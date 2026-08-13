@@ -1,56 +1,256 @@
 ---
-title: 第五部分 高效并发
-description: 第五部分 高效并发覆盖1个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
+title: "第五部分 高效并发"
+description: "用同步合同、线程状态、锁竞争与故障重放理解高效并发：固定输入，只改变一个同步条件，再用 happens-before、线程转储和退出码验收。"
 type: C
-section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
+section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
 draft: false
-math: true
-sourceUrl: 'https://github.com/fenixsoft/jvm_book'
+math: false
+sourceUrl: "https://github.com/fenixsoft/jvm_book"
 demo: true
 order: 0
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: duj3-part-5-concurrency
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Duj3Part5ConcurrencyEvidenceMap } from "@/components/mdx/deep-understanding-jvm/duj3-part5-concurrency-evidence-map";
 
-{/* DUJ3_QUALITY_V2 */}
+# 第五部分 高效并发
 
-## 为什么从“JMM—线程—锁路线台”开始
+并发问题常常不是“线程不够快”，而是多个执行者对同一状态的观察和修改没有一份可核对的合同。本部分把并发实验拆成同步边、线程载体、锁竞争、线程转储和重放五类证据，让读者知道一个结论究竟来自语言规则、虚拟机实现，还是某个 JDK 的运行时行为。
 
-第五部分 高效并发不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。JMM—线程—锁路线台沿“program order → synchronization order → happens-before → observation”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+本章解决的问题是：当两个线程都声称“已经写入”时，另一个线程凭什么看见它？当锁等待拉长尾延迟时，怎样证明是拥有者、调度还是工作量改变了？当结果偶尔错误时，怎样保存现场而不是用一次成功运行掩盖反例？
 
-第五部分 高效并发固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变线程模型或同步方式；图中只呈现本章真实运行时对象、状态边与证据出口；高亮表示当前分析路径，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+先固定 JDK、供应商、VM 参数、输入序列、线程载体和采集窗口，再只改变一个同步条件。证据图会把合同、发布、调度、竞争、观察与重放接成一条可播放路径；它展示诊断顺序，不制造线程安全分数。
+
+<Objectives>
+
+- 能区分 Java 内存模型的可见性与顺序合同、线程实现状态，以及锁竞争的运行时后果。
+- 能只改变一个同步或线程载体条件，采集 happens-before 边、线程转储、锁拥有者、等待者和退出码。
+- 能用固定输入、原始日志与全新进程重放解释一次并发反例，并明确结论覆盖的 JDK 与实现边界。
+
+</Objectives>
+
+## 为什么从“合同—发布—竞争—重放”开始
+
+把并发实验想成接力赛：共享状态是接力棒，发布动作是交棒规则，锁是交接区，线程转储是赛道摄像机。只看到终点名次，无法知道棒子是否按规则交过；必须记录谁在什么时候拥有它，以及另一个线程何时获得可见性。
+
+因此“结果正确”与“运行得快”要分开验收。正确性先写共享状态的不变量和同步边，性能再单独报告等待、竞争、吞吐和尾延迟；任何一条都不能替代另一条。
 
 ## 来源、勘误与独立重写边界
 
-第五部分 高效并发依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。第五部分 高效并发未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
+本部分依据作者的[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核对范围，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)确认“第五部分 高效并发”这一正式目录单元。未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
 
-第五部分 高效并发保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。第五部分 高效并发的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
+原书语境保留 2019 年 JDK 12 与 JDK 13 预览期边界；现代复核使用 [JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25 线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25 工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25 发布页](https://openjdk.org/projects/jdk/25/)和 [OpenJDK 源码](https://github.com/openjdk/jdk)作为事实入口。JDK 25 的调度、默认值和日志格式必须重新测量，不能把实现观察写成语言或 JVMS 的保证。
 
-## 本章跨层合同与章专属探针
+## 本部分的并发证据合同
 
-、、、、。
+通过不变量是“每个共享读写都能回到明确同步边或安全发布；正确性与性能分别验收；只改变一个条件时，第一处变化可定位”。实验档案至少保存 JDK 与供应商、OS 或容器限制、VM 参数、源码与 Class 哈希、线程载体、工作量、采集窗口、线程转储、锁事件、退出码和清理记录。
 
-第五部分 高效并发的通过不变量是“正确性由happens-before与不变量证明，性能另报告竞争和尾延迟”。第五部分 高效并发的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
-
-第五部分 高效并发使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存线程状态、锁拥有者与顺序证据，不能只复制命令截图：
-
-```bash
-java -version
-jcmd PID Thread.print -l
-```
-
-
-## 官方目录逐项深读
-
-### 第五部分 高效并发
-
-**四级证据 1/1。** 第五部分 高效并发中的第五部分 高效并发：写出happens-before或临界区不变量，用反复并发测试、线程转储和锁事件证明正确性与竞争代价。第五部分 高效并发固定同步方式为“monitor”，只把线程模型从“平台线程”切到“线程池”，以线程状态、锁拥有者与顺序证据定位第一处变化并验证“正确性由happens-before与不变量证明，性能另报告竞争和尾延迟”。
+`jcmd PID Thread.print -l` 可以提供某个运行时的线程和锁快照，但命令格式、状态细节和工具可用性随 JDK 变化。它不是 happens-before 证明；它只是把某一时刻的拥有者、等待者和线程状态写入原始档案。规范结论、实现观察和发行版差异必须分栏记录。
 
 ## 三个必须主动触发的误区
 
+<Callout type="trap" title="把 volatile 当成复合操作的原子性保证">
+  **现象 →** 计数器加一使用 volatile 字段，偶尔仍然少数。 **原因 →**
+  读、改、写是多个动作，可见不等于复合操作不可分割。 **修法 →**
+  写出不变量，改用锁或原子工具，并保存反例次数与输入规模。
+</Callout>
 
-## 练习、答案与282节点验证
+<Callout type="trap" title="把线程启动顺序当成所有共享读的顺序">
+  **现象 →** 先调用 start 就断言工作线程必然按预期看到全部状态。 **原因 →**
+  需要分析具体同步边，普通字段写入不能靠直觉补全合同。 **修法 →**
+  明确发布动作、读取动作和 happens-before 关系，再用重复运行验证。
+</Callout>
 
+<Callout type="trap" title="只看吞吐而丢掉锁等待现场">
+  **现象 →** 平均吞吐上升，就宣布锁优化成功。 **原因 →**
+  少数长等待可能被平均数隐藏，线程载体和调度也可能同时变化。 **修法 →**
+  同时保存锁拥有者、等待者、线程转储、分位延迟和工作量，单独解释尾部。
+</Callout>
 
+## 五个并发诊断词
+
+这些术语负责给证据字段命名。正文首现处用术语组件提供即时释义，章末 Glossary 再用大白话复述；结论仍必须回到同步边、线程状态和原始档案。
+
+<Term def="如果动作 A 按规则先于动作 B，B 就必须能观察到 A 的效果；它是分析可见性与顺序的关系，不是时间先后直觉。">
+  happens-before
+</Term>
+
+<Term def="让共享对象在其他线程开始使用前，通过构造、发布和同步动作变得可安全观察的过程。">
+  安全发布
+</Term>
+
+<Term def="一个复合动作对其他线程表现得不可再分的性质，例如锁保护下的读改写。">
+  原子性
+</Term>
+
+<Term def="多个线程争用同一把锁或同一临界区时产生的等待与调度成本。">
+  锁竞争
+</Term>
+
+<Term def="某个时间点所有线程状态、栈和锁关系的原始快照，用来定位现场而不是替代规范证明。">
+  线程转储
+</Term>
+
+## 官方目录映射：第五部分高效并发
+
+本页面对应 manifest 中唯一的正式 unit「第五部分 高效并发」。它是第12章 Java内存模型与线程、第13章 线程安全与锁优化的上位路线：先规定可见性和顺序，再分析载体、锁与竞争，最后把反例交给原始转储和同条件重放。这里不虚构未登记的子 unit，也不把某个 HotSpot 默认值升级为规范结论。
+
+## 读图：一条证据链如何闭合
+
+第一步写出共享状态不变量，例如“库存不会小于零”；第二步标出构造、发布、锁获取和读取之间的同步边；第三步固定平台线程或虚拟线程等载体，只观察状态和队列；第四步注入一个可逆的同步故障并保存现场；第五步清理旧进程后用同一输入重放。读者可以在图中切换正确性、竞争和重放镜头，观察同一个证据边界如何改变。
+
+先猜一猜：如果只把平台线程换成虚拟线程，而共享状态、锁和输入都不变，最先应该变化的是可见性结论、线程载体状态、锁拥有者，还是退出码？写下预测与反证条件，再播放下面的状态链。
+
+<Stepper>
+  <Step title="1. 写出共享状态与不变量">
+    固定 Class 哈希、工作量和输入摘要，先写“哪些读写必须满足什么条件”。不要先选锁再倒推正确性；把不变量作为验收目标。
+
+    <Duj3Part5ConcurrencyEvidenceMap />
+
+  </Step>
+  <Step title="2. 标出发布与同步边">
+    把构造、发布、线程启动、锁获取和读取动作按时间窗记录，区分语言合同与实现日志。没有同步边的“应该看见”只能算待证假设。
+
+    <Duj3Part5ConcurrencyEvidenceMap />
+
+  </Step>
+  <Step title="3. 固定线程载体并观察竞争">
+    平台线程与虚拟线程只作为一个可控变量；保存线程状态、锁拥有者、等待者和队列，不同时修改工作量或锁粒度。
+
+    <Duj3Part5ConcurrencyEvidenceMap />
+
+  </Step>
+  <Step title="4. 注入一个可逆故障并留住现场">
+    只移除一条发布或保护动作，保留第一次错误结果、线程转储、锁事件、PID、stderr 和退出码；不要重启覆盖反例。
+
+    <Duj3Part5ConcurrencyEvidenceMap />
+
+  </Step>
+  <Step title="5. 清理后用同输入重放">
+    结束旧进程、清理输出目录，在同一 JDK、Class 哈希和输入摘要下启动全新进程。让未参与者核对正确、失败和恢复三份档案。
+
+    <Duj3Part5ConcurrencyEvidenceMap />
+
+  </Step>
+</Stepper>
+
+## 最小并发探针：让不变量先于数字
+
+下面的探针故意把复合读改写放进锁保护的临界区。它的价值是制造可复核的动作与退出码，而不是给出跨机器吞吐排名；实验时可以复制一份去掉锁的变体，比较反例与线程转储。
+
+```java
+public final class ConcurrencyProbe {
+  static final class Inventory {
+    private int remaining = 100;
+    synchronized boolean reserve() {
+      if (remaining == 0) return false;
+      remaining--;
+      return true;
+    }
+    synchronized int remaining() { return remaining; }
+  }
+
+  public static void main(String[] args) throws Exception {
+    int workers = Integer.parseInt(args[0]);
+    Inventory inventory = new Inventory();
+    Thread[] threads = new Thread[workers];
+    for (int i = 0; i < workers; i++) {
+      threads[i] = new Thread(() -> inventory.reserve(), "reserve-" + i);
+      threads[i].start();
+    }
+    for (Thread thread : threads) thread.join();
+    System.out.println("remaining=" + inventory.remaining());
+  }
+}
+```
+
+先保存源码与 Class 哈希，再分别运行锁保护基线和故意移除保护的变体。`jcmd` 的输出是实现现场，必须和 JDK 版本、PID、采集时间及原始 stderr 一起归档。
+
+```bash
+set -eu
+run_id="duj3-part5-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "evidence/$run_id"
+java -version 2> "evidence/$run_id/java-version.txt"
+javac -g ConcurrencyProbe.java
+sha256sum ConcurrencyProbe.java ConcurrencyProbe.class > "evidence/$run_id/hashes.txt"
+java ConcurrencyProbe 32 > "evidence/$run_id/baseline.stdout.txt" 2> "evidence/$run_id/baseline.stderr.txt" &
+pid=$!
+jcmd "$pid" Thread.print -l > "evidence/$run_id/thread-dump.txt"
+wait "$pid"
+printf 'exit_code=%s\n' "$?" > "evidence/$run_id/exit-code.txt"
+```
+
+```yaml
+unit: duj3-part-5-concurrency
+baseline: invariant-publication-carrier-replay
+changed_axis: one-synchronization-edge-or-thread-carrier
+signals: source-hash,class-hash,happens-before,thread-state,lock-owner,waiter,pid,exit-code
+replay: fresh-process-same-class-and-input
+performance: report-contention-and-tail-separately
+cleanup: process-and-log-directory-recorded
+unknowns: explicit
+```
+
+## 三项练习与答案
+
+<Exercises>
+
+**问题 1：可见性与原子性。** 一个共享计数器加上 volatile 后仍然少于预期。请写出缺失的合同，并列出两份必须保存的反例证据。
+
+<Answer>
+  volatile
+  能帮助可见性与部分顺序约束，但不能让读、改、写组成一个不可分割动作。应把计数器的不变量放进锁或原子工具的合同中；保存重复运行的错误计数、输入规模、源码与
+  Class 哈希，并保存出现异常时的线程转储或原始日志。
+</Answer>
+
+**问题 2：线程载体对照。** 只把平台线程换成虚拟线程，哪些变量必须保持不变，才能讨论锁竞争而不是讨论工作量变化？
+
+<Answer>
+  保持共享状态、锁边界、输入序列、任务数量、JDK、VM 参数、采集窗口和 Class
+  哈希不变；分别记录载体、线程状态、锁拥有者、等待者、吞吐与尾延迟。若同步边和退出码变化，先报告正确性，再单独分析性能。
+</Answer>
+
+**问题 3：线程转储的边界。** 为什么一次 `Thread.print` 不能独立证明程序没有数据竞争？请给出重放步骤。
+
+<Answer>
+  转储只是一个时间点的实现快照，不能替代语言内存模型中的同步合同，也可能错过短暂窗口。应保存同步边与不变量，固定输入和版本，记录第一次反例，再清理旧进程与日志目录，用全新
+  PID 重放并比较原始转储、退出码和恢复结果。
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="happens-before">
+    一种“先发生的动作必须能被后续动作看到”的规则关系，用来分析可见性与顺序。
+  </GlossaryItem>
+  <GlossaryItem term="安全发布">
+    让其他线程开始使用共享对象前，先通过明确的构造和同步动作把它交出去。
+  </GlossaryItem>
+  <GlossaryItem term="原子性">
+    一个动作对外表现得不可拆分；锁保护的读改写是常见例子。
+  </GlossaryItem>
+  <GlossaryItem term="锁竞争">
+    多个线程争用同一临界区时产生的等待、排队和调度成本。
+  </GlossaryItem>
+  <GlossaryItem term="线程转储">
+    某一时刻线程栈、状态和锁关系的快照，用来保存现场和定位等待。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《深入理解Java虚拟机（第3版）》"
+  adaptedUrl="https://github.com/fenixsoft/jvm_book"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
