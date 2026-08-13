@@ -16828,6 +16828,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGems3Ch28PipelineDiagram: module0.GpuGems3Ch28PipelineDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/10-gpu-gems3-geometry/gpugems3-ch29": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems3-ch29-rigid-body");
+    return {
+      GpuGems3Ch29MotionDiagram: module0.GpuGems3Ch29MotionDiagram,
+      GpuGems3Ch29ParticleGridDiagram: module0.GpuGems3Ch29ParticleGridDiagram,
+      GpuGems3Ch29PipelineDiagram: module0.GpuGems3Ch29PipelineDiagram,
+      GpuGems3Ch29QuaternionDiagram: module0.GpuGems3Ch29QuaternionDiagram,
+      GpuGems3Ch29RigidBodyLab: module0.GpuGems3Ch29RigidBodyLab,
+      GpuGems3Ch29TextureDataDiagram: module0.GpuGems3Ch29TextureDataDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

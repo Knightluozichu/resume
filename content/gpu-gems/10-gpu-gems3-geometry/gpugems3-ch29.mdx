@@ -1,0 +1,263 @@
+---
+title: "GPU Gems 3 · Chapter 29. Real-Time Rigid Body Simulation on GPUs"
+type: C
+section: "GPU Gems 3 Part V · Physics Simulation"
+order: 29
+description: "把刚体拆成平移、旋转和粒子接触，解释如何用均匀网格、纹理双缓冲与 GPU 五阶段迭代扩展到大量实时对象。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-29-real-time-rigid-body-simulation-gpus"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-29
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch29MotionDiagram,
+  GpuGems3Ch29ParticleGridDiagram,
+  GpuGems3Ch29PipelineDiagram,
+  GpuGems3Ch29QuaternionDiagram,
+  GpuGems3Ch29RigidBodyLab,
+  GpuGems3Ch29TextureDataDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch29-rigid-body";
+
+<Objectives>
+
+- 能解释刚体的平移、旋转、线动量和角动量如何在一次迭代中更新
+- 能修改 GPU Rigid Body Simulation Lab 的粒子分辨率、邻域搜索和姿态表示，比较速度与稳定性
+- 能回答：为什么用粒子和均匀网格处理碰撞，并用四元数与双缓冲保证 GPU 迭代不失真
+
+</Objectives>
+
+## 先问：为什么几千个物体不能靠手写动画
+
+想象棋盘上同时落下几千枚棋子。你可以为一枚棋子写一条轨迹，却无法预先猜到每一枚会撞上谁、被推向哪里；玩家的下一次点击还会改变所有后续结果。
+
+本章解决的问题是：如何让大量有体积的物体在力、重力和碰撞作用下自己产生运动，并让 GPU 同时推进这些相互影响的状态。
+
+没有这条路径，物体越多，CPU 需要检查的邻居和姿态更新越多，模拟帧率会掉到渲染帧率以下；如果只把计算搬过去却不安排数据读写，还会出现状态被半更新、刚体逐渐变形的问题。
+
+<Callout type="tip" title="先预测：把粒子数减半会牺牲什么？">
+  在 Lab 中先保持大量物体和均匀网格，把粒子分辨率从高改成低。先猜迭代速度、碰撞接触数和形状近似哪一项变化最大，再切换到 brute force 对比。
+</Callout>
+
+## 1. 刚体运动是质心平移与绕质心旋转的合成
+
+<Callout type="trap" title="误区：只更新质心位置，不更新旋转状态">
+  **现象 →** 物体会被力推走，但碰撞后的棋子都保持同一个朝向，接触点看起来像穿透。
+
+**原因 →** 偏离质心施力会产生力矩，角动量和姿态必须与线动量、位置同步积分。
+
+**修法 →** 分开保存质心位置/线动量与姿态/角动量，根据作用点计算 torque，再更新两个状态。
+
+</Callout>
+
+<Term def="形状和质量分布保持不变、只允许整体平移和旋转的物体模型；它不会像布料那样拉伸。">
+  rigid body
+</Term>
+
+刚体的质心位置记作 `X`，速度是 `V`。力 `F` 改变它的线性状态；如果力的作用点与质心之间有相对位置 `r`，同一股力还会产生 `r × F` 的力矩。于是一次时间步需要同时处理“整体走到哪里”和“物体转了多少”。
+
+<Term def="描述整体平移状态的量，等于质量乘以质心速度；合力决定它随时间如何变化。">
+  linear momentum
+</Term>
+
+线动量 `P` 与速度通过质量 `M` 连接，位置则由速度积分得到。GPU 不必为每一枚棋子运行不同的控制逻辑，只需让每个 texel 保存一份状态，所有对象并行执行同一条更新规则。
+
+<Term def="描述旋转状态的量；力矩改变它，惯性张量把它转换成绕不同轴的角速度。">
+  angular momentum
+</Term>
+
+角动量 `L` 通过当前姿态下的惯性张量逆矩阵得到角速度 `W`。物体转向后，惯性张量也要随之更新；这也是姿态表示不能只保存一次初始矩阵的原因。
+
+<GpuGems3Ch29MotionDiagram />
+
+## 2. 用四元数存姿态，避免旋转矩阵慢慢变形
+
+连续把小旋转乘到一个矩阵上，会把浮点误差积累成缩放或剪切。结果看上去像旋转，却会让一个本应刚性的棋子逐渐被拉长。更合适的状态是只表达旋转自由度的紧凑向量。
+
+<Term def="用四个数表示旋转轴与旋转角的姿态表示；它没有额外的缩放自由度，适合放入 RGBA 纹理。">
+  quaternion
+</Term>
+
+四元数由标量和三维向量组成，角速度产生一个小的增量 `dq`，更新后重新归一化。归一化不是装饰：它把数值误差拉回单位四元数，防止重复迭代后出现非旋转成分。
+
+```hlsl
+float3 velocity = linearMomentum / mass;
+float3 angularVelocity = mul(inverseInertia, angularMomentum);
+position += velocity * dt;
+
+float angle = length(angularVelocity * dt);
+float3 axis = angle > 0 ? normalize(angularVelocity) : float3(0, 1, 0);
+float4 dq = float4(cos(angle * 0.5), axis * sin(angle * 0.5));
+orientation = normalize(quatMul(dq, orientation));
+```
+
+这段代码只突出“动量 → 速度 → 姿态”的状态关系；真实引擎还要处理小角度近似、惯性张量随姿态旋转，以及纹理读写的精度和布局。
+
+<GpuGems3Ch29QuaternionDiagram />
+
+## 3. 把复杂网格填成粒子，再把全局碰撞变成局部邻域搜索
+
+直接让两个复杂三角网格互相求交，候选对数量和几何分支都会迅速膨胀。更适合 GPU 的折中是把闭合模型体积离散为等尺寸球形粒子：粒子越密，形状越准，计算也越贵。
+
+<Callout type="trap" title="误区：对所有粒子做两两碰撞检查">
+  **现象 →** 少量对象还能运行，物体数一多，碰撞 pass 的耗时呈爆炸式增长。
+
+**原因 →** 暴力策略需要检查近似 n² 个粒子对，大多数相距很远的候选其实不可能接触。
+
+**修法 →** 先把粒子索引写入均匀网格，只读取当前单元及相邻单元，再对少量候选计算距离和接触力。
+
+</Callout>
+
+把闭合网格离散成许多等尺寸球形采样点的粒子表示，用分辨率换取碰撞检测的可控成本。为了从网格生成体内粒子，可以沿某个轴对模型做深度层剥离：奇数层是射线进入模型的位置，偶数层是射线离开的位置，体素深度落在一对入口/出口之间就标记为 inside。
+
+<Term def="按空间单元保存粒子索引的查找结构；把邻居候选限制在同一格及周围格子，避免全局两两检查。">
+  uniform grid
+</Term>
+
+每个粒子的半径相同时，两个粒子中心距离小于直径即可判定接触。碰撞反应可以用离散元法的直觉描述：沿法线方向的弹簧力把它们推开，阻尼消耗相对速度带来的能量，切向项提供摩擦。
+
+<Term def="按深度顺序提取模型表面交点的过程；它把闭合网格转换成可在 GPU 上判断体素 inside/outside 的深度层。">
+  depth peeling
+</Term>
+
+这一步只发生在粒子初始化或形状更新阶段，运行时主要成本转移到粒子邻域和接触力。粒子化还让同一套邻域查找自然延伸到颗粒材料和基于粒子的流体。
+
+<GpuGems3Ch29ParticleGridDiagram />
+
+## 4. 纹理既是物理状态，也是 GPU 的双缓冲队列
+
+当时的 GPU 更适合通过纹理读取和写入计算结果。每个刚体可以按索引映射到 2D 纹理坐标，保存线动量、角动量、质心位置和姿态四元数；粒子纹理则保存位置、速度和相对质心的位置。
+
+同一状态需要两份纹理：本轮从 input 读取，下一轮向 output 写入，完成后交换两者。这样一个像素不会一边被邻居读取一边被当前线程覆盖，所有粒子看到的都是一致的时间步。
+
+<GpuGems3Ch29TextureDataDiagram />
+
+三维均匀网格也可以铺平成一张 2D 纹理：把 `g_z` 对应的切片排成网格，再把三维坐标换算成二维坐标。即使现代硬件能直接写 3D 纹理，扁平布局仍可能带来兼容性或缓存优势。
+
+## 动手走一遍：一次 GPU 迭代如何闭环
+
+<Stepper>
+  <Step title="先从刚体状态生成粒子状态">
+    用当前四元数旋转初始相对位置，得到粒子位置；再把线速度和角速度合成为粒子速度。
+
+    <GpuGems3Ch29MotionDiagram />
+
+  </Step>
+  <Step title="再把粒子放入均匀网格">
+    将每个粒子的空间坐标换成网格单元，写入该单元的索引列表，只为附近粒子建立候选接触。
+
+    <GpuGems3Ch29ParticleGridDiagram />
+
+  </Step>
+  <Step title="接着计算碰撞反应并归约到刚体">
+    对候选粒子计算弹簧、阻尼和切向力，再把力与相对位置的叉积累加成线动量和角动量变化。
+
+    <GpuGems3Ch29TextureDataDiagram />
+
+  </Step>
+  <Step title="最后更新位置和四元数">
+    读取动量与旧姿态，积分得到下一状态，写入另一份纹理并交换输入输出。
+
+    <GpuGems3Ch29QuaternionDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch29PipelineDiagram />
+
+## 5. 五阶段迭代让碰撞与渲染解耦
+
+官方实现可以把一次迭代概括为：计算粒子值、生成网格、检测并反应碰撞、计算刚体动量、更新位置和四元数。若硬件支持多渲染目标，最后两个阶段可以合并写出；但无论是否融合，状态交换的边界必须清晰。
+
+GPU 只负责推进物理状态，渲染 pass 再按每个刚体的质心位置和姿态四元数变换网格顶点。这样模拟可以比渲染更高频运行，或者在需要时跳过某些渲染帧而不破坏物理时间步。
+
+<GpuGems3Ch29RigidBodyLab />
+
+先猜一猜：把均匀网格换成 brute force，再把四元数换成旋转矩阵，哪一项会先让结果变差？在 Lab 中一次改一个开关，观察候选检查数、迭代速度和姿态稳定性。
+
+## 6. 同一套邻域框架可以扩展到非刚体模拟
+
+粒子连接关系会随时间变化，正是这套方法的价值所在。颗粒材料可以直接用接触力更新粒子位置；流体可以用平滑粒子流体方法，在每次迭代用均匀网格查找邻域，再由密度和压力生成力。
+
+刚体与流体也可以耦合：把刚体粒子作为流体邻域的一部分，求出相互作用力后再回写刚体动量。代价是邻域搜索次数和显存占用都会增加，因此实际工程仍需按粒子数、网格稀疏度和目标迭代率做取舍。
+
+## 小结
+
+- 刚体状态同时包含质心平移和绕质心旋转。
+- 四元数避免旋转矩阵累积缩放，纹理双缓冲避免状态原地覆盖。
+- 粒子表示用分辨率换取形状与碰撞成本的可控取舍。
+- 均匀网格把全局粒子对筛成局部邻域，再计算接触力。
+- 五阶段 GPU 迭代可扩展到颗粒、流体和耦合模拟。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 将碰撞搜索从均匀网格改成 brute force，并把粒子分辨率分别设为低和高，记录候选检查数和估算 iterations/s 的变化。
+
+<Answer>
+
+均匀网格只检查局部单元，候选数应近似随粒子数线性增长；brute force 会快速增加，且高分辨率粒子更明显。低分辨率牺牲形状和接触精度换速度，高分辨率则相反。
+
+</Answer>
+
+**问题 2｜诊断刚体变形。** 物体开始旋转时正常，几百步后逐渐拉伸。请列出需要检查的状态表示与更新操作。
+
+<Answer>
+
+检查是否把旋转矩阵反复相乘而没有正交化，或是否用四元数更新后忘记归一化；同时确认惯性张量随当前姿态更新，并且位置、动量和姿态使用同一个时间步。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个有几千枚棋子的堆叠、一个粒子流体和一个与流体接触的刚体容器，分别说明应复用本章的哪一部分。
+
+<Answer>
+
+棋子堆叠适合粒子化刚体、均匀网格和 DEM 接触力；粒子流体可复用网格邻域与动态连接关系，但需要密度、压力等额外邻域 pass；耦合容器则共享邻域搜索，把流体粒子接触力归约回刚体动量。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="rigid body">
+    只整体平移和旋转、不改变自身形状的物体模型。
+  </GlossaryItem>
+  <GlossaryItem term="linear momentum">
+    描述质心平移状态的量，质量和速度共同决定它。
+  </GlossaryItem>
+  <GlossaryItem term="angular momentum">
+    描述旋转状态的量，力矩会改变它，惯性决定转动响应。
+  </GlossaryItem>
+  <GlossaryItem term="quaternion">
+    用四个数表示旋转的状态，适合放进 RGBA 纹理且不会表达缩放。
+  </GlossaryItem>
+  <GlossaryItem term="uniform grid">
+    按空间单元保存粒子索引的邻域结构，减少不可能碰撞的检查。
+  </GlossaryItem>
+  <GlossaryItem term="depth peeling">
+    按深度顺序找出网格入口和出口，用来判断体素是否在模型内部。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 29. Real-Time Rigid Body Simulation on GPUs"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-29-real-time-rigid-body-simulation-gpus"
+/>
