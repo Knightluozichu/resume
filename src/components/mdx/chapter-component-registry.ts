@@ -13292,6 +13292,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3Chapter10FrontendCompilerEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/15-duj3-11-backend-compiler/duj3-11-backend-compiler":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-chapter11-backend-compiler-evidence-map");
+      return {
+        Duj3Chapter11BackendCompilerEvidenceMap:
+          module0.Duj3Chapter11BackendCompilerEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
