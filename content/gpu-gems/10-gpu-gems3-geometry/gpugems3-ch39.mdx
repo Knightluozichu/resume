@@ -1,0 +1,265 @@
+---
+title: "GPU Gems 3 · Chapter 39. Parallel Prefix Sum (Scan) with CUDA"
+type: C
+section: "GPU Gems 3 Part VI · GPU Computing"
+order: 39
+description: "从前缀和的边界约定出发，解释 CUDA 上的 naive scan、work-efficient tree scan、bank conflict 消除和大数组 block increment，并连接到 compaction、summed-area table 与 radix sort。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-39
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch39ApplicationsDiagram,
+  GpuGems3Ch39BankConflictDiagram,
+  GpuGems3Ch39LargeArrayScanDiagram,
+  GpuGems3Ch39NaiveScanDiagram,
+  GpuGems3Ch39ScanDefinitionDiagram,
+  GpuGems3Ch39ScanLab,
+  GpuGems3Ch39TreeScanDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch39-scan";
+
+<Objectives>
+
+- 能区分 exclusive 与 inclusive scan，并解释为什么同一个前缀和原语可以把顺序计算改写为并行地址生成
+- 能修改 CUDA Scan Lab 的算法、数组规模、bank conflict、每线程元素数和应用场景，比较 modeled additions 与相对吞吐
+- 能回答：为什么 work-efficient tree scan 仍可能被 shared-memory bank conflict 拖慢，以及大数组怎样用 `SUMS`、`INCR` 和 uniform add 拼起来
+
+</Objectives>
+
+## 先问：怎样让“前面所有元素的总和”同时算出来
+
+给一列数字，每个位置都想知道它左边数字的总和。最直接的做法是从左到右累加：第一个位置算完，第二个才能开始，像一条只有一个人能走的队列。
+
+但很多任务真正需要的不是“下一个位置必须等上一个位置”，而是每个位置最终拥有一个可写入的地址或累计值。只要把中间的部分和组织成树，许多位置就能同时工作；这个小小的改写，后来会变成筛选、排序、图结构和图像滤波的共同积木。
+
+<Callout type="tip" title="先预测：把数组从 128 个元素调到 4,096 个，哪一种代价会增长得更快？">
+  在 Lab 中先保持 `work-efficient tree`、`conflict-free padding` 和 `8 values / thread`，记录 modeled additions 与 relative throughput。再切换到 `naive offset doubling`，先猜为什么数组越大，两者的差距越明显。
+</Callout>
+
+## 1. Scan 先要说清楚“当前元素算不算”
+
+<Term def="对数组的每个位置输出其左侧所有元素的组合结果，不包含当前位置；本章以加法和 identity 0 为主要例子。">
+  exclusive scan
+</Term>
+
+输入 `[3, 1, 7, 0, 4, 1, 6, 3]` 的 exclusive scan 是 `[0, 3, 4, 11, 11, 15, 16, 22]`。第一个位置放入加法的 identity `0`，位置 `j` 得到输入中 `j` 之前所有元素的和。它也可以使用任意满足结合律的二元操作，不必局限于加法，但操作必须有明确的 identity。
+
+<Term def="对数组的每个位置输出包含当前位置在内的前缀组合结果；它可以由 exclusive scan 平移并补上最后一项得到。">
+  inclusive scan
+</Term>
+
+同一个输入的 inclusive scan 是 `[3, 4, 11, 11, 15, 16, 22, 25]`。两者只差一个边界约定，却会影响后续地址是否从零开始、最后一个总和放在哪里，以及一个 predicate 的结果能否直接用作 scatter 位置。实现接口时应把这个约定写进名字或文档，不要让调用者靠猜。
+
+<GpuGems3Ch39ScanDefinitionDiagram />
+
+scan 的价值在于把看似顺序的循环改写成两段并行工作：先让每个元素独立计算 `f(input[j])`，再对临时数组做 scan。这样原本的 `out[j]` 依赖 `out[j - 1]`，就变成一个可以在 GPU 上分层处理的全局原语。
+
+## 2. Naive scan 有并行度，但没有工作效率
+
+最容易想到的 GPU 版本让 offset 依次取 1、2、4、8。每一轮中，位置 `k` 读取 `k - offset`，把较远的部分和加到自己身上。单轮有很多线程，视觉上很并行；但每个 offset 都会重新访问许多元素。
+
+<GpuGems3Ch39NaiveScanDiagram />
+
+<Term def="总加法次数与顺序版本保持同一个渐进量级的 scan；本章用平衡树的两次遍历把工作量压到 O(n)。">
+  work-efficient scan
+</Term>
+
+长度为 `n` 的顺序 scan 做 O(n) 次加法，而 naive offset doubling 做 O(n log n) 次。对小数组，额外工作可能还没有显现；对大数组，log₂ n 因子会直接转成更多指令、更多 shared-memory 访问和更长的同步链。work-efficient 的目标不是让每一轮看起来更热闹，而是让所有线程合计做的工作接近顺序下界。
+
+<Callout type="trap" title="误区：线程数量足够多，naive scan 就会自动高效">
+  **现象 →** 看到每个 offset 都能启动许多线程，就把线程数当成主要性能指标。
+
+**原因 →** naive 算法重复做了 O(n log n) 次加法；线程越多只是在更宽的机器上重复更多工作，不能消除算法级浪费。
+
+**修法 →** 先比较总 additions 和同步轮数，再用 work-efficient tree、循环展开或每线程多元素减少开销，最后才调 block 数。
+</Callout>
+
+在 GPU 上还有一个更隐蔽的问题：warp 是硬件执行批次，不是无限多的独立处理器。一个线程块里的线程并不会同时完成所有位置；如果每个线程原地覆盖数组，而另一个 warp 还要读取旧值，结果就可能互相覆盖。双缓冲能让每一轮明确区分 input 与 output，但它无法挽救 O(n log n) 的工作量。
+
+## 3. 平衡树用 up-sweep 和 down-sweep 回收前缀
+
+<Term def="先从叶子向根合并部分和，再把根设为 identity，最后从根向叶子传播前缀的两阶段树遍历；它是 work-efficient exclusive scan 的核心结构。">
+  up-sweep / down-sweep
+</Term>
+
+work-efficient scan 把输入看成一棵平衡二叉树。第一阶段 up-sweep 从叶子向根做 reduce，根节点得到整个数组的总和；随后把根清零，因为 exclusive scan 的第一个输出必须从 identity 开始。第二阶段 down-sweep 从根向叶子走，每次交换左子树的部分和，并把旧的左和加到右子树，最终每个叶子都拥有自己的 exclusive prefix。
+
+<GpuGems3Ch39TreeScanDiagram />
+
+一棵有 `n` 个叶子的树有 `n - 1` 个内部节点。up-sweep 和 down-sweep 各访问一次，整体约做 `2n - 2` 次加法，仍是 O(n)。树是推导线程行为的概念，不需要在内存中创建指针结构；实际 CUDA 代码只要按层计算 index、在每层同步，并在 shared memory 中原地更新即可。
+
+一个适合教学和调试的伪代码形状如下；它展示的是阶段关系，不是直接可编译的 kernel：
+
+```text
+load block into shared memory
+up-sweep:  combine pairs toward the root
+shared[last] = identity
+down-sweep: exchange and propagate toward the leaves
+write exclusive results
+```
+
+## 4. 从单 block 推到大数组
+
+单个线程块可以在 shared memory 中扫描自己负责的片段，但大数组远超一个 block 的容量。扩展方法是把数组分成 block：每个 block 做 local scan，同时把 local total 写入 `SUMS`；再对 `SUMS` 做一次 scan 得到每个 block 的 `INCR`；最后运行 uniform add，把 `INCR[i]` 加到 block `i` 的每个局部输出上。
+
+<GpuGems3Ch39LargeArrayScanDiagram />
+
+这三层职责很清楚：local scan 解决 block 内部顺序，`SUMS` 记录 block 之间的边界，`INCR` 把前面 block 的总量传播回来。数组不是 block size 的整倍数时，可以 padding 到下一个 block multiple；scan 不依赖尾部 padding 之后的无效元素，最后一个 block 仍可复用同一套 kernel。
+
+<Callout type="trap" title="误区：逐 block 扫描后直接拼接 local output 就完成了全局 scan">
+  **现象 →** 每个 block 的结果在本地都正确，但跨 block 的第二段从零重新开始，最终输出出现分段跳变。
+
+**原因 →** 后续 block 还没有加上所有前置 block 的总和；local prefix 不是 global prefix。
+
+**修法 →** 保存每个 block 的 total 到 `SUMS`，扫描得到 `INCR`，再把对应 increment 均匀加回 local output；把这两个数组当作显式的数据流阶段。
+</Callout>
+
+## 5. Work-efficient 还要经过 shared memory 的硬件现实
+
+<Term def="同一 warp 的多个线程同时访问同一个 shared-memory bank，导致访问被拆成多个串行事务的硬件冲突。">
+  bank conflict
+</Term>
+
+平衡树已经把加法次数降到 O(n)，但 index 访问模式可能让多个线程集中到同一个 shared-memory bank。bank conflict 会把本来并行的请求拆开；算法复杂度没有变，实际 latency 却会大幅增加。解决思路是给地址插入 padding 或 conflict-free offset，让相邻线程分散到不同 bank，再重新测量同步和吞吐。
+
+<GpuGems3Ch39BankConflictDiagram />
+
+原书还通过每线程处理多个元素来覆盖 global-memory latency：每个线程先在 registers 中顺序扫描自己的两个 `float4`，只把 partial sums 放进 shared memory；树扫描完成后，再把线程寄存器里的局部结果加上 block prefix。这让更多计算发生在寄存器中，也减少了循环、地址计算和 global load 的相对成本。固定 block size 时，把 tree loop 展开还能进一步减少控制指令。
+
+<Callout type="trap" title="误区：只证明树算法是 O(n)，就可以忽略 bank conflict 和内存布局">
+  **现象 →** profiler 显示加法数量接近顺序下界，但 shared-memory request replay 和 latency 仍然很高。
+
+**原因 →** 渐进工作效率没有描述 bank、同步、寄存器和 global-memory latency；硬件访问模式可能把并行请求串行化。
+
+**修法 →** 分别打开 conflict-free padding、loop unroll 和多元素/线程，对照 bank replay、register pressure、global transactions 与端到端吞吐。
+</Callout>
+
+## 6. 一个 scan 原语可以生成很多并行地址
+
+<Term def="从输入中筛出满足 predicate 的元素，保持原顺序并把它们压紧成连续输出的两阶段操作；第一阶段用 scan 生成目标地址，第二阶段 scatter。">
+  stream compaction
+</Term>
+
+对每个输入先生成 0/1 mask，再做 exclusive scan。mask 为 1 的位置，其 scan 结果就是它在 dense output 中的 destination address；随后 scatter 写入即可。scan 不负责判断元素是否保留，它负责把局部判断变成全局且无冲突的写入位置。
+
+同一个原语还可以按行、按列生成 summed-area table，让任意宽度的 box filter 在每个像素处用固定数量的查找完成；radix sort 则用 scan 计算每个 bit predicate 的稳定位置。scan 的力量来自它把“前面有多少个满足条件的元素”变成一个可直接索引的地址。
+
+<GpuGems3Ch39ApplicationsDiagram />
+
+## 动手走一遍：从单 block 到应用地址
+
+<Stepper>
+  <Step title="先确认 scan 的边界约定">
+    用一个小数组对照 input、exclusive 和 inclusive 输出，先决定 identity、最后一个总和及下游地址的语义。
+
+    <GpuGems3Ch39ScanDefinitionDiagram />
+  </Step>
+  <Step title="再用树替代重复 offset">
+    在 shared memory 中执行 up-sweep、清零根节点，再执行 down-sweep，得到 work-efficient exclusive scan。
+
+    <GpuGems3Ch39TreeScanDiagram />
+  </Step>
+  <Step title="把局部结果接成全局结果">
+    每个 block 写 local output 与 total；扫描 `SUMS` 得到 `INCR`，再用 uniform add 给每个 block 补上前置总和。
+
+    <GpuGems3Ch39LargeArrayScanDiagram />
+  </Step>
+  <Step title="把 prefix 变成写入地址">
+    对 predicate 做 mask scan，或者对图像行列做连续 scan；最后用地址 scatter 或查表，不要让线程竞争同一个输出位置。
+
+    <GpuGems3Ch39ApplicationsDiagram />
+  </Step>
+</Stepper>
+
+## 7. 用 CUDA Scan Lab 比较算法和硬件代价
+
+<GpuGems3Ch39ScanLab />
+
+猜一猜：保持 `1,024 elements`，把 `work-efficient tree` 换成 `naive offset doubling`，再打开 `bank conflicts present`，哪个变化影响 modeled additions，哪个变化只影响内存服务时间？
+
+先只切换 algorithm，比较 naive 的 O(n log n) additions 与 tree 的约 2n - 2 additions；再只切换 shared-memory access，观察 bank conflict 如何降低 relative throughput；最后将 values per thread 从 2 调到 8，思考 registers 中的 partial sums 为什么可能隐藏 global-memory latency，也为什么可能增加 register pressure。
+
+Lab 还可以切换到 `stream compaction` 或 `summed-area table`，让你看到 scan 的输出不是最终答案，而是下一阶段的写入地址或行列累计值。数字是教学模型，不执行真实 CUDA kernel；GPU Gems 3 的历史结果显示优化后的 CUDA scan 可达到顺序 CPU 版本约 20 倍、同 GPU OpenGL 版本约 7 倍，但这些结果属于特定硬件和实现条件。
+
+## 小结
+
+- exclusive 与 inclusive 的差别是 identity 和当前位置是否进入前缀。
+- naive offset scan 有并行度，却多做 O(n log n) 次加法。
+- up-sweep、清根、down-sweep 组成 O(n) 的 work-efficient tree scan。
+- 大数组需要 `SUMS`、`INCR` 和 uniform add 传播 block prefix。
+- bank conflict、寄存器、多元素/线程和 loop unroll 决定硬件效率。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中保持 `1,024 elements`、`conflict-free padding` 和 `prefix output`，比较 `naive offset doubling` 与 `work-efficient tree` 的 modeled additions。再把数组改为 `4,096 elements`，说明差距为什么会扩大。
+
+<Answer>
+
+naive 每个 offset 都重新做一轮合并，总工作量随 `n log n` 增长；work-efficient tree 的 up-sweep 与 down-sweep 总和接近 `2n - 2`。数组变大时，naive 多出的 log₂ n 因子更明显，所以即使两者都有大量并行线程，algorithmic work 仍会拉开差距。
+
+</Answer>
+
+**问题 2｜诊断跨 block 断层。** 你的每个 block local scan 都通过小数组测试，但完整数组在 block 边界突然从零开始。请指出需要检查的 `SUMS`、`INCR` 和 uniform add 阶段。
+
+<Answer>
+
+先确认每个 block 在清零 local root 前把 total 写入 `SUMS[i]`；再确认 `SUMS` 自身使用 exclusive scan 生成 `INCR[i]`，其中 `INCR[0]` 是 identity。最后检查 uniform add 是否把同一个 `INCR[i]` 加到 block `i` 的所有 local outputs，并且 block 的全局 offset 与 padding 长度一致。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个过滤数组需要稳定压紧、一个图像需要任意宽度 box filter、一个 key-value 数组要进行 radix sort，分别说明 scan 输出会怎样被下游使用。
+
+<Answer>
+
+过滤数组先把 predicate 变成 0/1 mask，exclusive scan 结果是保留元素的 dense destination，再执行 scatter；box filter 对图像每行做 scan、再对结果每列做 scan，得到 summed-area table；radix sort 用每一 bit 的 predicate 和 scan 生成稳定位置，把元素分到对应的 output 区域。scan 提供的是地址或累计上下文，仍需下游 kernel 完成写入或重排。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="exclusive scan">
+    每个位置只累加它左边的元素，第一项使用 identity，例如加法中的 0。
+  </GlossaryItem>
+  <GlossaryItem term="inclusive scan">
+    每个位置把自己也算进前缀，因此最后一项通常是整个数组的总和。
+  </GlossaryItem>
+  <GlossaryItem term="work-efficient scan">
+    总加法次数与顺序版本同阶的 scan，通常用平衡树的两次遍历实现。
+  </GlossaryItem>
+  <GlossaryItem term="up-sweep / down-sweep">
+    先向根汇总部分和、再从根向叶传播前缀的两个阶段。
+  </GlossaryItem>
+  <GlossaryItem term="bank conflict">
+    同一 warp 的线程撞到同一个 shared-memory bank，导致本来并行的访问被拆开执行。
+  </GlossaryItem>
+  <GlossaryItem term="stream compaction">
+    用 mask 和 scan 找到目标地址，再把满足条件的元素按原顺序压紧到连续输出。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 39. Parallel Prefix Sum (Scan) with CUDA"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda"
+/>
