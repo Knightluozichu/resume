@@ -1,0 +1,259 @@
+---
+title: "GPU Gems 3 · Chapter 35. Fast Virus Signature Matching on the GPU"
+type: C
+section: "GPU Gems 3 Part V · Physics Simulation"
+order: 35
+description: "从网络数据的重叠字节窗口出发，解释 GPU 如何用 2-byte key 和 4-byte tag 做病毒签名候选过滤，再由 CPU 验证并通过多 buffer 管线隐藏延迟。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-35-fast-virus-signature-matching-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-35
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch35BoundaryDiagram,
+  GpuGems3Ch35NetworkPipelineDiagram,
+  GpuGems3Ch35ParallelismDiagram,
+  GpuGems3Ch35PipelineDiagram,
+  GpuGems3Ch35ResultBufferDiagram,
+  GpuGems3Ch35SignatureTableDiagram,
+  GpuGems3Ch35VirusScanLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch35-virus";
+
+<Objectives>
+
+- 能解释为什么病毒检测要把“快速筛出候选”和“验证完整签名”拆成 GPU 与 CPU 两段
+- 能修改 GPU Virus Filter Lab 的签名表规模、输入 buffer、tag 命中率、验证策略和 buffer 管线，观察候选回读如何改变吞吐
+- 能回答：为什么一个命中 tag 不等于发现病毒，以及当签名跨 buffer 边界时怎样避免漏检
+
+</Objectives>
+
+## 先问：为什么要先做一个很快的筛子
+
+网络设备面对的不是一份整齐的文件，而是一条持续流入、大小不一、可能跨越多个对象的字节流。每一段数据都可能包含恶意模式；如果每次都让最慢的完整检查从头读到尾，吞吐很快就会被拖垮。
+
+本章把工作拆成两层：先用大量轻量线程找出“看起来像”的位置，再把少量候选交给更擅长复杂判断的处理器。这样没有候选时可以快速通过，有候选时也仍然保留完整检查的准确性。
+
+<Callout type="tip" title="先预测：tag 命中率升高时，哪一段会变慢？">
+  在 Lab 中先保持 `8 MB` buffer、`30,000` signatures 和 rotating buffers，把命中率从 0% 拖到 50%。先猜 GPU 过滤、结果回读、还是 CPU 验证会成为瓶颈，再切换到 block threshold 对照。
+</Callout>
+
+## 1. 把完整签名匹配拆成候选过滤和最终验证
+
+<Callout type="trap" title="误区：一个短片段命中就等于病毒已确认">
+  **现象 →** GPU 看到一个短 key 就直接报告感染，正常文件被大量误报。
+
+**原因 →** 短 key 和前置 tag 只是便宜的候选证据；完整签名可能还包含更多字符、通配符、范围约束或跨 buffer 的上下文。
+
+**修法 →** GPU 只写候选位置和 signature identifier，CPU 再验证完整字符串，并把偏移映射回具体文件或数据包。
+</Callout>
+
+<Term def="把输入字节流与已知恶意模式逐段比较、找出候选位置并最终确认匹配的过程。">
+  signature matching
+</Term>
+
+原始库以固定字符签名为第一步：GPU 负责规则短、访存规律的候选筛选，CPU 负责完整签名验证和对象归属。正则表达式、解压、文件类型判断和最终报告并不自动变成 GPU 工作；它们仍属于应用或 CPU 侧的可变逻辑。
+
+<GpuGems3Ch35NetworkPipelineDiagram />
+
+GPU 与网络处理器有相似之处：都需要快速内存、用很多线程隐藏 DRAM 延迟，并持续搬运大批量数据。但相似不意味着所有阶段都适合并行；“候选过滤”才是本章刻意挑出的规则核心。
+
+## 2. 选择并行方向：一个包内，还是多个包之间
+
+<Callout type="tip" title="先看数据布局，再决定线程映射">
+  如果一个 buffer 里只有一个大对象，按字节窗口拆线程可以充分利用连续访问；如果对象很多且大小差异大，让不同线程处理不同对象更容易保持独立。两者都能过滤，但边界处理和对象回写成本不同。
+</Callout>
+
+<Term def="在同一个数据包或文件内部，把相邻字节窗口分给多个线程同时处理。">
+  intrapacket scanning
+</Term>
+
+<Term def="把多个数据包或文件同时交给不同线程或工作组，每个工作单元处理自己的对象。">
+  interpacket scanning
+</Term>
+
+intrapacket 让一个长对象内部的相邻窗口并行；interpacket 则让多个对象同时前进。实际库把数据先填满 buffer，再由 GPU 忽略对象边界地扫描连续字节，最后由 CPU 使用对象描述把候选归回文件。这个设计避免 GPU 在线程中维护复杂的文件状态。
+
+<GpuGems3Ch35ParallelismDiagram />
+
+两种布局的共同要求是：线程必须能独立读固定数量的字节，输出也必须能写到确定位置。于是下一步不是把完整签名复制给每个线程，而是为每个窗口准备一个很小的索引和比较值。
+
+## 3. 用 2-byte key 把签名数据库压成一次查表
+
+<Callout type="trap" title="误区：把 64,000 个表项当成无限大的签名数据库">
+  **现象 →** 签名数量超过表容量后仍假设每个签名拥有唯一 key，候选映射互相覆盖或悄悄丢失。
+
+**原因 →** 原始结构使用两个连续字节作为 16-bit 索引，最多形成约 64,000 个位置；它还要求签名拥有可区分的 6-byte 序列。
+
+**修法 →** 先检查容量和 key 唯一性。超过容量时改成多个候选的粗筛表并由 CPU 消歧，或设计更大的层级结构，不能只扩大计数器。
+</Callout>
+
+<Term def="从签名或输入中取出的连续两个字节，用作 64,000-entry GPU 表的索引。">
+  2-byte key
+</Term>
+
+对每个固定字符签名，数据库取一对连续字节作为 key，并把它前面的四个字节存成 tag。GPU 线程读取输入中的一个 2-byte window，用这个 key 索引表，再把表里的 tag 与输入窗口之前的四个字节比较。两个比较都匹配时，只说明这里值得 CPU 进一步检查。
+
+<Term def="跟随 key 存在表项中的四个前置字节；它让 GPU 用一次小比较快速排除大多数不相关窗口。">
+  tag filter
+</Term>
+
+可以把线程的主循环压缩成下面的伪代码；关键不是语言，而是每个线程读取固定窗口、做一次索引和一次短比较：
+
+```text
+for each adjacent pair at offset i:
+  key = input[i : i + 2]
+  tag = table[key]
+  if input[i - 4 : i] matches tag:
+    output[2 * i] = signatureId
+```
+
+<GpuGems3Ch35SignatureTableDiagram />
+
+这个表故意把“快”放在第一位：每个 entry 原始设计至多对应一个签名，避免 GPU 为每个窗口追逐复杂链表。代价是签名集合、key 唯一性和内存容量都成为明确的可扩展性边界。
+
+## 4. 重叠窗口与结果缓冲区决定正确性成本
+
+线程 A 读取 `[i, i + 1]`，线程 B 读取 `[i + 1, i + 2]`，这种重叠让每个连续 2-byte pair 都有机会成为 key。若签名的关键字节跨越输入 buffer 末尾，应用必须复制足够的前置数据到下一个 buffer；复制量至少要覆盖最长签名所需的上下文。
+
+<GpuGems3Ch35BoundaryDiagram />
+
+命中时 GPU 不写入整条签名，而是在输出 buffer 的相对偏移 `2i` 写入两字节 identifier。没有命中的位置保持空值，CPU 之后扫描这些稀疏结果，再根据对象描述把 offset 转成文件或数据包中的位置。
+
+<Term def="GPU 过滤器报告的候选不一定是真匹配；只有 CPU 验证完整签名后，才能确认或排除它。">
+  false positive
+</Term>
+
+<GpuGems3Ch35ResultBufferDiagram />
+
+<Callout type="trap" title="误区：候选越多，只要 GPU 够快就没有关系">
+  **现象 →** tag 命中率升高后，系统吞吐突然下降，却只继续增加 GPU 线程。
+
+**原因 →** 每个候选都可能触发结果 buffer 回读、CPU 扫描和完整签名验证；瓶颈已经从规则过滤转移到跨设备传输和缓存随机访问。
+
+**修法 →** 监控候选密度，在可接受误报的场景用 block 或 object threshold 提前标记 suspect；同时用多 buffer 轮转隐藏正常情况下的 CPU/GPU 等待。
+</Callout>
+
+## 动手走一遍：一个 buffer 如何完成过滤并回到对象结果
+
+<Stepper>
+  <Step title="先填满输入 buffer">
+    CPU 先完成文件类型判断、解压等可变工作，把一个或多个对象拼入连续 buffer，并保留对象描述与跨边界所需的前置字节。
+
+    <GpuGems3Ch35NetworkPipelineDiagram />
+  </Step>
+  <Step title="再为每个窗口做 key/tag 过滤">
+    GPU 线程读取相邻 2-byte pair，以 key 查表，再比较四字节 tag；线程不关心窗口属于哪个文件。
+
+    <GpuGems3Ch35SignatureTableDiagram />
+  </Step>
+  <Step title="把候选写入确定位置">
+    命中时把 signature identifier 写到 `2i`，没有命中就保持空值；跨 buffer 的签名依靠复制前缀保持连续上下文。
+
+    <GpuGems3Ch35BoundaryDiagram />
+  </Step>
+  <Step title="CPU 验证并映射对象">
+    CPU 扫描结果 buffer，验证完整签名，累计每个对象的候选，再报告 clean、suspect 或 confirmed 的应用状态。
+
+    <GpuGems3Ch35ResultBufferDiagram />
+  </Step>
+</Stepper>
+
+## 5. 用多 buffer 把两个处理器变成一条流水线
+
+如果 CPU 填一块 buffer、等待 GPU、再读回结果，GPU 工作时 CPU 可能闲着，CPU 验证时 GPU 也可能闲着。轮转多个 buffer 后，CPU 可以填充下一块，GPU 扫描当前块，CPU 同时验证上一块；只有结果 buffer 的回读在原始实现中仍然是串行点。
+
+<GpuGems3Ch35PipelineDiagram />
+
+轮流使用多块输入/输出 buffer，让 CPU 填充、GPU 过滤和 CPU 验证在不同 buffer 上重叠执行，可以隐藏传输与执行延迟。
+
+这种管线的收益依赖输入分布。没有 tag 命中时，GPU 可以连续处理大块数据，原文测量中最高获得 27 倍于 CPU 参考路径的加速；命中率升高后，结果回读与 CPU 验证会吞掉收益。这里的数字属于特定旧硬件和测试条件，不应当当成今天所有 GPU 的固定承诺。
+
+## 6. 用 GPU Virus Filter Lab 观察吞吐如何被候选拖慢
+
+<GpuGems3Ch35VirusScanLab />
+
+先保持 `30,000 signatures`、`8 MB` buffer 和 `rotating buffers`，把命中率从 0% 拉到 50%；再切换 `full verification`、`block threshold` 和 `object threshold`。你应该看到：过滤阶段仍然规则，但 candidate ids、结果搬运和 CPU checks 会随着命中密度上升。
+
+当数据库切到 `120,000` 时，Lab 会显式显示 table overflow。这个状态不是“GPU 变慢一点”这么简单，而是告诉你原始单 key 表的表示能力已被超过：必须引入多候选结构、分层查表或让 CPU 承担更多消歧工作。
+
+## 小结
+
+- GPU 适合做规则、短路径的候选过滤，CPU 仍负责完整签名验证和对象报告。
+- intrapacket 与 interpacket 是两种数据并行布局，连续 buffer 让 GPU 可以暂时忽略对象边界。
+- 2-byte key 索引约 64,000-entry 表，tag comparison 用四个前置字节快速排除多数窗口。
+- 重叠窗口和跨 buffer 前缀复制防止签名在边界处漏检；命中结果写入 `2i` 的稀疏输出位置。
+- 多 buffer 轮转能隐藏延迟，但 false positive 密集时回读和 CPU 验证仍会成为瓶颈。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中保持 `30,000 signatures`，分别使用 0%、10%、50% tag match rate，比较 serial 与 rotating buffers 的 relative filter path、candidate ids 和 CPU checks。说明为什么 GPU 速度不等于端到端速度。
+
+<Answer>
+
+0% 命中时输出 buffer 几乎为空，GPU 可以连续过滤，rotating buffers 主要隐藏输入传输；命中率升高后，candidate ids 增多，结果回读、扫描和完整签名验证占据更多时间。serial 会暴露 CPU/GPU 的等待，而 rotating buffers 只能重叠独立 buffer 的工作，不能消除候选本身的验证成本。
+
+</Answer>
+
+**问题 2｜诊断边界漏检。** 一个签名在 buffer A 的最后三个字节和 buffer B 的前几个字节拼成完整匹配，但系统只在 B 开头重新开始扫描。请指出数据准备和 offset 映射需要怎样修改。
+
+<Answer>
+
+在提交 B 前复制足够覆盖最长签名的 A 尾部字节，让 B 的 GPU 输入拥有连续上下文；扫描输出仍按 B 的局部 offset 写入，CPU 映射对象结果时要减去复制前缀长度，避免把补齐字节报告成新对象内容。对象描述必须保留原始边界，GPU 不负责判断文件归属。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个几乎没有命中的高速流量、一个命中率高但允许提前标记 suspect 的网关、一个必须精确处理正则签名的离线扫描器，分别选择管线和验证策略。
+
+<Answer>
+
+低命中高速流量适合 rotating buffers，让 GPU 过滤吞吐成为主收益；高命中且允许保守告警的网关可以按 block 或 object threshold 提前停止部分 CPU 验证，但要明确 false positive 语义；必须精确执行复杂正则的离线扫描器仍应把 GPU 当候选生成器，保留 CPU 状态机和完整验证，不能把固定字符 key 表当成完整正则引擎。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="signature matching">
+    把输入字节与已知模式逐段比较，并最终确认是否真的匹配的过程。
+  </GlossaryItem>
+  <GlossaryItem term="intrapacket scanning">
+    在一个文件或数据包内部，把相邻字节窗口分给多个线程并行检查。
+  </GlossaryItem>
+  <GlossaryItem term="interpacket scanning">
+    同时处理多个文件或数据包，让不同对象占据不同的并行工作单元。
+  </GlossaryItem>
+  <GlossaryItem term="2-byte key">
+    用来索引 GPU 签名表的连续两个字节，原始结构约有 64,000 个位置。
+  </GlossaryItem>
+  <GlossaryItem term="tag filter">
+    跟随 key 存储的四个前置字节比较，用便宜的短检查筛出候选。
+  </GlossaryItem>
+  <GlossaryItem term="false positive">
+    过滤器报告了候选，但 CPU 验证完整签名后发现并没有真正匹配。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 35. Fast Virus Signature Matching on the GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-35-fast-virus-signature-matching-gpu"
+/>
