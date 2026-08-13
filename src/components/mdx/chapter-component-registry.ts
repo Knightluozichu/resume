@@ -13519,6 +13519,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       IteratorCursorTraversalLab: module0.IteratorCursorTraversalLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/03-behavioral/memento": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/memento-snapshot-canvas-lab");
+    return {
+      MementoSnapshotCanvasLab: module0.MementoSnapshotCanvasLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

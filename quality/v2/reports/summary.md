@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T18:54:30.771Z；旧版分数不迁移。
+> 2026-08-13T19:14:16.855Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1871
+- failed：1870
 - queued：218
-- passed：1727
+- passed：1728
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -110,7 +110,7 @@
 | 97 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 98 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 99 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
-| 100 | design-patterns | 27 | 8 | 0 | 19 | 24 |
+| 100 | design-patterns | 27 | 7 | 0 | 20 | 21 |
 | 101 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 102 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 103 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |

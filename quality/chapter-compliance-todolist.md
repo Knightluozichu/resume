@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T18:54:47.084Z
+> 生成时间：2026-08-13T19:14:23.182Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 473 |
-| failed | 1871 |
+| failed | 1870 |
 | queued | 218 |
-| passed | 1727 |
+| passed | 1728 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4397,7 +4397,7 @@
     - 路径：`content/deep-understanding-jvm/24-duj3-official-final-review/duj3-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## design-patterns（27 个内容页面 · failed:8 passed:19 · 🚫 门禁阻断 9 项）
+## design-patterns（27 个内容页面 · failed:7 passed:20 · 🚫 门禁阻断 8 项）
 
 - 门禁摘要：目录=未登记，manifest=24；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：design-patterns: publication-policy-not-approved。
@@ -4459,7 +4459,7 @@
 - [x] ✅ **03-behavioral/mediator** — passed；score 97
     - 路径：`content/design-patterns/03-behavioral/mediator.mdx`
     - 正式 unit：`designpatterns-20` explained=13/13
-- [ ] ❌ P1 **03-behavioral/memento** — failed；score 43；门禁阻断: status=failed、score=43<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **03-behavioral/memento** — passed；score 96
     - 路径：`content/design-patterns/03-behavioral/memento.mdx`
     - 正式 unit：`designpatterns-21` explained=13/13
 - [ ] ❌ P1 **03-behavioral/observer** — failed；score 43；门禁阻断: status=failed、score=43<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: source、pedagogy、visual、practice、ux、engineering
