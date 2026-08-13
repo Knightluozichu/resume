@@ -8911,6 +8911,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10CreatingTypesInCsharpTypeContractMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/07-official/collections": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/collections-capability-flow-diagram");
+    return {
+      Ctc10CollectionsCapabilityFlowDiagram:
+        module0.Ctc10CollectionsCapabilityFlowDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
