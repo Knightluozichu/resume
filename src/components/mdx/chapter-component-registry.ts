@@ -13455,6 +13455,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CompositePermissionTreeLab: module0.CompositePermissionTreeLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/02-structural/facade": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/facade-subsystem-gateway-lab");
+    return {
+      FacadeSubsystemGatewayLab: module0.FacadeSubsystemGatewayLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
