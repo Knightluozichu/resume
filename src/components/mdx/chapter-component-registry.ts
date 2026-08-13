@@ -12511,6 +12511,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DnjNetworkProtocolMapDiagram: module0.DnjNetworkProtocolMapDiagram,
     } as ChapterMdxComponents;
   },
+  "deep-nodejs/04-web-process/dnj-08-web-application": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/web-application-request-map-diagram");
+    return {
+      DnjWebApplicationRequestMapDiagram:
+        module0.DnjWebApplicationRequestMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");

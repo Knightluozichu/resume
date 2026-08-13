@@ -3,307 +3,290 @@ title: "第 8 章 构建 Web 应用"
 type: A
 section: "深入浅出 Node.js · Web 与进程"
 order: 8
-description: "从请求解析、Cookie/Session/缓存/认证、上传、路由、中间件到模板和 BigPipe 构建 Web 请求链。"
+description: "从请求解析、Cookie/Session/缓存/认证、上传、路由、中间件到模板和 BigPipe，建立输入受限、身份可验证、响应只完成一次的 Node Web 请求链。"
 demo: true
 math: false
 sourceUrl: "https://www.96192.com/product/detail/637599"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dnj-unit-08
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { DnjWebApplicationRequestMapDiagram } from "@/components/mdx/deep-nodejs/web-application-request-map-diagram";
 
-## 直觉起点
+# 第 8 章 构建 Web 应用
 
-、、、、共同构成本页的观察坐标。Web
-应用把不可信请求变成受控业务调用：解析与验证先于路由业务，身份与 Session
-有明确边界，中间件只完成一次，响应和模板输出需要编码。 深入理解 Node 不是背诵
-API，而是回答 JavaScript
-与系统之间如何传递数据、谁拥有异步资源、错误沿哪条边传播、何时能安全退出。
+<Objectives>
 
-## 六阶段执行链
+- 能把请求从 bytes 解析到响应，明确输入上限、身份状态、路由匹配、中间件顺序和唯一完成出口。
+- 能实现安全的 Cookie/Session、查询与上传处理，并比较文件路径、MVC 和 RESTful 路由的边界。
+- 能为模板、内容响应、BigPipe 和异常处理设计可重放验收矩阵，证明敏感数据不会越过输出边界。
 
-### 1. 限制并解析请求
+</Objectives>
 
-固定 Node 版本、依赖锁、入口参数、环境变量和输入，先预测同步栈、异步资源与最终输出。没有版本证据，就无法区分原书历史行为和现代运行时。
+## Web 应用的第一条规则：请求不是可信对象
 
-### 2. 恢复身份会话
+Web 应用接收的是一组由客户端控制的 method、target、headers、cookies、body 和上传字节。它们经过解析、大小限制、身份恢复、路由匹配和业务处理后，才可以成为响应或页面。把请求直接交给 handler，会把解析错误、权限错误和模板注入混在一起，也很难知道哪个资源应当关闭。
 
-明确数据是模块标识、字节、事件、请求、消息还是制品，并标出创建资源与接收完成通知的所有者。资源创建必须同时设计错误、超时和关闭。
+先预测一条 `POST /users` 请求：body 在哪里停止，Session 从哪里恢复，哪个 middleware 可以拒绝它，handler 何时获得一次调用，响应何时拥有 status 和 body。然后只改变一个边界，例如把 query 重复一次、把 cookie 签名截断或让上传超过上限，观察第一个不同的状态。
 
-### 3. 匹配路由
+本章的验收不变量是：**请求有界、身份可验证、路由可解释、中间件只前进一次、输出按上下文编码、错误只产生一个终态。** 页面显示成功不足以证明这些条件；必须同时记录输入摘要、匹配结果、身份来源、响应状态和清理结果。
 
-把正常路径压缩为最小可运行样本，只保留一个完成出口。回调、Promise、事件和进程消息不能为同一操作重复签发结果。
+<Term def="把 method、路径、query、headers、cookie、body 与上传内容解析成带大小上限和拒绝原因的内部请求。">request normalization</Term>
 
-### 4. 执行中间件链
+<Term def="由客户端携带不透明标识、由服务端验证并加载状态的会话边界；标识本身不应承载未经保护的权限结论。">session boundary</Term>
 
-注入一个边界：空输入、分块、慢消费者、权限、断线、Worker 退出、依赖升级或部署失败。停止在首个偏离点并保存状态。
+<Term def="把 URL、HTTP method 和资源约束映射到一个 handler，并在匹配失败时给出确定的 404 或 405 结果。">route contract</Term>
 
-### 5. 渲染或流式响应
+<Term def="多个处理阶段按顺序观察或改变请求，每个阶段只能调用 next 一次或写出一次响应。">middleware chain</Term>
 
-检查 2013 年接口在当前 Node 的状态：仍支持、语义变化、弃用或移出生态。现代替代保持原问题身份，同时明确迁移不能自动保证的行为。
+<Term def="根据 HTML、属性、URL、JSON 或脚本上下文选择不同编码规则，防止数据在输出解释阶段变成代码。">contextual output encoding</Term>
 
-### 6. 统一异常出口
+<Callout type="trap" title="参数解析成功就可以直接进业务">
+  **现象：**`req.query` 或表单字段看起来是字符串，业务却遇到数组、超长值和意外编码。**原因：**解析只完成形状转换，没有完成大小、类型、重复键和权限验证。**修法：**先做 request normalization，再让 route contract 接收经过 schema 检查的对象。
+</Callout>
 
-删除故障并重放同一输入，等待文件、套接字、队列、Worker、日志和连接排空。输出、退出码与资源计数共同收敛才算恢复。
+<Callout type="trap" title="Session ID 等于登录身份">
+  **现象：**客户端改写或重放 cookie 后获得了不属于自己的状态。**原因：**服务只相信标识，没有校验签名、过期、撤销、绑定条件和服务端记录。**修法：**把 cookie 当查找键，服务端验证 session boundary，并在权限变化时轮换标识。
+</Callout>
 
-## 核心机制深挖
+<Callout type="trap" title="模板变量只要不是脚本就能原样输出">
+  **现象：**HTML 文字安全，属性、URL 或脚本片段却产生注入。**原因：**不同输出上下文需要不同编码，HTML escape 不能覆盖 JavaScript、CSS 和 URL。**修法：**让模板默认转义，按上下文使用专用编码，并把 CSP、CSRF 和输出测试纳入验收。
+</Callout>
 
-Web 应用把不可信请求变成受控业务调用：解析与验证先于路由业务，身份与 Session 有明确边界，中间件只完成一次，响应和模板输出需要编码。 所有案例统一记录六类证据：**输入表示、模块或协议边界、调度阶段、资源所有者、错误出口、关闭条件**。表示错误会造成编码或分帧歧义；调度理解错误会把同步事件误认为异步回调；所有权不清会留下描述符、Worker 与连接；关闭条件缺失会让进程悬挂或强行丢数据。
+<Stepper>
+  <Step title="切换 request、session 与 route 边界">
+    <DnjWebApplicationRequestMapDiagram />
+  </Step>
+  <Step title="限制并规范化输入">为 method、path、query、cookie、body 和 upload 写长度、类型、重复键与拒绝状态。</Step>
+  <Step title="重放身份失败">替换签名、过期时间、Session 记录和权限版本，确认错误不会把未认证请求送入 handler。</Step>
+</Stepper>
 
-本页签发不变量是：**请求体和上传有上限，身份、路由、中间件和模板职责分离，任一错误只产生一次响应且敏感状态不进入客户端。**。代码必须回答正常路径完成什么、边界输入限制在哪里、失败由谁观察、取消怎样传播、关闭等待哪些资源，以及 2013 年接口在当前 Node 中是否仍适合新项目。成功输出不能独自证明这些条件。
+## 第8章 构建Web应用
 
-## 2013 版与现代 Node 的版本账本
+第8章 构建Web应用的主线不是堆积框架 API，而是把不可信请求变成一个可以审计的状态转移：normalize、authenticate、route、run middleware、render/stream、complete。每一步都要把“输入、owner、错误、下一步”写清楚。
 
-原书出版于 2013 年，覆盖早期 CommonJS、V8 分代回收、process.nextTick、setImmediate、node-heapdump、node-memwatch、旧 Buffer 构造器、cluster、node-inspector、AMD/CMD 和 CouchDB npm 仓库。重构保留 11 章 4 附录的知识身份，但现代示例采用安全且受支持的入口，并明确 `node:*` 模块、Promise/async、Buffer.alloc、N-API、Inspector、node:test、锁文件和当前供应链机制的对照关系。
+## 8.1 基础功能
 
-版本账本至少包含原书接口、当时用途、当前支持状态、替代入口、行为差异和移除兼容层的条件。事件循环、TCP 无消息边界、字节编码、资源所有权等稳定原理不会因版本改变；模块解析细节、V8 回收器、默认超时、cluster 调度和包仓库实现必须按当前版本重新验证。
-
-## 完整公开目录逐项讲解
-
-### 第8章 构建Web应用
-
-第8章 构建Web应用 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“限制并解析请求”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 8.1 基础功能
-
-8.1 基础功能 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“恢复身份会话”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.1 基础功能包含请求方法、路径、query、Cookie、Session、缓存和 Basic 认证。它们共享一个先后关系：先解析和限制，再恢复身份，最后授权和执行业务。缓存命中也不能绕过权限检查，Basic 认证成功也不代表资源访问已获授权。
 
 ### 8.1.1 请求方法
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
+8.1.1 请求方法不只是字符串分支。GET/HEAD 通常要求安全读取，PUT/DELETE 的幂等语义影响重试，POST 需要明确幂等键或禁止盲目重放。服务器应对不允许的方法返回确定的 405 和 `Allow`，而不是把所有请求交给同一 handler。
 
-实验从“匹配路由”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+```js
+function methodPolicy(method) {
+  if (method === "GET" || method === "HEAD") return { kind: "read", retryable: true };
+  if (method === "PUT" || method === "DELETE") return { kind: "write", retryable: "with-id" };
+  if (method === "POST") return { kind: "write", retryable: "idempotency-key" };
+  return null;
+}
+```
 
 ### 8.1.2 路径解析
 
-8.1.2 路径解析 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“执行中间件链”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.1.2 路径解析要在路由匹配前完成 URL 解码、重复斜杠策略、路径参数类型和 traversal 防护。文件路径型路由不能把用户输入直接拼进 filesystem path；先将参数限制到允许的资源 ID，再通过固定根目录解析并确认结果仍在根目录内。
 
 ### 8.1.3 查询字符串
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“渲染或流式响应”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.1.3 查询字符串可能包含重复键、空值、数组样式和超长编码。schema 应明确 `?limit=10&limit=100000` 取哪一个、未知键是否拒绝、数字是否有范围。查询只改变筛选条件，不应偷偷改变身份或授权结论。
 
 ### 8.1.4 Cookie
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“统一异常出口”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.1.4 Cookie 需要同时考虑 `Secure`、`HttpOnly`、`SameSite`、Domain、Path、Max-Age 和大小上限。解析 cookie 只得到候选值；签名校验、过期和轮换完成后，才能把它送入 session boundary。敏感状态不应放在可被客户端读取的明文 cookie 中。
 
 ### 8.1.5 Session
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“限制并解析请求”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.1.5 Session 可以是服务端存储，也可以是带签名和加密的受控 token；两者都要定义过期、撤销、并发登录、固定攻击和密钥轮换。登录成功时轮换 session ID，权限提升时再次轮换，退出时删除服务端状态或加入撤销策略。
 
 ### 8.1.6 缓存
 
-process.memoryUsage 的 heapUsed、external、arrayBuffers 与 RSS 指向不同区域。泄漏排查从固定负载和基线开始，用快照保留路径找所有者；大文件通过流与背压处理。
-
-实验从“恢复身份会话”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.1.6 缓存键必须包含真正影响响应的身份、语言、版本和资源参数。私有响应不能被公共缓存复用，失效和 stale 数据应有策略；缓存命中发生在授权之前会把上一个用户的内容发给下一个用户。记录 hit、miss、age 和 owner，比只记录快慢更容易定位错误。
 
 ### 8.1.7 Basic认证
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
+8.1.7 Basic认证把用户名和密码放进编码后的 header，因此只能在已验证的 TLS 通道上使用，并且服务端仍需 rate limit、恒定时间比较、密码 KDF 和统一错误消息。认证通过只建立 principal，后续 route contract 仍要检查资源授权。
 
-实验从“匹配路由”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+<Stepper>
+  <Step title="切换 upload、route 与 middleware 链">
+    <DnjWebApplicationRequestMapDiagram />
+  </Step>
+  <Step title="追踪一个 body 到 handler">记录 content type、parser、临时文件、route params、middleware 次数和 response owner。</Step>
+  <Step title="注入上传与异常">让 multipart、JSON、文件名、解析器和 handler 分别失败，确认临时资源删除且响应只完成一次。</Step>
+</Stepper>
 
-### 8.2 数据上传
+## 8.2 数据上传
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“执行中间件链”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.2 数据上传的风险在于 body 可以远大于内存预算，并且 content type、文件名和压缩格式都能被伪造。上传处理应先限制总字节、字段数、单文件大小、解压倍率和处理时间，再决定是否落盘、扫描、转码或交给业务。
 
 ### 8.2.1 表单数据
 
-8.2.1 表单数据 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“渲染或流式响应”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.2.1 表单数据要区分 `application/x-www-form-urlencoded` 和 `multipart/form-data`。解析器应限制键值数量、嵌套深度、字段大小和 boundary；解析未完成时客户端断开，临时 buffer 和 file descriptor 都必须走同一 cleanup。
 
 ### 8.2.2 其他格式
 
-8.2.2 其他格式 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“统一异常出口”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.2.2 其他格式包括 JSON、文本和二进制。`Content-Type` 只是声明，不是事实证明；先做 bytes 上限和语法解析，再用 schema 检查字段。未知格式应明确拒绝，不能为了“兼容”把二进制猜成 UTF-8。
 
 ### 8.2.3 附件上传
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“限制并解析请求”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.2.3 附件上传要把客户端文件名与服务端存储名分离，拒绝路径分隔符和危险扩展名，使用临时目录、随机 ID 和权限最小化。先写临时对象，完成大小和病毒扫描后再原子移动；失败和取消都要删除半成品。
 
 ### 8.2.4 数据上传与安全
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
+8.2.4 数据上传与安全还需防 zip bomb、解析器漏洞、宏文件、内容嗅探和跨租户读取。响应使用 `Content-Disposition` 时也要编码文件名；日志记录 digest、size 和 verdict，不记录 token、密码或原始附件。
 
-实验从“恢复身份会话”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+## 8.3 路由解析
 
-### 8.3 路由解析
-
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“匹配路由”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.3 路由解析把 transport 层的 path 和 method映射到业务边界。路由表应在启动时构建并可审计，匹配顺序不能被动态注册悄悄改变；404 表示资源不存在，405 表示资源存在但方法不允许，两者对客户端修复方向不同。
 
 ### 8.3.1 文件路径型
 
-8.3.1 文件路径型 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“执行中间件链”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.3.1 文件路径型路由适合静态资源和按目录组织的页面，但必须固定根目录、拒绝 traversal、限制符号链接和 MIME 类型。URL 解码只能发生在明确阶段，不能对已经解码的值重复解码而制造新的分隔符。
 
 ### 8.3.2 MVC
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“渲染或流式响应”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.3.2 MVC 把 controller 的请求协调、model 的领域状态和 view 的输出分开。controller 不应把未验证的 query 直接塞给 model，view 不应决定授权；用一个 request context 传递 trace、principal、locale 和 deadline，避免隐式全局状态。
 
 ### 8.3.3 RESTful
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
+8.3.3 RESTful 路由以资源和表示为中心，使用 HTTP method、状态码和链接语义表达操作。版本、分页、ETag、条件请求和幂等键应进入契约；错误响应保持稳定 schema，不能通过堆栈信息泄漏内部路径。
 
-实验从“统一异常出口”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+## 8.4 中间件
 
-### 8.4 中间件
-
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“限制并解析请求”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.4 中间件是围绕请求的可组合阶段，例如 request id、日志、认证、限流、解析、路由和错误边界。排序直接改变语义：body parser 需要在 schema validation 之前，认证要在 private cache 之前，error handler 要包住异步 handler。
 
 ### 8.4.1 异常处理
 
-8.4.1 异常处理 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“恢复身份会话”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.4.1 异常处理需要一个统一的 error boundary，把可预期的客户端错误映射为稳定状态，把内部异常记录为带 trace 的服务端事件。响应已开始后不能重新发送 header；abort、timeout 和 handler throw 之间用 completion guard 防止二次完成。
 
 ### 8.4.2 中间件与性能
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“匹配路由”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.4.2 中间件与性能要测量每一层的 wall time、CPU、分配和 body bytes，而不是简单删除日志或校验。昂贵的解析和认证可按路由裁剪，但安全边界不能因为 benchmark 而跳过。慢 middleware 应共享 request deadline，并在下游取消时停止工作。
 
 ### 8.4.3 小结
 
-8.4.3 小结 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
+8.4.3 小结：每个 middleware 只能选择 `next`、response 或 error 中的一条出口；调用 next 后再写 response 是最常见的重复完成来源。把顺序、owner 和 deadline 写进测试，才能让链条在框架迁移后仍可解释。
 
-实验从“执行中间件链”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+<Stepper>
+  <Step title="切换内容响应、模板与 BigPipe">
+    <DnjWebApplicationRequestMapDiagram />
+  </Step>
+  <Step title="比较 render 与 stream">记录 headers commit、chunk 顺序、模板上下文、缓存策略和客户端中断。</Step>
+  <Step title="做输出安全回放">把相同输入放入 HTML、attribute、URL 和 script 上下文，确认编码规则不同且敏感值不泄漏。</Step>
+</Stepper>
 
-### 8.5 页面渲染
+## 8.5 页面渲染
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“渲染或流式响应”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.5 页面渲染需要把数据与代码分开。内容响应可以是 JSON、HTML 或流；视图渲染把已授权数据交给模板；BigPipe 则把页面分成先后片段。所有路径都必须在输出前完成上下文编码，不能让模板引擎替业务决定权限。
 
 ### 8.5.1 内容响应
 
-8.5.1 内容响应 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“统一异常出口”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.5.1 内容响应应明确 `Content-Type`、charset、Cache-Control、ETag 和 Content-Length/stream 选择。JSON 输出使用序列化器，不把用户输入拼进 JSONP 或脚本；错误响应保持相同的 envelope，不把内部 exception message 返回给客户端。
 
 ### 8.5.2 视图渲染
 
-8.5.2 视图渲染 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“限制并解析请求”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.5.2 视图渲染先组装 view model，再交给默认转义的模板。view model 不应携带数据库连接、request、session store 或可调用对象；这样可以把渲染测试变成纯输入到 HTML 的检查，也能避免模板访问越权资源。
 
 ### 8.5.3 模板
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
-
-实验从“恢复身份会话”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.5.3 模板要按上下文编码：HTML 文本、属性、URL、CSS 和 JavaScript 不能共用一个 escape 函数。禁止把字符串当作“已安全 HTML”四处传递；如确实需要受控富文本，先经过白名单 sanitizer，并用恶意属性、URL 和脚本样本验收。
 
 ### 8.5.4 BigPipe
 
-请求数据默认不可信，解析、大小限制、认证和验证应先于业务。Session 只向客户端暴露不透明标识，中间件保持单次 next 或响应，模板输出按上下文编码。
+8.5.4 BigPipe 把页面壳和局部片段分批发送，可以降低首屏等待，但也扩大了状态一致性和错误处理面。每个 chunk 都要带顺序/标识、超时和取消策略；用户权限变化或后端失败时，后续片段不能覆盖已显示的错误或私有内容。
 
-实验从“匹配路由”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+## 8.6 总结
 
-### 8.6 总结
+8.6 总结可以用六个问题验收：请求是否受限，Session 是否可验证，route 是否有明确 method，middleware 是否只完成一次，输出是否按上下文编码，关闭/错误是否能重放。缓存、上传和流式渲染都必须服从这六个问题，而不是拥有特殊豁免。
 
-8.6 总结 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
+## 8.7 参考资源
 
-实验从“执行中间件链”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+8.7 参考资源按用途分为原书目录、当前 Node HTTP/URL/stream 文档、Cookie/Session/HTTP 规范、安全输出指南和项目实验日志。原书出版于 2013 年，历史 API 只用于解释问题来源；迁移到 `node:` 模块、Promise/async 和 AbortSignal 时，要重新验证默认值、超时和错误语义。
 
-### 8.7 参考资源
+## 版本账本：从 2013 API 迁移到当前 Node
 
-8.7 参考资源 要放回“限制并解析请求、恢复身份会话、匹配路由、执行中间件链、渲染或流式响应、统一异常出口”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
+原书的 Web 章节处于早期 CommonJS、回调、中间件生态和手工模板的时代。现代重写保留请求、Session、路由、上传、middleware、render 和 BigPipe 的问题身份，但使用当前 Node 的 URL、HTTP、stream、AbortSignal 和锁定依赖。迁移验收关注行为而非只改 import：body limit、错误状态、cookie 属性、异步取消和输出编码都必须有样本。
 
-实验从“渲染或流式响应”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+| 历史关注点 | 当前验证入口 | 迁移时必须重测 |
+| --- | --- | --- |
+| HTTP server 与请求事件 | `node:http`、`URL`、AbortSignal | method、body limit、timeout、abort、single completion |
+| Cookie/Session 中间件 | 受支持的 session store 与签名库 | rotation、expiry、SameSite、跨实例一致性 |
+| 文件与表单上传 | 流式 parser、临时目录、scanner | size、field count、filename、cleanup、zip bomb |
+| 模板与页面分块 | 默认转义模板、stream、CSP | HTML/URL/script context、chunk order、private cache |
 
-## 资源与失败矩阵
-
-| 资源          | 正常完成           | 常见边界             | 失败出口        | 关闭证据     |
-| ------------- | ------------------ | -------------------- | --------------- | ------------ |
-| 模块与包      | 导出一次、依赖锁定 | 循环依赖、平台差异   | 解析或 ABI 错误 | 模块图可追溯 |
-| Buffer 与流   | 编码完整、背压生效 | 截断、跨字符、慢目标 | pipeline 拒绝   | 描述符关闭   |
-| 套接字与请求  | 响应一次           | 半包、断线、超时     | error 或 abort  | close 已观察 |
-| Worker 与制品 | 退出、接管或回滚   | 崩溃、重启风暴       | 非零码与报警    | 在途请求排空 |
-
-## 最小可运行实验
+## 最小实验：把请求状态压缩为一条 trace
 
 ```js
-import http from "node:http";
-const server = http.createServer((request, response) => {
-  const url = new URL(request.url ?? "/", "http://localhost");
-  if (request.method !== "GET" || url.pathname !== "/health") {
-    response.writeHead(404).end();
-    return;
-  }
-  response.setHeader("content-type", "application/json");
-  response.end(JSON.stringify({ ok: true }));
-});
+const trace = {
+  id: "web-42",
+  input: { method: "POST", path: "/upload", bodyLimit: 1_048_576 },
+  principal: null,
+  route: null,
+  middleware: [],
+  response: "pending",
+  owners: ["request-body", "upload-temp-file", "deadline-timer"],
+};
+
+function finish(status) {
+  if (trace.response !== "pending") return false;
+  trace.response = status;
+  trace.owners = [];
+  return true;
+}
 ```
 
-```yaml
-book: 深入浅出 Node.js
-edition: 2013-12
-page: dnj-08-web-application
-sample: normal | boundary | failure | recovery
-module_graph_fixed: true
-resource_owner_known: true
-single_completion: true
-close_observed: true
-```
-
-```text
-freeze node version + dependency lock + input
-predict sync stack + async resources + byte boundaries
-change exactly one boundary condition
-stop at the first divergent state
-remove fault and replay the same sample
-wait for files, sockets, workers, and logs to close
-```
-
-## 常见误区与故障注入
-
+先预测正常上传、过大 body、无效 Session 和模板渲染失败的 trace。每个样本只改变一个条件；通过条件是 response 只从 pending 转移一次，临时资源消失，日志能由 trace id 还原首个错误。
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                         | 必查证据                  | 通过条件       |
-| ---- | -------------------------------- | ------------------------- | -------------- |
-| 正常 | 小输入、依赖健康                 | 字节、事件、响应、提交    | 只完成一次     |
-| 边界 | 空、长、分块、慢、并发           | 上限、背压、顺序          | 内存与延迟受控 |
-| 失败 | 权限、断线、Worker退出、部署失败 | 首个错误与所有者          | 错误不丢不重复 |
-| 恢复 | 删除故障后同样本重放             | close、exit、连接数、回滚 | 无悬挂资源     |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 合法 method、Session、route 和小 body | normalized input、principal、status、owners | 响应一次，资源归零 |
+| 边界 | 重复 query、超大上传、慢 middleware、空 cookie | limits、deadline、parser state、cache key | 受控拒绝，不无限等待 |
+| 失败 | 过期 Session、未知 route、模板异常、scanner reject | 首个 error、trace、response state | 错误可见且不泄漏敏感值 |
+| 恢复 | 修复输入或依赖后重放相同请求 | status、chunk、cache、cleanup | 结果稳定，无临时文件残留 |
 
-目录证据：第8章 构建Web应用、8.1 基础功能、8.1.1 请求方法、8.1.2 路径解析、8.1.3 查询字符串、8.1.4 Cookie、8.1.5 Session、8.1.6 缓存、8.1.7 Basic认证、8.2 数据上传、8.2.1 表单数据、8.2.2 其他格式、8.2.3 附件上传、8.2.4 数据上传与安全、8.3 路由解析、8.3.1 文件路径型、8.3.2 MVC、8.3.3 RESTful、8.4 中间件、8.4.1 异常处理、8.4.2 中间件与性能、8.4.3 小结、8.5 页面渲染、8.5.1 内容响应、8.5.2 视图渲染、8.5.3 模板、8.5.4 BigPipe、8.6 总结、8.7 参考资源。本页按完整公开目录独立教学重构，不复制原书正文；29 个条目全部进入输入、机制、失败、版本和关闭证据链。
+## 练习：从请求现象还原 Web 边界
 
-## 练习
+<Exercises>
 
+**问题 1：** 如何避免一个请求同时走 error handler 和成功响应？
 
-## 小结
+<Answer>
+  为请求建立 single-completion guard，handler、timeout、abort 和 error 都只能把 pending 状态改成一个终态。middleware 调用 next 后不能继续写 response；error boundary 只处理尚未提交 headers 的请求，已开始的流则销毁并记录 trace。
+</Answer>
 
-- Cookie：对应“限制并解析请求”的核心观察量。
-- Session：对应“恢复身份会话”的核心观察量。
-- 路由：对应“匹配路由”的核心观察量。
-- 中间件：对应“执行中间件链”的核心观察量。
-- BigPipe：对应“渲染或流式响应”的核心观察量。
-- 29 个本页公开目录条目已全部映射到执行链与版本账本。
-- 先预测再运行；最终输出、错误传播和资源关闭共同决定是否通过。
+**问题 2：** 上传文件为什么不能只检查文件名后缀？
+
+<Answer>
+  文件名和 Content-Type 都由客户端控制，不能证明内容。应限制总大小、字段数、解压倍率和处理时间，使用随机存储名和临时目录，检查实际格式或扫描结果后再原子移动；取消、解析错误和扫描失败都删除半成品。
+</Answer>
+
+**问题 3：** Session、缓存和模板怎样共同防止跨用户数据泄漏？
+
+<Answer>
+  先验证 Session 并得到 principal，再用包含身份、locale、版本和资源参数的私有 cache key 查缓存；view model 只携带已授权数据，模板按 HTML、attribute、URL 或 script 上下文编码。公共缓存不能复用私有响应，渲染失败也不能输出原始 token。
+</Answer>
+
+</Exercises>
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="request normalization" definition="对 method、URL、headers、cookie、body 与 upload 做解析、限长和 schema 验证。" />
+  <GlossaryItem term="session boundary" definition="验证客户端会话标识并从受控存储恢复 principal 与状态。" />
+  <GlossaryItem term="route contract" definition="把 method、URL 与资源约束映射到唯一 handler 和失败状态。" />
+  <GlossaryItem term="middleware chain" definition="按顺序执行的请求阶段，每个阶段只选择一个继续或完成出口。" />
+  <GlossaryItem term="contextual output encoding" definition="按 HTML、属性、URL、CSS 或脚本上下文使用相应编码。" />
+</Glossary>
 
+<Attribution adaptedFrom="《深入浅出 Node.js》第 8 章：构建 Web 应用" adaptedUrl="https://www.96192.com/product/detail/637599" />
