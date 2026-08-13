@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T10:16:36.607Z；旧版分数不迁移。
+> 2026-08-13T10:24:49.431Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1907
+- failed：1906
 - queued：218
-- passed：1691
+- passed：1692
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -65,13 +65,13 @@
 | 52 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
 | 53 | effective-java | 17 | 17 | 0 | 0 | 73 |
 | 54 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 55 | deep-understanding-jvm | 25 | 17 | 0 | 8 | 51 |
-| 56 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 57 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 58 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 59 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 60 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 61 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 55 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 56 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 57 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 58 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 59 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 60 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 61 | deep-understanding-jvm | 25 | 16 | 0 | 9 | 48 |
 | 62 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
 | 63 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
 | 64 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |

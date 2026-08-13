@@ -1,56 +1,275 @@
 ---
-title: 第三部分 虚拟机执行子系统
-description: 第三部分 虚拟机执行子系统覆盖1个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
+title: "第三部分 虚拟机执行子系统"
+description: "把 Class 文件到方法执行的路径拆成可核对的状态链：固定字节码与 JDK，分别验证、加载、链接、初始化和栈帧，再用 javap、JFR 与失败样例交接证据。"
 type: C
-section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
+section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
 draft: false
-math: true
-sourceUrl: 'https://github.com/fenixsoft/jvm_book'
+math: false
+sourceUrl: "https://github.com/fenixsoft/jvm_book"
 demo: true
 order: 0
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: duj3-part-3-execution-subsystem
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Duj3Part3ExecutionSubsystemEvidenceMap } from "@/components/mdx/deep-understanding-jvm/duj3-part-3-execution-subsystem-evidence-map";
 
-{/* DUJ3_QUALITY_V2 */}
+# 第三部分 虚拟机执行子系统
 
-## 为什么从“Class到执行状态台”开始
+一段 Java 代码从源码变成正在运行的方法，中间经过的不是一条“编译后直接执行”的直线。Class 文件带着版本、常量池、字段和方法表进入虚拟机；验证、加载、链接、初始化与执行分别承担不同责任。调试时若把这些阶段混成一个“类加载问题”，就无法解释第一处失败发生在哪里。
 
-第三部分 虚拟机执行子系统不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。Class到执行状态台沿“class bytes → verification → loading/linking/init → frames”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+本部分建立一份可重放的状态合同：输入是固定的 Class 字节和运行时版本，输出是每个阶段的原始证据，失败则保留退出码、异常链和字节码校验和。图中高亮表示教学顺序，不生成合成的性能分数，也不把某个 HotSpot 版本的实现细节冒充 JVMS 必然行为。
 
-第三部分 虚拟机执行子系统固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变表示层或解析时点；图中只呈现本章真实运行时对象、状态边与证据出口；高亮表示当前分析路径，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+<Objectives>
 
-## 来源、勘误与独立重写边界
+- 能沿验证、加载、链接、初始化和方法执行的边界解释一次 Class 到结果的状态变化。
+- 能只改变一个字节码、类路径或初始化条件，保存 `javap`、异常、JFR 和版本证据，定位首个分叉。
+- 能区分 JVMS 规定、HotSpot 实现与 JDK 发行版行为，在证据不足或兼容性越界时停止并回到基线。
 
-第三部分 虚拟机执行子系统依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。第三部分 虚拟机执行子系统未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
-
-第三部分 虚拟机执行子系统保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。第三部分 虚拟机执行子系统的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
-
-## 本章跨层合同与章专属探针
-
-、、、、。
-
-第三部分 虚拟机执行子系统的通过不变量是“Class表项、加载状态、栈帧与调用结果能够逐层对应”。第三部分 虚拟机执行子系统的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
-
-第三部分 虚拟机执行子系统使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存Class校验和、常量池与指令，不能只复制命令截图：
-
-```bash
-javac --release 12 Sample.java
-javap -v -c -s Sample
-```
-
-
-## 官方目录逐项深读
-
-### 第三部分 虚拟机执行子系统
-
-**四级证据 1/1。** 第三部分 虚拟机执行子系统中的第三部分 虚拟机执行子系统：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第三部分 虚拟机执行子系统固定解析时点为“加载”，只把表示层从“源码”切到“运行时”，以Class校验和、常量池与指令定位第一处变化并验证“Class表项、加载状态、栈帧与调用结果能够逐层对应”。
+</Objectives>
 
 ## 三个必须主动触发的误区
 
+<Callout type="trap" title="把类能找到当成类能使用">
+  **现象 →** `Class.forName` 返回成功，就认为类已经可以安全执行。 **原因 →**
+  找到类只说明加载入口可用，验证、准备、解析、初始化和依赖类仍可能在后续失败。
+  **修法 →**
+  保存每个阶段的时间、异常链、类加载器和实际字节码哈希，再判断失败边界。
+</Callout>
 
-## 练习、答案与282节点验证
+<Callout type="trap" title="把 javap 输出当成规范答案">
+  **现象 →** 看到某个 JDK 的常量池或指令输出，就把它当成所有 JVM 的执行事实。
+  **原因 →** `javap` 是工具视图，HotSpot
+  还可能在解释器、编译器和运行时之间改变实现路径。 **修法 →** 用 JVMS 25
+  定义格式和语义，用实际 JDK、启动参数和 JFR 记录实现证据，明确版本范围。
+</Callout>
 
+<Callout type="trap" title="忽略初始化副作用">
+  **现象 →**
+  为了“预热”而主动加载类，结果测试数据被静态初始化、文件访问或线程创建污染。
+  **原因 →** 初始化可能执行任意静态代码，并且通常只在特定触发点发生一次。 **修法
+  →**
+  把初始化触发作为单独实验轴，记录类加载顺序、输出、副作用和重置方法，不把预热与业务工作量混在一起。
+</Callout>
 
+## 五个执行子系统工作词
+
+这些词不是一组可互换的同义词，而是把 Class 状态拆成可观察的责任边界。正文首现处给出人话解释，章末 Glossary 再收回到排障语言。
+
+<Term def="检查 Class 文件结构、版本、类型和字节码约束的过程；它先判断输入是否符合虚拟机能够理解的合同。">
+  字节码验证
+</Term>
+
+<Term def="把二进制类名与 Class 文件或其他来源建立对应，并把类定义交给某个类加载器的过程。">
+  类加载
+</Term>
+
+<Term def="在类真正使用前完成准备和解析等工作；它可能建立静态字段的默认状态并解析符号引用。">
+  链接
+</Term>
+
+<Term def="执行类初始化方法和静态初始化代码的阶段；它可能触发应用副作用或抛出初始化异常。">
+  初始化
+</Term>
+
+<Term def="线程执行一个方法时保存局部变量、操作数栈、返回位置和动态链接信息的运行时结构。">
+  栈帧
+</Term>
+
+## 一条从 Class 到结果的状态链
+
+先把 Class 字节当作不可变输入，把类加载器、运行时版本、类路径和初始化触发条件当作实验边界。然后逐步收集证据：格式与版本由 `javap -v` 和 JVMS 解释，类来源由加载器与资源路径解释，执行结果由异常、线程和 JFR 对齐。一个阶段成功，不等于后续阶段一定成功。
+
+### 第三部分 虚拟机执行子系统
+
+正式范围是“第三部分 虚拟机执行子系统”。它把 Class 文件进入虚拟机后的验证、加载、链接、初始化和栈帧执行放进同一条证据链；通过不变量是：每个状态转移都能指向固定的 Class 哈希、类加载器、版本、异常或执行结果。若只有“能运行”的截图而没有边界证据，结论应保持 `unknown`。
+
+### 输入合同：先锁定 Class 与运行时
+
+实验开始前记录源码或 Class 哈希、编译器版本、`--release`、JDK 供应商与版本、操作系统、类路径、模块路径、类加载器名称和启动参数。只改变一个轴：例如只替换字节码版本，或只改变类路径顺序；不要在同一轮同时换 JDK、收集器和类加载器，否则首个失败无法归因。
+
+### 验证与链接：格式通过不等于语义完成
+
+验证关心 Class 文件是否满足结构和类型约束，链接还可能包括准备与解析。`javap -v` 能帮助检查版本号、常量池、字段、方法和属性，但它不能替代虚拟机真实接受或拒绝输入的结果。把 `VerifyError`、`NoClassDefFoundError`、`NoSuchMethodError` 等异常按阶段归档，才能区分输入损坏、依赖缺失和二进制不兼容。
+
+### 初始化：把一次性副作用单独记账
+
+初始化并不是“再读一次类文件”，它可能执行静态字段赋值、注册钩子、读取环境变量、打开文件或创建线程。基线运行要记录初始化触发者和副作用；候选运行只改变触发方式或依赖条件，并保存 stdout、stderr、异常原因链和清理结果。初始化失败后，同一进程中的后续访问可能观察到包装异常，因此必须保留第一次失败。
+
+### 执行：用栈帧解释方法内部状态
+
+方法执行时，当前线程的栈帧承载局部变量表、操作数栈和返回信息。字节码指令的顺序可以解释“程序要做什么”，但解释器、即时编译和内联属于实现层，不能从一段 `javap` 输出直接推断所有机器码。用线程栈、JFR 方法采样和同一输入的结果对照执行路径，明确哪些是规范语义、哪些只是某个版本的观察。
+
+## 章专属实验：一次变更，完整留痕
+
+先猜一猜：如果只把 Class 文件的版本号从当前 JDK 支持范围外改高，失败应该出现在验证、加载、链接、初始化还是方法执行？先写出阶段假设和反例，再沿图示推进；图中的状态不是某次运行的耗时或成功率。
+
+<Stepper>
+  <Step title="1. 固定输入与版本">
+    保存 Class 或源码哈希、`javac --release`、JDK 版本、供应商、类路径、类加载器、启动参数和预期输出。把“允许的版本范围”和清理动作写进实验档案。
+
+    <Duj3Part3ExecutionSubsystemEvidenceMap />
+
+  </Step>
+  <Step title="2. 观察验证与来源">
+    用 `javap -v -c -s` 保存常量池、版本、方法签名和指令；再记录实际资源路径、类加载器和首个异常。工具输出是索引，原始 stderr 才是失败证据。
+
+    <Duj3Part3ExecutionSubsystemEvidenceMap />
+
+  </Step>
+  <Step title="3. 分离链接与初始化">
+    只改变一个依赖或初始化触发条件，比较准备、解析、静态副作用和异常原因链。不要用主动预加载替代真实触发路径，也不要在失败后复用污染过的 JVM。
+
+    <Duj3Part3ExecutionSubsystemEvidenceMap />
+
+  </Step>
+  <Step title="4. 对齐栈帧与结果">
+    用线程栈、JFR 方法采样、返回值或异常结果对齐当前方法的栈帧边界；若只看到工具摘要而没有同一输入的结果，结论先标为 `unknown`。
+
+    <Duj3Part3ExecutionSubsystemEvidenceMap />
+
+  </Step>
+  <Step title="5. 复现、回滚与交接">
+    版本不兼容、依赖缺失、初始化副作用或证据冲突时恢复基线，保存退出码、文件哈希、原始日志、环境和未解决问题。只有重放能解释首个分叉，才把结论交给下一位维护者。
+
+    <Duj3Part3ExecutionSubsystemEvidenceMap />
+
+  </Step>
+</Stepper>
+
+## 工具入口与实验档案
+
+下面的命令只提供低成本观察入口，不保证在每个 JDK 或模块边界下都成功。先保存版本和目标文件，再运行诊断；失败输出同样是证据，不能用空文件覆盖。
+
+```bash
+set -eu
+run_id="execution-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "execution-evidence/$run_id"
+java -version 2> "execution-evidence/$run_id/java-version.txt"
+javac --release 12 Sample.java
+javap -v -c -s Sample > "execution-evidence/$run_id/sample.javap.txt"
+java -Xlog:class+load=info,class+init=info \
+  -cp . Sample > "execution-evidence/$run_id/stdout.txt" \
+  2> "execution-evidence/$run_id/stderr.txt"
+sha256sum Sample.class > "execution-evidence/$run_id/class.sha256"
+```
+
+每个实验目录还要记录类加载器、模块路径、工作量、初始化前后状态、采样窗口、退出码、JFR 或线程转储是否开启、探针成本、未过滤日志、回滚命令和清理结果。不要把 `javap` 的漂亮摘要当成完整档案。
+
+```yaml
+unit: duj3-part-3-execution-subsystem
+baseline: fixed-class-hash-jdk-and-classpath
+changed_axis: one-bytecode-or-one-loading-condition
+stages: verify,load,link,initialize,execute
+signals: javap,class-load-log,stderr,jfr,thread-stack,result
+rollback: restore-baseline-class-and-runtime
+replay: fresh-jvm-same-input
+unknowns: explicit
+cleanup: recorded
+```
+
+## 代码对照：观察栈帧与初始化边界
+
+这个最小样例把静态初始化和实例方法调用分开，输出只用于建立可复跑的阶段标记。它不模拟真实吞吐，也不生成自动评分；性能或兼容性结论必须来自外部工具与业务工作量。
+
+```java
+public final class ExecutionProbe {
+  private static final String INITIALIZED = initialize();
+
+  private static String initialize() {
+    System.out.println("phase=initialize");
+    return "ready";
+  }
+
+  private int execute(int input) {
+    int local = input + INITIALIZED.length();
+    return local * 2;
+  }
+
+  public static void main(String[] args) {
+    int input = args.length == 0 ? 3 : Integer.parseInt(args[0]);
+    ExecutionProbe probe = new ExecutionProbe();
+    System.out.println("phase=execute result=" + probe.execute(input));
+  }
+}
+```
+
+先用同一个 JDK 和参数运行两次，确认初始化只在预期的首次触发点发生；再只改 `input` 或只替换 Class 文件，比较 `javap`、类加载日志、stderr、线程栈和结果。若候选运行失败，保留全新 JVM 的失败原文，不把上一轮的成功输出拼进来。
+
+## 练习、答案与执行验收
+
+<Exercises>
+
+**问题 1：阶段归因。** `javap` 能看到方法，但运行时抛出 `NoSuchMethodError`。你会先核对哪些证据，为什么不能直接归因于字节码验证失败？
+
+<Answer>
+  先保存实际加载的 Class
+  来源、类加载器、方法签名、依赖版本和完整异常原因链，再核对 Class
+  哈希与启动类路径。`NoSuchMethodError`
+  通常说明运行时链接到的二进制契约与调用方不一致；它和“Class
+  文件结构不符合验证约束”是不同阶段，必须用新 JVM 重放确认。
+</Answer>
+
+**问题 2：改 Demo 代码。** 修改 `ExecutionProbe`，让静态初始化读取一个可控环境变量，并设计一个不会污染基线的对照运行。
+
+<Answer>
+  把环境变量读取放进
+  `initialize`，输出变量是否存在但不要打印敏感值；基线和候选各使用全新的
+  JVM，只改变环境变量这一轴，保存 stdout、stderr、退出码、Class 哈希、JDK
+  版本和清理结果。初始化失败时保留第一次异常原因链。
+</Answer>
+
+**问题 3：规范与实现。** 线程栈显示方法被内联，而 `javap` 没有“内联指令”。请说明如何写出不越界的结论。
+
+<Answer>
+  先说规范层：字节码定义方法调用语义和栈帧抽象；再说实现层：目标 JDK 的 JIT
+  可能内联并改变采样栈的呈现。用
+  JFR、编译日志、启动参数和同一工作量重放验证这次观察，并注明版本、采样偏差和未知项，不能把
+  HotSpot 观察写成所有 JVM 都必须内联。
+</Answer>
+
+</Exercises>
+
+## 本部分小结
+
+- Class 到结果必须拆成验证、加载、链接、初始化和执行边界。
+- 工具摘要不能替代 Class 哈希、异常链、类加载器和原始 stderr。
+- 栈帧解释方法状态，JIT 内联属于需按版本复核的实现观察。
+- 只改变一个字节码或加载条件，才能解释首个失败分叉。
+- 证据冲突或兼容性越界时，恢复基线并保留 `unknown`。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="字节码验证">
+    检查 Class
+    文件是否符合虚拟机结构和类型约束；它回答“这个输入能否被接受”，不回答业务逻辑是否正确。
+  </GlossaryItem>
+  <GlossaryItem term="类加载">
+    根据类名找到字节并交给类加载器定义；找到来源不等于后面的链接和初始化一定成功。
+  </GlossaryItem>
+  <GlossaryItem term="链接">
+    在使用类前完成准备、解析等工作；依赖版本不一致时可能在这里暴露二进制兼容问题。
+  </GlossaryItem>
+  <GlossaryItem term="初始化">
+    执行类的静态初始化代码；它可能读取环境、注册资源或抛出异常，所以要单独记录副作用。
+  </GlossaryItem>
+  <GlossaryItem term="栈帧">
+    线程调用方法时保存局部变量、操作数和返回信息的一小块运行时状态；它帮助我们解释当前方法正在做什么。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《深入理解Java虚拟机（第3版）》"
+  adaptedUrl="https://github.com/fenixsoft/jvm_book"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
