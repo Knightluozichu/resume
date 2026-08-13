@@ -13202,6 +13202,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3Chapter2MemoryAreasEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/05-duj3-03-gc-allocation/duj3-03-gc-allocation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-chapter3-gc-allocation-evidence-map");
+      return {
+        Duj3Chapter3GcAllocationEvidenceMap:
+          module0.Duj3Chapter3GcAllocationEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

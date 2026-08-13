@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T09:43:49.207Z；旧版分数不迁移。
+> 2026-08-13T09:56:17.148Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1910
+- failed：1909
 - queued：218
-- passed：1688
+- passed：1689
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -47,11 +47,11 @@
 | 34 | shader-practice | 21 | 21 | 0 | 0 | 63 |
 | 35 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
 | 36 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
-| 37 | deep-understanding-jvm | 25 | 20 | 0 | 5 | 60 |
-| 38 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
-| 39 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
-| 40 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
-| 41 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 37 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
+| 38 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
+| 39 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
+| 40 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 41 | deep-understanding-jvm | 25 | 19 | 0 | 6 | 57 |
 | 42 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
 | 43 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
 | 44 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
