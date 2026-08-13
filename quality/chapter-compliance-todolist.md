@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T04:07:42.925Z
+> 生成时间：2026-08-13T04:12:59.804Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,10 +13,10 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 480 |
+| manifest 证据不完整 unit | 479 |
 | failed | 1925 |
-| queued | 243 |
-| passed | 1648 |
+| queued | 242 |
+| passed | 1649 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -2991,9 +2991,9 @@
     - 路径：`content/csapp/06-review/cap-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## csharp-10-core（27 个内容页面 · queued:25 passed:2 · 🚫 门禁阻断 26 项）
+## csharp-10-core（27 个内容页面 · queued:24 passed:3 · 🚫 门禁阻断 25 项）
 
-- 门禁摘要：目录=未登记，manifest=25；正式概念覆盖率=97%；未映射 unit=0；证据不完整 unit=5。
+- 门禁摘要：目录=未登记，manifest=25；正式概念覆盖率=97.4%；未映射 unit=0；证据不完整 unit=4。
 - 其他门禁阻断：csharp-10-core: publication-policy-not-approved。
 
 - [ ] ⚠️ P1 **00-lang/ctc-learning-map** — queued（待发布）；score 71；门禁阻断: status=queued、score=71<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
@@ -3032,9 +3032,9 @@
 - [ ] ⚠️ P1 **10-official/linq-to-xml** — queued（待发布）；score 69；门禁阻断: status=queued、score=69<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
     - 路径：`content/csharp-10-core/10-official/linq-to-xml.mdx`
     - 正式 unit：`ctc10-10` explained=12/12
-- [ ] ⚠️ P1 **11-official/xml-json-technologies** — queued（待发布）；score 68；门禁阻断: status=queued、score=68<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
+- [x] ✅ **11-official/xml-json-technologies** — passed；score 96
     - 路径：`content/csharp-10-core/11-official/xml-json-technologies.mdx`
-    - 正式 unit：`ctc10-11` explained=7/8
+    - 正式 unit：`ctc10-11` explained=8/8
 - [ ] ⚠️ P1 **12-official/disposal-and-garbage-collection** — queued（待发布）；score 68；门禁阻断: status=queued、score=68<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
     - 路径：`content/csharp-10-core/12-official/disposal-and-garbage-collection.mdx`
     - 正式 unit：`ctc10-12` explained=8/9
@@ -3077,8 +3077,6 @@
 - [ ] ⚠️ P1 **25-official/regular-expressions** — queued（待发布）；score 67；门禁阻断: status=queued、score=67<90、dimensionFailures=source,visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: source、visual、ux
     - 路径：`content/csharp-10-core/25-official/regular-expressions.mdx`
     - 正式 unit：`ctc10-25` explained=11/13
-- [ ] 🔴 P1 **[正式 unit ctc10-11] Chapter 11. Other XML and JSON Technologies** — evidence 不完整；explained=7/8
-    - 关联路径：`content/csharp-10-core/11-official/xml-json-technologies.mdx`
 - [ ] 🔴 P1 **[正式 unit ctc10-12] Chapter 12. Disposal and Garbage Collection** — evidence 不完整；explained=8/9
     - 关联路径：`content/csharp-10-core/12-official/disposal-and-garbage-collection.mdx`
 - [ ] 🔴 P1 **[正式 unit ctc10-14] Chapter 14. Concurrency and Asynchrony** — evidence 不完整；explained=11/12

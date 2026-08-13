@@ -8919,6 +8919,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10CollectionsCapabilityFlowDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/11-official/xml-json-technologies": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/xml-json-technologies-ownership-flow-diagram");
+    return {
+      Ctc10XmlJsonOwnershipFlowDiagram:
+        module0.Ctc10XmlJsonOwnershipFlowDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
