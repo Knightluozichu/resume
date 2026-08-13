@@ -13403,6 +13403,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.AbstractFactoryFamilyCompatibilityLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/01-creational/factory-method": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/factory-method-creation-boundary-lab");
+    return {
+      FactoryMethodCreationBoundaryLab:
+        module0.FactoryMethodCreationBoundaryLab,
+    } as ChapterMdxComponents;
+  },
   "design-patterns/01-creational/builder": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/builder-construction-contract-lab");

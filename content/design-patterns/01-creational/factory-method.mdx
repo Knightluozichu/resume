@@ -3,102 +3,267 @@ title: "工厂方法模式"
 type: A
 section: "创建型模式"
 order: 8
-description: "工厂方法模式：定义创建产品的操作，把具体产品选择延迟给创建者子类或扩展点"
+description: "从文档导入流水线的稳定骨架出发，理解工厂方法如何把具体产品选择延迟给扩展点，并判断继承成本是否值得。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: designpatterns-08
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { FactoryMethodCreationBoundaryLab } from "@/components/mdx/design-patterns/factory-method-creation-boundary-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+# 工厂方法模式
 
-通用导入算法若直接 new 每种解析器，就不能在不改骨架的情况下扩展格式 因此，工厂方法模式 的第一步不是画类图，而是写清 **导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+工厂方法模式解决的是一个创建点会随着扩展而变化，但业务流程本身应该保持稳定的问题。文档导入器就是一个清晰的例子：打开输入、创建解析器、解析内容、统一处理错误并关闭资源的骨架不变，CSV、JSON 和 Markdown 的解析器却应该由不同的创建者决定。
 
-在实验前先预测：沿 开始导入 → 调用工厂 → 创建解析器 → 执行解析 → 统一收尾 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+工厂方法不是“把 `new` 藏到任意函数里”。采用它的证据是：客户端需要依赖抽象产品，创建者的业务流程可复用，而且新增产品类型不应修改这条流程。若变化只是一个小参数分支，独立工厂函数往往更小；本章实验会让你直接绕过工厂方法，观察稳定流程为什么失去产品契约。
 
+<Objectives>
 
-## 问题合同与术语
+- 能从稳定业务流程中识别工厂方法隔离的创建变化，并说明 Creator、ConcreteCreator 与 Product 的责任边界。
+- 能修改专属导入实验，切换 CSV/JSON/Markdown 创建者、运行统一流程、注入直接构造越界并重置基线。
+- 能比较工厂方法、抽象工厂、建造者与直接构造，依据产品数量、流程稳定性和继承成本写出采用或拒绝决定。
 
-**意图。** 定义创建产品的操作，把具体产品选择延迟给创建者子类或扩展点。**适用边界。** 流程骨架稳定而其中一个产品类型需要由扩展者决定，并且继承关系合理。本页验收不变量是：**新增解析格式不应修改通用导入、错误处理和资源关闭流程**。
+</Objectives>
 
-、、、、、
-## 官方目录结构的逐项解释
+## 直觉：先固定流程，再移动创建点
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+一个直接 `new CsvParser()` 的导入函数同时知道格式、解析器类和资源处理顺序。每增加一种格式，就会把创建分支塞进同一个函数；更危险的是，不同分支可能复制错误处理和关闭资源的细节。
+
+工厂方法把创建点变成 Creator 的一个可覆写操作。Creator 的 `import()` 负责稳定算法，ConcreteCreator 只回答“本次创建哪一种 Product”。这样，CSV 与 JSON 可以有自己的创建者，但它们仍然共享导入流程对抽象解析器的调用合同。
+
+## 三个必须主动触发的工厂方法误区
+
+<Callout type="trap" title="把参数分支伪装成继承层次">
+  **现象 →** 只有一个产品和两个字符串参数，也建立 Creator、ConcreteCreator 及一组子类。 **原因 →** 把“选择配置”误判成“扩展创建者行为”，继承成本超过变化本身。 **修法 →** 先用独立工厂函数或映射表；只有创建点需要被扩展且流程骨架稳定时才采用工厂方法。
+</Callout>
+
+<Callout type="trap" title="让 Creator 依赖具体产品类型">
+  **现象 →** `import()` 返回 `CsvParser`，调用方立即读取 CSV 专属字段。 **原因 →** 创建点虽然被抽出，抽象产品契约却被具体类型泄漏。 **修法 →** 返回最小的 Parser 接口，让 Creator 只调用 `parse` 和 `close` 等稳定能力。
+</Callout>
+
+<Callout type="trap" title="复制每个子类的业务流程">
+  **现象 →** CSV、JSON、Markdown 创建者各自复制打开、错误处理和关闭资源的代码。 **原因 →** 把工厂方法误解成整套算法模板，流程变化会在多个子类之间漂移。 **修法 →** 把不变步骤留在 Creator，只让子类实现创建操作，并对流程做一次契约测试。
+</Callout>
+
+## 来源、版次与独立重写边界
+
+本章以 [InformIT 官方书目与授权样章页](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)核对 GoF 模式目录范围，并用 [Pearson/Addison-Wesley 官方书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)核对版次信息。模式语言的历史语境参考 [GoF 作者十年回顾](https://www.informit.com/articles/article.aspx?p=1327762)，TypeScript 的类与方法表达参考 [TypeScript 官方类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)。
+
+本文的文档导入领域、代码切片、交互实验和练习均为独立教学重写，不声称复现原书正文、原书代码或某个解析框架的完整实现。实验中的“契约通过”只表示页面专属抽象接口满足，不代表生产导入系统已经完成安全、性能或格式兼容性认证。
+
+## 问题合同与五个关键术语
+
+导入流程中的<Term def="由 Creator 暴露的稳定业务算法，负责调用创建点并完成统一处理">创建者</Term>拥有不变骨架。它调用的<Term def="供 Creator 使用的稳定产品接口，例如 parse、records 和 close">抽象产品</Term>只暴露流程真正需要的能力；负责决定具体产品的覆写操作叫<Term def="由具体创建者实现、返回某种具体产品的创建操作">工厂方法</Term>。
+
+CSV 或 JSON 的具体解析器是<Term def="实现抽象产品接口并携带某种格式差异的实际对象">具体产品</Term>，实现创建选择的子类则是<Term def="覆写工厂方法、为一种产品格式提供具体创建逻辑的 Creator 子类">具体创建者</Term>。这五个角色的边界共同构成验收合同：流程依赖抽象产品，格式变化停留在创建点。
+
+| 评审卡 | 要回答的问题 | 通过信号 |
+| --- | --- | --- |
+| 流程骨架 | 哪些步骤对所有格式都相同？ | 打开、解析、错误处理和关闭只写一份 |
+| 创建点 | 哪个操作随产品格式变化？ | `createParser()` 可由扩展者实现 |
+| 抽象产品 | 流程真正需要哪些能力？ | Creator 不读取具体格式字段 |
+| 扩展成本 | 新格式要修改哪些文件？ | 新增 Creator/Product，不改流程骨架 |
+| 替代方案 | 继承是否已经过重？ | 简单分支保留独立工厂函数 |
+
+## 官方目录节点的逐项解释
+
+下面的 13 个节点对应 manifest 中 `designpatterns-08` 的正式目录。它们不是把模式定义重复 13 次，而是从导入流程的创建边界、扩展成本和替代方案逐项验收。
 
 ### 模式名称与分类
 
-“工厂方法模式”归入创建型模式，名称只用于定位 定义创建产品的操作，把具体产品选择延迟给创建者子类或扩展点，不能替代问题证据。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+工厂方法模式属于创建型模式，关注的是由谁决定具体产品的创建。分类只能帮助定位章节；真正的采用证据是创建点变化，而 Creator 的业务骨架仍然稳定。
 
 ### 意图
 
-“意图”回答模式想改变什么：定义创建产品的操作，把具体产品选择延迟给创建者子类或扩展点。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+它的意图是定义创建产品的接口，让具体产品的选择延迟到子类或其他扩展点。导入器因此可以复用统一的错误和资源处理，同时让 CSV、JSON 或 Markdown 创建者提供不同解析器。
 
 ### 别名
 
-“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+本章不追加未经来源核对的稳定别名。不要因为 API 叫 `create` 或返回了一个对象，就自动把它称为工厂方法；要检查创建操作是否处在可扩展的 Creator 流程中。
 
 ### 动机
 
-“动机”从具体压力出发：通用导入算法若直接 new 每种解析器，就不能在不改骨架的情况下扩展格式。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+直接构造把格式选择与导入流程绑在一起，新格式会迫使通用函数增加分支或复制算法。工厂方法把变化压缩到一个创建操作，适合“流程比产品更稳定”的场景。
 
 ### 适用性
 
-“适用性”要求同时满足：流程骨架稳定而其中一个产品类型需要由扩展者决定，并且继承关系合理。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+当一个类无法预知需要创建的具体产品，或希望由子类决定实例化对象时，工厂方法很合适。若没有稳定流程、没有抽象产品，或者只是一个很小的参数映射，应拒绝继承层次，先用更小的工厂函数。
 
 ### 结构
 
-“结构”由 ImporterCreator、ParserProduct、CsvImporter 以及它们之间的引用方向共同确定。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+结构包含 Creator、ConcreteCreator、Product 和 ConcreteProduct。Creator 公开业务操作并调用工厂方法，ConcreteCreator 实现创建，Product 提供业务操作的抽象接口，ConcreteProduct 携带格式差异。引用方向要让创建细节留在具体创建者。
 
 ### 参与者
 
-“参与者”逐一说明 ImporterCreator、ParserProduct、CsvImporter 谁保存状态、谁发起调用以及谁承担变化。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+Creator 持有稳定算法，ConcreteCreator 决定具体产品，Product 约束流程可调用的能力，ConcreteProduct 实现格式差异，客户端选择一个 Creator 并调用业务操作。参与者的变化原因不应互相覆盖。
 
 ### 协作
 
-“协作”的运行协议是：Creator 的业务方法调用 factoryMethod，ConcreteCreator 返回匹配的 Product。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+客户端选择具体创建者后调用 Creator 的导入操作。Creator 在自己的流程中调用工厂方法，获得抽象 Product，再执行解析、统一错误处理和关闭资源。客户端不需要重新编排这些步骤。
 
 ### 后果
 
-“后果”必须连同收益和成本记录：产品创建与流程解耦，但每种产品可能增加创建者子类并强化继承结构。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+收益是创建与使用解耦、新增产品不必改稳定流程、产品契约更容易测试；成本是每种产品通常会增加一个具体创建者，继承层次和导航成本会增长。若产品变化很少，简单工厂可能更清楚。
 
 ### 实现
 
-“实现”落地时遵守：保持工厂返回抽象产品，避免调用方立即向下转型到具体类型。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+实现时先定义最小 Product 接口，再把真正变化的 `createParser` 提升为工厂方法。Creator 应避免向下转型，也不应把格式专属字段泄漏给通用流程；错误和资源关闭要留在 Creator。
 
 ### 示例代码
 
-“示例代码”使用本页 TypeScript 最小切片验证“新增解析格式不应修改通用导入、错误处理和资源关闭流程”，代码是独立教学示例。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+下面的 TypeScript 切片只表达工厂方法的调用方向，不绑定真实文件系统。无论返回 CSV 还是 JSON 解析器，`importDocument` 都只依赖 `Parser`：
+
+```ts
+interface Parser {
+  parse(input: string): string[];
+}
+
+abstract class Importer {
+  importDocument(input: string) {
+    const parser = this.createParser();
+    try {
+      return parser.parse(input);
+    } finally {
+      // 真实实现会在这里统一关闭资源。
+    }
+  }
+
+  protected abstract createParser(): Parser;
+}
+```
 
 ### 已知应用
 
-“已知应用”可在这些场景识别：框架回调、文档创建和可扩展解析器常把对象创建留给子类，但名称相似不构成采用证据。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+框架回调、可扩展解析器、报告导出器和持久化适配层都可能使用工厂方法。相似的命名或继承不构成采用证据；仍要证明创建点变化，而业务流程可以稳定复用。
 
 ### 相关模式
 
-“相关模式”用于比较边界：抽象工厂创建一组相关产品；模板方法常在算法骨架中调用工厂方法。 对“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”先保存基线，再改变一个条件；若出现“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”，就拒绝 工厂方法模式 方案并回到更简单结构。
+抽象工厂创建一组相互兼容的产品，建造者按步骤组装一个复杂产品，模板方法定义算法骨架并可能调用工厂方法。比较时要说明工厂方法的辨识线是“一个 Creator 流程中的产品创建点”。
 
-## 常见误区与反例
+## 章专属实验：观察创建点与流程骨架
 
+先预测：选择 JSON 创建者时，统一导入流程应改变几步？再预测：绕过工厂方法直接放入一个不满足 `Parser` 合同的对象时，应该在哪里拒绝？按四步操作实验，把通过路径、越界路径和重置后的基线写进复盘。
 
-另一个易错点是把结构相似当作语义相同。抽象工厂创建一组相关产品；模板方法常在算法骨架中调用工厂方法；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+<Stepper>
+  <Step title="1. 选择具体创建者">
+    在实验中选择 CSV、JSON 或 Markdown Creator，观察每个创建者只替换解析器产品，Creator 的流程轨迹仍然相同。先写下你认为最应该稳定的步骤。
 
-## 术语表
+    <FactoryMethodCreationBoundaryLab />
 
+  </Step>
+  <Step title="2. 运行统一导入流程">
+    点击“运行导入流程”，观察工厂方法在打开输入之后创建产品，随后由同一条骨架完成解析、错误处理和关闭。比较三种格式的结果，不要把格式差异写回 Creator。
 
-## 练习与答案
+    <FactoryMethodCreationBoundaryLab />
 
+  </Step>
+  <Step title="3. 注入直接构造越界">
+    点击“绕过工厂方法”，再运行流程。实验应显示产品契约拒绝，而不是让 Creator 接收一个只在某种格式下工作的具体对象；记录抽象产品如何保护流程。
 
-## 本章小结
+    <FactoryMethodCreationBoundaryLab />
 
-工厂方法模式 把“导入流程固定，但 CSV 与 JSON 文档的解析器创建方式不同”收敛为 ImporterCreator、ParserProduct、CsvImporter 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“创建逻辑只是参数分支时，独立工厂函数可能比继承层次更直接”这一反例、重置实验，并根据 产品创建与流程解耦，但每种产品可能增加创建者子类并强化继承结构 接受或拒绝方案。
+  </Step>
+  <Step title="4. 重置并比较替代方案">
+    点击重置实验，确认选择回到 CSV、越界开关关闭、流程状态清空。最后比较直接构造、独立工厂函数、工厂方法和抽象工厂，写出采用或拒绝的理由。
+
+    <FactoryMethodCreationBoundaryLab />
+
+  </Step>
+</Stepper>
+
+## 把抽象产品合同写进 TypeScript
+
+工厂方法的价值不在继承语法，而在 Creator 对 Product 的依赖保持抽象。下面用联合类型表达三种格式的创建结果，再让稳定流程只读取共同能力：
+
+```ts
+type Format = "csv" | "json" | "markdown";
+
+type ImportProduct = {
+  format: Format;
+  parse(input: string): string[];
+};
+
+function importWith(product: ImportProduct, input: string) {
+  const records = product.parse(input);
+  return { format: product.format, count: records.length };
+}
+```
+
+如果通用流程开始读取 `CsvProduct.columns`，创建点虽然被隐藏，耦合仍然穿透了抽象产品。应把格式差异留在具体 Product，把流程需要的最小能力写进接口。
+
+## 练习、答案与 13 个节点验收
+
+<Exercises>
+
+本组练习覆盖：模式名称与分类；意图；别名；动机；适用性；结构；参与者；协作；后果；实现；示例代码；已知应用；相关模式。
+
+**问题 1：改 Demo 代码。** 在实验中新增 YAML 解析器。哪些代码应该新增，哪些代码必须保持不变？
+
+<Answer>
+  新增 `YamlParser` 和 `YamlImporter`，让后者实现或覆写工厂方法并返回抽象 `Parser`。打开输入、调用 `parse`、统一错误处理和关闭资源的 Creator 流程应保持不变；再用同一组契约测试验证 YAML 产品。
+</Answer>
+
+**问题 2：比较创建方案。** 只有一个解析器，格式由一个配置字符串决定，且没有稳定的 Creator 流程。为什么先用独立工厂函数更合理？
+
+<Answer>
+  当前缺少可复用的业务骨架和需要由子类扩展的创建点，继承只会增加角色与导航成本。独立工厂函数或映射表已经能集中选择产品；等流程稳定且产品创建需要扩展时，再升级为工厂方法。
+</Answer>
+
+**问题 3：做一次拒绝决定。** 如果 Creator 的 `import()` 返回具体 `CsvParser`，并且客户端读取 CSV 专属字段，工厂方法还隔离了变化吗？
+
+<Answer>
+  没有。创建点虽然被覆写，但具体产品类型已经泄漏到流程外，新增格式仍会修改客户端。应让 Creator 和客户端依赖最小的 `Parser` 接口，把 CSV 专属能力留在具体产品内部或单独的格式适配层。
+</Answer>
+
+</Exercises>
+
+## 本章小结与发布前回顾
+
+- 工厂方法隔离的是 Creator 流程中的具体产品创建点。
+- Creator 保持稳定算法，ConcreteCreator 决定产品，Product 提供抽象能力。
+- 抽象产品契约能阻止格式细节穿透到通用流程和客户端。
+- 新增产品通常需要新增创建者，因此要把继承成本与解耦收益一起评估。
+- 没有稳定流程或只是小参数分支时，独立工厂函数往往更小。
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="创建者">
+    由 Creator 暴露的稳定业务算法，负责调用创建点并完成统一处理。
+  </GlossaryItem>
+  <GlossaryItem term="抽象产品">
+    供 Creator 使用的稳定产品接口，例如 parse、records 和 close。
+  </GlossaryItem>
+  <GlossaryItem term="工厂方法">
+    由具体创建者实现、返回某种具体产品的创建操作。
+  </GlossaryItem>
+  <GlossaryItem term="具体产品">
+    实现抽象产品接口并携带某种格式差异的实际对象。
+  </GlossaryItem>
+  <GlossaryItem term="具体创建者">
+    覆写工厂方法、为一种产品格式提供具体创建逻辑的 Creator 子类。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Design Patterns: Elements of Reusable Object-Oriented Software"
+  adaptedUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+/>
 
 ## 前后导航
 
 - [上一页：单例模式](/learn/design-patterns/01-creational/singleton)
 - [下一页：抽象工厂模式](/learn/design-patterns/01-creational/abstract-factory)
-
