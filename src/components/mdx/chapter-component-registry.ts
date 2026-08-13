@@ -13403,6 +13403,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.AbstractFactoryFamilyCompatibilityLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/01-creational/prototype": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/prototype-clone-identity-lab");
+    return {
+      PrototypeCloneIdentityLab: module0.PrototypeCloneIdentityLab,
+    } as ChapterMdxComponents;
+  },
   "design-patterns/01-creational/factory-method": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/factory-method-creation-boundary-lab");
