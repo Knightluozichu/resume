@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T10:04:58.759Z；旧版分数不迁移。
+> 2026-08-13T10:16:36.607Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1908
+- failed：1907
 - queued：218
-- passed：1690
+- passed：1691
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -58,14 +58,14 @@
 | 45 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
 | 46 | unity5 | 18 | 18 | 0 | 0 | 64 |
 | 47 | shaderx | 18 | 18 | 0 | 0 | 60 |
-| 48 | deep-understanding-jvm | 25 | 18 | 0 | 7 | 54 |
-| 49 | python-ops | 18 | 18 | 0 | 0 | 54 |
-| 50 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
-| 51 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
-| 52 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
-| 53 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
-| 54 | effective-java | 17 | 17 | 0 | 0 | 73 |
-| 55 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 48 | python-ops | 18 | 18 | 0 | 0 | 54 |
+| 49 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
+| 50 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 51 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
+| 52 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
+| 53 | effective-java | 17 | 17 | 0 | 0 | 73 |
+| 54 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 55 | deep-understanding-jvm | 25 | 17 | 0 | 8 | 51 |
 | 56 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
 | 57 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
 | 58 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
