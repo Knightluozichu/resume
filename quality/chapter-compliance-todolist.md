@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T04:24:15.695Z
+> 生成时间：2026-08-13T04:33:56.675Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,10 +13,10 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 477 |
+| manifest 证据不完整 unit | 476 |
 | failed | 1925 |
-| queued | 240 |
-| passed | 1651 |
+| queued | 239 |
+| passed | 1652 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -2991,9 +2991,9 @@
     - 路径：`content/csapp/06-review/cap-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## csharp-10-core（27 个内容页面 · queued:22 passed:5 · 🚫 门禁阻断 23 项）
+## csharp-10-core（27 个内容页面 · queued:21 passed:6 · 🚫 门禁阻断 22 项）
 
-- 门禁摘要：目录=未登记，manifest=25；正式概念覆盖率=98.3%；未映射 unit=0；证据不完整 unit=2。
+- 门禁摘要：目录=未登记，manifest=25；正式概念覆盖率=99.1%；未映射 unit=0；证据不完整 unit=1。
 - 其他门禁阻断：csharp-10-core: publication-policy-not-approved。
 
 - [ ] ⚠️ P1 **00-lang/ctc-learning-map** — queued（待发布）；score 71；门禁阻断: status=queued、score=71<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
@@ -3062,9 +3062,9 @@
 - [ ] ⚠️ P1 **20-official/cryptography** — queued（待发布）；score 69；门禁阻断: status=queued、score=69<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
     - 路径：`content/csharp-10-core/20-official/cryptography.mdx`
     - 正式 unit：`ctc10-20` explained=7/7
-- [ ] ⚠️ P1 **21-official/advanced-threading** — queued（待发布）；score 66；门禁阻断: status=queued、score=66<90、dimensionFailures=source,visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: source、visual、ux
+- [x] ✅ **21-official/advanced-threading** — passed；score 96
     - 路径：`content/csharp-10-core/21-official/advanced-threading.mdx`
-    - 正式 unit：`ctc10-21` explained=8/10
+    - 正式 unit：`ctc10-21` explained=10/10
 - [ ] ⚠️ P1 **22-official/parallel-programming** — queued（待发布）；score 69；门禁阻断: status=queued、score=69<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
     - 路径：`content/csharp-10-core/22-official/parallel-programming.mdx`
     - 正式 unit：`ctc10-22` explained=8/8
@@ -3077,8 +3077,6 @@
 - [ ] ⚠️ P1 **25-official/regular-expressions** — queued（待发布）；score 67；门禁阻断: status=queued、score=67<90、dimensionFailures=source,visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: source、visual、ux
     - 路径：`content/csharp-10-core/25-official/regular-expressions.mdx`
     - 正式 unit：`ctc10-25` explained=11/13
-- [ ] 🔴 P1 **[正式 unit ctc10-21] Chapter 21. Advanced Threading** — evidence 不完整；explained=8/10
-    - 关联路径：`content/csharp-10-core/21-official/advanced-threading.mdx`
 - [ ] 🔴 P1 **[正式 unit ctc10-25] Chapter 25. Regular Expressions** — evidence 不完整；explained=11/13
     - 关联路径：`content/csharp-10-core/25-official/regular-expressions.mdx`
 

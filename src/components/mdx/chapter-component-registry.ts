@@ -8943,6 +8943,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10ConcurrencyAsynchronyExecutionFlowDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/21-official/advanced-threading": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/advanced-threading-primitive-state-diagram");
+    return {
+      Ctc10AdvancedThreadingPrimitiveStateDiagram:
+        module0.Ctc10AdvancedThreadingPrimitiveStateDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
