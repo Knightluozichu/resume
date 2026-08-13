@@ -12519,6 +12519,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.DnjWebApplicationRequestMapDiagram,
     } as ChapterMdxComponents;
   },
+  "deep-nodejs/04-web-process/dnj-09-processes": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/process-lifecycle-map-diagram");
+    return {
+      DnjProcessLifecycleMapDiagram: module0.DnjProcessLifecycleMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
