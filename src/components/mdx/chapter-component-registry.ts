@@ -13211,6 +13211,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3Chapter3GcAllocationEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/06-duj3-04-monitoring-tools/duj3-04-monitoring-tools":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-chapter4-monitoring-tools-evidence-map");
+      return {
+        Duj3Chapter4MonitoringToolsEvidenceMap:
+          module0.Duj3Chapter4MonitoringToolsEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

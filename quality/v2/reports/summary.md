@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T09:56:17.148Z；旧版分数不迁移。
+> 2026-08-13T10:04:58.759Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1909
+- failed：1908
 - queued：218
-- passed：1689
+- passed：1690
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -51,14 +51,14 @@
 | 38 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
 | 39 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
 | 40 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
-| 41 | deep-understanding-jvm | 25 | 19 | 0 | 6 | 57 |
-| 42 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
-| 43 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
-| 44 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
-| 45 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
-| 46 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
-| 47 | unity5 | 18 | 18 | 0 | 0 | 64 |
-| 48 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 41 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
+| 42 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
+| 43 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
+| 44 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
+| 45 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
+| 46 | unity5 | 18 | 18 | 0 | 0 | 64 |
+| 47 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 48 | deep-understanding-jvm | 25 | 18 | 0 | 7 | 54 |
 | 49 | python-ops | 18 | 18 | 0 | 0 | 54 |
 | 50 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
 | 51 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
