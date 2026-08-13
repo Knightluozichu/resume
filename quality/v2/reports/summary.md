@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T08:53:39.153Z；旧版分数不迁移。
+> 2026-08-13T09:06:00.482Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1913
+- failed：1912
 - queued：218
-- passed：1685
+- passed：1686
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -38,9 +38,9 @@
 | 25 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
 | 26 | os-concepts | 23 | 23 | 0 | 0 | 92 |
 | 27 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
-| 28 | deep-understanding-jvm | 25 | 23 | 0 | 2 | 69 |
-| 29 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
-| 30 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
+| 28 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
+| 29 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
+| 30 | deep-understanding-jvm | 25 | 22 | 0 | 3 | 66 |
 | 31 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
 | 32 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
 | 33 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
