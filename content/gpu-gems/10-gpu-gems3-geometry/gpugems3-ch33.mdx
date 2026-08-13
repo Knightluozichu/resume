@@ -1,0 +1,243 @@
+---
+title: "GPU Gems 3 · Chapter 33. LCP Algorithms for Collision Detection Using CUDA"
+type: C
+section: "GPU Gems 3 Part V · Physics Simulation"
+order: 33
+description: "从凸体距离查询和半空间约束出发，解释线性互补问题、Lemke pivot 与 CUDA block 协作如何服务碰撞窄相位和接触力求解。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-33-lcp-algorithms-collision-detection-using-cuda"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-33
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch33ComplementarityDiagram,
+  GpuGems3Ch33ConvexDistanceDiagram,
+  GpuGems3Ch33CudaBlockDiagram,
+  GpuGems3Ch33LCPLab,
+  GpuGems3Ch33PhysicsPipelineDiagram,
+  GpuGems3Ch33PivotDiagram,
+  GpuGems3Ch33PipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch33-lcp";
+
+<Objectives>
+
+- 能区分 broad phase、凸体 narrow phase 和 resolution phase，并说明 LCP 在其中解决的具体问题
+- 能修改 CUDA LCP Collision Lab 的 pair 数、凸体复杂度、目标类型、执行模式和 pivot 上限，比较方程规模与吞吐
+- 能回答：为什么每个 collision pair 可以映射到一个 CUDA block，而同一个 LCP 内的 pivot 选择仍需要共享状态与同步
+
+</Objectives>
+
+## 先问：精确碰撞为什么会变成一张矩阵
+
+上一章已经把不可能碰撞的对象对筛掉了。现在留下的是“可能碰撞”的 pair：我们需要知道两个凸体是否穿透、最近的接触点在哪里，以及若它们静止接触，应该施加多大的约束力。
+
+如果只写一个几何分支处理所有形状，代码会随着面数、维度和接触情况变得难以并行。更统一的做法是把凸体写成半空间约束，把“找到最近的可行点”改写为优化问题，再把优化条件整理成可协作求解的方程组。
+
+<Callout type="tip" title="先预测：复杂凸体一定会让 pivot 次数线性增加吗？">
+  在 Lab 中先保持 CUDA 模式，把凸体从 simple 切到 complex，再逐步增加 pivot 上限。先猜 setup 成本、方程数和实际 pivot 次数谁变化最大，再切到 CPU reference。
+</Callout>
+
+## 1. LCP 位于物理管线的窄相位
+
+<Callout type="trap" title="误区：把 broad phase 的候选 pair 当成已经碰撞">
+  **现象 →** 包围体一重叠就产生接触力，两个实际没有接触的凸体被错误推开。
+
+**原因 →** broad phase 只使用保守包围体；它宁可产生 false positive，也不能漏掉可能碰撞，但不会计算真实接触几何。
+
+**修法 →** 让 LCP 或其他凸体距离算法只消费候选 pair，确认距离、接触点和法线后，再交给 resolution phase。
+
+</Callout>
+
+<Term def="由矩阵 M 和向量 q 定义、要求 w = Mz + q 且 w 与 z 非负互补的方程问题；它可表达凸体距离和接触约束。">
+  linear complementarity problem (LCP)
+</Term>
+
+刚体物理通常分成 broad phase、narrow phase 和 resolution phase。LCP 负责窄相位中的一类任务：给定两个凸体的几何约束，求出距离查询或约束力所需的可行解；它不会替代前面的候选筛选，也不负责最后的时间积分。
+
+<GpuGems3Ch33PhysicsPipelineDiagram />
+
+如果两个显示模型是非凸的，碰撞几何通常使用凸分解后的多个凸块或凸包。这样每个 pair 都能沿同一种约束接口进入求解器，而不是在 kernel 里为任意凹形状写一套不可控的分支。
+
+## 2. 先把凸体写成半空间，再定义最近点
+
+一个凸多边形或凸多面体可以表示为若干半空间的交集：每个面给出一个线性不等式。要找两个凸体之间的距离，可以分别在形状 A 和 B 内选择点 `P₀`、`P₁`，最小化它们的平方距离 `‖P₀ − P₁‖²`。
+
+<Term def="在凸形状约束下寻找两个物体最近点的优化查询；结果包含距离或形成接触的点对。">
+  convex distance query
+</Term>
+
+把不等式改写成矩阵约束后，问题同时包含二次目标和线性可行域。凸性很关键：当解存在时，局部最优就是全局最优；因此求解器可以把精确几何问题压缩为固定形式的矩阵操作。
+
+<GpuGems3Ch33ConvexDistanceDiagram />
+
+离散距离查询只看当前时间点，适合实时窄相位；连续碰撞检测则要追踪一段运动路径，寻找 first contact time，能避免高速穿透但实现更复杂。两者不要混为一谈：本章的 LCP demo 主要解决离散凸体距离和接触相关问题。
+
+## 3. complementarity 把原问题和对偶问题绑在一起
+
+线性规划有原问题和对偶问题。它们的 slack variables 在最优解上具有互补关系：一对变量都必须非负，但每一对不能同时为正。
+
+<Term def="一对非负变量中至少有一个为零的约束关系；它表达某个约束是否活跃，并把可行性和最优性连接起来。">
+  complementarity
+</Term>
+
+LCP 可以写成 `w = Mz + q`，同时满足 `w ≥ 0`、`z ≥ 0` 和 `wᵢ · zᵢ = 0`。直觉上，每个约束对都要选择一个“活跃侧”：如果接触约束在起作用，对应的 slack 就必须收紧；如果约束没有起作用，另一侧可以保留空间。
+
+<GpuGems3Ch33ComplementarityDiagram />
+
+对于距离问题，矩阵中会出现两个点的坐标、各自凸体的面约束以及二次目标的梯度；对于 resting contact force，则可以把不穿透条件和外部加速度抵消条件装进同样的 LCP 结构。
+
+## 4. Lemke pivot 在 basis 之间寻找互补解
+
+<Callout type="trap" title="误区：把 pivot 选择当成可以完全无序的矩阵乘法">
+  **现象 →** 所有线程各自选择不同的 entering variable，下一轮矩阵状态分叉，结果不再满足同一个 LCP。
+
+**原因 →** Lemke 迭代每一步只有一个当前 pivot；进入和离开变量依赖共享的 basis、complementary 关系和最小比值比较。
+
+**修法 →** 先在 block 内协同确定唯一 pivot，再并行更新各方程行；更新后同步，所有线程读取同一个下一状态。
+
+</Callout>
+
+<Term def="在当前 basis 中引入或移除互补变量的单次基变换；它沿可行路径推进 LCP，直到得到互补解或发现不可解方向。">
+  Lemke pivot
+</Term>
+
+Lemke 方法先加入 artificial variable，得到容易构造的 basic feasible point。每一步选择 complementary variable 进入 basis，再用 ratio test 选择离开变量；通过 pivot 更新矩阵，直到 artificial variable 离开并得到完整互补解，或沿 unbounded ray 判断该实例不可解。
+
+<Term def="在候选行中寻找最小的有效常数项与 pivot 列系数之比的规则；它决定哪一行离开 basis。">
+  minimum ratio test
+</Term>
+
+<GpuGems3Ch33PivotDiagram />
+
+为了避免退化时循环，实际实现还需要稳定的 tie-break 规则。数值精度可能让迭代次数略高于方程维度，但对于典型凸体，实际 pivot 次数通常远低于矩阵规模。
+
+## 动手走一遍：一个 collision pair 如何在 CUDA 中完成 LCP 求解
+
+<Stepper>
+  <Step title="先建立约束矩阵">
+    根据两个凸体的世界空间位置和面约束构造 M、q，初始化 z、w 与当前 basis。
+
+    <GpuGems3Ch33ConvexDistanceDiagram />
+
+  </Step>
+  <Step title="再选择唯一 pivot">
+    共享 pivot column，按互补规则过滤候选，再用 minimum ratio test 选出离开方程。
+
+    <GpuGems3Ch33PivotDiagram />
+
+  </Step>
+  <Step title="然后协作更新方程行">
+    一个线程负责一行；每个线程用公共 pivot 信息更新自己的系数，block 内同步后进入下一轮。
+
+    <GpuGems3Ch33CudaBlockDiagram />
+
+  </Step>
+  <Step title="最后检查并打包结果">
+    检查是否互补、是否不可解，并把应用真正需要的 P₀、P₁ 或约束力打包成连续结果。
+
+    <GpuGems3Ch33ComplementarityDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch33PipelineDiagram />
+
+## 5. 一个 block 对应一个 pair，行级并行隐藏矩阵细节
+
+每个 collision pair 的 LCP 解相互独立，因此可以把 pair list 映射到 CUDA grid。每个 block 的线程数等于该 LCP 的方程数；一个线程负责矩阵的一行，所有线程共享当前 pivot column 和 basis flags。
+
+不同凸体的面数不同，会造成每个 block 的方程数不同。CUDA kernel 仍需要统一的 block 线程配置，因此实现可以让多出来的线程 idle，并把每个 block 的实际 cardinality 单独存储。这样比为每个复杂度单独启动 kernel 更直接。
+
+<Term def="把一个 pair 的多条 LCP 方程分配给同一个 CUDA block，由线程按行更新，并用 shared memory 共享 pivot 列与状态的协作执行方式。">
+  cooperative CUDA block
+</Term>
+
+矩阵系数和公共列的访问需要同步：pivot 选择后，所有线程必须看到同一列；更新结束后，所有线程必须看到同一轮的新状态。shared memory 减少重复的 device memory 读取，但容量有限，所以系数通常按 z、w 和常数项分段处理。
+
+## 6. 用 CUDA LCP Collision Lab 观察矩阵规模与控制流
+
+<GpuGems3Ch33LCPLab />
+
+先猜一猜：把目标从 distance/contact points 切到 resting contact force，会增加的主要是方程数、setup，还是结果解释？再把 complex 凸体切回 simple，观察固定 block 里 idle thread 和吞吐的变化。
+
+## 小结
+
+- broad phase 生成候选，LCP 作为 narrow-phase 工具求凸体距离或约束力，resolution phase 再进行积分。
+- 凸体可以表示成半空间约束，最近点问题因此成为带线性约束的凸优化。
+- complementarity 要求每一对非负变量至少一侧为零，Lemke 通过 pivot 逐步逼近该条件。
+- minimum ratio test 决定离开 basis 的方程；pivot 选择本身有顺序，行更新才适合并行。
+- 每个 collision pair 映射到一个 cooperative CUDA block，线程按方程行工作，shared memory 保存公共 pivot 状态。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中保持 many pairs，比较 simple/complex 凸体和 CPU/CUDA 模式，记录 equations、pivot iterations 与 queries/s，并说明哪一项是 pair 之间可并行、pair 内仍需同步的部分。
+
+<Answer>
+
+不同 collision pair 的 LCP 可以独立映射到不同 block，因此 pair 数增加会扩大 grid；一个 pair 内的方程行可并行更新，但 pivot 选择和 basis 状态需要 block 内共享与同步。complex 凸体方程更多，setup 和每轮矩阵更新成本都上升；CUDA 模式可以通过 cooperative block 提高批量查询吞吐。
+
+</Answer>
+
+**问题 2｜诊断 solver 不收敛。** 某个 pair 在 pivot limit 内没有得到互补解。请列出需要优先检查的数值和控制流。
+
+<Answer>
+
+先检查 M、q 是否由当前世界空间位置重新构造，约束符号和非负条件是否一致；再确认 pivot column、complementary variable 和 minimum ratio test 在 block 内使用同一状态。若矩阵实例确实不可解，还要让 solver 标记 unsolvable，而不是无限循环。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个需要快速距离查询的凸体堆、一个有大量静止接触的堆叠场景、一个包含凹模型的场景，分别说明 LCP 该如何使用。
+
+<Answer>
+
+凸体堆适合把 broad phase 候选交给 LCP 做离散距离和接触点查询；静止接触可以使用包含约束力的 LCP，但需要关注多个接触和迭代稳定性；凹模型应先拆成凸块或使用凸包近似，再以多个 convex pair 调用 solver，不能把任意凹面直接塞进单个凸体约束矩阵。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="linear complementarity problem (LCP)">
+    满足 w = Mz + q、非负性和互补关系的矩阵问题，可表达凸体距离或接触约束。
+  </GlossaryItem>
+  <GlossaryItem term="convex distance query">
+    在两个凸形状内部寻找最近点对的优化查询，结果可用于距离和接触点计算。
+  </GlossaryItem>
+  <GlossaryItem term="complementarity">
+    一对非负变量至少有一侧为零的关系，用来表示约束是否活跃。
+  </GlossaryItem>
+  <GlossaryItem term="Lemke pivot">
+    在 LCP 的 basis 中交换互补变量、推进可行解的一次基变换。
+  </GlossaryItem>
+  <GlossaryItem term="minimum ratio test">
+    通过最小有效比值选择离开 basis 的方程行的规则。
+  </GlossaryItem>
+  <GlossaryItem term="cooperative CUDA block">
+    一个 block 内线程按 LCP 方程行协作，并共享 pivot 列和 solver 状态的执行单元。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 33. LCP Algorithms for Collision Detection Using CUDA"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-33-lcp-algorithms-collision-detection-using-cuda"
+/>
