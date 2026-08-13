@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T02:37:18.546Z
+> 生成时间：2026-08-13T02:45:16.025Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 497 |
+| manifest 证据不完整 unit | 496 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -1885,7 +1885,7 @@
 
 ## coder-revolution（62 个内容页面 · passed:62 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=60；正式概念覆盖率=99.6%；未映射 unit=0；证据不完整 unit=1。
+- 门禁摘要：目录=未登记，manifest=60；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
 - [x] ✅ **00-map/crv18-official-learning-map** — passed；score 98；officialUnitId 未在 manifest 登记: crv18-official-learning-map
     - 路径：`content/coder-revolution/00-map/crv18-official-learning-map.mdx`
@@ -1929,9 +1929,9 @@
 - [x] ✅ **13-section-01-11/crv18-section-01-11** — passed；score 97
     - 路径：`content/coder-revolution/13-section-01-11/crv18-section-01-11.mdx`
     - 正式 unit：`crv18-section-01-11` explained=4/4
-- [x] ✅ **14-section-01-12/crv18-section-01-12** — passed；score 95
+- [x] ✅ **14-section-01-12/crv18-section-01-12** — passed；score 98
     - 路径：`content/coder-revolution/14-section-01-12/crv18-section-01-12.mdx`
-    - 正式 unit：`crv18-section-01-12` explained=4/5
+    - 正式 unit：`crv18-section-01-12` explained=5/5
 - [x] ✅ **15-section-01-13/crv18-section-01-13** — passed；score 98
     - 路径：`content/coder-revolution/15-section-01-13/crv18-section-01-13.mdx`
     - 正式 unit：`crv18-section-01-13` explained=1/1
@@ -2073,8 +2073,6 @@
 - [x] ✅ **61-review/crv18-official-final-review** — passed；score 98；officialUnitId 未在 manifest 登记: crv18-official-final-review
     - 路径：`content/coder-revolution/61-review/crv18-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] 🔴 P1 **[正式 unit crv18-section-01-12] 1.12 编程世界的那把锁** — evidence 不完整；explained=4/5
-    - 关联路径：`content/coder-revolution/14-section-01-12/crv18-section-01-12.mdx`
 
 ## coding-interviews（81 个内容页面 · published:81 · ✅ 书级门禁条件满足）
 
