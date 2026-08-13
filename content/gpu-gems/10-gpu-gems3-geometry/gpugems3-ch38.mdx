@@ -1,0 +1,251 @@
+---
+title: "GPU Gems 3 · Chapter 38. Imaging Earth's Subsurface Using CUDA"
+type: C
+section: "GPU Gems 3 Part VI · GPU Computing"
+order: 38
+description: "从海上地震勘探的波场数据出发，解释 SRMIP 频域传播、共享内存 tile、GPU 常驻数据流和 CUDA kernel 资源取舍如何组成工业地下成像管线。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-38-imaging-earths-subsurface-using-cuda"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-38
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch38KernelTradeoffDiagram,
+  GpuGems3Ch38MigrationPipelineDiagram,
+  GpuGems3Ch38PipelineDiagram,
+  GpuGems3Ch38SeismicLab,
+  GpuGems3Ch38SeismicSurveyDiagram,
+  GpuGems3Ch38TileMappingDiagram,
+  GpuGems3Ch38TransferResidencyDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch38-seismic";
+
+<Objectives>
+
+- 能解释海上地震数据怎样从波的反射记录变成带速度场的地下三维体，并指出成像迭代中最昂贵的局部算子
+- 能修改 CUDA Seismic Migration Lab 的 tile、数据驻留、读取路径、kernel 类型和边界支持区，比较历史加速模型、PCIe 流量与共享内存预算
+- 能回答：为什么把数据留在 GPU 上、让 load 阶段与 process 阶段使用不同线程映射，往往比单纯增加 GPU 线程更重要
+
+</Objectives>
+
+## 先问：怎样从海面上的回声猜出地下结构
+
+想象一艘船在水面上不断发出短促的声音，拖在后面的传感器记录回来的回声。不同地下层会把声音以不同时间和强度反射回来；单次记录只能告诉我们一个局部线索，很多次记录叠在一起，才可能拼出地下的轮廓。
+
+如果每次只把一小段数据送到计算机、算完再搬回来，数据搬运会和计算一样昂贵。更糟的是，地下速度一开始并不知道，模型必须反复传播、比较和修正；没有一条能把大量局部计算留在加速器内的管线，完整调查可能要在大型 CPU 集群上运行数天。
+
+<Callout type="tip" title="先预测：把所有中间结果都搬回 CPU 会发生什么？">
+  在 Lab 中先保持 `GPU-resident`、`48 × 32 tile` 和 `texture cache + boundary`，记录 transfer estimate 与 historical speedup model。再切换到 `stream every stage`，先猜哪一个变化会把 GPU 优势吃掉。
+</Callout>
+
+## 1. 从地震勘探记录到地下体
+
+<Term def="通过发出地震波并记录地下不同界面反射回来的信号，推断地层位置、速度和其他属性的测量过程。">
+  seismic survey
+</Term>
+
+一次海上勘探用气枪发出压缩波，拖曳电缆上的水听器记录反射与折射。水中的声速约为 2,500 m/s，地下岩层约为 3,000 到 5,000 m/s；记录几秒钟，就能捕捉到来自数公里深度的回波。一个大型调查会包含数百万个 shot、数 TB 的向量，每个向量对应一个接收位置、一个时间窗口和一次发射。
+
+<GpuGems3Ch38SeismicSurveyDiagram />
+
+处理不是直接把波形画成图片。首先要修正船位、潮汐和电缆漂移，把所有向量放进统一的地理坐标；然后做信号归一化、提高信噪比，并把多个反射叠加造成的混合信号拆开。结果是一个带有 x、y、z 位置的体数据，里面还可以提取速度、密度、阻抗和各向异性等属性。
+
+<Term def="把地表记录反向传播到地下反射位置，使不同 shot 对同一地下结构的贡献在正确位置聚合起来的成像过程。">
+  seismic migration
+</Term>
+
+速度场一开始只是近似值。成像后得到的地下结构可以反过来帮助修正速度场，再做下一轮成像；这个过程逐渐收敛到更可信的反射率模型。GPU 并不是替代地球物理模型，而是把其中规则、密集、可分块的网格算子变成大量并行工作。
+
+<Callout type="trap" title="误区：有了足够多的 GPU 线程，整套地震处理都会按比例加速">
+  **现象 →** 只看最内层卷积的线程数，把整条工业管线的端到端时间直接除以 GPU 加速比。
+
+**原因 →** 坐标校正、外层深度循环、CPU 控制、PCIe 传输和结果解释仍可能是串行或带宽受限阶段；局部 kernel 快不代表全局管线快。
+
+**修法 →** 先按总耗时定位昂贵 kernel，再画出数据流和控制边界，用端到端 profiling 验证每一段的贡献。
+</Callout>
+
+## 2. 用频率平面和 SRMIP 推进波场
+
+先沿时间轴对 shot 数据做 FFT，把每个 shot 变成一组 frequency planes。对每个频率，地表的 downgoing wave 和测得的 upgoing wave 从深度 0 开始，逐层向下传播；每次从深度 `z` 推进到 `z + dz`，都要在 x、y 网格上应用局部空间算子，再把两条波的贡献合并。
+
+<Term def="本章工业实现使用的地震迁移算法名称；它在频域中用有限差分传播波场，并把径向传播滤波器近似为 Laplacian 的多项式。">
+  SRMIP
+</Term>
+
+SRMIP 利用传播滤波器的圆对称性：先把径向响应展开成 Laplacian 的多项式，再用两个一维二阶导数滤波器近似二维 Laplacian。传播算子就可以写成一个多项式 `G(L)`，每次深度迭代只需执行一组局部网格操作，而不是为每个位置单独求完整波动方程。
+
+<Term def="描述网格上局部二阶变化的算子；在 SRMIP 中，它由两个方向的一维二阶差分近似，并作为传播多项式的输入。">
+  Laplacian
+</Term>
+
+为了让深度迭代稳定，章节实现用 Chebyshev polynomials 优化多项式系数。关键不是背下某个系数，而是看清算法边界：外层循环仍然按频率和深度推进，内层的 Laplacian、卷积、插值和查表才是 GPU 最适合承接的规则局部工作。
+
+<GpuGems3Ch38MigrationPipelineDiagram />
+
+## 3. 让 GPU 常驻数据，减少 PCIe 往返
+
+<Term def="让一组相关的波场、速度场和中间数组在 GPU 显存中保持多轮迭代，只把输入平面和最终结果在必要时跨 CPU/GPU 边界传输的数据组织方式。">
+  GPU-resident dataflow
+</Term>
+
+原书的关键通信设计是：CPU 每次送入一个 frequency plane，GPU 在显存里完成多个深度的传播、插值与累积，最后才回读结果。历史实现回传的 image result 约为 1.3 GB，而速度场在内层循环中的传输约为 20 MB/s；这个数量级让团队可以把 PCIe 带宽作为可计算的预算，而不是等到程序跑完才发现搬运成了瓶颈。
+
+<GpuGems3Ch38TransferResidencyDiagram />
+
+这不是“永远不传数据”的规则。CPU 仍负责外层迭代、输入准备、失败恢复和下一张 frequency plane；GPU 常驻的原则是避免把每个深度的中间数组都同步回 CPU。要验证这个设计，先列出每个数组的 owner、生命周期和读写阶段，再算一次最坏的传输量与 PCIe 带宽，而不是只看 kernel 的 global-memory 吞吐。
+
+<Callout type="trap" title="误区：每个 kernel 结束就把结果回读，最容易保证正确">
+  **现象 →** 每轮卷积、插值和求和后都调用一次 device-to-host copy，调试时似乎更容易检查。
+
+**原因 →** 正确性检查的位置被误当成生产数据流；大量同步和 PCIe 往返会让 GPU 等待 CPU，且破坏跨 kernel 的显存复用。
+
+**修法 →** 开发期保留抽样回读或小尺寸 reference path，生产期让中间数组留在 GPU，只在明确的控制边界回传。
+</Callout>
+
+## 4. 一个 tile 同时服务于加载和处理
+
+<Term def="把带有边界支持区的二维网格片段协同加载到 shared memory，再由线程块重复读取来完成局部卷积或差分计算的工作单元。">
+  shared-memory tile
+</Term>
+
+四个主要 kernel 都是在网格元素上做局部操作。线程块先从 global memory 读取一个带 halo 的二维 tile，把它缓存到 shared memory，统一同步后再做卷积。对于 wave propagation，原书使用约 48 × 32 的数据 tile、48 × 8 的线程块；半径为 4 的 cross-shaped filter 让有效输出约为 40 × 24。tile 的复数数据约占 12 KB，既要容纳邻域，又要留下空间让另一个 block 并行运行。
+
+<GpuGems3Ch38TileMappingDiagram />
+
+同一组线程不必在两个阶段使用同一个几何映射。加载阶段优先满足 coalesced access：48 × 8 的线程排列把数据按连续方向搬入。处理阶段优先让线程多做工作，把有效输出重新分配给线程，每个线程计算多个元素。这样既减少重复 global loads，也避免因为 halo 而让大批线程在处理阶段闲置。
+
+## 5. 读取路径、寄存器和 block 大小的共同预算
+
+波传播 kernel 需要根据速度场查表，并重复读取网格邻域。章节使用 texture read path 来获得缓存和边界处理；cross-shaped filter 放在 constant memory 中。这个选择不是 API 崇拜，而是把“近似随机的查表”和“规则的邻域加载”分配给更合适的存储路径。
+
+G80 每个 multiprocessor 只有约 8,000 个 32-bit registers。如果一个 block 有 256 个线程，平均每线程约 32 个寄存器就触及资源上限；复杂 kernel 可能必须拆成多次 pass，或减少 block 中的线程数。另一方面，线程太少又不足以隐藏 global loads 的延迟。因此应分别测量 load phase 的访问合并、process phase 的算术复用和 block 的 occupancy，而不是只调一个 block dimension。
+
+<GpuGems3Ch38KernelTradeoffDiagram />
+
+一个实用的近似指标是每加载一个 byte 做多少有效操作。原书的经验目标是至少约 30 operations per byte，让算术工作足以覆盖访存延迟；这不是通用硬阈值，但能帮助比较“多做一点局部计算”与“多搬一遍邻域数据”哪一个更划算。
+
+<Callout type="trap" title="误区：tile 越大，数据复用越多，性能就一定越好">
+  **现象 →** 不断扩大 tile，看到 global loads 减少，就假设速度会持续上升。
+
+**原因 →** shared memory、registers 和线程数都有上限；tile 变大还会增加 halo、同步成本，可能阻止多个 block 同时驻留。
+
+**修法 →** 固定输入与边界条件，比较 shared-memory bytes、register pressure、active blocks、有效输出面积和端到端时间，再决定 tile 尺寸。
+</Callout>
+
+## 动手走一遍：从 survey 到可解释的地下体
+
+<Stepper>
+  <Step title="先整理 survey 数据和位置">
+    纠正船位、潮汐和电缆漂移，把 shot vectors 放入统一坐标，并保留 receiver、time 和 frequency 的索引关系。
+
+    <GpuGems3Ch38SeismicSurveyDiagram />
+  </Step>
+  <Step title="再把 shot 变成 frequency planes">
+    沿时间轴做 FFT；CPU 负责提交下一张 plane，GPU 为后续深度传播准备常驻的 wave buffers。
+
+    <GpuGems3Ch38MigrationPipelineDiagram />
+  </Step>
+  <Step title="把局部传播映射到 shared-memory tile">
+    先用 coalesced load 填充带 halo 的 tile，再同步并重映射线程做 Laplacian、卷积、查表和输出。
+
+    <GpuGems3Ch38TileMappingDiagram />
+  </Step>
+  <Step title="最后在明确边界回读和解释">
+    GPU 完成深度方向的中间计算，只在最终结果或控制点回到 CPU；随后提取速度、密度、阻抗等属性并修正 velocity field。
+
+    <GpuGems3Ch38TransferResidencyDiagram />
+  </Step>
+</Stepper>
+
+<GpuGems3Ch38PipelineDiagram />
+
+## 6. 用 CUDA Seismic Migration Lab 做一次可复现比较
+
+<GpuGems3Ch38SeismicLab />
+
+猜一猜：把 `48 × 32 tile` 换成 `64 × 32`，把 `GPU-resident` 换成 `stream every stage`，再把边界支持区切到 `omit support halo`，哪些变化是性能取舍，哪些变化已经是正确性风险？
+
+先只改 tile，记录 shared-memory tile、threads in block、historical speedup model；再只改 data path，比较 transfer estimate；最后打开错误模式，确认缺少 halo 时 Lab 会明确提示 edge artifacts。Lab 的数字是根据章节历史测量构造的相对教学模型，不运行真实 SRMIP，也不代表现代 GPU 或完整工业集群的 benchmark。
+
+原书报告 CUDA kernels 相对优化单核 CPU 约有 8 到 15 倍的加速，但测试数据和问题尺寸并未覆盖 CPU 版本的全部参数，且这不是整个工业应用的最终集群加速比。部署时还要考虑多 GPU 节点、CPU 控制能力、PCIe 带宽、故障恢复和数天任务的 checkpoint；性能数字必须和这些系统成本一起解释。
+
+## 小结
+
+- 地震成像先定位和整理 shot，再在频域逐层传播波场并累积地下体。
+- SRMIP 把传播滤波器近似成 Laplacian 的多项式，适合分解为局部网格算子。
+- GPU 常驻数据能减少 PCIe 往返，但 CPU 仍保留外层控制和最终解释职责。
+- tile 的加载映射、处理映射、shared memory、registers 和边界 halo 必须一起调。
+- 8 到 15 倍是历史 kernel 参考，不等于完整工业集群的端到端保证。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中保持 `GPU-resident`、`texture cache + boundary` 和 `load support halo`，分别选择 `32 × 16`、`48 × 32`、`64 × 32` tile。记录 shared-memory tile、threads in block 和 historical speedup model，解释为什么中间尺寸可能比最大尺寸更合适。
+
+<Answer>
+
+`48 × 32` 代表章节中的折中：约 12 KB shared memory、384 个线程和约 40 × 24 的有效输出；`64 × 32` 虽然复用更大，却把 shared-memory 与线程预算推近上限，可能减少同时驻留的 block。`32 × 16` 资源轻但有效输出和数据复用较少。最终应以固定输入、边界和完整 pipeline 的实测为准。
+
+</Answer>
+
+**问题 2｜诊断传输瓶颈。** 一个实现的 convolution kernel 已经比 CPU 快 12 倍，但整段程序只快 2 倍。请列出你会检查的数据 owner、同步点和传输边界。
+
+<Answer>
+
+先确认每个 frequency plane 是否只在开始时进入 GPU，uwave、dwave、velocity 和中间结果是否在多轮深度迭代中保持 GPU owner；再统计每个 kernel 后是否发生隐式同步、device-to-host copy 或重新分配。把外层 CPU 控制、PCIe 往返、最终 result 回读和属性提取分别计时，避免把单一 kernel 的 12 倍直接当成应用级加速。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个 shared memory 很紧的小型节点、一个能容纳大数组并执行长深度循环的 GPU 节点、一个必须在边界处保持高可信度的研究数据集，分别说明第一轮配置和上线前检查。
+
+<Answer>
+
+小型节点先比较较小 tile、较低 register pressure 和 texture read path，确认 active blocks 不因 tile 过大而下降；大显存节点可以优先实验 GPU-resident dataflow，但仍要测 PCIe、checkpoint 和多任务并发；边界敏感的数据集必须保留 halo，比较错误模式与 CPU reference 的 edge artifacts，再做速度优化。三种场景都要用端到端结果和数值误差验收，不能只看 kernel speedup。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="seismic survey">
+    发出地震波并记录地下反射信号，用来推断地层结构的一次大规模测量。
+  </GlossaryItem>
+  <GlossaryItem term="seismic migration">
+    把地表记录反向传播到地下正确位置，让同一结构的反射贡献聚合起来的成像过程。
+  </GlossaryItem>
+  <GlossaryItem term="SRMIP">
+    本章使用的频域地震迁移算法名称；它把传播步骤拆成可在网格上重复的局部算子。
+  </GlossaryItem>
+  <GlossaryItem term="Laplacian">
+    描述网格中局部二阶变化的算子；在这里由两个方向的一维差分近似。
+  </GlossaryItem>
+  <GlossaryItem term="shared-memory tile">
+    线程块协同加载并重复使用的二维网格片段，通常包含计算边界所需的 halo。
+  </GlossaryItem>
+  <GlossaryItem term="GPU-resident dataflow">
+    让相关数组在 GPU 显存中跨多个 kernel 保持，减少中间结果在 CPU 和 GPU 之间来回搬运。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 38. Imaging Earth's Subsurface Using CUDA"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-38-imaging-earths-subsurface-using-cuda"
+/>
