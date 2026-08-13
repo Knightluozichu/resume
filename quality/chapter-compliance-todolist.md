@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T03:42:31.332Z
+> 生成时间：2026-08-13T03:46:01.044Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 483 |
+| manifest 证据不完整 unit | 482 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -2874,14 +2874,14 @@
 
 ## crazy-android（21 个内容页面 · passed:21 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=19；正式概念覆盖率=99.8%；未映射 unit=0；证据不完整 unit=1。
+- 门禁摘要：目录=未登记，manifest=19；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
 - [x] ✅ **00-official-learning-map/cra4-official-learning-map** — passed；score 96
     - 路径：`content/crazy-android/00-official-learning-map/cra4-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [x] ✅ **01-environment/cra4-01-environment** — passed；score 94
     - 路径：`content/crazy-android/01-environment/cra4-01-environment.mdx`
-    - 正式 unit：`cra4-01-environment` explained=40/41
+    - 正式 unit：`cra4-01-environment` explained=41/41
 - [x] ✅ **02-ui-programming/cra4-02-ui-programming** — passed；score 94
     - 路径：`content/crazy-android/02-ui-programming/cra4-02-ui-programming.mdx`
     - 正式 unit：`cra4-02-ui-programming` explained=107/107
@@ -2939,8 +2939,6 @@
 - [x] ✅ **20-official-final-review/cra4-official-final-review** — passed；score 96
     - 路径：`content/crazy-android/20-official-final-review/cra4-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] 🔴 P1 **[正式 unit cra4-01-environment] 第1章 Android应用和开发环境** — evidence 不完整；explained=40/41
-    - 关联路径：`content/crazy-android/01-environment/cra4-01-environment.mdx`
 
 ## csapp（15 个内容页面 · passed:15 · 🚫 门禁阻断 1 项）
 
