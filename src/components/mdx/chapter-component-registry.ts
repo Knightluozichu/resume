@@ -8943,6 +8943,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10CreatingTypesInCsharpTypeContractMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/04-official/advanced-csharp": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/advanced-csharp-boundary-map-diagram");
+    return {
+      Ctc10AdvancedCsharpBoundaryMapDiagram:
+        module0.Ctc10AdvancedCsharpBoundaryMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/07-official/collections": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/collections-capability-flow-diagram");
