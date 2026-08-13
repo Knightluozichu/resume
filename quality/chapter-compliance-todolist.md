@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T03:32:17.575Z
+> 生成时间：2026-08-13T03:38:06.318Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 485 |
+| manifest 证据不完整 unit | 484 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -2682,7 +2682,7 @@
 
 ## cpp-server-essence（11 个内容页面 · published:11 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=9；正式概念覆盖率=94.3%；未映射 unit=0；证据不完整 unit=2。
+- 门禁摘要：目录=未登记，manifest=9；正式概念覆盖率=96.2%；未映射 unit=0；证据不完整 unit=1。
 
 - [x] 🚀 **00-intro/cse-learning-map** — published（已发布）；score 99
     - 路径：`content/cpp-server-essence/00-intro/cse-learning-map.mdx`
@@ -2699,9 +2699,9 @@
 - [x] 🚀 **03-official/multithreading-resource-sync** — published（已发布）；score 96
     - 路径：`content/cpp-server-essence/03-official/multithreading-resource-sync.mdx`
     - 正式 unit：`cse-03` explained=7/7
-- [x] 🚀 **04-official/network-programming-hard-points** — published（已发布）；score 94
+- [x] 🚀 **04-official/network-programming-hard-points** — published（已发布）；score 96
     - 路径：`content/cpp-server-essence/04-official/network-programming-hard-points.mdx`
-    - 正式 unit：`cse-04` explained=5/6
+    - 正式 unit：`cse-04` explained=6/6
 - [x] 🚀 **05-official/network-troubleshooting-commands** — published（已发布）；score 99
     - 路径：`content/cpp-server-essence/05-official/network-troubleshooting-commands.mdx`
     - 正式 unit：`cse-05` explained=3/3
@@ -2717,8 +2717,6 @@
 - [x] 🚀 **09-official/common-server-module-design** — published（已发布）；score 97
     - 路径：`content/cpp-server-essence/09-official/common-server-module-design.mdx`
     - 正式 unit：`cse-09` explained=5/5
-- [ ] 🔴 P1 **[正式 unit cse-04] 第4章 网络编程重难点解析** — evidence 不完整；explained=5/6
-    - 关联路径：`content/cpp-server-essence/02-official/backend-tools-debugging.mdx`、`content/cpp-server-essence/04-official/network-programming-hard-points.mdx`
 - [ ] 🔴 P1 **[正式 unit cse-07] 第7章 单个服务的基本结构** — evidence 不完整；explained=5/7
     - 关联路径：`content/cpp-server-essence/02-official/backend-tools-debugging.mdx`、`content/cpp-server-essence/07-official/single-service-structure.mdx`
 
