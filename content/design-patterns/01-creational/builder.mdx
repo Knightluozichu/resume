@@ -3,102 +3,287 @@ title: "建造者模式"
 type: A
 section: "创建型模式"
 order: 10
-description: "建造者模式：把复杂对象的分步构造与最终表示分离，使相同步骤能产生不同结果"
+description: "从部署计划的有序步骤和多种表示出发，理解建造者如何隔离构造过程与最终表示，并识别它不值得引入的边界。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: designpatterns-10
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { BuilderConstructionContractLab } from "@/components/mdx/design-patterns/builder-construction-contract-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+# 建造者模式
 
-一个超长构造函数无法表达步骤顺序、可选项和中途不变量 因此，建造者模式 的第一步不是画类图，而是写清 **部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+建造者模式解决的是一种具体的构造压力：一个产品要经过多个有序步骤才能成立，但客户端又不应该被迫知道这些步骤，而且同一套步骤可能需要产出不同的表示。部署计划就是这样的产品——它要先选环境，再添加服务、健康探针和回滚动作，最后可以生成执行版或审计版。
 
-在实验前先预测：沿 选择建造者 → 配置环境 → 添加服务 → 加入回滚 → 取出产品 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+建造者不是“把构造函数改成很多 setter”。值得引入它的证据是：步骤有顺序、产品有中途不变量、最终表示不止一种，或者构造流程需要被多个客户端复用。本章实验会让你主动删除一个必需步骤，观察 `build` 如何拒绝半成品；再切换输出表示，区分构造过程和产品格式。
 
+<Objectives>
 
-## 问题合同与术语
+- 能根据有序步骤、产品不变量和多种表示，说明建造者模式隔离的变化轴与适用边界。
+- 能修改专属构造实验，切换执行版/审计版、删除必需步骤并重置基线，解释 Director、Builder 与 Product 的协作。
+- 能比较建造者、抽象工厂、工厂方法和直接构造，依据构造复杂度与表示变化写出接受或拒绝决定。
 
-**意图。** 把复杂对象的分步构造与最终表示分离，使相同步骤能产生不同结果。**适用边界。** 构造过程包含多个有序步骤，表示可以变化，且半成品不应泄露给客户端。本页验收不变量是：**没有健康探针或回滚步骤的部署计划不得从 build 返回**。
+</Objectives>
 
-、、、、、
-## 官方目录结构的逐项解释
+## 直觉：先写产品必须满足的合同
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+如果把部署计划写成一个长构造函数，调用者必须记住环境、服务、探针和回滚动作的顺序，还要知道哪些参数只对审计版有效。这样的 API 既难读，也很难阻止“忘记回滚”这类半成品流入发布流程。
+
+建造者把这条变化拆成三层：Director 规定稳定的构造步骤，具体 Builder 保存步骤结果并选择表示，Product 只在所有必需部分齐备时交付。客户端可以直接调用 Builder，也可以交给 Director；关键不在调用形式，而在 `build` 不能返回不满足合同的对象。
+
+## 三个必须主动触发的建造者误区
+
+<Callout type="trap" title="把每个多参数对象都升级成建造者">
+  **现象 →** 一个对象只有两三个独立参数，却先建立 Director、抽象 Builder 和多个具体 Builder。 **原因 →** 把参数数量误当成构造过程复杂度，增加了跳转和维护成本。 **修法 →** 先用命名参数或小型工厂表达意图；只有步骤有顺序或表示确实分叉时再引入建造者。
+</Callout>
+
+<Callout type="trap" title="允许半成品从 build 返回">
+  **现象 →** 没有健康探针或回滚动作的计划也能被 `build` 交付。 **原因 →** Builder 只负责赋值，没有把业务不变量放在产品边界。 **修法 →** 在 `build` 集中验证必需步骤，失败时返回可解释的错误，不把检查推迟到发布器。
+</Callout>
+
+<Callout type="trap" title="把表示变化塞进构造步骤">
+  **现象 →** 为执行版和审计版各复制一套 Director，步骤一改就要同步两份流程。 **原因 →** 混淆了“怎样构造”和“结果怎样呈现”。 **修法 →** 共享 Director 的步骤协议，让具体 Builder 决定最终 Product 的表示。
+</Callout>
+
+## 来源、版次与独立重写边界
+
+本章以 [InformIT 官方书目与授权样章页](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)核对 GoF 模式目录范围，并用 [Pearson/Addison-Wesley 官方书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)核对版次信息。模式语言的历史语境参考 [GoF 作者十年回顾](https://www.informit.com/articles/article.aspx?p=1327762)，TypeScript 的类与构造表达参考 [TypeScript 官方类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)。
+
+本文的部署计划领域、代码切片、交互实验和练习均为独立教学重写，不声称复现原书正文、原书代码或某个云平台的完整实现。实验中的“发布”只是对产品合同的教学判断，不代表真实部署系统的安全或运维批准。
+
+## 问题合同与五个关键术语
+
+本章把要交付的结果称为<Term def="经过多个有序步骤并满足全部必需约束的最终对象">产品</Term>。负责累积构造状态并在最后交付产品的是<Term def="隐藏构造细节、保存中间状态并生成最终产品的对象">建造者</Term>；负责规定步骤顺序但不持有最终表示细节的是<Term def="编排一组稳定构造步骤的可选协调者">指导者</Term>。
+
+健康探针和回滚动作属于<Term def="产品在交付前必须满足的条件，例如不能缺少探针或回滚步骤">产品不变量</Term>。同一组步骤可以产出执行文本或审计记录，这种差异叫<Term def="同一构造流程最终生成的不同外部形态">最终表示</Term>。如果只有参数组合，没有顺序、校验或表示变化，直接构造通常更小。
+
+| 评审卡 | 要回答的问题 | 通过信号 |
+| --- | --- | --- |
+| 步骤 | 哪些动作必须按顺序发生？ | Director 或调用协议能表达顺序 |
+| 不变量 | 什么条件不满足就不能交付？ | `build` 集中拒绝半成品 |
+| 表示 | 同一结果是否有不同输出形态？ | 执行版和审计版共享步骤 |
+| 责任 | 谁编排、谁保存、谁交付？ | Director、Builder、Product 边界清楚 |
+| 边界 | 什么情况下模式过重？ | 简单参数对象保留直接构造 |
+
+## 官方目录节点的逐项解释
+
+下面的 13 个节点对应 manifest 中 `designpatterns-10` 的正式目录。它们不是把一句定义复制 13 次，而是从构造问题的不同角度审查建造者是否真的被使用。
 
 ### 模式名称与分类
 
-“建造者模式”归入创建型模式，名称只用于定位 把复杂对象的分步构造与最终表示分离，使相同步骤能产生不同结果，不能替代问题证据。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+建造者模式属于创建型模式，关注的是复杂对象如何被逐步构造。分类只提供导航；真正的采用证据是步骤顺序、不变量或最终表示变化，而不是对象字段很多。
 
 ### 意图
 
-“意图”回答模式想改变什么：把复杂对象的分步构造与最终表示分离，使相同步骤能产生不同结果。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+它的意图是将复杂对象的构造与其表示分离，使同一构造过程可以创建不同表示。部署计划中，Director 可以保持“环境 → 服务 → 探针 → 回滚”的顺序，执行 Builder 与审计 Builder 则输出不同 Product。
 
 ### 别名
 
-“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+本章不追加未经来源核对的稳定别名。评审时使用“建造者、指导者、产品、具体建造者”这组责任名称，避免把 fluent API、参数对象或 setter 链自动当作模式本身。
 
 ### 动机
 
-“动机”从具体压力出发：一个超长构造函数无法表达步骤顺序、可选项和中途不变量。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+长构造函数把顺序、可选项和校验压力转嫁给调用者；建造者允许每一步有名称，并把最终检查集中在产品边界。动机成立的前提是这些步骤会被复用，或产品表示确实会变化。
 
 ### 适用性
 
-“适用性”要求同时满足：构造过程包含多个有序步骤，表示可以变化，且半成品不应泄露给客户端。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+当创建算法必须独立于产品的组成部分和表示，或者同一构造流程需要产出不同表示时，建造者很合适。若对象只有少量独立参数、没有顺序和半成品风险，应拒绝建造者，保留直接构造或小型工厂。
 
 ### 结构
 
-“结构”由 DeploymentDirector、PlanBuilder、AuditPlanBuilder 以及它们之间的引用方向共同确定。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+结构通常包含 Product、Builder、ConcreteBuilder 和可选的 Director。Builder 声明步骤，ConcreteBuilder 累积状态并实现步骤，Director 复用流程，Product 只暴露完成后的结果。Director 不是必需的神秘基类，而是对稳定流程的封装。
 
 ### 参与者
 
-“参与者”逐一说明 DeploymentDirector、PlanBuilder、AuditPlanBuilder 谁保存状态、谁发起调用以及谁承担变化。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+Product 持有最终部署计划；Builder 定义构造协议；ConcreteBuilder 选择执行版或审计版的内部表示；Director 发起有序调用；客户端决定使用哪个 Builder 并取出 Product。每个参与者的变化原因应该不同。
 
 ### 协作
 
-“协作”的运行协议是：Director 规定步骤，Builder 累积状态，ConcreteBuilder 返回特定表示。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+客户端把具体 Builder 交给 Director，Director 依次调用步骤，Builder 把片段累积到自己的状态，最后由 Builder 返回 Product。若客户端在 `build` 之后仍能补写内部列表，说明产品边界没有封装好。
 
 ### 后果
 
-“后果”必须连同收益和成本记录：构造意图更清楚，但多个建造者必须共同维护步骤契约。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+收益是构造步骤更可读、表示更容易替换、必需条件可以集中验证；成本是角色数量增加、简单对象的调用路径变长，而且 Builder 的步骤协议需要与 Product 不变量同步维护。采用决定必须同时写收益和成本。
 
 ### 实现
 
-“实现”落地时遵守：在 build 时集中验证必填项，用类型或状态隐藏尚未完成的产品。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+实现时先列出最小步骤协议，再决定哪些步骤必须发生。可以让 `build` 返回只读 Product，也可以用类型状态表达“已配置探针”；无论选哪种方式，都要在运行时边界拒绝缺少健康探针或回滚步骤的计划。
 
 ### 示例代码
 
-“示例代码”使用本页 TypeScript 最小切片验证“没有健康探针或回滚步骤的部署计划不得从 build 返回”，代码是独立教学示例。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+下面的 TypeScript 切片展示同一个 Director 如何服务两种表示。它省略真实部署调用，只验证构造顺序和产品不变量：
+
+```ts
+type Plan = { format: "run" | "audit"; lines: readonly string[] };
+
+interface PlanBuilder {
+  setEnvironment(name: string): void;
+  addService(name: string): void;
+  addProbe(path: string): void;
+  addRollback(command: string): void;
+  build(): Plan;
+}
+
+function deployPlan(builder: PlanBuilder) {
+  builder.setEnvironment("staging");
+  builder.addService("api");
+  builder.addProbe("/health");
+  builder.addRollback("kubectl rollout undo");
+  return builder.build();
+}
+```
 
 ### 已知应用
 
-“已知应用”可在这些场景识别：查询构造器、文档生成器、配置装配和测试数据工厂都适合分步构造，但名称相似不构成采用证据。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+查询构造器、文档生成器、配置装配器和测试数据构造器都可能需要建造者式的分步协议。相似的 fluent 链不构成采用证据；仍要检查步骤是否有顺序、不变量是否需要集中守护，以及是否有多种最终表示。
 
 ### 相关模式
 
-“相关模式”用于比较边界：抽象工厂强调产品家族；原型通过复制已有对象开始创建。 对“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”先保存基线，再改变一个条件；若出现“对象只有两三个独立参数时，命名参数比完整建造者层次简单”，就拒绝 建造者模式 方案并回到更简单结构。
+抽象工厂强调创建一族彼此兼容的产品，工厂方法把单个产品的创建交给子类；建造者强调按步骤构造一个复杂结果。原型则从已有对象复制开始。比较时应指出变化轴，而不是只比较类图形状。
 
-## 常见误区与反例
+## 章专属实验：把构造协议变成可观察证据
 
+先预测：删除健康探针后，`build` 是否应该返回产品？再预测：把表示从执行版切换为审计版时，步骤顺序是否应该改变？按四步操作实验，记录通过路径、拒绝路径和重置后的基线。
 
-另一个易错点是把结构相似当作语义相同。抽象工厂强调产品家族；原型通过复制已有对象开始创建；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+<Stepper>
+  <Step title="1. 选择具体建造者">
+    在实验中选择执行版或审计版 Builder，观察两者都接收相同的环境、服务、探针和回滚步骤，但 Product 的外部表示不同。先记下你认为最容易被客户端越过的边界。
 
-## 术语表
+    <BuilderConstructionContractLab />
 
+  </Step>
+  <Step title="2. 让指导者编排步骤">
+    点击“运行标准流程”，观察 Director 按固定顺序调用 Builder。检查产品面板中的步骤轨迹，确认客户端不需要手写每一次调用。
 
-## 练习与答案
+    <BuilderConstructionContractLab />
 
+  </Step>
+  <Step title="3. 删除必需步骤并拒绝半成品">
+    点击“删除健康探针”，再尝试构建。实验应明确显示产品合同拒绝，而不是给出一个看似成功的部署计划；这就是 `build` 边界的证据。
 
-## 本章小结
+    <BuilderConstructionContractLab />
 
-建造者模式 把“部署计划由环境、服务、探针和回滚步骤组成，并要输出执行版与审计版”收敛为 DeploymentDirector、PlanBuilder、AuditPlanBuilder 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“对象只有两三个独立参数时，命名参数比完整建造者层次简单”这一反例、重置实验，并根据 构造意图更清楚，但多个建造者必须共同维护步骤契约 接受或拒绝方案。
+  </Step>
+  <Step title="4. 重置并比较替代方案">
+    点击重置实验，确认选择回到执行版、步骤恢复完整、状态回到未构建。最后比较直接构造、工厂方法、抽象工厂与建造者，写出采用或拒绝的理由。
+
+    <BuilderConstructionContractLab />
+
+  </Step>
+</Stepper>
+
+## 把产品不变量写进 TypeScript
+
+真实项目可以让 Builder 返回不可变 Product，并把必需步骤的检查放在 `build`。下面的示例故意保留运行时校验，因为 JavaScript 调用者仍可能绕过编译期约束：
+
+```ts
+type DeploymentPlan = {
+  environment: string;
+  services: readonly string[];
+  probe: string;
+  rollback: string;
+};
+
+class SafePlanBuilder {
+  private environment?: string;
+  private services: string[] = [];
+  private probe?: string;
+  private rollback?: string;
+
+  setEnvironment(value: string) { this.environment = value; }
+  addService(value: string) { this.services.push(value); }
+  addProbe(value: string) { this.probe = value; }
+  addRollback(value: string) { this.rollback = value; }
+
+  build(): DeploymentPlan {
+    if (!this.environment || this.services.length === 0 || !this.probe || !this.rollback) {
+      throw new Error("deployment plan needs environment, service, probe, and rollback");
+    }
+    return {
+      environment: this.environment,
+      services: [...this.services],
+      probe: this.probe,
+      rollback: this.rollback,
+    };
+  }
+}
+```
+
+注意 `build` 只返回完成后的快照，不能把 Builder 的可变数组直接暴露出去。这样，表示可以变化，产品合同却保持稳定。
+
+## 练习、答案与 13 个节点验收
+
+<Exercises>
+
+本组练习覆盖：模式名称与分类；意图；别名；动机；适用性；结构；参与者；协作；后果；实现；示例代码；已知应用；相关模式。
+
+**问题 1：改 Demo 代码。** 在实验中新增一个 `setRegion` 步骤，并让执行版与审计版都保留它。你需要修改哪些角色，怎样证明顺序没有被破坏？
+
+<Answer>
+  先扩展 Builder 协议和两个具体 Builder，再由 Director 在选择环境之后调用 `setRegion`，最后让 Product 面板显示步骤轨迹。用一次标准流程和一次缺少后续步骤的构建测试，证明新步骤被两种表示共同使用且顺序仍由 Director 控制。
+</Answer>
+
+**问题 2：比较创建方案。** 一个 `Report` 只有三个独立参数，没有必需顺序，也没有第二种表示。为什么此时不应直接引入建造者？
+
+<Answer>
+  因为没有可复用的构造算法、半成品风险或表示变化，建造者的角色数量只会增加认知成本。命名参数、参数对象或小型工厂已经能表达意图；等真实步骤或表示压力出现后再升级。
+</Answer>
+
+**问题 3：做一次拒绝决定。** 如果客户端可以在 `build` 之后继续修改服务列表，建造者模式的哪条边界失效？
+
+<Answer>
+  Product 不变量和封装边界失效了：交付后的对象仍暴露 Builder 的可变状态，执行版和审计版也可能被不同步修改。应返回只读快照或不可变结构，并把健康探针、回滚动作等必需条件集中检查在 `build`。
+</Answer>
+
+</Exercises>
+
+## 本章小结与发布前回顾
+
+- 建造者隔离的是复杂产品的构造步骤与最终表示。
+- Director 编排可复用流程，Builder 累积状态，Product 只交付满足不变量的结果。
+- `build` 是半成品的最后边界，不能把必需校验推迟到下游。
+- 多种表示不应复制整套步骤；简单参数对象也不应被过度模式化。
+- 采用前要同时写出步骤顺序、产品不变量、表示变化和额外角色成本。
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="产品">
+    经过多个有序步骤并满足全部必需约束的最终对象。
+  </GlossaryItem>
+  <GlossaryItem term="建造者">
+    隐藏构造细节、保存中间状态并生成最终产品的对象。
+  </GlossaryItem>
+  <GlossaryItem term="指导者">
+    编排一组稳定构造步骤的可选协调者。
+  </GlossaryItem>
+  <GlossaryItem term="产品不变量">
+    产品在交付前必须满足的条件，例如不能缺少探针或回滚步骤。
+  </GlossaryItem>
+  <GlossaryItem term="最终表示">
+    同一构造流程最终生成的不同外部形态，例如执行文本或审计记录。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Design Patterns: Elements of Reusable Object-Oriented Software"
+  adaptedUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+/>
 
 ## 前后导航
 
 - [上一页：抽象工厂模式](/learn/design-patterns/01-creational/abstract-factory)
-- [下一页：原型模式](/learn/design-patterns/01-creational/prototype)
-
+- [下一页：工厂方法模式](/learn/design-patterns/01-creational/factory-method)
