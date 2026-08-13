@@ -13157,6 +13157,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Csharp8AndBeyondFailureDiagram: module0.Csharp8AndBeyondFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "deep-understanding-jvm/00-duj3-official-learning-map/duj3-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-official-learning-map");
+      return {
+        Duj3OfficialLearningMapEvidenceMap:
+          module0.Duj3OfficialLearningMapEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
