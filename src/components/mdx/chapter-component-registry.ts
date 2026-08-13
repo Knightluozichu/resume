@@ -12533,6 +12533,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DnjTestingEvidenceMapDiagram: module0.DnjTestingEvidenceMapDiagram,
     } as ChapterMdxComponents;
   },
+  "deep-nodejs/05-quality-production/dnj-11-productization": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/productization-evidence-map-diagram");
+    return {
+      DnjProductizationEvidenceMapDiagram:
+        module0.DnjProductizationEvidenceMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
