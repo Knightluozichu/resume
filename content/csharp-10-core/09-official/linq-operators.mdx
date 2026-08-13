@@ -3,11 +3,15 @@ title: "Chapter 9. LINQ Operators"
 type: C
 section: "C# 10 Nutshell · .NET and Data"
 order: 9
-description: "覆盖filter/project/join/order/group/set/conversion/element/aggregate/quantifier/generation operators，以shape、cardinality和empty契约选型。"
+description: "覆盖 filtering、projection、join、ordering、grouping、set、conversion、element、aggregate、quantifier、generation operators，以 shape、cardinality 和 empty 契约选型。"
 demo: true
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch09.html"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ctc10-09
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,7 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { Ctc10LinqOperatorsDecisionMapDiagram } from "@/components/mdx/csharp-10-core/linq-operators-decision-map-diagram";
 
 <Objectives>
 
@@ -39,10 +44,11 @@ Where、Select、SelectMany、Join看起来都是链式method，却分别保留�
 Operators可分sequence-to-sequence（deferred为主）、sequence-to-element/value（terminal为主）、void-to-sequence generation。Local IEnumerable semantics与IQueryable provider translation分开验证。本章先讲logical contract，再检查复杂度、buffering和provider。
 
 ```text
-Where:       Seq<A> -> Seq<A>
-Select:      Seq<A> -> Seq<B>
-SelectMany:  Seq<A> -> (A -> Seq<B>) -> Seq<B>
-GroupBy:     Seq<A> -> Seq<Group<K,A>>
+Where: Seq<A> -> Seq<A>
+Select: Seq<A> -> Seq<B>
+SelectMany:
+  Seq<A> -> (A -> Seq<B>) -> Seq<B>
+GroupBy: Seq<A> -> Seq<Group<K,A>>
 First/Count: Seq<A> -> A / int
 ```
 
@@ -57,7 +63,9 @@ Untrusted Take count和pagination需limit；TakeWhile遇first false后停止。D
 Select一对一转换，SelectMany把每个input映射到inner sequence再flatten；result selector可保留outer/inner。SelectMany对empty inner产生零输出，cardinality可能爆炸。Projection可避免暴露entity/多列，也可产生anonymous/named DTO。
 
 <Stepper>
-  <Step title="切换filter、select、select many与join"></Step>
+  <Step title="切换filter、select、select many与join">
+    <Ctc10LinqOperatorsDecisionMapDiagram />
+  </Step>
   <Step title="写shape/cardinality">每个operator列empty/one/many input到输出数量和order，标是否buffer。</Step>
   <Step title="用counting sources验收">记录source/predicate/selector次数，覆盖empty、duplicates、large inner与partial consumption。</Step>
 </Stepper>
@@ -71,15 +79,16 @@ Select一对一转换，SelectMany把每个input映射到inner sequence再flatte
 Join做inner equijoin，GroupJoin为每个outer提供matching group并可表达left join；Zip按position配对并在短source结束。Join的key comparer、duplicate keys与source order决定输出数量。Local Join通常对一侧构建lookup，provider翻译为SQL join。
 
 ```csharp
-var rows = customers.GroupJoin(
-    orders,
-    customer => customer.Id,
-    order => order.CustomerId,
-    (customer, matches) => new
+var rows = customers
+    .GroupJoin(
+        orders,
+        customer => customer.Id,
+        order => order.CustomerId,
+        (customer, matches) => new
     {
-        customer.Name,
-        OrderCount = matches.Count(),
-        Total = matches.Sum(order => order.Total)
+            customer.Name,
+            OrderCount = matches.Count(),
+            Total = matches.Sum(order => order.Total)
     });
 ```
 
@@ -106,7 +115,9 @@ Concat只拼接并保留duplicates；Union/Distinct去重；Intersect保留第�
 Set semantics对entity按哪个key必须显式；record full-value equality可能与business identity不同。Large/unbounded source的seen set需capacity评估。
 
 <Stepper>
-  <Step title="切换order、group、set与zip"></Step>
+  <Step title="切换order、group、set与zip">
+    <Ctc10LinqOperatorsDecisionMapDiagram />
+  </Step>
   <Step title="标comparer和duplicates">每个operator写equality/order key、null、duplicate、tie和output-order guarantee。</Step>
   <Step title="运行permutation properties">Shuffle input、重复keys、culture/comparer变化，验证set membership与explicit ordering。</Step>
 </Stepper>
@@ -156,7 +167,9 @@ Empty返回空sequence，Range生成连续ints，Repeat重复同一个value refe
 不要用Repeat(new Mutable(), n)期待n个独立objects；使用Range.Select(_ => new Mutable())。Range overflow/count invalid明确失败。
 
 <Stepper>
-  <Step title="切换element、aggregate、quantifier与materialize"></Step>
+  <Step title="切换element、aggregate、quantifier与materialize">
+    <Ctc10LinqOperatorsDecisionMapDiagram />
+  </Step>
   <Step title="建立empty/one/many表">每个terminal写result/default/throw、short-circuit和source consumption。</Step>
   <Step title="注入overflow/duplicate/fault">用throwing enumerable定位最远MoveNext，验证duplicate ToDictionary、Aggregate seed和All empty policy。</Step>
 </Stepper>
