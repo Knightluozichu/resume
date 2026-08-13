@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T04:58:47.376Z；旧版分数不迁移。
+> 2026-08-13T05:03:01.410Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
 - failed：1925
-- queued：234
-- passed：1657
+- queued：233
+- passed：1658
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -121,7 +121,7 @@
 | 108 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
 | 109 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
 | 110 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 111 | csharp-10-core | 27 | 0 | 16 | 11 | 16 |
+| 111 | csharp-10-core | 27 | 0 | 15 | 12 | 15 |
 | 112 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
 | 113 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
 | 114 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
