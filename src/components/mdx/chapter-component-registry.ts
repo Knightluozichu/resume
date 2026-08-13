@@ -13362,6 +13362,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Duj3AppendixDOqlHeapQueryLab: module0.Duj3AppendixDOqlHeapQueryLab,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/23-duj3-appendix-e-jdk-history/duj3-appendix-e-jdk-history":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-appendix-e-jdk-history-timeline-lab");
+      return {
+        Duj3AppendixEJdkHistoryTimelineLab:
+          module0.Duj3AppendixEJdkHistoryTimelineLab,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T14:26:16.479Z；旧版分数不迁移。
+> 2026-08-13T14:36:37.592Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1892
+- failed：1891
 - queued：218
-- passed：1706
+- passed：1707
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -112,7 +112,7 @@
 | 99 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 100 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
 | 101 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 102 | deep-understanding-jvm | 25 | 2 | 0 | 23 | 6 |
+| 102 | deep-understanding-jvm | 25 | 1 | 0 | 24 | 3 |
 | 103 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 104 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
 | 105 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
