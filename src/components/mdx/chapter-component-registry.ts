@@ -8935,6 +8935,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10DisposalGcOwnershipFlowDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/14-official/concurrency-and-asynchrony": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/concurrency-and-asynchrony-execution-flow-diagram");
+    return {
+      Ctc10ConcurrencyAsynchronyExecutionFlowDiagram:
+        module0.Ctc10ConcurrencyAsynchronyExecutionFlowDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
