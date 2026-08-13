@@ -1,0 +1,237 @@
+---
+title: "GPU Gems 3 · Chapter 37. Efficient Random Number Generation and Application Using CUDA"
+type: C
+section: "GPU Gems 3 Part VI · GPU Computing"
+order: 37
+description: "从 CUDA 上的独立随机子流出发，解释 Tausworthe、Box-Muller、Wallace 和 Monte Carlo 金融模拟如何在吞吐、统计质量与 GPU 资源之间取舍。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-37-efficient-random-number-generation-and-application"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-37
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch37GaussianChoiceDiagram,
+  GpuGems3Ch37MonteCarloDiagram,
+  GpuGems3Ch37PipelineDiagram,
+  GpuGems3Ch37ResourceTradeoffDiagram,
+  GpuGems3Ch37RngLab,
+  GpuGems3Ch37StreamAssignmentDiagram,
+  GpuGems3Ch37WallacePoolDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch37-rng";
+
+<Objectives>
+
+- 能解释 Monte Carlo 的独立 trial 如何变成 CUDA 上的并行工作，以及为什么每个线程必须拥有不重叠的随机子流
+- 能修改 CUDA RNG Lab 的 generator、distribution、trial 数、Wallace pool 大小和质量策略，比较历史吞吐模型、共享内存压力与误差
+- 能回答：为什么 GPU 上不应只追求更快的随机数，而要同时检查周期、子流独立性、统计质量、线程路径和模拟资源预算
+
+</Objectives>
+
+## 先问：为什么随机数会成为 Monte Carlo 的 GPU 瓶颈
+
+Monte Carlo 的核心动作很简单：重复执行许多独立 trial，把每次试验的 payoff 或估计值聚合起来。它看起来天然适合 GPU，但“重复”并不等于“安全地复制同一个随机状态”。如果多个线程从同一段序列取数，结果可能重叠；如果每个线程都带一个很大的状态，状态搬运又会吞掉算力。
+
+本章关注一个可迁移的 CUDA 设计问题：怎样给大量并行执行单元分配彼此独立的随机序列，再用合适的生成器提供 uniform 或 Gaussian samples，最后把结果稳定地送回模拟与归约。GPU Gems 3 的数字来自当时的硬件与实现，适合用来观察相对取舍，不是现代 GPU 的性能承诺。
+
+<Callout type="tip" title="先预测：多开线程就能解决随机数问题吗？">
+  在 Lab 中先保持 `Taus + Box-Muller`、`Gaussian`、`100,000 trials` 和 `balanced`，再切换到 `Wallace`。先猜哪一项会变化：每秒样本数、shared-memory pressure，还是 Monte Carlo error。最后把 pool 改成 `4,096 words`，检查为什么“直接生成 Gaussian”会挤占模拟 kernel 的资源。
+</Callout>
+
+## 1. 把独立 trial 变成并行工作
+
+<Term def="用大量随机输入重复执行同一个数值模型，再对 trial 输出求平均或其他统计量，以近似期望值的模拟方法。">
+  Monte Carlo simulation
+</Term>
+
+Monte Carlo 的并行形状可以分成五步：分配随机序列；把模型参数传播到执行单元；生成随机流；运行模拟 kernel；收集并组合输出。前四步是数据产生和计算，最后一步是统计归约。只要 trial 之间没有数据依赖，就可以让不同线程分别走不同路径，例如一个线程生成一条资产价格路径，最后只留下 option payoff。
+
+<GpuGems3Ch37MonteCarloDiagram />
+
+这里的“独立”有两层含义。第一层是程序结构上的独立：线程不应读写别的 trial 的中间状态。第二层是统计意义上的独立：不同线程看到的随机值不能来自相互重叠、明显相关的子序列。第一层容易由 kernel 的索引检查出来，第二层必须通过序列设计和统计测试来验证。
+
+<Callout type="trap" title="误区：把同一个 seed 复制给所有线程就得到了并行随机数">
+  **现象 →** 每个线程都初始化为相同 seed，结果仍然看起来有噪声，于是直接把输出当作可靠的 Monte Carlo 估计。
+
+**原因 →** 相同 seed 通常意味着相同状态和相同后继序列；线程之间的样本相互重合，平均值可能带着隐藏相关性。
+
+**修法 →** 明确 sequence ownership：为每个执行单元分配不重叠的 stream 或 substream，并用统计测试检查跨流相关性，不能只看一张结果图。
+</Callout>
+
+## 2. 先分配 sequence，再选择生成器
+
+<Term def="确定性地产生一串看似随机的值的算法；它不是真随机源，也不提供密码学安全性，但适合可重复的数值模拟。">
+  pseudorandom number generator (PRNG)
+</Term>
+
+PRNG 的优点是可重复、可在 CPU 与 GPU 之间复现，并且可以把状态保存到下一次 kernel 调用。对并行 GPU 来说，单个序列的周期还不够：需要把长序列切成不会重叠的子区间，或为每个执行单元选择经过设计的不同初始状态。工程上还要记录 seed、stream id 和 skip-ahead 规则，否则一次重排线程就可能改变实验结果。
+
+<Term def="从一个 PRNG 长序列中切出的、分配给一个线程或工作单元的连续区间；正确设计时不同 substream 之间不重叠。">
+  substream
+</Term>
+
+最简单的 LCG 只需少量乘加，但周期、低位质量和并行分段都容易成为限制。大型状态的 lagged Fibonacci 或 Mersenne Twister 具有更复杂的状态更新，也可能让每个线程频繁读写 global memory。GPU Gems 3 选择 combined Tausworthe：多个 LFSR 组合成小状态的生成器，使用位移、掩码与 XOR，周期约为 2^113，适合把状态放在寄存器或较近的存储层。
+
+<Term def="把多个 Tausworthe 线性反馈移位寄存器组合起来的 PRNG；它以小状态和位级更新换取适合 GPU 的规则路径，仍需做统计验证。">
+  combined Tausworthe
+</Term>
+
+<GpuGems3Ch37StreamAssignmentDiagram />
+
+分配 substream 不是把 `seed + threadId` 当成普适公式。要问清楚：每个线程需要多少样本，stride 是否足够覆盖整个 trial，kernel 重新调度后状态是否仍能恢复，以及每次运行是否需要可重复。状态初始化也应与 simulation kernel 分开验证：先生成固定数量的 stream，保存样本做周期、分布和跨流相关性测试，再接入金融模型。
+
+## 3. uniform 到 Gaussian：固定变换为何适合 GPU
+
+许多模型先需要 uniform values，再把它们变成 Gaussian values。CPU 上常见的 Ziggurat 或 polar 方法很高效，但它们可能包含拒绝采样、概率分支和循环次数不一的路径。在一个 warp 中，如果线程走不同分支，硬件可能要串行执行多条路径；平均每次调用很快，并不表示整个 warp 的路径规则。
+
+<Term def="用两个 uniform 输入经过固定的三角函数与对数变换，产生两个 Gaussian 输出；它的固定工作形状通常适合 GPU 的规则线程路径。">
+  Box-Muller transform
+</Term>
+
+Box-Muller 使用两个 uniform samples，经过固定的变换得到两个正态样本。它的代价是三角函数和对数，但每个线程的指令形状比较可预测，且一次可以消费一对 uniform values。这里的选择不是“最少指令”一票否决，而是要把分支、循环、函数吞吐和统计质量放到同一张成本表里。
+
+<GpuGems3Ch37GaussianChoiceDiagram />
+
+<Callout type="trap" title="误区：Gaussian 生成器只要均值为零就算正确">
+  **现象 →** 只打印样本平均值，看到接近零就宣布变换没有问题。
+
+**原因 →** 均值无法发现尾部、方差、空间相关和跨线程子流问题；分支路径也可能让吞吐随输入分布变化。
+
+**修法 →** 同时检查均值、方差、尾部、序列相关性和跨 substream 相关性，再用固定 workload 比较 branch behavior 与端到端吞吐。
+</Callout>
+
+## 4. Wallace：用 Gaussian pool 换掉重复变换
+
+<Term def="维护一组 Gaussian 值，先随机置换索引，再对成对元素施加小的正交变换来生成下一组值的直接 Gaussian 生成方法。">
+  Wallace Gaussian generator
+</Term>
+
+Wallace 的思路不同：先在 CPU 上用可靠方法初始化一个 Gaussian pool，GPU 再从 pool 中随机挑选元素，用许多 2×2 orthogonal transforms 生成下一 pool。正交变换保持 pool 的平方和，因此整体能量不漂移；随机 permutation 则负责把新旧位置混合，避免简单映射产生相关性。它直接产生 Gaussian，不必为每两个输出再次执行 Box-Muller。
+
+<GpuGems3Ch37WallacePoolDiagram />
+
+代价是状态。示例使用 2,048 words 的共享内存 pool，这块空间不能同时给 simulation kernel 使用。若 pool 太小，混合质量与周期性可能需要更谨慎地测试；若 pool 太大，occupancy、其他 shared arrays 和 block 数量会受压。初始化阶段和 GPU 运行阶段也要分别审计：CPU 的 seed 方法不能自动证明 Wallace 的 permutation 与 transform 实现没有偏差。
+
+## 动手走一遍：从 sequence ownership 到估计值
+
+<Stepper>
+  <Step title="先分配不重叠的随机子流">
+    为每个执行单元保存自己的 state、stream id 和起点规则；不要让线程共享一个会被同时推进的 PRNG state。
+
+    <GpuGems3Ch37StreamAssignmentDiagram />
+  </Step>
+  <Step title="再生成 uniform 或 Gaussian samples">
+    根据 kernel 的路径选择 combined Tausworthe 加 Box-Muller，或使用经过统计测试的 Wallace pool；把分支、状态和输出数量一起记录。
+
+    <GpuGems3Ch37GaussianChoiceDiagram />
+  </Step>
+  <Step title="每个线程运行自己的 simulation trial">
+    在线程内部传播模型参数，生成 path 或 payoff；不要为了共享随机状态而引入跨 trial 的同步依赖。
+
+    <GpuGems3Ch37MonteCarloDiagram />
+  </Step>
+  <Step title="最后聚合并检查误差">
+    收集 partial sums 或其他统计量，比较 trial 数增加时的误差下降，并把统计测试和性能测试放在同一个实验记录里。
+
+    <GpuGems3Ch37WallacePoolDiagram />
+  </Step>
+</Stepper>
+
+<GpuGems3Ch37PipelineDiagram />
+
+## 5. 资源取舍：更快的 RNG 不一定更快的模拟
+
+<GpuGems3Ch37ResourceTradeoffDiagram />
+
+GPU Gems 3 的历史测量把 Tausworthe 加 Box-Muller 和 Wallace 放在同一类 Monte Carlo workload 中比较：原始 GPU 样本率约为 4,327 与 5,274 million samples per second，Wallace 的直接 Gaussian 路径更快；但这是以共享内存 pool 和 permutation 为代价。对应的金融示例加速比也会随 workload 改变，不能把单独的 RNG samples/s 直接等同于 option pricing 的端到端吞吐。
+
+选择生成器时至少同时看四张表：序列周期与统计质量；每线程或每 block 的状态字数；warp 是否出现分支与循环；simulation kernel 还剩多少 register、shared memory 和 occupancy 预算。Mersenne Twister 一类大状态生成器可能在统计上很有吸引力，却因为状态访问把 GPU 变成内存搬运器。Wallace 可能减少变换调用，却让 shared memory 变成瓶颈。结合 Tausworthe 的 hybrid path 则可能在资源受限的 block 上胜出。
+
+## 6. 用 CUDA RNG Lab 做一次可复现的比较
+
+<GpuGems3Ch37RngLab />
+
+先记录默认配置，再只改变一个变量。将 `Taus + Box-Muller` 换成 `Wallace`，观察 raw samples 和 shared-memory words；将 `Gaussian` 换成 `uniform`，看固定变换成本如何从模型中消失；将 trial 从 `10,000` 提升到 `1,000,000`，观察估计误差按样本数的平方根趋势下降，而不是误以为吞吐会无限增加。
+
+把 Wallace pool 从 `512` 调到 `4,096 words`，Lab 会标出 shared-memory pressure；把 quality strategy 调到 `strict statistical checks`，教学模型会给出更保守的误差估计。这个交互实验使用章节历史结果的相对模型，不执行真实随机序列、不替代 TestU01 等统计套件，也不应直接用于生产金融定价。生产实现还必须明确 seed 管理、跨 stream 相关性测试、数值精度和失败重试策略。
+
+## 小结
+
+- Monte Carlo 的独立 trial 可以并行，但每个线程必须获得统计上安全、不重叠的随机 substream。
+- combined Tausworthe 以小状态和位级更新适合 GPU；周期长不等于自动通过所有统计测试。
+- Box-Muller 用固定变换把 uniform 变成 Gaussian，常以更多算术换取更规则的 warp 路径。
+- Wallace 从 Gaussian pool 直接生成样本，减少重复变换，却要用 shared memory、随机 permutation 和正交混合交换资源。
+- 选择 RNG 要同时检查随机质量、状态存储、分支行为、simulation kernel 预算和端到端归约成本。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中分别选择 `Taus + Box-Muller` 和 `Wallace`，保持 `Gaussian`、`100,000 trials` 和 `balanced`，记录 samples/s、shared-memory words 和 estimated standard error。再把 pool 改为 `4,096 words`，解释哪个指标反映的是资源压力而不是统计质量。
+
+<Answer>
+
+Wallace 的历史模型 samples/s 更高，但它使用较大的 shared-memory pool；`4,096 words` 会继续增加 pool pressure，减少留给 simulation kernel 的空间。estimated standard error 是由 trial 数与 quality strategy 的教学模型计算的，不是 pool 变大就自动更准确；真实准确性仍需统计测试与重复实验。
+
+</Answer>
+
+**问题 2｜诊断跨线程相关。** 一个程序把相同 seed 写进所有线程的状态，单线程测试通过，但多线程的 payoff histogram 有异常尖峰。请按“状态初始化、子流分配、统计测试、模拟 kernel”给出排查顺序。
+
+<Answer>
+
+先保存几个线程的前若干输出，确认相同 seed 是否产生相同后继序列；再检查 stream id、stride 或 skip-ahead 是否真正让区间不重叠，并验证 kernel 重排后 state 仍与线程或逻辑 trial 绑定。随后做均值、方差、尾部和跨流相关性测试；最后才检查 payoff kernel 的索引和归约，因为错误的序列所有权会先于金融公式制造尖峰。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个共享内存很紧的短期定价 kernel、一个可以为 RNG 预留较大 shared pool 的批量风险分析 kernel、一个需要最高统计质量的研究原型，分别说明你的第一轮实验和上线前检查。
+
+<Answer>
+
+共享内存紧的 kernel 先比较 combined Tausworthe 加 Box-Muller 与较小状态方案，优先观察 occupancy、分支和端到端 payoff 吞吐；能预留 pool 的批量分析可以实验 Wallace，但要测试 permutation、pool 大小与跨 block 相关性。研究原型应先固定 seed、保存 stream 元数据，使用独立统计套件检查分布与相关性，再决定是否接受 GPU 的历史吞吐优势；三者都不能只依据 samples/s 上线。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Monte Carlo simulation">
+    用许多随机 trial 重复执行数值模型，再聚合输出以估计期望值或其他统计量。
+  </GlossaryItem>
+  <GlossaryItem term="pseudorandom number generator (PRNG)">
+    由确定性状态产生可重复随机样本的算法；不是真随机源，也不自动提供密码学安全性。
+  </GlossaryItem>
+  <GlossaryItem term="substream">
+    从长 PRNG 序列中分配给一个执行单元的不重叠子区间。
+  </GlossaryItem>
+  <GlossaryItem term="combined Tausworthe">
+    由多个 Tausworthe 线性反馈移位寄存器组合而成的小状态 PRNG，使用位级操作推进状态。
+  </GlossaryItem>
+  <GlossaryItem term="Box-Muller transform">
+    消费两个 uniform samples、用固定数学变换产生两个 Gaussian samples 的方法。
+  </GlossaryItem>
+  <GlossaryItem term="Wallace Gaussian generator">
+    对 Gaussian pool 做随机置换与 2×2 正交变换，直接生成下一组 Gaussian samples 的方法。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 37. Efficient Random Number Generation and Application Using CUDA"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-37-efficient-random-number-generation-and-application"
+/>
