@@ -13328,6 +13328,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3Chapter13ThreadSafetyLocksEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/19-duj3-appendix-a-build-openjdk6/duj3-appendix-a-build-openjdk6":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-appendix-a-build-openjdk6-evidence-map");
+      return {
+        Duj3AppendixABuildOpenJdk6EvidenceMap:
+          module0.Duj3AppendixABuildOpenJdk6EvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

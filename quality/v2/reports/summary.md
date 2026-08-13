@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T12:10:26.936Z；旧版分数不迁移。
+> 2026-08-13T13:47:32.184Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1896
+- failed：1895
 - queued：218
-- passed：1702
+- passed：1703
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -108,10 +108,10 @@
 | 95 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
 | 96 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 97 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 98 | deep-understanding-jvm | 25 | 6 | 0 | 19 | 18 |
-| 99 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 100 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 101 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 98 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 99 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 100 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 101 | deep-understanding-jvm | 25 | 5 | 0 | 20 | 15 |
 | 102 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 103 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 104 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |

@@ -1,57 +1,261 @@
 ---
-title: 附录A 在Windows系统下编译OpenJDK 6
-description: 附录A 在Windows系统下编译OpenJDK 6覆盖1个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
+title: "附录A 在Windows系统下编译OpenJDK 6"
+description: "把历史 OpenJDK 6 构建拆成可审计的输入归档、Windows 主机边界、引导 JDK、工具链、构建产物和全新工作区重放。"
 type: C
-section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
+section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
 draft: false
-math: true
-sourceUrl: 'https://github.com/fenixsoft/jvm_book'
+math: false
+sourceUrl: "https://github.com/fenixsoft/jvm_book"
 demo: true
 order: 0
 qualityVersion: 2
-practiceMode: diagnosis
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: duj3-appendix-a-build-openjdk6
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Duj3AppendixABuildOpenJdk6EvidenceMap } from "@/components/mdx/deep-understanding-jvm/duj3-appendix-a-build-openjdk6-evidence-map";
 
-{/* DUJ3_QUALITY_V2 */}
+# 附录A 在Windows系统下编译OpenJDK 6
 
-## 为什么从“历史OpenJDK 6构建台”开始
+在 Windows 系统下编译历史 OpenJDK 6，难点不只是让某条命令返回成功，而是证明“输入是什么、工具链是什么、构建在哪个边界内完成、输出能否被另一个人复核”。本附录把一次构建拆成归档、主机、工具链、配置、构建和验收六个阶段；每个阶段都留下原始记录，失败时也保留失败原文。
 
-附录A 在Windows系统下编译OpenJDK 6不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。历史OpenJDK 6构建台沿“archived source → historical toolchain → isolated build → checksum”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+这里的“OpenJDK 6”是历史构建对象，不等于现代 JDK 发行版。原书的 JDK 12/JDK 13 语境只帮助理解版本演进；真正执行时必须单独记录源码提交、引导 JDK、编译器、构建脚本、Windows 版本、路径、权限、环境变量和输出哈希。现代 OpenJDK 25 文档可以帮助解释工具和规范边界，却不能替代历史工具链。
 
-附录A 在Windows系统下编译OpenJDK 6固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变构建目标或隔离级别；图中只呈现本章真实运行时对象、状态边与证据出口；高亮表示当前分析路径，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+<Objectives>
+
+- 能把一次历史构建拆成输入、主机、工具链、配置、产物和清理六类证据，并写出通过不变量。
+- 能在 Windows 或隔离工作区中固定源码归档、引导 JDK、编译器和构建参数，保存退出码与未过滤日志。
+- 能用全新目录重放构建，比较产物清单与校验和，明确哪些结论属于历史实现、哪些只是现代环境观察。
+
+</Objectives>
+
+## 先拆掉三个历史构建误区
+
+<Callout type="trap" title="把现代 JDK 当成历史构建的替代品">
+  **现象 →** 用当前 `java` 和 `javac` 直接编译，成功后宣布已经复现 OpenJDK 6
+  构建。 **原因 →** 引导
+  JDK、编译器、脚本和路径约束属于输入合同，现代工具可能静默改变行为。 **修法 →**
+  记录工具链版本与供应商；不匹配时保留失败原文，并把现代构建另列为迁移实验。
+</Callout>
+
+<Callout type="trap" title="只保存最后一个成功产物">
+  **现象 →** 构建结束后只留下一个目录或截图，没有归档哈希和命令。 **原因 →**
+  产物无法证明来自哪个源码、补丁、环境和构建参数。 **修法 →**
+  先保存输入哈希、工具链清单、配置输出、完整日志、退出码和产物清单，再计算产物校验和。
+</Callout>
+
+<Callout type="trap" title="失败后直接清理现场">
+  **现象 →** 路径、权限或工具链错误时删掉工作区，重新下载后只报告“现在可以了”。
+  **原因 →** 首个失败信号被覆盖，无法区分输入差异、主机边界和修复动作。 **修法
+  →** 失败目录只读归档，记录变更，再用全新目录重放；清理动作本身也要进入档案。
+</Callout>
+
+## 六个工作术语
+
+下面六个词把构建事实和解释分开；正文先用它们标记证据，章末 Glossary 再用更直白的话回收。
+
+<Term def="用于构建的源码压缩包、提交、补丁和下载地址的固定集合；它必须带校验和。">
+  源码归档
+</Term>
+
+<Term def="用来启动历史构建工具的 JDK；它是构建输入，不等于最终生成的运行时。">
+  引导 JDK
+</Term>
+
+<Term def="编译器、构建工具、脚本解释器和环境变量的组合；版本不明就不能声称可复现。">
+  工具链
+</Term>
+
+<Term def="把源码、工具链和命令放进一个边界清楚的目录或镜像，避免主机上其他软件悄悄参与。">
+  隔离构建
+</Term>
+
+<Term def="构建输出目录中的可执行文件、库、镜像、日志和版本信息；每项都应能追溯到本次输入。">
+  构建产物
+</Term>
+
+<Term def="使用相同输入在全新目录或进程中再跑一次，并比较退出码、文件清单和校验和。">
+  可重放档案
+</Term>
 
 ## 来源、勘误与独立重写边界
 
-附录A 在Windows系统下编译OpenJDK 6依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。附录A 在Windows系统下编译OpenJDK 6未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
+本附录以作者的[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定构建主题，并以[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)确认本附录是正式目录中的“附录A 在Windows系统下编译OpenJDK 6”。未取得出版正文授权；本文的 Windows 操作清单、证据图、命令、故障和练习均为独立教学重写。
 
-附录A 在Windows系统下编译OpenJDK 6保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。附录A 在Windows系统下编译OpenJDK 6的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
+现代复核入口包括 [JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25 工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25 发布页](https://openjdk.org/projects/jdk/25/)和 [OpenJDK 源码](https://github.com/openjdk/jdk)。这些链接用于标出当前规范和工具边界，不证明历史 OpenJDK 6 能在当前环境中无修改构建。
 
-## 本章跨层合同与章专属探针
+## 历史构建合同与证据边界
 
-、、、、。
+构建通过不变量是：源码归档与补丁可定位，引导 JDK 和工具链版本可说明，配置命令与环境变量可重放，失败或成功都有退出码和完整日志，构建产物能列出并校验，清理不会删除唯一一份失败现场。任何一项缺失，结论都只能写成“本机观察到一次结果”。
 
-附录A 在Windows系统下编译OpenJDK 6的通过不变量是“历史构建只在隔离环境运行，输入归档、输出校验和清理可审计”。附录A 在Windows系统下编译OpenJDK 6的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
+把事实分成三层。Java 与 JVMS 资料解释最终运行时的规范约束；OpenJDK 源码和构建脚本解释实现输入；Windows、兼容 shell、编译器和 JDK 工具输出只代表这次实验的环境观察。不要用一个现代 `java -version` 输出替代历史引导 JDK 的证据，也不要把成功生成文件写成跨平台保证。
 
-附录A 在Windows系统下编译OpenJDK 6使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存归档哈希、工具链清单与镜像输出，不能只复制命令截图：
-
-```bash
-sha256sum source-archive.tar.gz
-bash configure
-make images
-```
-
+实验档案至少保存源码或归档哈希、来源 URL、补丁清单、Windows 版本、CPU 与磁盘限制、工作区路径、引导 JDK、编译器、构建工具、环境变量、完整命令、未过滤日志、退出码、产物清单、校验和、失败现场保留时间和清理记录。
 
 ## 官方目录逐项深读
 
 ### 附录A 在Windows系统下编译OpenJDK 6
 
-**四级证据 1/1。** 附录A 在Windows系统下编译OpenJDK 6中的附录A 在Windows系统下编译OpenJDK 6：区分前端、解释、分层编译与去优化，固定预热和工作量后保存Class、编译事件与回退证据。附录A 在Windows系统下编译OpenJDK 6固定隔离级别为“容器”，只把构建目标从“源码获取”切到“镜像验证”，以归档哈希、工具链清单与镜像输出定位第一处变化并验证“历史构建只在隔离环境运行，输入归档、输出校验和清理可审计”。
+**四级证据 1/1。** 本正式节点的核心不是背下一组过时命令，而是理解历史构建的输入合同：先拿到可核验的源码归档，再在 Windows 主机或明确的隔离边界中固定引导 JDK 与工具链，保存配置和构建日志，最后对产物进行清单与哈希验收。构建失败时，失败日志同样是证据；只有在全新工作区用相同输入重放，才能把“这台机器偶然成功”推进为“这份档案可复核”。
 
-## 三个必须主动触发的误区
+## 版本与主机边界
 
+Windows 路径、权限、换行、文件锁、临时目录和环境变量都会改变构建现场。先将工作区放在短路径、可写且空间足够的位置，记录当前用户、PowerShell 或兼容 shell 版本、磁盘剩余空间和是否使用隔离镜像。主机边界变化时，只改变主机或隔离方式，不同时更换源码和工具链。
 
-## 练习、答案与282节点验证
+“历史工具链”不是一个可以凭记忆填写的字符串。将引导 JDK、编译器、构建脚本解释器和必要的环境变量逐项列出；如果某个旧组件无法合法取得或无法安全运行，就把它标记为阻断并转向离线归档、容器或迁移实验，而不是用现代工具静默替换。
 
+## 章专属实验：从归档到可重放构建
 
+<Stepper>
+  <Step title="1. 固定源码归档与校验和">
+    记录仓库地址、提交或归档文件、补丁和 `SHA-256`。下载完成后不要立即解压覆盖旧目录；把原始文件、哈希输出和下载时间放入只读输入目录。
+
+    <Duj3AppendixABuildOpenJdk6EvidenceMap />
+
+  </Step>
+  <Step title="2. 固定 Windows 主机或隔离边界">
+    记录 Windows 版本、用户权限、路径、临时目录、磁盘空间和兼容 shell。需要隔离时保存镜像摘要、挂载路径与网络策略，让主机差异可被解释。
+
+    <Duj3AppendixABuildOpenJdk6EvidenceMap />
+
+  </Step>
+  <Step title="3. 核对引导 JDK 与工具链">
+    分别保存 `java -version`、`javac -version`、编译器版本、构建脚本版本和环境变量。若版本不匹配，先保留失败输出，不要把 PATH 中的另一个 JDK 当作修复。
+
+    <Duj3AppendixABuildOpenJdk6EvidenceMap />
+
+  </Step>
+  <Step title="4. 配置、构建并保留原始日志">
+    在全新工作区执行配置和构建命令，把标准输出、错误输出、退出码和生成目录列表一起保存。构建耗时、并行度、网络访问和失败阶段都要写入档案。
+
+    <Duj3AppendixABuildOpenJdk6EvidenceMap />
+
+  </Step>
+  <Step title="5. 校验产物并用新目录重放">
+    对构建产物计算校验和，记录文件清单和版本信息；再用相同输入创建第二个目录重跑。比较差异，保留失败现场，最后按保留策略清理临时文件。
+
+    <Duj3AppendixABuildOpenJdk6EvidenceMap />
+
+  </Step>
+</Stepper>
+
+## Windows 采集与构建命令
+
+下面的 PowerShell 片段只负责建立证据目录和采集版本，不假定当前机器已经具备历史工具链。实际构建命令应从目标源码的构建说明和已核验工具链中选择；若命令不存在，要保存帮助文本和错误原文。
+
+```powershell
+$ErrorActionPreference = "Stop"
+$Run = "openjdk6-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+$Root = Join-Path (Get-Location) "evidence\$Run"
+New-Item -ItemType Directory -Force $Root | Out-Null
+Get-ComputerInfo | Out-File "$Root\windows.txt"
+java -version 2> "$Root\java-version.txt"
+javac -version 2> "$Root\javac-version.txt"
+Get-ChildItem Env:Path,Env:JAVA_HOME | Out-File "$Root\environment.txt"
+Get-FileHash .\source-archive.zip -Algorithm SHA256 |
+  Out-File "$Root\source-hash.txt"
+& .\configure.ps1 *>&1 | Tee-Object "$Root\configure.log"
+$ConfigureExit = $LASTEXITCODE
+"configure_exit=$ConfigureExit" | Out-File "$Root\exit-codes.txt"
+```
+
+构建阶段要把 stdout 和 stderr 合并保存，并单独记录 `$LASTEXITCODE`；PowerShell 的管道输出本身不等于构建成功。把生成目录复制到证据目录前先列出文件，避免复制动作改变时间戳后又把时间戳误当作源码差异。
+
+如果目标构建说明使用兼容 shell，先以同样的方式采集 shell、`make`、编译器和路径信息，再运行 `configure` 与 `make images`。命令名可以随历史项目变化，不能根据现代 OpenJDK 目录结构臆造；版本不明时将该字段标为 unknown。
+
+## 构建档案与故障注入
+
+下面的 YAML 是档案索引，不是成功证明。完整日志、失败原文、产物列表和哈希文件仍需和它放在同一目录；故障注入时只改变工具链路径或一个环境变量，并保存恢复前后的两份记录。
+
+```yaml
+unit: duj3-appendix-a-build-openjdk6
+question: historical-windows-build-replay
+source_archive: url-commit-sha256-recorded
+host_boundary: windows-version-user-path-disk-recorded
+toolchain: bootstrap-jdk-compiler-build-tools-recorded
+fixed: source-patch-commands-workspace-policy
+variable: one-toolchain-path-or-one-environment-variable
+signals: versions-configure-log-build-log-exit-code-artifact-hash
+failure_policy: preserve-raw-output-before-repair
+replay: fresh-workspace-same-input
+unknowns: unavailable-historical-dependencies-and-modern-substitutes
+cleanup: temporary-files-and-retention-recorded
+```
+
+一个有用的故障不是“随便删掉文件”，而是让 `JAVA_HOME` 指向另一份已知不同的 JDK，或让构建目录缺少一项输入，然后观察配置日志、退出码和产物清单怎样变化。恢复时回到档案中记录的路径，重新执行校验；如果失败后直接清理，实验就失去了定位价值。
+
+## 练习、答案与单节点验收
+
+<Exercises>
+
+**问题 1：改 Demo 代码。** 在证据图中加入一个“跳过源码哈希”的故障模式：界面应显示哪条证据缺失，重置后应恢复什么状态？
+
+<Answer>
+  故障模式应把输入边界标成警示，显示“来源 URL
+  仍在，但源码归档哈希缺失”，并让下一步不能声称输入可追溯。重置后恢复为 `source
+  + hash`，同时恢复默认 Windows
+  主机、首个证据边界和时间线第一步；这能验证故障开关不是只改变颜色。
+</Answer>
+
+**问题 2：判断构建是否可重放。** 第一次构建成功，第二次在新目录失败，但两次都只保存了最后的产物目录。请列出三个必须补采的证据。
+
+<Answer>
+  补采源码归档与补丁的哈希、引导 JDK
+  与编译器的完整版本、配置和构建的未过滤日志及退出码；同时记录
+  Windows、路径、权限、环境变量和磁盘边界。没有这些输入，就无法判断失败来自源码、工具链、主机还是清理动作。
+</Answer>
+
+**问题 3：选择现代迁移路径。** 历史工具链无法在当前 Windows 上运行，团队想直接换成现代 JDK。如何写一份不越界的结论？
+
+<Answer>
+  结论应分两条：历史复现因工具链或主机约束未满足而阻断，失败原文和输入档案已保留；现代
+  JDK 的构建是另一个迁移实验，必须使用新的
+  unit、固定新的输入并重新采集版本、命令、产物和哈希。不能把迁移成功改写成
+  OpenJDK 6 历史构建已复现。
+</Answer>
+
+</Exercises>
+
+## 本章小结与发布前回顾
+
+- 历史 OpenJDK 6 构建的可复现边界是：固定源码归档、Windows 主机条件、引导 JDK、工具链、配置参数和产物校验；现代 JDK 只能辅助核对，不能替代历史输入。
+- 发布前逐项检查输入归档、主机与工具链边界、构建日志、产物清单和全新目录重放；五类证据都齐，才把“能编译”升级为“可审计、可重放”。
+- 如果故障注入后无法在同一节点复现，先检查记录是否缺少版本、路径或权限，而不是继续清理现场或直接宣称成功。
+
+## 本章名词回收
+
+<Glossary>
+  <GlossaryItem term="源码归档">
+    一份能被重新找到的源码和补丁集合，旁边放着校验和；它像快递单号一样说明你拿到的确实是同一份输入。
+  </GlossaryItem>
+  <GlossaryItem term="引导 JDK">
+    用来启动编译过程的
+    JDK，不一定是最后生成的运行时；它必须和历史构建合同一起记录。
+  </GlossaryItem>
+  <GlossaryItem term="工具链">
+    编译器、构建命令、脚本解释器和环境变量的组合；少记一个版本，都可能让第二次构建走另一条路。
+  </GlossaryItem>
+  <GlossaryItem term="隔离构建">
+    把构建放在边界清楚的目录、镜像或虚拟环境里，避免主机上不明软件偷偷参与。
+  </GlossaryItem>
+  <GlossaryItem term="构建产物">
+    构建生成的文件、库、镜像和报告；对它们列清单并计算哈希，别人才能比较两次结果。
+  </GlossaryItem>
+  <GlossaryItem term="可重放档案">
+    把输入、命令、环境、日志、退出码和校验和放在一起，并在全新目录用相同输入再跑一次的记录。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《深入理解Java虚拟机（第3版）》"
+  adaptedUrl="https://github.com/fenixsoft/jvm_book"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
