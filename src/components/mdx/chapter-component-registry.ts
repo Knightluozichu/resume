@@ -13434,6 +13434,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.BuilderConstructionContractLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/02-structural/adapter": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/adapter-semantic-contract-lab");
+    return {
+      AdapterSemanticContractLab: module0.AdapterSemanticContractLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
