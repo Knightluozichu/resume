@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T03:14:32.197Z
+> 生成时间：2026-08-13T03:18:54.863Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 489 |
+| manifest 证据不完整 unit | 488 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -2552,7 +2552,7 @@
 
 ## cpp-primer-5e（20 个内容页面 · passed:20 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=20；正式概念覆盖率=98.9%；未映射 unit=0；证据不完整 unit=1。
+- 门禁摘要：目录=未登记，manifest=20；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
 - [x] ✅ **cpp-advanced/large-programs** — passed；score 98
     - 路径：`content/cpp-primer-5e/cpp-advanced/large-programs.mdx`
@@ -2587,9 +2587,9 @@
 - [x] ✅ **cpp-basics/variables-and-types** — passed；score 100
     - 路径：`content/cpp-primer-5e/cpp-basics/variables-and-types.mdx`
     - 正式 unit：`cppp-02` explained=5/5
-- [x] ✅ **cpp-class-design/copy-control** — passed；score 97
+- [x] ✅ **cpp-class-design/copy-control** — passed；score 100
     - 路径：`content/cpp-primer-5e/cpp-class-design/copy-control.mdx`
-    - 正式 unit：`cppp-13` explained=4/5
+    - 正式 unit：`cppp-13` explained=5/5
 - [x] ✅ **cpp-class-design/oop** — passed；score 100
     - 路径：`content/cpp-primer-5e/cpp-class-design/oop.mdx`
     - 正式 unit：`cppp-15` explained=5/5
@@ -2614,8 +2614,6 @@
 - [x] ✅ **cpp-library/sequential-containers** — passed；score 100
     - 路径：`content/cpp-primer-5e/cpp-library/sequential-containers.mdx`
     - 正式 unit：`cppp-09` explained=5/5
-- [ ] 🔴 P1 **[正式 unit cppp-13] Copy Control** — evidence 不完整；explained=4/5
-    - 关联路径：`content/cpp-primer-5e/cpp-class-design/copy-control.mdx`
 
 ## cpp-primer-plus（20 个内容页面 · passed:20 · ✅ 书级门禁条件满足）
 
