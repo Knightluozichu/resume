@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T04:12:48.226Z；旧版分数不迁移。
+> 2026-08-13T04:18:01.625Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
 - failed：1925
-- queued：242
-- passed：1649
+- queued：241
+- passed：1650
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -115,9 +115,9 @@
 | 102 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
 | 103 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 104 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 105 | csharp-10-core | 27 | 0 | 24 | 3 | 24 |
-| 106 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 107 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 105 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 106 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 107 | csharp-10-core | 27 | 0 | 23 | 4 | 23 |
 | 108 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
 | 109 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
 | 110 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |

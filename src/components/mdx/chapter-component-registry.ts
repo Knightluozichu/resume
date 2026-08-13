@@ -8927,6 +8927,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10XmlJsonOwnershipFlowDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/12-official/disposal-and-garbage-collection": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/disposal-and-garbage-collection-ownership-flow-diagram");
+    return {
+      Ctc10DisposalGcOwnershipFlowDiagram:
+        module0.Ctc10DisposalGcOwnershipFlowDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
