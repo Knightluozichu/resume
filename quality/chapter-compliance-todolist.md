@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T10:24:05.331Z
+> 生成时间：2026-08-13T10:47:55.254Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 475 |
-| failed | 1905 |
+| failed | 1904 |
 | queued | 218 |
-| passed | 1693 |
+| passed | 1694 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4317,7 +4317,7 @@
 - [ ] 🔴 P1 **[正式 unit cid4-10] Chapter 10. A smörgåsbord of features for concise code** — evidence 不完整；explained=3/4
     - 关联路径：`content/deep-understanding-csharp/10-official/concise-code-smorgasbord.mdx`
 
-## deep-understanding-jvm（25 个内容页面 · failed:15 passed:10 · 🚫 门禁阻断 16 项）
+## deep-understanding-jvm（25 个内容页面 · failed:14 passed:11 · 🚫 门禁阻断 15 项）
 
 - 门禁摘要：目录=未登记，manifest=23；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：deep-understanding-jvm: publication-policy-not-approved。
@@ -4352,7 +4352,7 @@
 - [x] ✅ **09-duj3-06-class-file/duj3-06-class-file** — passed；score 94
     - 路径：`content/deep-understanding-jvm/09-duj3-06-class-file/duj3-06-class-file.mdx`
     - 正式 unit：`duj3-06-class-file` explained=25/25
-- [ ] ❌ P1 **10-duj3-07-class-loading/duj3-07-class-loading** — failed；score 42；门禁阻断: status=failed、score=42<90、dimensionFailures=pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: pedagogy、visual、practice、ux、engineering
+- [x] ✅ **10-duj3-07-class-loading/duj3-07-class-loading** — passed；score 94
     - 路径：`content/deep-understanding-jvm/10-duj3-07-class-loading/duj3-07-class-loading.mdx`
     - 正式 unit：`duj3-07-class-loading` explained=17/17
 - [ ] ❌ P1 **11-duj3-08-bytecode-engine/duj3-08-bytecode-engine** — failed；score 42；门禁阻断: status=failed、score=42<90、dimensionFailures=pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: pedagogy、visual、practice、ux、engineering
