@@ -13476,6 +13476,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ProxyAccessBoundaryLab: module0.ProxyAccessBoundaryLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/03-behavioral/chain-of-responsibility": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/chain-of-responsibility-request-pipeline-lab");
+    return {
+      ChainOfResponsibilityRequestPipelineLab:
+        module0.ChainOfResponsibilityRequestPipelineLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
