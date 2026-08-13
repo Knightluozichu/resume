@@ -13265,6 +13265,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3Chapter8BytecodeEngineEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/12-duj3-09-loading-execution-cases/duj3-09-loading-execution-cases":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-chapter9-loading-execution-cases-evidence-map");
+      return {
+        Duj3Chapter9LoadingExecutionCasesEvidenceMap:
+          module0.Duj3Chapter9LoadingExecutionCasesEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

@@ -1,103 +1,319 @@
 ---
-title: 第9章 类加载及执行子系统的案例与实战
-description: 第9章 类加载及执行子系统的案例与实战覆盖13个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
+title: "第9章 类加载及执行子系统的案例与实战"
+description: "用可隔离、可复现的案例理解类加载器架构、代码来源、动态代理和远程执行：固定版本坐标，只改变一个边界，再用加载器图、异常原文和重放结果验收。"
 type: C
-section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
+section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
 draft: false
-math: true
-sourceUrl: 'https://github.com/fenixsoft/jvm_book'
+math: false
+sourceUrl: "https://github.com/fenixsoft/jvm_book"
 demo: true
 order: 0
 qualityVersion: 2
-practiceMode: diagnosis
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: duj3-09-loading-execution-cases
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Duj3Chapter9LoadingExecutionCasesEvidenceMap } from "@/components/mdx/deep-understanding-jvm/duj3-chapter9-loading-execution-cases-evidence-map";
 
-{/* DUJ3_QUALITY_V2 */}
+# 第9章 类加载及执行子系统的案例与实战
 
-## 为什么从“类加载故障案例台”开始
+类加载案例最容易被一句“类路径里有这个类”带偏。真正决定行为的还有请求者与定义加载器、代码来源、包或模块边界、版本坐标、生成字节码的时机，以及失败后是否仍有旧进程或旧缓存参与。远程执行更进一步：传输协议、权限、进程生命周期和结果回收必须与类加载问题分层验收。
 
-第9章 类加载及执行子系统的案例与实战不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。类加载故障案例台沿“container/module loader graph → linkage → execution”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+本章把 Tomcat、OSGi、动态代理、Backport 工具和远程执行放进同一条诊断方法：冻结版本与输入，画出加载器图，保存代码来源和字节哈希，只改变一个隔离或失败条件，再用异常原文、退出码和全新进程重放。原书的 2019 年 JDK 12 / JDK 13 预览期语境与当前 JDK 25 观察分开记录，不能把今天的默认行为倒灌回历史案例。
 
-第9章 类加载及执行子系统的案例与实战固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变隔离机制或失败样本；图中只呈现本章真实运行时对象、状态边与证据出口；高亮表示当前分析路径，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+<Objectives>
 
-## 来源、勘误与独立重写边界
+- 能从加载器图、代码来源、版本坐标和模块边界解释容器、OSGi 或动态代理案例的首个失败点。
+- 能实现一个最小的受限远程执行探针，只改变一个输入或隔离边界，并保存协议、进程、类加载和结果证据。
+- 能用 `LinkageError`、退出码、Class 哈希和全新进程重放区分规范合同、工具输出与 HotSpot 或容器实现行为。
 
-第9章 类加载及执行子系统的案例与实战依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。第9章 类加载及执行子系统的案例与实战未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
-
-第9章 类加载及执行子系统的案例与实战保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。第9章 类加载及执行子系统的案例与实战的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
-
-## 本章跨层合同与章专属探针
-
-、、、、。
-
-第9章 类加载及执行子系统的案例与实战的通过不变量是“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。第9章 类加载及执行子系统的案例与实战的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
-
-第9章 类加载及执行子系统的案例与实战使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存code source、加载器图与LinkageError，不能只复制命令截图：
-
-```bash
-java -Xlog:class+load=debug -verbose:class CaseApp
-```
-
-
-## 官方目录逐项深读
-
-### 第9章 类加载及执行子系统的案例与实战
-
-**四级证据 1/13。** 第9章 类加载及执行子系统的案例与实战中的第9章 类加载及执行子系统的案例与实战：记录二进制名、定义加载器、代码来源和加载初始化日志，用LinkageError或初始化反例限制结论。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.1 概述
-
-**四级证据 2/13。** 第9章 类加载及执行子系统的案例与实战中的9.1 概述：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.2 案例分析
-
-**四级证据 3/13。** 第9章 类加载及执行子系统的案例与实战中的9.2 案例分析：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.2.1 Tomcat：正统的类加载器架构
-
-**四级证据 4/13。** 第9章 类加载及执行子系统的案例与实战中的9.2.1 Tomcat：正统的类加载器架构：记录二进制名、定义加载器、代码来源和加载初始化日志，用LinkageError或初始化反例限制结论。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.2.2 OSGi：灵活的类加载器架构
-
-**四级证据 5/13。** 第9章 类加载及执行子系统的案例与实战中的9.2.2 OSGi：灵活的类加载器架构：记录二进制名、定义加载器、代码来源和加载初始化日志，用LinkageError或初始化反例限制结论。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.2.3 字节码生成技术与动态代理的实现
-
-**四级证据 6/13。** 第9章 类加载及执行子系统的案例与实战中的9.2.3 字节码生成技术与动态代理的实现：从Class字节偏移和JVMS结构出发，用javap核对常量池、描述符、栈效应、调用点和验证条件。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.2.4 Backport工具：Java的时光机器
-
-**四级证据 7/13。** 第9章 类加载及执行子系统的案例与实战中的9.2.4 Backport工具：Java的时光机器：先定义诊断问题和探针预算，再最小授权采集原始记录，并用第二种证据交叉验证和安全销毁。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.3 实战：自己动手实现远程执行功能
-
-**四级证据 8/13。** 第9章 类加载及执行子系统的案例与实战中的9.3 实战：自己动手实现远程执行功能：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.3.1 目标
-
-**四级证据 9/13。** 第9章 类加载及执行子系统的案例与实战中的9.3.1 目标：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.3.2 思路
-
-**四级证据 10/13。** 第9章 类加载及执行子系统的案例与实战中的9.3.2 思路：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.3.3 实现
-
-**四级证据 11/13。** 第9章 类加载及执行子系统的案例与实战中的9.3.3 实现：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.3.4 验证
-
-**四级证据 12/13。** 第9章 类加载及执行子系统的案例与实战中的9.3.4 验证：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
-
-### 9.4 本章小结
-
-**四级证据 13/13。** 第9章 类加载及执行子系统的案例与实战中的9.4 本章小结：先判定这是规范合同、HotSpot实现还是发行版行为，再用固定环境、原始输出和失败反例建立可重放证据。第9章 类加载及执行子系统的案例与实战固定失败样本为“版本冲突”，只把隔离机制从“classpath”切到“OSGi/容器”，以code source、加载器图与LinkageError定位第一处变化并验证“加载器图、代码来源、模块边界和LinkageError能够共同解释故障”。
+</Objectives>
 
 ## 三个必须主动触发的误区
 
+<Callout type="trap" title="把类路径当成完整加载器架构">
+  **现象 →** 把所有依赖放进同一个类路径，看到资源存在就断定容器一定能加载。
+  **原因 →**
+  父子加载器、代码来源、包隔离和模块可读性可能让同名类型属于不同身份。 **修法
+  →** 记录请求者、定义加载器、资源 URL、Class
+  哈希和最终异常，先画图再改一个委托边界。
+</Callout>
 
-## 练习、答案与282节点验证
+<Callout type="trap" title="把动态生成字节码当成可信输入">
+  **现象 →** 代理或 Backport 工具生成了 Class 文件，就直接放入生产类路径。
+  **原因 →** 目标版本、常量池、栈映射、权限和生成器版本可能不匹配。 **修法 →**
+  在临时目录保存生成前后哈希，使用 `javap -v` 和全新 JVM 验证，失败时保留原始
+  Class 与完整 stderr。
+</Callout>
 
+<Callout type="trap" title="远程执行只验收返回字符串">
+  **现象 →** 客户端收到“成功”就认为远程任务已安全完成。 **原因 →**
+  进程可能仍在运行、stderr 被丢弃、输入越权或旧结果污染了本次响应。 **修法 →**
+  限制工作目录、环境、时长和输出，记录请求
+  ID、退出码、stdout/stderr、进程树和清理结果，并用同一输入重放失败与恢复。
+</Callout>
 
+## 六个案例诊断工作词
+
+正文首现用术语组件建立共同字段，章末 Glossary 再把这些词映射到验收档案；术语只帮助定位，不替代实际日志和异常。
+
+<Term def="加载请求经过的父子或并列加载器关系图，节点应标出请求者、定义者和委托方向。">
+  加载器图
+</Term>
+
+<Term def="Class 字节真正被读取或定义的位置，例如目录、JAR、模块或远程缓存；它必须可由 URL 和哈希核对。">
+  代码来源
+</Term>
+
+<Term def="类链接阶段暴露的错误族，包含版本、符号、方法或类型边界不兼容等运行时失败。">
+  LinkageError
+</Term>
+
+<Term def="在受限工作目录和进程边界内接收输入、执行任务并返回结果的协议与实现组合。">
+  远程执行
+</Term>
+
+<Term def="同时描述 JDK、编译器、容器、依赖、协议和生成器的版本坐标，不能只写一个 Java 大版本。">
+  版本坐标
+</Term>
+
+<Term def="把生成类或任务代码与宿主应用、缓存和权限分开的加载与进程边界，便于回滚和清理。">
+  隔离边界
+</Term>
+
+## 官方目录逐项深读
+
+以下 13 个节点是本章正式范围。每一节都明确案例对象、可观察证据和不应过度推出的结论；专属证据图把它们接入“加载器图—来源—隔离—执行—失败—重放”轨迹。
+
+### 第9章 类加载及执行子系统的案例与实战
+
+本章的核心不是收集容器名称，而是用一套字段解释不同案例：请求者、定义加载器、代码来源、版本坐标、输入边界、进程状态和失败原文。只有这些字段能在修复前后被同条件重放，案例才具有工程价值。
+
+### 9.1 概述
+
+类加载及执行子系统位于字节码、运行时和应用边界的交叉处。先判断当前问题属于规范允许的行为、JDK 工具呈现，还是容器或 HotSpot 的实现选择，再决定应该保存 Class 文件、加载日志、模块描述还是进程记录，避免用一层证据替代另一层。
+
+### 9.2 案例分析
+
+案例分析从失败症状反推最小假设：同名类转换失败指向身份或来源，方法缺失指向描述符或版本，初始化异常指向主动使用，远程结果异常则还要检查协议和进程。每个假设只配一个可推翻实验，保持原始输入和错误不被后续修复覆盖。
+
+### 9.2.1 Tomcat：正统的类加载器架构
+
+Tomcat 类加载器架构可以作为父子隔离的观察样本：公共库、容器库和 Web 应用库不一定由同一个加载器定义。用一个同名接口和两个版本实现构造最小部署，保存请求者、定义者、资源 URL、委托方向和转换结果；案例只能说明该配置的边界，不能概括所有容器版本。
+
+### 9.2.2 OSGi：灵活的类加载器架构
+
+OSGi 把包导入、导出和 Bundle 生命周期纳入类加载决策，模块间“可见”与“同名”并非同一件事。用两个 Bundle 的最小接口版本差异观察解析与激活，分别记录包版本、加载器、代码来源和解析异常；不要把一个 OSGi 框架的默认委托规则写成 JVM 规范。
+
+### 9.2.3 字节码生成技术与动态代理的实现
+
+动态代理或字节码生成器会把接口、调用处理器、生成器版本和目标 ClassLoader 组合成新的类。验收时比较生成前后的 Class 哈希、常量池、方法描述符、保护域和代码来源，再执行一个成功调用与一个错误签名调用；生成成功不等于目标环境可链接或可安全执行。
+
+### 9.2.4 Backport工具：Java的时光机器
+
+Backport 工具把较新语言或库特性转换成旧运行时可接受的形式，但转换范围、生成属性和依赖替换都有版本边界。冻结源 JDK、目标 JDK、工具版本、输入 Class 和依赖树，先在隔离目录运行 `javap` 与加载测试；若工具修改了调用描述符或属性，结论必须带差异文件和失败样本。
+
+### 9.3 实战：自己动手实现远程执行功能
+
+远程执行的最小闭环包含请求解析、输入校验、受限工作目录、子进程启动、超时终止、stdout/stderr 回收、退出码和临时文件清理。它不是把字符串拼到 shell 的快捷方式；每个动作都要绑定请求 ID、权限、资源预算和可撤销边界，Class 加载问题也必须保留在子进程内。
+
+### 9.3.1 目标
+
+目标是实现一个仅接收白名单任务和固定参数的本地探针，让调用者能够证明“同一输入得到同一退出语义”，而不是构建任意命令执行器。验收包应包含协议版本、输入哈希、工作目录、JDK、类路径、进程 ID、退出码、输出上限和清理状态。
+
+### 9.3.2 思路
+
+先把控制面和执行面分开：控制面生成请求 ID、校验任务名并设置预算，执行面只在临时目录启动已知 Java 主类。故障注入可以选择缺少依赖、错误版本或超时中的一个；保存请求、环境快照和首个失败点，再通过同请求 ID 验证回滚没有残留。
+
+### 9.3.3 实现
+
+实现时使用 `ProcessBuilder` 的参数数组，不经过 shell 字符串拼接；显式设置目录、环境白名单、输入流、输出流和超时。子进程加载的 Class 路径、代码来源和日志写入请求目录，父进程只读取结构化结果，不能把未清理的临时文件或旧 stdout 当成成功证据。
+
+### 9.3.4 验证
+
+验证分四轮：正常输入、单故障输入、修复后同输入和重置后同输入。每轮比较请求哈希、Class 哈希、加载器图摘要、stdout、stderr、退出码、进程树和目录清单；只有失败边界稳定、恢复结果一致且旧进程不存在，才接受远程执行结论。
+
+### 9.4 本章小结
+
+类加载案例的稳定读法是先画加载器图，再核对代码来源和版本坐标，之后把动态生成、容器隔离和远程执行放到清晰的进程边界中。故障必须保存 LinkageError 或协议原文、退出码、Class 哈希与全新进程重放；修复通过不等于可以扩大权限、删除失败日志或推广到未测量的容器版本。
+
+## 章专属实验：从加载器图到远程执行结果
+
+先猜一猜：同名接口由两个隔离边界分别定义时，最先变化的会是资源 URL、Class 身份、调用结果还是进程退出码？写下预测和能够推翻它的输入，再播放图示；图中状态只表达诊断顺序，不生成安全或性能评分。
+
+<Stepper>
+  <Step title="1. 固定版本坐标与加载器图">
+    保存 JDK、编译器、容器或框架版本、依赖哈希、工作目录和请求者；先画出父子加载器与 Bundle 或进程边界。
+
+    <Duj3Chapter9LoadingExecutionCasesEvidenceMap />
+
+  </Step>
+  <Step title="2. 核对代码来源与身份">
+    对每个候选 Class 保存资源 URL、ClassLoader、Class 哈希、保护域和模块或包关系；只比较名字不能结束验收。
+
+    <Duj3Chapter9LoadingExecutionCasesEvidenceMap />
+
+  </Step>
+  <Step title="3. 注入一个链接或生成失败">
+    只改变依赖版本、生成器选项或隔离边界中的一个条件，保留 `LinkageError`、验证错误、生成 Class 和完整 stderr。
+
+    <Duj3Chapter9LoadingExecutionCasesEvidenceMap />
+
+  </Step>
+  <Step title="4. 运行受限远程探针">
+    通过白名单任务、固定参数和临时目录启动子进程，记录请求 ID、协议、PID、超时、退出码、stdout/stderr 和进程树。
+
+    <Duj3Chapter9LoadingExecutionCasesEvidenceMap />
+
+  </Step>
+  <Step title="5. 同输入恢复与交接">
+    清理旧进程、缓存和目录，以相同请求与 Class 哈希重放；把正常、失败、恢复、复位四份记录交给未参与者独立核对。
+
+    <Duj3Chapter9LoadingExecutionCasesEvidenceMap />
+
+  </Step>
+</Stepper>
+
+## 最小受限远程执行探针
+
+这个探针只允许一个固定任务名，参数通过独立数组传给 Java 子进程。它用于观察类路径、代码来源和进程退出语义，不提供任意命令执行能力；正式实验仍须在临时容器或隔离工作目录中运行。
+
+```java
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+public final class RemoteProbe {
+  private static final long OUTPUT_LIMIT = 16_384;
+
+  public static void main(String[] args) throws Exception {
+    if (args.length != 1 || !args[0].equals("inspect-loader")) {
+      throw new IllegalArgumentException("task-not-allowed");
+    }
+
+    Path workDir = Files.createTempDirectory("remuse-bytecode-case-");
+    Process process = new ProcessBuilder(
+        List.of("java", "-Xlog:class+load=info", "-cp", ".", "LoaderReport"))
+        .directory(workDir.toFile())
+        .redirectErrorStream(false)
+        .start();
+    boolean finished = process.waitFor(Duration.ofSeconds(5).toMillis(), TimeUnit.MILLISECONDS);
+    if (!finished) {
+      process.destroyForcibly();
+      throw new IllegalStateException("timeout");
+    }
+
+    byte[] stdout = process.getInputStream().readNBytes((int) OUTPUT_LIMIT);
+    byte[] stderr = process.getErrorStream().readNBytes((int) OUTPUT_LIMIT);
+    System.out.println("exit=" + process.exitValue());
+    System.out.println("stdout=" + new String(stdout, StandardCharsets.UTF_8));
+    System.out.println("stderr=" + new String(stderr, StandardCharsets.UTF_8));
+    Files.deleteIfExists(workDir);
+  }
+}
+```
+
+```bash
+set -eu
+run_id="loading-case-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "loading-evidence/$run_id"
+java -version 2> "loading-evidence/$run_id/java-version.txt"
+javac --release 12 -g LoaderReport.java RemoteProbe.java
+sha256sum LoaderReport.class RemoteProbe.class \
+  > "loading-evidence/$run_id/classes.sha256"
+java RemoteProbe inspect-loader \
+  > "loading-evidence/$run_id/probe.stdout.txt" \
+  2> "loading-evidence/$run_id/probe.stderr.txt" || true
+```
+
+```yaml
+unit: duj3-09-loading-execution-cases
+baseline: loader-graph-source-hash-restricted-process
+changed_axis: one-isolation-or-one-failure-condition
+signals: request-id,loader,code-source,class-hash,linkage-error,pid,exit-code
+replay: same-request-fresh-process
+output_limit_bytes: 16384
+cleanup: process-and-temp-directory-recorded
+unknowns: explicit
+```
+
+## 练习、答案与案例验证
+
+<Exercises>
+
+**问题 1：容器与 OSGi。** 同名接口在两个加载器中分别定义时，怎样证明转换失败来自身份边界而不是方法实现？
+
+<Answer>
+  固定接口字节、依赖版本和输入，只切换定义加载器或 Bundle
+  可见性；保存请求者、两个定义者、代码来源、Class 哈希、`isAssignableFrom`
+  结果和完整异常。若资源 URL 与哈希也变化，先定位来源差异，再判断身份错误。
+</Answer>
+
+**问题 2：生成与 Backport。** 如何验收一个动态代理或 Backport 工具没有把新版本结构带入旧运行时？
+
+<Answer>
+  锁定源 JDK、目标 JDK、工具版本和输入 Class，保存生成前后哈希；用 `javap -v`
+  比较版本、常量池、方法描述符、属性和栈映射，再在全新目标 JVM
+  中运行成功与失败样本。工具退出成功不等于目标运行时链接成功。
+</Answer>
+
+**问题 3：远程执行恢复。** 如何证明一次超时或缺少依赖的远程任务没有留下旧进程和旧结果？
+
+<Answer>
+  给每次请求生成唯一 ID，限制白名单任务、工作目录、环境、输出和时间；记录
+  PID、进程树、stdout、stderr、退出码、Class
+  哈希和目录清单。修复后用同一请求输入在全新进程重放，并确认旧
+  PID、临时目录和缓存均已清理，恢复结果与预期错误语义一致。
+</Answer>
+
+</Exercises>
+
+## 本章小结
+
+- 加载器图、代码来源、版本坐标和 Class 身份必须分别记录。
+- Tomcat、OSGi、动态代理和 Backport 是架构或工具案例，不是 JVM 规范的同义词。
+- 远程执行必须有白名单任务、参数数组、资源预算、进程回收和原始输出。
+- `LinkageError`、退出码和全新进程重放共同决定失败是否可解释。
+- 修复结论只能推广到已测量的版本、依赖和隔离边界，未知项必须保留。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="加载器图">
+    表示请求者、父子或并列加载器、最终定义者与委托方向的关系图。
+  </GlossaryItem>
+  <GlossaryItem term="代码来源">
+    Class 字节被读取或定义的位置，例如目录、JAR、模块或受控缓存，可用 URL
+    与哈希核对。
+  </GlossaryItem>
+  <GlossaryItem term="LinkageError">
+    类链接过程中暴露版本、符号、方法或类型边界不兼容的错误族。
+  </GlossaryItem>
+  <GlossaryItem term="远程执行">
+    在受限工作目录和进程边界内接收输入、执行白名单任务并返回结果的协议与实现组合。
+  </GlossaryItem>
+  <GlossaryItem term="版本坐标">
+    同时描述 JDK、编译器、容器、依赖、协议和生成器的版本信息集合。
+  </GlossaryItem>
+  <GlossaryItem term="隔离边界">
+    将生成类或任务代码与宿主应用、缓存和权限分开的加载或进程边界。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《深入理解Java虚拟机（第3版）》"
+  adaptedUrl="https://github.com/fenixsoft/jvm_book"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
