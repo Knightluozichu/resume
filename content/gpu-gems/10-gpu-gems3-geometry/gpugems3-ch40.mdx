@@ -1,0 +1,263 @@
+---
+title: "GPU Gems 3 · Chapter 40. Incremental Computation of the Gaussian"
+type: C
+section: "GPU Gems 3 Part VI · GPU Computing"
+order: 40
+description: "从 Gaussian blur 的昂贵指数运算出发，解释 forward differencing、forward quotients、增量系数生成和 GPU shader 的误差与半径取舍。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-40-incremental-computation-gaussian"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-40
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch40DeploymentDiagram,
+  GpuGems3Ch40ForwardDifferenceDiagram,
+  GpuGems3Ch40ForwardQuotientDiagram,
+  GpuGems3Ch40GaussianCostDiagram,
+  GpuGems3Ch40GaussianCurveDiagram,
+  GpuGems3Ch40GaussianErrorDiagram,
+  GpuGems3Ch40GaussianLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch40-gaussian";
+
+<Objectives>
+
+- 能从 Gaussian blur 的卷积和 separable 结构出发，估算 support、指数运算与查表的 inner-loop 成本
+- 能用 forward differencing 与 forward quotient 的状态递推生成 Gaussian 系数，并解释为什么一个指数种子足以启动整段序列
+- 能在 Lab 中比较增量计算、纹理查表和每采样指数计算，结合半径、初始化方式、浮点误差和 shader 限制做出部署选择
+
+</Objectives>
+
+## 先问：为什么每个 blur sample 都要重新算指数
+
+Gaussian blur 的画面效果很熟悉：中心样本权重大，离中心越远权重越小，权重曲线平滑而且没有明显的硬边。但一个朴素实现会在每个 sample 都重新计算指数、乘法和归一化；当半径变大时，真正拖慢 shader 的可能不是“多取了几个像素”，而是每个系数都重复付出了昂贵的算术代价。
+
+本章把问题拆成一条可检查的数据流：先看 Gaussian 曲线和卷积支持域，再用差分理解“用状态代替重算”，最后把 Gaussian 的特殊结构改写成 quotient 递推。这样优化的重点不是背一段 magic formula，而是判断某个递推在你的半径、精度和硬件上是否仍然可信。
+
+<Callout type="tip" title="先预测：半径翻倍，哪一项会跟着每个 sample 翻倍？">
+  在 Lab 中先固定 `sigma = 3` 和 `support radius = 16`，记录 coefficient samples、exp setup calls 和 relative throughput。再把半径调到 `64`，猜一猜：增量方法是否仍然只需要初始化指数，还是每个 sample 都会重新调用指数。
+</Callout>
+
+## 1. Gaussian blur 先把成本放到显微镜下
+
+<Term def="以中心为峰值、按距离平方的指数衰减来分配邻域权重的平滑核；本章把它看作需要逐样本生成的系数序列。">
+  Gaussian kernel
+</Term>
+
+在一维中，Gaussian 权重可以写成“归一化常数乘以距离的指数衰减”。`sigma` 决定曲线宽度：sigma 越大，更多邻域像素会获得可见权重；为了截断无限长的尾部，工程上通常围绕中心取一个有限 support，常见经验是覆盖若干个 sigma。support 越宽，系数数量和采样次数越多，尾部的数值误差也越值得检查。
+
+二维 Gaussian blur 具有径向对称性，并且可以拆成水平与垂直两个一维 pass。这个 separable 结构把二维邻域的组合成本降下来，却没有消除一维 pass 中“每个位置都要生成权重”的 inner loop。
+
+<Term def="把二维卷积拆成先水平、再垂直的两个一维卷积；它减少邻域组合数量，但仍需要为每个一维 sample 提供系数。">
+  separable blur
+</Term>
+
+<GpuGems3Ch40GaussianCurveDiagram />
+
+如果把每个系数预先放进纹理，shader 可以用查表替代指数。但一次 texture lookup 也有地址计算、缓存和带宽代价；如果系数是规则序列，直接在寄存器里递推可能更省。结论必须由目标硬件和实际半径的测量来决定，而不是由“查表看起来简单”决定。
+
+<Callout type="trap" title="误区：把系数放进纹理，查表就一定比算术快">
+  **现象 →** 把每个 Gaussian coefficient 放进纹理后，代码行数变少，便认为性能已经得到保证。
+
+**原因 →** 查表增加了纹理请求、坐标计算和缓存依赖；在有常量缓冲区或强算术吞吐的硬件上，它不一定胜过寄存器中的增量乘法。
+
+**修法 →** 在同一个 support、同一个采样布局和同一个精度要求下，对比 lookup、增量乘法和直接指数计算的端到端吞吐，并记录缓存命中与带宽压力。
+</Callout>
+
+## 2. 先用 forward differencing 建立递推直觉
+
+<Term def="对按固定步长采样的多项式保存连续阶差分，使下一点可以用少量加法从当前状态推进。">
+  forward differencing
+</Term>
+
+对固定步长的多项式，下一点不必重新求值。以三次多项式为例，可以同时保存当前值、一次差分、二次差分和三次差分；每推进一次，只需把低阶状态加到前一阶状态。三次多项式的核心更新可以压缩成 `p.xyz += p.yzw`，因此内层循环只剩规则的向量加法和消费当前值。
+
+<GpuGems3Ch40ForwardDifferenceDiagram />
+
+这个技巧的关键不是“三次”本身，而是把昂贵的函数求值搬到循环外。初始化阶段准备好差分状态，循环阶段只做固定更新；如果目标函数确实是低阶多项式，误差和成本都容易分析。它也为下一节提供了一个问题：Gaussian 不是低阶多项式，能不能找到另一种保持“状态推进”形状的递推？
+
+```text
+value = p0
+delta = p1
+delta2 = p2
+delta3 = p3
+repeat for each sample:
+  consume value
+  p0 += p1
+  p1 += p2
+  p2 += p3
+```
+
+## 3. Gaussian 不适合直接套多项式
+
+Gaussian 的中心附近很平滑，容易让人产生“用 Taylor polynomial 近似整段曲线就好”的直觉。然而固定阶数多项式在尾部会继续增长或改变符号，而 Gaussian 的尾部应当持续衰减到零；support 一旦拉长，中心附近的好拟合不能代表尾部仍然安全。
+
+提高多项式阶数会带来更多状态、更高初始化成本和更难控制的尾部误差。把 Gaussian 改写成有理多项式可以扩大拟合范围，却会把除法重新带回 inner loop。分段多项式或纹理近似也能工作，但需要额外的区间选择、分支或内存访问。
+
+<Callout type="trap" title="误区：中心附近拟合得好，整条 Gaussian 尾部就一定安全">
+  **现象 →** 只在中心几个 sample 上比较多项式与 Gaussian，看到曲线重合就扩大 blur radius。
+
+**原因 →** 多项式的远端行为与指数衰减不同；support 越宽，尾部系数越小，绝对误差和相对误差的定义也越容易被混淆。
+
+**修法 →** 同时画中心、边缘和归一化后的尾部，给定最大相对误差预算；若需要规则长序列，优先分析 Gaussian 自身的 quotient 递推。
+</Callout>
+
+## 4. 用 forward quotient 生成增量 Gaussian
+
+<Term def="保存相邻采样值的比值或比值的比值，让满足规则关系的序列通过乘法而不是重新求值向前推进。">
+  forward quotient
+</Term>
+
+Gaussian 的好消息是：相邻样本之间的比值仍然有规则结构。令 `g0` 表示当前位置的系数，令 `g1` 表示下一点与当前点的比值，再令 `g2` 表示比值序列的固定推进量。对于固定采样步长，可以在初始化阶段计算一个指数种子，然后在循环中用乘法更新 `g0` 和 `g1`。
+
+这就是一个 <Term def="利用 Gaussian 相邻系数的规则比值，用指数种子加乘法递推生成后续系数的内层算法。">incremental Gaussian</Term>。最小伪代码可以写成：先算归一化的 `g0`，再算一次 `g1 = exp(...)`，然后令 `g2 = g1 * g1`；每次消费 `g0` 后执行 `g0 *= g1`、`g1 *= g2`。把相邻状态放进向量时，更新形状就是 `g.xy *= g.yz`。
+
+<GpuGems3Ch40ForwardQuotientDiagram />
+
+注意这不是把指数“近似成零成本”，而是把指数从每个 sample 的重复路径移到了初始化路径。它还要求采样间隔、sigma 和 support 的关系在循环中保持稳定；一旦每个 sample 使用不同的 sigma 或任意不规则距离，就必须重新推导 quotient 或退回其他方法。
+
+## 动手走一遍：从 Gaussian 曲线到 blur coefficient
+
+<Stepper>
+  <Step title="先量出曲线与支持域">
+    观察中心权重、sigma 和 support 的关系，先决定哪些尾部 sample 真的要进入 shader。
+
+    <GpuGems3Ch40GaussianCurveDiagram />
+  </Step>
+  <Step title="用差分理解状态推进">
+    让一组多项式状态在固定步长上前进，体会“初始化一次、循环加法”的结构。
+
+    <GpuGems3Ch40ForwardDifferenceDiagram />
+  </Step>
+  <Step title="把差分换成 quotient">
+    对 Gaussian 保存 `g0`、`g1`、`g2`，比较一次指数种子与每个 sample 重算指数的差别。
+
+    <GpuGems3Ch40ForwardQuotientDiagram />
+  </Step>
+  <Step title="把精度预算放回尾部">
+    观察一指数平方和两指数初始化的误差风险，确认支持域扩大后仍在可接受预算内。
+
+    <GpuGems3Ch40GaussianErrorDiagram />
+  </Step>
+</Stepper>
+
+## 5. 把 inner loop 成本和 shader 限制放回工程
+
+<GpuGems3Ch40GaussianCostDiagram />
+
+直接指数法的成本大致按 sample 数量重复付费；查表法把成本转成纹理访问；quotient 法则把指数集中在 setup，并在每个 sample 只做规则乘法。原章报告的历史 GPU 测量中，增量计算至少带来约 15% 的收益，但这是特定硬件、shader 编译器和采样设置下的结果，不能直接当成今天所有 GPU 的保证。
+
+现代硬件可能提供更快的常量缓冲区、缓存和算术单元，使查表重新成为有竞争力的方案。另一方面，驱动可能展开循环；半径过大时，指令数量和纹理请求数量会撞上限制。实际部署应把最大 radius、循环展开策略、寄存器压力和纹理路径一起测，而不是只看单次系数计算。
+
+<GpuGems3Ch40DeploymentDiagram />
+
+<Callout type="trap" title="误区：只要只调用一次指数，就可以无限增大 blur radius">
+  **现象 →** 看到 quotient 的 exp setup calls 固定为一次，就把 support radius 不受限制地拉长。
+
+**原因 →** 循环仍会增加采样、乘法、指令和累积误差；驱动展开 shader 时还可能触及指令上限，尾部浮点误差也可能超过画质预算。
+
+**修法 →** 为 radius 设上限，分别验证 instruction budget、相对误差和边缘画质；必要时切换两指数初始化、分段策略或查表路径。
+</Callout>
+
+## 6. 误差分析不是可选项
+
+<Term def="把近似系数与参考系数的差异按参考值归一化，用来判断中心与尾部是否同时满足画质预算。">
+  relative error
+</Term>
+
+在精确算术中，quotient 递推可以精确地产生 Gaussian 序列；在浮点算术中，初始化和重复乘法会把舍入误差带入后续 sample。一个重要的不对称性是：`g1` 的初始化误差通常线性影响系数，`g0` 的初始化误差则会以平方关系进入归一化项。于是“用一个指数，再平方得到两个状态”速度更好，却可能比“分别计算两个指数”更不精确。
+
+选择初始化方式要看目标。若 blur 半径适中、画质预算宽松，一指数加平方可以节省 setup；若 support 很长、sigma 很大或尾部仍然可见，两指数初始化能降低起始误差。无论选择哪种，都应把中心、尾部、归一化总和以及最坏 relative error 放进测试，而不是只检查一张看起来平滑的截图。
+
+<GpuGems3Ch40GaussianErrorDiagram />
+
+原章给出过特定浮点条件下的数量级边界，用来说明一指数平方在常见应用中可能够用，但那些数字不是跨 GPU、跨格式和跨半径的通用保证。课程中的正确动作是：记录你的系数生成方式、浮点格式、sigma、support 和误差阈值，再决定是否放宽或收紧策略。
+
+## 7. 用 Lab 做一次可复现比较
+
+先猜一猜：当 `support radius = 128` 且选择长 support stress 时，哪种路径会最容易暴露误差或指令问题？然后只改变一个控制项，观察 exp setup calls、coefficient samples、texture lookup model、relative throughput 和 error risk 的联动。
+
+<GpuGems3Ch40GaussianLab />
+
+Lab 提供三条可比较的路径：增量 quotient 只在 setup 使用指数，texture table 把系数工作转成查表，exp every sample 则模拟最直接但最昂贵的实现。sigma、support radius、初始化方式和 validation mode 共同决定教学模型中的数字；这些数字用于建立因果直觉，不执行真实 CUDA 或现代 GPU benchmark。切换后先读卡片上的结论，再点击“重置实验”，确认 UI 回到了默认路径，避免把上一轮选择误当成新结果。
+
+## 小结
+
+- Gaussian blur 可以利用二维径向对称与 separable 结构降低邻域组合成本，但一维 inner loop 仍需生成系数。
+- forward differencing 用低阶状态的加法推进规则多项式，Gaussian 则更适合利用相邻系数的 forward quotient。
+- incremental Gaussian 把指数调用移到初始化阶段，用规则乘法生成后续 sample；查表和直接指数是需要测量的替代路径。
+- 一指数加平方更省 setup，两指数初始化更稳健；sigma、support、浮点格式和尾部画质共同决定误差预算。
+- shader 循环展开、指令限制、缓存、带宽和寄存器压力会改变历史 benchmark 的结论，发布前必须在目标硬件上复测。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中固定 `sigma = 3` 和 `support radius = 64`，分别运行增量 quotient、texture table 与 exp every sample。记录三种路径的 exp setup calls、coefficient samples 和 relative throughput，并说明哪一项随着半径增加而变化。
+
+<Answer>
+
+增量 quotient 的 exp setup calls 保持在初始化量级，后续系数由乘法递推；texture table 的指数调用也不在每个 sample 中出现，但 texture lookup model 会随 sample 数增加；exp every sample 的指数调用会随系数数量增长。三者的最终胜负仍受缓存、算术吞吐、带宽和编译器影响，所以 Lab 的相对吞吐只能作为因果模型，不能替代目标 GPU 的 benchmark。
+
+</Answer>
+
+**问题 2｜诊断尾部误差。** 你把一指数加平方用于长 support，中心样本正常，但尾部相对误差超过预算。请指出初始化方式、sigma、support 和验证图表之间的检查顺序。
+
+<Answer>
+
+先固定采样步长与参考 Gaussian，分别记录中心和尾部的 relative error，再确认 sigma 与 support 是否让尾部仍然具有可见权重。然后将初始化切换为两指数并保持其他条件不变，判断问题来自起始误差还是乘法累积；最后检查浮点格式、归一化总和和 shader 展开是否改变了实际计算路径。若两指数仍不够，就收紧 support、分段生成或改用经过测量的查表方案。
+
+</Answer>
+
+**问题 3｜场景选型。** 小 sigma 的短 blur、长 support 的高质量 blur、以及常量缓冲区和缓存都很强的目标硬件，分别优先尝试哪条路径？哪些证据会让你改变决定？
+
+<Answer>
+
+短 blur 可以先用一指数加平方的 incremental Gaussian，setup 简单且循环规则；长 support 应先比较两指数初始化与增量乘法的误差，并为指令展开和尾部画质设上限；常量缓冲区与缓存很强的硬件则应把 texture table 或常量路径纳入对照。只要 profile 显示带宽、缓存、寄存器、指令或 relative error 超过预算，就应根据证据切换路径，而不是坚持某种算法在历史硬件上的结论。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Gaussian kernel">
+    以距离平方的指数衰减分配平滑权重的卷积核，中心权重最大，尾部逐渐趋近于零。
+  </GlossaryItem>
+  <GlossaryItem term="separable blur">
+    将二维卷积拆成水平和垂直两个一维 pass 的结构。
+  </GlossaryItem>
+  <GlossaryItem term="forward differencing">
+    保存多阶连续差分，并用加法从当前采样点推进到下一个采样点的方法。
+  </GlossaryItem>
+  <GlossaryItem term="forward quotient">
+    保存相邻序列的比值及其推进关系，并用乘法生成后续值的方法。
+  </GlossaryItem>
+  <GlossaryItem term="incremental Gaussian">
+    用指数种子与 quotient 乘法递推生成 Gaussian 系数的算法。
+  </GlossaryItem>
+  <GlossaryItem term="relative error">
+    将系数与参考值的差异按参考值归一化后的误差指标，用于比较中心和尾部的精度。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 40. Incremental Computation of the Gaussian"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-40-incremental-computation-gaussian"
+/>
