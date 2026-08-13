@@ -8975,6 +8975,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10NativeComInteropBoundaryMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/25-official/regular-expressions": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/regex-execution-budget-map-diagram");
+    return {
+      Ctc10RegexExecutionBudgetMapDiagram:
+        module0.Ctc10RegexExecutionBudgetMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");

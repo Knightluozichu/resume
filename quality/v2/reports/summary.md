@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T04:48:51.054Z；旧版分数不迁移。
+> 2026-08-13T04:54:22.504Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
 - failed：1925
-- queued：236
-- passed：1655
+- queued：235
+- passed：1656
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -119,8 +119,8 @@
 | 106 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
 | 107 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
 | 108 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 109 | csharp-10-core | 27 | 0 | 18 | 9 | 18 |
-| 110 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 109 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 110 | csharp-10-core | 27 | 0 | 17 | 10 | 17 |
 | 111 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
 | 112 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
 | 113 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
