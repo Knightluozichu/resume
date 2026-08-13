@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T15:00:22.714Z
+> 生成时间：2026-08-13T15:11:41.545Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 473 |
-| failed | 1889 |
+| failed | 1888 |
 | queued | 218 |
-| passed | 1709 |
+| passed | 1710 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4397,7 +4397,7 @@
 - [x] ✅ **24-duj3-official-final-review/duj3-official-final-review** — passed；score 98
     - 路径：`content/deep-understanding-jvm/24-duj3-official-final-review/duj3-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-## design-patterns（27 个内容页面 · failed:26 passed:1 · 🚫 门禁阻断 27 项）
+## design-patterns（27 个内容页面 · failed:25 passed:2 · 🚫 门禁阻断 26 项）
 
 - 门禁摘要：目录=未登记，manifest=24；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：design-patterns: publication-policy-not-approved。
@@ -4405,7 +4405,7 @@
 - [x] ✅ **00-intro/intro** — passed；score 100
     - 路径：`content/design-patterns/00-intro/intro.mdx`
     - 正式 unit：`designpatterns-01` explained=11/11
-- [ ] ❌ P1 **00-intro/learning-map** — failed；score 48；门禁阻断: status=failed、score=48<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **00-intro/learning-map** — passed；score 100
     - 路径：`content/design-patterns/00-intro/learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [ ] ❌ P1 **01-creational/abstract-factory** — failed；score 43；门禁阻断: status=failed、score=43<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: source、pedagogy、visual、practice、ux、engineering

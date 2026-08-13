@@ -13387,6 +13387,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DesignPatternsIntroDecisionLab: module0.DesignPatternsIntroDecisionLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/design-patterns-learning-map-route-lab");
+    return {
+      DesignPatternsLearningMapRouteLab:
+        module0.DesignPatternsLearningMapRouteLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

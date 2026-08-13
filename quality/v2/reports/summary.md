@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T15:00:16.199Z；旧版分数不迁移。
+> 2026-08-13T15:11:32.514Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1889
+- failed：1888
 - queued：218
-- passed：1709
+- passed：1710
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -20,10 +20,10 @@
 | 7 | out-of-control | 28 | 28 | 0 | 0 | 84 |
 | 8 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
 | 9 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
-| 10 | design-patterns | 27 | 26 | 0 | 1 | 78 |
-| 11 | fluent-python | 26 | 26 | 0 | 0 | 78 |
-| 12 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
-| 13 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 10 | fluent-python | 26 | 26 | 0 | 0 | 78 |
+| 11 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
+| 12 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 13 | design-patterns | 27 | 25 | 0 | 2 | 75 |
 | 14 | programmers-math | 25 | 25 | 0 | 0 | 75 |
 | 15 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
 | 16 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
