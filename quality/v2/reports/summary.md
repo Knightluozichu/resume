@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T06:26:32.556Z；旧版分数不迁移。
+> 2026-08-13T06:32:12.134Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
 - failed：1925
-- queued：219
-- passed：1672
+- queued：218
+- passed：1673
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -123,52 +123,52 @@
 | 110 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
 | 111 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
 | 112 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 113 | csharp-10-core | 27 | 0 | 1 | 26 | 1 |
-| 114 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 115 | ai-agent | 9 | 0 | 0 | 9 | 0 |
-| 116 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
-| 117 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
-| 118 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 119 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 120 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 121 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 122 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 123 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 124 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 125 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 126 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 127 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
-| 128 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
-| 129 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
-| 130 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
-| 131 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
-| 132 | blender-3d | 17 | 0 | 0 | 17 | 0 |
-| 133 | blockchain-dev-practice | 17 | 0 | 0 | 17 | 0 |
-| 134 | blockchain-plain | 14 | 0 | 0 | 14 | 0 |
-| 135 | building-llm-applications | 18 | 0 | 0 | 18 | 0 |
-| 136 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 137 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
-| 138 | cg-principles-practice | 55 | 0 | 0 | 55 | 0 |
-| 139 | chatgpt-principles-practice | 13 | 0 | 0 | 13 | 0 |
-| 140 | clr-via-csharp | 32 | 0 | 0 | 32 | 0 |
-| 141 | code-complete-2e | 51 | 0 | 0 | 0 | 0 |
-| 142 | code-quality-refactoring | 11 | 0 | 0 | 11 | 0 |
-| 143 | coder-revolution | 62 | 0 | 0 | 62 | 0 |
-| 144 | coding-interviews | 81 | 0 | 0 | 0 | 0 |
-| 145 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
-| 146 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
-| 147 | computer-networks-top-down | 10 | 0 | 0 | 0 | 0 |
-| 148 | concrete-mathematics | 11 | 0 | 0 | 11 | 0 |
-| 149 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
-| 150 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
-| 151 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
-| 152 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
-| 153 | cpp-server-essence | 11 | 0 | 0 | 0 | 0 |
-| 154 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
-| 155 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
-| 156 | crafting-compiler | 25 | 0 | 0 | 25 | 0 |
-| 157 | crazy-android | 21 | 0 | 0 | 21 | 0 |
-| 158 | csapp | 15 | 0 | 0 | 15 | 0 |
+| 113 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 114 | ai-agent | 9 | 0 | 0 | 9 | 0 |
+| 115 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
+| 116 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
+| 117 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 118 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 119 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 120 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 121 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 122 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 123 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 124 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 125 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 126 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
+| 127 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
+| 128 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
+| 129 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
+| 130 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 131 | blender-3d | 17 | 0 | 0 | 17 | 0 |
+| 132 | blockchain-dev-practice | 17 | 0 | 0 | 17 | 0 |
+| 133 | blockchain-plain | 14 | 0 | 0 | 14 | 0 |
+| 134 | building-llm-applications | 18 | 0 | 0 | 18 | 0 |
+| 135 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 136 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
+| 137 | cg-principles-practice | 55 | 0 | 0 | 55 | 0 |
+| 138 | chatgpt-principles-practice | 13 | 0 | 0 | 13 | 0 |
+| 139 | clr-via-csharp | 32 | 0 | 0 | 32 | 0 |
+| 140 | code-complete-2e | 51 | 0 | 0 | 0 | 0 |
+| 141 | code-quality-refactoring | 11 | 0 | 0 | 11 | 0 |
+| 142 | coder-revolution | 62 | 0 | 0 | 62 | 0 |
+| 143 | coding-interviews | 81 | 0 | 0 | 0 | 0 |
+| 144 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
+| 145 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
+| 146 | computer-networks-top-down | 10 | 0 | 0 | 0 | 0 |
+| 147 | concrete-mathematics | 11 | 0 | 0 | 11 | 0 |
+| 148 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
+| 149 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
+| 150 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
+| 151 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
+| 152 | cpp-server-essence | 11 | 0 | 0 | 0 | 0 |
+| 153 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
+| 154 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
+| 155 | crafting-compiler | 25 | 0 | 0 | 25 | 0 |
+| 156 | crazy-android | 21 | 0 | 0 | 21 | 0 |
+| 157 | csapp | 15 | 0 | 0 | 15 | 0 |
+| 158 | csharp-10-core | 27 | 0 | 0 | 27 | 0 |
 | 159 | csharp-functional-programming | 17 | 0 | 0 | 17 | 0 |
 | 160 | csharp-quality-code | 14 | 0 | 0 | 14 | 0 |
 | 161 | css-secrets | 10 | 0 | 0 | 10 | 0 |

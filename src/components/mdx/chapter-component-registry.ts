@@ -9071,6 +9071,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10DynamicProgrammingRuntimeMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/20-official/cryptography": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/cryptography-envelope-map-diagram");
+    return {
+      Ctc10CryptographyEnvelopeMapDiagram:
+        module0.Ctc10CryptographyEnvelopeMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/21-official/advanced-threading": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/advanced-threading-primitive-state-diagram");
