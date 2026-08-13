@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T14:49:35.322Z；旧版分数不迁移。
+> 2026-08-13T15:00:16.199Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1890
+- failed：1889
 - queued：218
-- passed：1708
+- passed：1709
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -18,9 +18,9 @@
 | 5 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
 | 6 | windows-journey | 29 | 29 | 0 | 0 | 87 |
 | 7 | out-of-control | 28 | 28 | 0 | 0 | 84 |
-| 8 | design-patterns | 27 | 27 | 0 | 0 | 81 |
-| 9 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
-| 10 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 8 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
+| 9 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 10 | design-patterns | 27 | 26 | 0 | 1 | 78 |
 | 11 | fluent-python | 26 | 26 | 0 | 0 | 78 |
 | 12 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
 | 13 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |

@@ -13380,6 +13380,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3OfficialFinalReviewReleaseGateLab,
       } as ChapterMdxComponents;
     },
+  "design-patterns/00-intro/intro": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/design-patterns-intro-decision-lab");
+    return {
+      DesignPatternsIntroDecisionLab: module0.DesignPatternsIntroDecisionLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
