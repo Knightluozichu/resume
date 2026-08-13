@@ -12572,6 +12572,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DnjAppendixDLocalNpmRegistryMap: module0.DnjAppendixDLocalNpmRegistryMap,
     } as ChapterMdxComponents;
   },
+  "deep-nodejs/07-review/dnj-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/dnj-official-final-review-evidence-map");
+    return {
+      DnjOfficialFinalReviewEvidenceMap:
+        module0.DnjOfficialFinalReviewEvidenceMap,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
