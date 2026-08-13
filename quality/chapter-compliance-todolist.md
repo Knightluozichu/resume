@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T07:00:33.634Z
+> 生成时间：2026-08-13T07:13:05.230Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 475 |
-| failed | 1922 |
+| failed | 1921 |
 | queued | 218 |
-| passed | 1676 |
+| passed | 1677 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4088,7 +4088,7 @@
     - 路径：`content/deep-learning-textbook/21-final-review/dlt-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## deep-nodejs（17 个内容页面 · failed:7 passed:10 · 🚫 门禁阻断 8 项）
+## deep-nodejs（17 个内容页面 · failed:6 passed:11 · 🚫 门禁阻断 7 项）
 
 - 门禁摘要：目录=未登记，manifest=15；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：deep-nodejs: publication-policy-not-approved。
@@ -4123,7 +4123,7 @@
 - [x] ✅ **04-web-process/dnj-09-processes** — passed；score 94
     - 路径：`content/deep-nodejs/04-web-process/dnj-09-processes.mdx`
     - 正式 unit：`dnj-unit-09` explained=21/21
-- [ ] ❌ P1 **05-quality-production/dnj-10-testing** — failed；score 40；门禁阻断: status=failed、score=40<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,within-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、within-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **05-quality-production/dnj-10-testing** — passed；score 92
     - 路径：`content/deep-nodejs/05-quality-production/dnj-10-testing.mdx`
     - 正式 unit：`dnj-unit-10` explained=13/13
 - [ ] ❌ P1 **05-quality-production/dnj-11-productization** — failed；score 40；门禁阻断: status=failed、score=40<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,within-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、within-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
