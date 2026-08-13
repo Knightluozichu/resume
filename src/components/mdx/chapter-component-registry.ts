@@ -13371,6 +13371,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3AppendixEJdkHistoryTimelineLab,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/24-duj3-official-final-review/duj3-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-official-final-review-release-gate-lab");
+      return {
+        Duj3OfficialFinalReviewReleaseGateLab:
+          module0.Duj3OfficialFinalReviewReleaseGateLab,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
