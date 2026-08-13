@@ -9047,6 +9047,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10NetworkingContractMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/17-official/assemblies": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/assemblies-isolation-map-diagram");
+    return {
+      Ctc10AssembliesIsolationMapDiagram:
+        module0.Ctc10AssembliesIsolationMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/21-official/advanced-threading": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/advanced-threading-primitive-state-diagram");
