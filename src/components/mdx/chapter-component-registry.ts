@@ -13166,6 +13166,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3OfficialLearningMapEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/01-duj3-part-1-approaching-java/duj3-part-1-approaching-java":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-part-1-approaching-java-evidence-map");
+      return {
+        Duj3Part1ApproachingJavaEvidenceMap:
+          module0.Duj3Part1ApproachingJavaEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
