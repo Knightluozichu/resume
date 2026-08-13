@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T03:18:54.863Z
+> 生成时间：2026-08-13T03:22:47.823Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 488 |
+| manifest 证据不完整 unit | 487 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -2617,7 +2617,7 @@
 
 ## cpp-primer-plus（20 个内容页面 · passed:20 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=18；正式概念覆盖率=97.7%；未映射 unit=0；证据不完整 unit=2。
+- 门禁摘要：目录=未登记，manifest=18；正式概念覆盖率=98.9%；未映射 unit=0；证据不完整 unit=1。
 
 - [x] ✅ **00-intro/learning-map** — passed；score 99
     - 路径：`content/cpp-primer-plus/00-intro/learning-map.mdx`
@@ -2634,9 +2634,9 @@
 - [x] ✅ **03-official/dealing-with-data** — passed；score 97
     - 路径：`content/cpp-primer-plus/03-official/dealing-with-data.mdx`
     - 正式 unit：`epp-03` explained=5/5
-- [x] ✅ **04-official/compound-types** — passed；score 94
+- [x] ✅ **04-official/compound-types** — passed；score 97
     - 路径：`content/cpp-primer-plus/04-official/compound-types.mdx`
-    - 正式 unit：`epp-04` explained=4/5
+    - 正式 unit：`epp-04` explained=5/5
 - [x] ✅ **05-official/loops-and-relational-expressions** — passed；score 96
     - 路径：`content/cpp-primer-plus/05-official/loops-and-relational-expressions.mdx`
     - 正式 unit：`epp-05` explained=5/5
@@ -2679,8 +2679,6 @@
 - [x] ✅ **18-official/visiting-new-cpp-standard** — passed；score 99
     - 路径：`content/cpp-primer-plus/18-official/visiting-new-cpp-standard.mdx`
     - 正式 unit：`epp-18` explained=5/5
-- [ ] 🔴 P1 **[正式 unit epp-04] Chapter 4 Compound Types** — evidence 不完整；explained=4/5
-    - 关联路径：`content/cpp-primer-plus/04-official/compound-types.mdx`
 - [ ] 🔴 P1 **[正式 unit epp-06] Chapter 6 Branching Statements and Logical Operators** — evidence 不完整；explained=4/5
     - 关联路径：`content/cpp-primer-plus/06-official/branching-statements-and-logical-operators.mdx`
 
