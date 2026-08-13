@@ -1,0 +1,233 @@
+---
+title: "GPU Gems 3 · Chapter 36. AES Encryption and Decryption on the GPU"
+type: C
+section: "GPU Gems 3 Part VI · GPU Computing"
+order: 36
+description: "从 128-bit AES state 和轮变换出发，解释 GeForce 8 时代的整数流处理、查表、transform feedback，以及 ECB、CBC、CTR 对 GPU 并行性的不同要求。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-36-aes-encryption-and-decryption-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-36
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch36AesLab,
+  GpuGems3Ch36AesOverviewDiagram,
+  GpuGems3Ch36IntegerPipelineDiagram,
+  GpuGems3Ch36ModesDiagram,
+  GpuGems3Ch36PipelineDiagram,
+  GpuGems3Ch36RoundDiagram,
+  GpuGems3Ch36StateLayoutDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch36-aes";
+
+<Objectives>
+
+- 能解释 AES 的 128-bit block、三种 key length、round key schedule 与四个 round operation 如何组合成可逆的整数流变换
+- 能修改 AES GPU Mapping Lab 的 key length、cipher mode、操作方向、历史 GPU 路径和 batch size，比较轮数、依赖宽度与查表成本
+- 能回答：为什么 ECB/CTR 可以把 block 分开处理，而 CBC 加密不能直接把所有 block 同时交给 GPU
+
+</Objectives>
+
+## 先问：为什么加密会成为 GPU 的整数流问题
+
+一条数据流需要被转换成别人看不懂的字节，但处理结果最终仍要以连续字节流交给网络、文件或纹理。若硬件只擅长浮点和绘制像素，按位异或、移位、整数查表以及原始 buffer 输出都会变成额外的工程负担。
+
+本章展示一个历史转折点：GeForce 8 系列加入整数和位运算、整数索引表、texture-buffer object 与 transform feedback 后，GPU 可以把 AES block 当作数据流处理。重点不是宣称旧 API 仍是今天的最佳密码库，而是看清“算法的哪些部分能并行、数据怎样进出 GPU”。
+
+<Callout type="tip" title="先预测：换成 CBC 加密后，GPU 的线程数还会带来同样收益吗？">
+  在 Lab 中先保持 `128-bit`、`fragment` 和 `1 MB`，比较 ECB、CBC、CTR；再把 CBC 的 operation 切到 decrypt。先猜 parallel width 和 throughput reference 哪一项会被前一块结果限制。
+</Callout>
+
+## 1. AES 先把明文 block 变成 state，再重复轮变换
+
+<Callout type="trap" title="误区：key length 只改变安全等级，不改变 GPU 工作量">
+  **现象 →** 128、192、256-bit key 都按同样轮数估算，实验里的吞吐和查表次数完全不变。
+
+**原因 →** AES 固定 128-bit block，但 key length 决定 round key schedule 和轮数：分别是 10、12、14 轮。
+
+**修法 →** 把 block size 与 key size 分开建模。改变 key length 时同时更新 round keys、轮数和每个 block 的整数/查表工作。
+</Callout>
+
+<Term def="Advanced Encryption Standard，一种使用对称密钥的 128-bit block cipher；同一把密钥体系用于加密与解密。">
+  AES
+</Term>
+
+AES 的数据 block 固定为 128 bits，也就是 16 bytes；支持 128、192、256-bit key。用户 key 先展开成每一轮使用的 round keys，随后对 state 重复相同风格的变换。key 越长，轮数越多，但 block 并不会变成 192 或 256 bits。
+
+<GpuGems3Ch36AesOverviewDiagram />
+
+每一轮通常包含四种操作：SubBytes 用非线性表替换每个 byte，ShiftRows 改变行的排列，MixColumns 在有限域上混合每一列，AddRoundKey 用 XOR 加入本轮 key。最后一轮省略 MixColumns；解密使用相反方向的表和变换。
+
+## 2. 4×4 state 是字节算法和寄存器之间的桥
+
+<Term def="AES 在一个 128-bit block 内使用的 4×4 byte 矩阵；实现把连续 16 bytes 解包到四个 32-bit 整数寄存器，再按轮变换更新。">
+  AES state
+</Term>
+
+GPU 输入是连续 buffer，AES 轮逻辑却需要按 byte、row 和 column 访问。因此实现把每个 16-byte block 解包为 4×4 state，并用四个 32-bit integer registers 保存它。初始化时，unpack 可以和第一次 AddRoundKey 合并；输出时再把 state pack 回连续 block。
+
+<GpuGems3Ch36StateLayoutDiagram />
+
+这个布局不是密码标准本身，而是实现层的桥梁。它让 `XOR`、`SHL`、`SHR`、`OR` 处理明确的 bit pattern，也让 ShiftRows 和 MixColumns 有一个可视化的中间状态。调试时应先确认 byte order 和 pack/unpack 对称，再看轮逻辑。
+
+## 3. 新的整数能力把轮变换变成可查表的 stream kernel
+
+<Term def="AES 用来把一个 input byte 非线性替换成另一个 byte 的固定查找表；加密和解密各有对应的表。">
+  S-box
+</Term>
+
+GeForce 8 的新能力解决了几类旧障碍：整数寄存器和位操作可以直接表达 AES 的 byte packing；array parameter 和 texture-buffer object 可以用整数索引访问 S-box、MixColumns 等表；transform feedback 可以在光栅化之前把 shader 输出写入 buffer。
+
+<GpuGems3Ch36IntegerPipelineDiagram />
+
+MixColumns 的乘法不是普通整数乘法，而是在 AES 的有限域上进行。章节实现把乘以特定系数的结果预先放进表中，shader 根据 byte 查表，再通过旋转、XOR 和 unpack 组合出列混合结果。这样，复杂的有限域乘法被重写为规律的整数取值与位运算。
+
+<GpuGems3Ch36RoundDiagram />
+
+<Callout type="trap" title="误区：transform feedback 只是把普通渲染的颜色换了个名字">
+  **现象 →** 仍然让 rasterizer 生成像素，或把加密输出当作可显示的颜色纹理再读回。
+
+**原因 →** transform feedback 的价值是把 vertex shader 输出直接捕获为 buffer attributes；本章还关闭 rasterization，因为后续阶段不需要图像。
+
+**修法 →** 把输入/输出声明为流 buffer，明确记录 interleaved 或 separate attributes，并在不需要画面的路径启用 rasterizer discard。
+</Callout>
+
+## 4. 模式决定 block 之间能否真正并行
+
+<Term def="一种 block-cipher mode：每个明文 block 独立加密，因此适合并行，但相同明文 block 会产生相同密文 pattern。">
+  ECB mode
+</Term>
+
+ECB 最容易映射到 GPU：每个 block 都独立执行 AES，多个线程可以同时完成。它也暴露了重要的工程取舍：即使密文不可读，相同输入 block 仍然留下可见的重复 pattern，所以“易并行”不等于“适合所有安全场景”。
+
+<Term def="一种把当前明文 block 与前一密文 block XOR 后再加密的 mode；CBC 加密有前向依赖，CBC 解密可利用已知密文并行。">
+  CBC mode
+</Term>
+
+CBC 加密必须先得到前一个 ciphertext，block `i` 才能开始；GPU 拥有很多线程也不能跳过这条数据依赖。CBC 解密则不同：所有前一 ciphertext 都已在输入中，可以并行解开各 block。CTR 用递增 counter block 生成独立 keystream，再与明文 XOR，因此加密和解密都能独立处理；但 counter 管理和 nonce 约束仍是系统职责。
+
+<GpuGems3Ch36ModesDiagram />
+
+这就是本章最重要的选型规则：不要只看“每个 block 有多少算术操作”，还要看 block 是否等待别的 block 的结果。模式把密码算法外层的依赖图暴露出来，决定 GPU 能占据多宽的并行表面。
+
+## 动手走一遍：一个 AES block 如何成为 GPU stream
+
+<Stepper>
+  <Step title="先展开 key 并解包 state">
+    CPU 生成 encryption/decryption round keys；GPU 把连续 16 bytes 解包到四个 32-bit registers，并完成初始 AddRoundKey。
+
+    <GpuGems3Ch36StateLayoutDiagram />
+  </Step>
+  <Step title="再执行整数轮变换">
+    每一轮依次进行 SubBytes、ShiftRows、MixColumns 和 AddRoundKey；最终轮跳过 MixColumns。
+
+    <GpuGems3Ch36RoundDiagram />
+  </Step>
+  <Step title="然后重新打包 block">
+    把 4×4 byte state 重新组合为四个 32-bit 输出值；解密走逆表和逆变换，但仍遵循同一个 stream 形状。
+
+    <GpuGems3Ch36AesOverviewDiagram />
+  </Step>
+  <Step title="最后写回 GPU buffer">
+    vertex path 可使用 transform feedback；fragment path 则把同一逻辑放进传统 fragment pipeline。输出是 ciphertext stream，不是需要显示的图像。
+
+    <GpuGems3Ch36IntegerPipelineDiagram />
+  </Step>
+</Stepper>
+
+<GpuGems3Ch36PipelineDiagram />
+
+## 5. transform feedback 与 fragment path 是不同的输出路线
+
+本章的历史测试比较了两种实现：vertex program 通过 transform feedback 输出，fragment program 复用类似 AES 逻辑但把输入/输出寄存器映射到传统渲染路径。测试中 1 MB batch 下 vertex path 约 53 MB/s，fragment path 约 95 MB/s；同一机器上的 CPU 参考约 55 MB/s，所以 fragment path 约为 CPU 的 1.7 倍。
+
+这些数值首先说明一个事实：整数查表是重要成本，输出机制也会改变吞吐；它们不是现代 GPU、现代 CUDA 或生产密码库的基准。今天的工程还必须考虑侧信道、密钥生命周期、认证加密、API 审计和经过验证的密码实现，不能因为一个教学 shader 跑得快就替换成熟库。
+
+## 6. 用 AES GPU Mapping Lab 比较模式依赖和实现路径
+
+<GpuGems3Ch36AesLab />
+
+先保持 `ECB + encrypt`，观察 `parallel width` 等于 block 数；再切到 `CBC + encrypt`，它会显示 `previous ciphertext required` 和并行宽度收缩；最后切到 `CBC + decrypt` 或 `CTR`，看独立 block 重新出现。把 key length 从 128 调到 256，则轮数从 10 增到 14。
+
+Lab 的吞吐数字是章节历史测量的教学模型，帮助你比较相对方向，不执行真实加密，也不提供安全性证明。真实系统应使用经过审计的 AES/AEAD 库和正确的 nonce、key storage、认证与错误处理。
+
+## 小结
+
+- AES 固定 128-bit block，key length 128/192/256 决定 10/12/14 轮。
+- 4×4 byte state 把连续流数据接到整数寄存器、S-box 和 MixColumns 查表。
+- GeForce 8 的整数/位运算、texture-buffer 和 transform feedback 让 GPU 能直接处理整数流。
+- ECB 与 CTR 的 block 可独立处理；CBC 加密等待前一密文，CBC 解密可利用已知密文并行。
+- 历史吞吐结果说明映射取舍，不等于现代密码库的安全或性能承诺。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中比较 `128-bit` 与 `256-bit` key，分别选择 ECB、CBC encrypt、CBC decrypt 和 CTR。记录 rounds、parallel width 与 table-assisted ops，并解释哪个变化来自 key schedule，哪个来自 mode dependency。
+
+<Answer>
+
+128-bit key 使用 10 轮，256-bit key 使用 14 轮，因此每个 block 的 round 和查表工作增加；mode 不改变 AES 固定 block 或轮数，但会改变 block 是否能独立启动。ECB、CTR 和 CBC decrypt 有较大的 parallel width，CBC encrypt 的 width 收缩到串行链上的一个 block。
+
+</Answer>
+
+**问题 2｜诊断解密结果不等于明文。** 一个 GPU path 的加密输出能写回 buffer，但解密后只有部分 byte 正确。请按 state layout、round key 和 mode dependency 列出排查顺序。
+
+<Answer>
+
+先用已知 16-byte block 检查 unpack/pack 的 byte order 是否互为逆操作；再确认解密使用了逆向 round keys、正确的轮数以及最后一轮的 MixColumns 规则。若是 CBC，还要检查 IV、前一 ciphertext 和 block 顺序；若是 CTR，要检查 counter、nonce 和加解密两端使用了完全一致的 keystream 输入。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个只想批量处理独立 block 的离线任务、一个需要安全隐藏重复 pattern 的文件格式、一个需要高吞吐实时加解密的通信流，分别说明 mode 与 GPU 映射上的优先级。
+
+<Answer>
+
+独立 block 任务可以选择 ECB 以观察最高的并行宽度，但真实数据仍要评估 ECB 的 pattern 泄漏；需要隐藏重复 pattern 的格式不能因为容易并行就选 ECB，应选择合适的认证模式并由成熟库实现；实时通信更适合能让 block 独立生成 keystream 的 CTR 类思路，但必须同时正确管理 nonce、认证和密钥，不能只复制 GPU 的并行结构。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="AES">
+    一种对称 block cipher：固定处理 16-byte 数据块，使用 128、192 或 256-bit key。
+  </GlossaryItem>
+  <GlossaryItem term="AES state">
+    AES 在一个 block 内使用的 4×4 byte 矩阵，是输入流和轮变换之间的中间布局。
+  </GlossaryItem>
+  <GlossaryItem term="S-box">
+    把一个 byte 替换为另一个 byte 的固定非线性表，AES 每轮用它打散局部关系。
+  </GlossaryItem>
+  <GlossaryItem term="ECB mode">
+    每个 block 独立加密的模式，容易并行，但会保留重复明文 block 的 pattern。
+  </GlossaryItem>
+  <GlossaryItem term="CBC mode">
+    把当前明文与前一密文混合的模式；加密有链式依赖，解密可利用已知密文并行。
+  </GlossaryItem>
+  <GlossaryItem term="transform feedback">
+    在不必光栅化成图像时，把 shader 输出直接捕获到 buffer attributes 的 GPU 输出模式。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 36. AES Encryption and Decryption on the GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-36-aes-encryption-and-decryption-gpu"
+/>
