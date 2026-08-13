@@ -13505,6 +13505,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       InterpreterRuleTreeLab: module0.InterpreterRuleTreeLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/03-behavioral/iterator": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/iterator-cursor-traversal-lab");
+    return {
+      IteratorCursorTraversalLab: module0.IteratorCursorTraversalLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
