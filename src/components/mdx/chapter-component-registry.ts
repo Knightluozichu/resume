@@ -12557,6 +12557,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.DnjAppendixDebuggingCausalTraceDiagram,
     } as ChapterMdxComponents;
   },
+  "deep-nodejs/06-appendices/dnj-appendix-c-coding-style": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/appendix-coding-style-contract-diagram");
+    return {
+      DnjAppendixCodingStyleContractDiagram:
+        module0.DnjAppendixCodingStyleContractDiagram,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
