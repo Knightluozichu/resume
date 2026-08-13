@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T17:25:53.258Z；旧版分数不迁移。
+> 2026-08-13T17:41:49.081Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1878
+- failed：1877
 - queued：218
-- passed：1720
+- passed：1721
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -79,16 +79,16 @@
 | 66 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
 | 67 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
 | 68 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 69 | design-patterns | 27 | 15 | 0 | 12 | 45 |
-| 70 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 71 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 72 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 73 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 74 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 75 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 76 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 77 | effective-executive | 14 | 14 | 0 | 0 | 56 |
-| 78 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 69 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 70 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 71 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 72 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 73 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 74 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 75 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 76 | effective-executive | 14 | 14 | 0 | 0 | 56 |
+| 77 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 78 | design-patterns | 27 | 14 | 0 | 13 | 42 |
 | 79 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
 | 80 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
 | 81 | unity-master | 14 | 14 | 0 | 0 | 42 |
