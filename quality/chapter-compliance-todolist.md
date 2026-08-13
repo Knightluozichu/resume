@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T07:24:06.568Z
+> 生成时间：2026-08-13T07:38:25.262Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 475 |
-| failed | 1920 |
+| failed | 1919 |
 | queued | 218 |
-| passed | 1678 |
+| passed | 1679 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4088,7 +4088,7 @@
     - 路径：`content/deep-learning-textbook/21-final-review/dlt-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## deep-nodejs（17 个内容页面 · failed:5 passed:12 · 🚫 门禁阻断 6 项）
+## deep-nodejs（17 个内容页面 · failed:4 passed:13 · 🚫 门禁阻断 5 项）
 
 - 门禁摘要：目录=未登记，manifest=15；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：deep-nodejs: publication-policy-not-approved。
@@ -4129,7 +4129,7 @@
 - [x] ✅ **05-quality-production/dnj-11-productization** — passed；score 92
     - 路径：`content/deep-nodejs/05-quality-production/dnj-11-productization.mdx`
     - 正式 unit：`dnj-unit-11` explained=28/28
-- [ ] ❌ P1 **06-appendices/dnj-appendix-a-installation** — failed；score 40；门禁阻断: status=failed、score=40<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **06-appendices/dnj-appendix-a-installation** — passed；score 90
     - 路径：`content/deep-nodejs/06-appendices/dnj-appendix-a-installation.mdx`
     - 正式 unit：`dnj-unit-12` explained=6/6
 - [ ] ❌ P1 **06-appendices/dnj-appendix-b-debugging** — failed；score 40；门禁阻断: status=failed、score=40<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
@@ -4144,6 +4144,9 @@
 - [ ] ❌ P1 **07-review/dnj-official-final-review** — failed；score 45；门禁阻断: status=failed、score=45<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,within-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、within-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
     - 路径：`content/deep-nodejs/07-review/dnj-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
+
+- [ ] 🔴 P1 **[正式 unit dnj-unit-12] 附录 A 安装 Node** — evidence 不完整；explained=3/6
+    - 关联路径：`content/deep-nodejs/06-appendices/dnj-appendix-a-installation.mdx`
 
 ## deep-opengl（10 个内容页面 · passed:10 · ✅ 书级门禁条件满足）
 

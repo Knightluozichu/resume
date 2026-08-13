@@ -3,164 +3,245 @@ title: "附录 A 安装 Node"
 type: A
 section: "深入浅出 Node.js · 附录"
 order: 12
-description: "核对 Windows、macOS 与 Linux 安装路径，并用版本、架构、包管理器和原生编译条件固定环境。"
+description: "从平台与架构探查开始，建立可核验的 Node 安装记录，并在 Windows、macOS 与 Linux 上验证版本、权限和原生工具链。"
 demo: true
 math: false
 sourceUrl: "https://www.96192.com/product/detail/637599"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dnj-unit-12
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { DnjAppendixInstallationEvidenceMapDiagram } from "@/components/mdx/deep-nodejs/appendix-installation-evidence-map-diagram";
 
-## 直觉起点
+# 附录 A 安装 Node
 
-、、、、共同构成本页的观察坐标。安装的目标是得到可复现运行时，而非仅让 node
-命令可执行；平台、CPU 架构、系统库、包管理器和权限都会影响后续模块行为。
-深入理解 Node 不是背诵 API，而是回答 JavaScript
-与系统之间如何传递数据、谁拥有异步资源、错误沿哪条边传播、何时能安全退出。
+<Objectives>
 
-## 六阶段执行链
+- 能在任意一个目标平台上记录 Node 的版本、CPU 架构、来源、校验方式与项目包管理器，而不是只确认命令能运行。
+- 能为 Windows、macOS 与 Linux 分别找出权限、原生编译器、Shell 和架构差异，并用一条最小样本验证项目实际使用的运行时。
+- 能在版本或工具链失败时保留诊断证据、撤销错误安装并重放验证，说明哪些差异属于平台边界、哪些差异来自项目配置。
 
-### 1. 确认平台架构
+</Objectives>
 
-固定 Node 版本、依赖锁、入口参数、环境变量和输入，先预测同步栈、异步资源与最终输出。没有版本证据，就无法区分原书历史行为和现代运行时。
+安装 Node 的验收对象不是一个绿色的版本字符串，而是一份可以交给同事复核的运行时记录：谁安装了什么版本、从哪里取得、运行在哪种架构上、项目如何选择它，以及原生依赖失败时该找谁负责。把这些证据留在项目之外的聊天记录里，下一次升级就会重新变成猜谜。
 
-### 2. 选择发行渠道
+先做一个预测：如果同一份项目在两台机器上运行，Node 版本相同但 CPU 架构、C 运行库或全局包不同，哪一项最可能让原生模块安装失败？再打开下面的图，沿着“探查 → 选择来源 → 锁定项目 → 验证 → 回滚”检查每个边界。答案不是预先填好的分数，而是能被命令输出和文件内容支持的状态。
 
-明确数据是模块标识、字节、事件、请求、消息还是制品，并标出创建资源与接收完成通知的所有者。资源创建必须同时设计错误、超时和关闭。
+<Callout type="trap" title="node --version 能执行就算安装完成">
+  **现象：**终端能打印版本，项目却在安装依赖或启动原生模块时失败。**原因：**只验证了 PATH 上的命令，没有记录架构、包管理器、锁文件、编译器和项目实际解析到的 Node。**修法：**先保存平台探查和版本来源，再用项目脚本验证依赖安装、启动与退出。
+</Callout>
 
-### 3. 校验版本来源
+<Callout type="trap" title="把全局包当成项目依赖">
+  **现象：**作者机器能运行，CI 或同事机器缺少命令。**原因：**工具被装进全局目录，项目清单和锁文件没有声明它。**修法：**把可复用工具写进项目的 devDependencies，用包管理器脚本调用，并把锁文件纳入评审。
+</Callout>
 
-把正常路径压缩为最小可运行样本，只保留一个完成出口。回调、Promise、事件和进程消息不能为同一操作重复签发结果。
+<Callout type="trap" title="原生模块失败只重试安装">
+  **现象：**反复安装仍得到 ABI、权限或编译错误。**原因：**重试没有改变真正的边界，反而掩盖了 Node 版本、架构和系统库的组合。**修法：**保存首个失败输出，区分预编译二进制、源码编译和纯 JavaScript 替代，再决定升级、切换工具链或移除依赖。
+</Callout>
 
-### 4. 配置项目版本
+<Term def="一组能被复核的运行时事实：平台、CPU 架构、Node 版本、来源、校验方式和项目入口。">installation evidence</Term>
 
-注入一个边界：空输入、分块、慢消费者、权限、断线、Worker 退出、依赖升级或部署失败。停止在首个偏离点并保存状态。
+<Term def="当前终端执行到的 Node 与项目声明的 Node 之间的选择关系；它决定命令到底使用哪一个运行时。">runtime provenance</Term>
 
-### 5. 验证原生工具链
+<Term def="把包名、版本、完整性校验和依赖关系固定下来，使另一台机器可以复现同一棵依赖树。">dependency lock</Term>
 
-检查 2013 年接口在当前 Node 的状态：仍支持、语义变化、弃用或移出生态。现代替代保持原问题身份，同时明确迁移不能自动保证的行为。
+<Term def="编译原生扩展所需的编译器、头文件、链接器、Python 与系统库的组合。">native toolchain</Term>
 
-### 6. 记录卸载回滚
+<Term def="把不同系统上的差异集中成可检查的边界，例如路径、Shell、权限、架构和动态库搜索位置。">platform boundary</Term>
 
-删除故障并重放同一输入，等待文件、套接字、队列、Worker、日志和连接排空。输出、退出码与资源计数共同收敛才算恢复。
+<Term def="移除不正确的版本或来源，恢复到已记录的运行时，再用同一份样本确认项目没有依赖残留状态。">replayable rollback</Term>
 
-## 核心机制深挖
+## 安装证据链
 
-安装的目标是得到可复现运行时，而非仅让 node 命令可执行；平台、CPU 架构、系统库、包管理器和权限都会影响后续模块行为。 所有案例统一记录六类证据：**输入表示、模块或协议边界、调度阶段、资源所有者、错误出口、关闭条件**。表示错误会造成编码或分帧歧义；调度理解错误会把同步事件误认为异步回调；所有权不清会留下描述符、Worker 与连接；关闭条件缺失会让进程悬挂或强行丢数据。
+安装可以看成五个相连的观察点。第一步确认平台和架构；第二步选择可以说明来源的发行渠道；第三步让项目自己的声明优先于全局 PATH；第四步验证依赖和原生工具链；最后清理错误状态并重放同一个样本。每一步都记录输入、命令、输出、责任人和下一个停止条件。
 
-本页签发不变量是：**开发、测试与生产明确 Node 版本和平台差异，安装来源可校验，项目不依赖未记录的全局包。**。代码必须回答正常路径完成什么、边界输入限制在哪里、失败由谁观察、取消怎样传播、关闭等待哪些资源，以及 2013 年接口在当前 Node 中是否仍适合新项目。成功输出不能独自证明这些条件。
+<Stepper>
+  <Step title="探查平台与架构">
+    <DnjAppendixInstallationEvidenceMapDiagram />
+  </Step>
+  <Step title="锁定来源与项目入口">记录系统、架构、Node 版本、下载来源或版本管理器、包管理器、锁文件和启动脚本；预测项目会从哪个路径解析到 Node。</Step>
+  <Step title="验证边界并保留回滚">在干净目录安装依赖，运行版本探查、最小启动和退出检查；若原生模块失败，保存首个错误、工具链版本与恢复前后的目录状态。</Step>
+</Stepper>
 
-## 2013 版与现代 Node 的版本账本
+## 附录 A 安装 Node
 
-原书出版于 2013 年，覆盖早期 CommonJS、V8 分代回收、process.nextTick、setImmediate、node-heapdump、node-memwatch、旧 Buffer 构造器、cluster、node-inspector、AMD/CMD 和 CouchDB npm 仓库。重构保留 11 章 4 附录的知识身份，但现代示例采用安全且受支持的入口，并明确 `node:*` 模块、Promise/async、Buffer.alloc、N-API、Inspector、node:test、锁文件和当前供应链机制的对照关系。
+### 先问五个可复核的问题
 
-版本账本至少包含原书接口、当时用途、当前支持状态、替代入口、行为差异和移除兼容层的条件。事件循环、TCP 无消息边界、字节编码、资源所有权等稳定原理不会因版本改变；模块解析细节、V8 回收器、默认超时、cluster 调度和包仓库实现必须按当前版本重新验证。
+1. 这台机器是什么系统、CPU 架构和 Shell？
+2. 当前终端的 `node` 来自哪里，项目希望它来自哪里？
+3. Node 版本、包管理器版本和依赖锁是否能被同事重建？
+4. 依赖树中是否包含需要编译的原生扩展，它需要哪些系统工具？
+5. 删除错误安装后，能否用同一个目录和同一份输入重放成功路径？
 
-## 完整公开目录逐项讲解
-
-### 附录A 安装Node
-
-安装记录平台、架构、发行渠道、校验值和 Node 版本。版本管理器减少环境漂移，但原生依赖仍受系统库与编译工具链影响；项目不能依赖未登记全局包。
-
-实验从“确认平台架构”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### A.1 Windows系统下的Node安装
-
-安装记录平台、架构、发行渠道、校验值和 Node 版本。版本管理器减少环境漂移，但原生依赖仍受系统库与编译工具链影响；项目不能依赖未登记全局包。
-
-实验从“选择发行渠道”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### A.2 macOS系统下Node的安装
-
-安装记录平台、架构、发行渠道、校验值和 Node 版本。版本管理器减少环境漂移，但原生依赖仍受系统库与编译工具链影响；项目不能依赖未登记全局包。
-
-实验从“校验版本来源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### A.3 Linux系统下Node的安装
-
-安装记录平台、架构、发行渠道、校验值和 Node 版本。版本管理器减少环境漂移，但原生依赖仍受系统库与编译工具链影响；项目不能依赖未登记全局包。
-
-实验从“配置项目版本”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### A.4 总结
-
-A.4 总结 要放回“确认平台架构、选择发行渠道、校验版本来源、配置项目版本、验证原生工具链、记录卸载回滚”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“验证原生工具链”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### A.5 参考资源
-
-A.5 参考资源 要放回“确认平台架构、选择发行渠道、校验版本来源、配置项目版本、验证原生工具链、记录卸载回滚”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“记录卸载回滚”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-## 资源与失败矩阵
-
-| 资源          | 正常完成           | 常见边界             | 失败出口        | 关闭证据     |
-| ------------- | ------------------ | -------------------- | --------------- | ------------ |
-| 模块与包      | 导出一次、依赖锁定 | 循环依赖、平台差异   | 解析或 ABI 错误 | 模块图可追溯 |
-| Buffer 与流   | 编码完整、背压生效 | 截断、跨字符、慢目标 | pipeline 拒绝   | 描述符关闭   |
-| 套接字与请求  | 响应一次           | 半包、断线、超时     | error 或 abort  | close 已观察 |
-| Worker 与制品 | 退出、接管或回滚   | 崩溃、重启风暴       | 非零码与报警    | 在途请求排空 |
-
-## 最小可运行实验
+可以把记录写成一个小的 `runtime-report.json`。报告应该描述事实，不应该写入 token、密码或完整环境变量。`process.version` 只说明运行时版本，`process.execPath` 才能帮助定位实际二进制；两者连同 `process.platform` 和 `process.arch` 才构成最小安装证据。
 
 ```js
 console.log({
   node: process.version,
+  executable: process.execPath,
   platform: process.platform,
   architecture: process.arch,
-  versions: process.versions,
-+});
+  packageManager: process.env.npm_config_user_agent ?? "unknown",
+});
 ```
 
-```yaml
-book: 深入浅出 Node.js
-edition: 2013-12
-page: dnj-appendix-a-installation
-sample: normal | boundary | failure | recovery
-module_graph_fixed: true
-resource_owner_known: true
-single_completion: true
-close_observed: true
+用项目脚本而不是手敲一串隐含参数来验证：先在没有 `node_modules` 的目录执行安装，再执行一个只读的版本报告，最后启动并正常退出。这样既能发现 PATH 指向错误，也能发现锁文件和包管理器不匹配。若报告暴露了不一致，先停止后续编译，不要用“再试一次”覆盖证据。
+
+### A.1 Windows 系统下的 Node 安装
+
+Windows 的第一条边界是“终端看到的路径”与“项目脚本看到的路径”可能不同。PowerShell、命令提示符和编辑器任务可能继承不同的 PATH；安装后应分别运行 `where.exe node`、`node -p "process.execPath"` 和项目脚本，记录它们是否指向同一份安装。
+
+第二条边界是原生工具链。若依赖没有可用的预编译包，安装器可能进入源码编译，需要 Visual C++ 工具、Python 和与 Node ABI 匹配的配置。先看完整的首个错误，再判断是切换 Node 版本、补齐工具链，还是选择不需要原生编译的替代依赖；不要把管理员权限当成万能修复。
+
+第三条边界是路径与文件权限。用项目目录中的锁文件安装，避免把缓存和全局包目录当作项目依赖。验证完后保存 PowerShell 输出、Node 路径、架构和原生模块构建日志；回滚时清除错误的 `node_modules` 与缓存条目，再用相同锁文件重装。
+
+<Stepper>
+  <Step title="定位 Windows 的实际入口">
+    <DnjAppendixInstallationEvidenceMapDiagram />
+  </Step>
+  <Step title="分离 PATH 与构建问题">先比较 `where.exe node`、`process.execPath` 和项目脚本，再单独检查 Visual C++、Python、ABI 与权限；一次只改变一个条件。</Step>
+  <Step title="重放干净安装">保存首个构建错误，移除项目依赖与错误缓存，用同一锁文件重装，确认脚本没有读取全局包。</Step>
+</Stepper>
+
+### A.2 macOS 系统下 Node 的安装
+
+macOS 需要先识别 Intel 与 Apple silicon 架构。终端的 `uname -m`、Node 的 `process.arch` 与包管理器安装前缀共同决定原生模块会从哪里取得二进制；终端通过 Rosetta 运行时，命令结果可能与系统原生终端不同。把这三个事实写进记录，避免只凭机器型号猜测。
+
+版本管理器可以减少多版本切换的混乱，但它必须与团队约定一致。安装后重新打开一个干净终端，确认 `command -v node`、`process.execPath` 和项目的 `engines` 声明互相解释；如果项目要求某个版本，先在项目入口拒绝不匹配的运行时，而不是让依赖安装到一半才失败。
+
+原生扩展失败时，保留系统版本、架构、Xcode Command Line Tools 状态、Node 版本和包管理器输出。卸载一个错误的版本后，清理项目依赖，再用同一个锁文件重放；若选择预编译包或纯 JavaScript 替代，要把行为变化写进迁移记录，而不是只写“安装成功”。
+
+### A.3 Linux 系统下 Node 的安装
+
+Linux 的发行版、C 运行库、动态链接器和容器基础镜像都是安装边界。不要只记录 `node --version`；同时记录发行版标识、`uname -m`、`ldd --version` 的可识别结果、Node 可执行文件路径以及包管理器。容器里安装的 Node 还应记录基础镜像摘要，标签名不足以构成可追溯来源。
+
+系统包管理器、版本管理器和发行版预装包各有维护边界。团队可以选择其中一种作为来源，但要明确升级策略、签名或完整性校验、镜像更新方式和离线回滚路径。项目安装只使用声明的包管理器与锁文件；全局命令即使存在，也不能替代项目脚本中的依赖。
+
+源码编译或原生扩展失败时，先检查编译器、Python、头文件、链接库和 ABI，再决定补工具或改版本。用最小容器或临时目录重放，确认成功并非来自工作机上残留的 `node_modules`。回滚要同时撤销 Node 来源、基础镜像和依赖安装结果，最后再次跑版本报告与最小退出样本。
+
+<Stepper>
+  <Step title="定位 Linux 的运行边界">
+    <DnjAppendixInstallationEvidenceMapDiagram />
+  </Step>
+  <Step title="比较系统库与镜像">记录发行版、架构、C 运行库、动态链接器、基础镜像摘要和 Node 路径；把系统包、版本管理器与容器来源分开核对。</Step>
+  <Step title="验证工具链与回滚">让一个原生依赖进入可控失败，保存编译器与头文件证据；清理错误来源和目录后，重建干净环境并观察退出码。</Step>
+</Stepper>
+
+## 平台差异的验证矩阵
+
+| 平台 | 先记录 | 常见首个偏离点 | 关闭与回滚证据 |
+| --- | --- | --- | --- |
+| Windows | `where.exe`、PowerShell、架构、构建工具状态 | PATH、权限或 ABI 与预编译包不合 | 清理项目依赖、缓存和错误安装路径后重装 |
+| macOS | `uname -m`、`process.arch`、安装前缀 | Rosetta、架构混用或版本管理器未加载 | 新终端中的路径、锁文件重放和原生日志 |
+| Linux | 发行版、C 运行库、镜像摘要、动态链接器 | 基础镜像、系统库或编译器不匹配 | 撤销镜像与运行时来源，再重建干净目录 |
+
+这张表的用法是先预测，再改变一项边界。比如把 Node 版本从当前 LTS 切到项目要求的版本，只观察依赖解析与原生构建；不要同时换系统包管理器和锁文件，否则无法判断首个偏离来自哪里。成功也要记录退出码、依赖树、Node 路径和没有遗留进程的事实。
+
+### A.4 总结
+
+附录 A 安装 Node 的核心不是记住某个下载按钮，而是完成一条可重放链：平台与架构 → 来源与版本 → 项目入口与锁文件 → 原生工具链 → 最小运行 → 清理与回滚。Windows 重点是 PATH、权限和编译工具；macOS 重点是架构与终端环境；Linux 重点是发行版、C 运行库和镜像边界。
+
+验收时请把“能启动”拆成四种样本：正常安装、边界组合、故障注入和恢复重放。每种样本都保存同一组字段：`process.execPath`、版本、架构、来源、锁文件摘要、首个错误、退出码和资源关闭状态。只有这样，下一次升级才有可比较的基线。
+
+### A.5 参考资源
+
+本章的原书目录把安装拆成 Windows、macOS、Linux 和总结；现代实践还需要对照官方运行时与包管理器文档。建议把目标环境中的实际命令输出作为项目证据，而不是把链接本身当成已验证事实：
+
+- [Node.js 官方下载与发布信息](https://nodejs.org/en/download)：核对版本来源、平台包和当前支持范围。
+- [Node.js 官方 API 文档](https://nodejs.org/api/)：核对 `process`、模块解析、退出与运行时行为。
+- [npm package.json 文档](https://docs.npmjs.com/cli/v11/configuring-npm/package-json)：核对 `engines`、脚本和依赖声明。
+- [npm package-lock.json 文档](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json)：核对锁文件与完整性字段的语义。
+
+这些入口用于查事实，不替代本章的验收记录。Node 版本、包管理器命令、发行版和工具链会变化；升级时应重新执行平台探查与最小重放，并在记录中标明验证日期。
+
+## 最小实验：生成一份可审查的运行时报告
+
+```js
+import { writeFile } from "node:fs/promises";
+
+const report = {
+  node: process.version,
+  executable: process.execPath,
+  platform: process.platform,
+  architecture: process.arch,
+  packageManager: process.env.npm_config_user_agent ?? "unknown",
+};
+
+await writeFile("runtime-report.json", `${JSON.stringify(report, null, 2)}\n`);
+console.log("runtime report written");
 ```
 
-```text
-freeze node version + dependency lock + input
-predict sync stack + async resources + byte boundaries
-change exactly one boundary condition
-stop at the first divergent state
-remove fault and replay the same sample
-wait for files, sockets, workers, and logs to close
-```
-
-## 常见误区与故障注入
-
+实验顺序固定为：在干净目录安装锁文件 → 运行报告脚本 → 运行一个正常退出的项目命令 → 故意使用不匹配版本或缺少工具链 → 保存首个错误 → 清除故障状态 → 用同一个锁文件重放。通过条件是报告可定位实际二进制，失败在预期边界停止，恢复后没有依赖残留或悬挂进程。
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                         | 必查证据                  | 通过条件       |
-| ---- | -------------------------------- | ------------------------- | -------------- |
-| 正常 | 小输入、依赖健康                 | 字节、事件、响应、提交    | 只完成一次     |
-| 边界 | 空、长、分块、慢、并发           | 上限、背压、顺序          | 内存与延迟受控 |
-| 失败 | 权限、断线、Worker退出、部署失败 | 首个错误与所有者          | 错误不丢不重复 |
-| 恢复 | 删除故障后同样本重放             | close、exit、连接数、回滚 | 无悬挂资源     |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 目标版本、干净目录、已提交锁文件 | 路径、版本、架构、依赖摘要 | 报告与项目声明一致，命令正常退出 |
+| 边界 | 换架构、换 Shell、使用原生依赖或容器 | 首个解析差异、ABI、工具链输出 | 差异可解释，未把全局状态带入项目 |
+| 失败 | 缺少编译器、权限不足或版本不匹配 | 完整首个错误、输入、责任边界 | 安装停止，不覆盖原始证据 |
+| 恢复 | 清除错误版本与 `node_modules` 后重放 | 清理范围、锁文件、退出码、进程数 | 同一输入可重建，未遗留错误运行时 |
 
-目录证据：附录A 安装Node、A.1 Windows系统下的Node安装、A.2 macOS系统下Node的安装、A.3 Linux系统下Node的安装、A.4 总结、A.5 参考资源。本页按完整公开目录独立教学重构，不复制原书正文；6 个条目全部进入输入、机制、失败、版本和关闭证据链。
+<Exercises>
 
-## 练习
+**问题 1：**找出 PATH 误导
 
+在一台可以运行 Node 的机器上记录 `where.exe node` 或 `command -v node`、`process.execPath`、`process.version` 和项目的 `engines`。如果它们互相矛盾，指出真正被项目脚本使用的运行时，并写出最小修复。
+
+<Answer>
+  **答案：**以项目脚本实际打印的 `process.execPath` 为准，不能只看 PATH 的第一项。修复应让团队约定的版本来源在干净终端中先被解析，并把版本要求写入项目声明或版本管理配置；随后删除依赖目录，用锁文件重新安装并保存前后报告。
+</Answer>
+
+**问题 2：**定位原生模块失败
+
+给定一个原生依赖安装失败的日志，按“平台与架构 → Node ABI → 编译器与头文件 → 包是否有预编译产物”的顺序检查。哪一条证据能证明你找到了首个偏离，而不是最后一个连带错误？
+
+<Answer>
+  **答案：**首个偏离是第一条让预期状态无法成立的错误，例如架构不匹配或编译器缺失；后续链接失败可能只是连带结果。应保留完整日志、版本报告、架构、工具链版本和安装输入，再只改变一项条件重放来验证因果。
+</Answer>
+
+**问题 3：**设计跨平台回滚
+
+为 Windows、macOS 或 Linux 选择一个错误 Node 版本，写出清理范围和重放顺序。要求回滚后项目使用同一份锁文件，并能证明没有继续使用全局包。
+
+<Answer>
+  **答案：**先停止项目进程并保存报告与错误，再移除错误版本来源、项目 `node_modules`、相关缓存和临时构建产物；恢复团队认可的 Node 来源，打开干净终端，确认 `process.execPath` 与版本，最后用同一锁文件安装并运行项目脚本。脚本应从项目依赖解析工具，不应依赖全局命令；用依赖树和退出码作为证据。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
-- 运行时版本：对应“确认平台架构”的核心观察量。
-- CPU 架构：对应“选择发行渠道”的核心观察量。
-- 版本管理器：对应“校验版本来源”的核心观察量。
-- 原生工具链：对应“配置项目版本”的核心观察量。
-- 环境漂移：对应“验证原生工具链”的核心观察量。
-- 6 个本页公开目录条目已全部映射到执行链与版本账本。
-- 先预测再运行；最终输出、错误传播和资源关闭共同决定是否通过。
+- `installation evidence` 让平台、架构、来源与版本成为可复核事实。
+- `runtime provenance` 解释终端路径、项目声明和实际 `process.execPath` 的关系。
+- `dependency lock` 固定依赖树与完整性，避免全局包改变结果。
+- `native toolchain` 把原生扩展失败拆成 ABI、编译器、头文件和系统库边界。
+- `platform boundary` 让 Windows、macOS 与 Linux 的差异进入预测和验收，而不是进入猜测。
+- `replayable rollback` 要求清理错误状态后用同一输入重放，并观察退出与资源关闭。
 
-## 术语表
+<Glossary>
+  <GlossaryItem term="installation evidence">能让另一位工程师复核安装结果的一组记录，不只是版本号，还包括实际二进制路径、平台、架构、来源和项目入口。</GlossaryItem>
+  <GlossaryItem term="runtime provenance">Node 从哪个来源被选中、项目如何找到它的来路记录。`process.execPath` 是定位实际二进制的关键证据。</GlossaryItem>
+  <GlossaryItem term="dependency lock">包管理器写出的固定依赖树与完整性信息。它让重新安装有比较基线，也让升级差异可以被评审。</GlossaryItem>
+  <GlossaryItem term="native toolchain">编译原生扩展的一整套系统能力，包括编译器、头文件、链接器、Python 与系统库，而不是某一个安装按钮。</GlossaryItem>
+  <GlossaryItem term="platform boundary">系统、架构、Shell、权限、路径、动态库或容器镜像之间会改变行为的边界，需要先记录再改变。</GlossaryItem>
+  <GlossaryItem term="replayable rollback">撤掉错误运行时和依赖状态后，用同一版本声明、锁文件和样本重新验证成功路径，证明恢复没有依赖残留。</GlossaryItem>
+</Glossary>
 
-
+<Attribution
+  adaptedFrom="《深入浅出 Node.js》"
+  adaptedUrl="https://www.96192.com/product/detail/637599"
+  mode="independent-rewrite"
+  workTitle="《深入浅出 Node.js》附录 A 安装 Node"
+  sourceBasis="outline-only"
+/>
