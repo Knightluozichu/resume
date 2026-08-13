@@ -9031,6 +9031,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10ConcurrencyAsynchronyExecutionFlowDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/15-official/streams-and-io": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/streams-io-boundary-map-diagram");
+    return {
+      Ctc10StreamsIoBoundaryMapDiagram:
+        module0.Ctc10StreamsIoBoundaryMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/21-official/advanced-threading": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/advanced-threading-primitive-state-diagram");
