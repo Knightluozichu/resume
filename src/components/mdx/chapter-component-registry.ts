@@ -8959,6 +8959,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10ParallelProgrammingExecutionMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/23-official/span-and-memory": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/span-memory-ownership-map-diagram");
+    return {
+      Ctc10SpanMemoryOwnershipMapDiagram:
+        module0.Ctc10SpanMemoryOwnershipMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
