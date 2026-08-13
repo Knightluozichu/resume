@@ -11,6 +11,7 @@ draft: false
 qualityVersion: 2
 practiceMode: design
 sourceMode: independent-rewrite
+officialUnitId: cse-07
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -188,6 +189,8 @@ connection info 保存 owner EventLoop/thread，所有变更路由到它。globa
 
 ## 7.9 后端服务中的定时器与时间缓存
 
+后端服务中的定时器应由 owner EventLoop 统一调度：每个 deadline 绑定 connection generation，取消、重排和回调执行都回到同一线程，避免关闭连接后仍触发旧任务。
+
 简单定时器可每轮扫描所有 entries，规模大时用 min-heap、ordered tree、timing wheel 或分层 wheel。timer API 要定义 one-shot/repeating、cancel race、callback ownership、monotonic deadline 与 clock jump。
 
 <Term def="按 monotonic deadline 管理 timeout/periodic callback，并能在 connection 关闭时安全取消的 event-loop 子系统。">event-loop timer</Term>
@@ -215,6 +218,8 @@ worker result 回 loop 时，connection 可能已关闭或 generation 改变；�
 non-intrusive container 持独立 entry/value，ownership 清晰、可让同一 object 多种索引，但有额外 allocation/indirection。intrusive timer/list 将 node 嵌入 Connection，可 O(1) remove 并改善 locality；对象销毁前必须从所有 intrusive containers 解除，一份 node 不能同时入同一类多条链。
 
 ## 7.12 经典服务器结构与性能瓶颈
+
+经典服务器结构把 listenfd 非阻塞、acceptor、I/O loop、Connection/Buffer/Codec/Session 和有界业务池串成明确的数据流；服务器性能瓶颈应以 event-loop lag、queue wait、CPU profile 和 tail latency 定位，而不是凭线程数量猜测。
 
 listen fd 应 nonblocking：readiness 到实际 `accept` 之间可能被其他 consumer、error 或状态变化消耗；blocking accept 会卡住 loop。ET 下 accept 循环到 EAGAIN，并处理 EMFILE/ENFILE/backoff。
 
