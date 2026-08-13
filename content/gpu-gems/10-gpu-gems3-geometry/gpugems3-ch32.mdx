@@ -1,0 +1,249 @@
+---
+title: "GPU Gems 3 · Chapter 32. Broad-Phase Collision Detection with CUDA"
+type: C
+section: "GPU Gems 3 Part V · Physics Simulation"
+order: 32
+description: "解释 broad phase 如何用包围体、sort and sweep、空间细分和稳定 radix sort 筛掉不可能碰撞的对象对，再把候选范围交给窄相位。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-32-broad-phase-collision-detection-cuda"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-32
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch32BroadNarrowDiagram,
+  GpuGems3Ch32BroadPhaseLab,
+  GpuGems3Ch32PassScheduleDiagram,
+  GpuGems3Ch32PipelineDiagram,
+  GpuGems3Ch32RadixSortDiagram,
+  GpuGems3Ch32SortSweepDiagram,
+  GpuGems3Ch32SpatialGridDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch32-broad-phase";
+
+<Objectives>
+
+- 能区分 broad phase 的保守候选筛选与 narrow phase 的精确接触计算，并估算两者的工作量
+- 能修改 CUDA Broad-Phase Collision Lab 的对象规模、策略、cell 大小、radix 位宽和 pass 调度，比较候选对与吞吐
+- 能回答：为什么空间细分要区分 home cell 与 phantom cell，并在更新对象状态时用多类 pass 避免写冲突
+
+</Objectives>
+
+## 先问：为什么碰撞检测不能一上来就算精确接触
+
+想象一万个移动物体。大多数物体相距很远，真正接触的只有少数；如果每一帧都为每一对形状计算精确接触点和法线，就会把时间花在明显不可能相交的对象上。
+
+本章解决的问题是：先用便宜、保守的规则快速拒绝大多数对象对，再把剩下的潜在碰撞交给昂贵的精确测试。GPU 的任务不只是“把碰撞循环并行化”，还要把空间索引、排序和候选调度组织成可预测的内存访问。
+
+<Callout type="tip" title="先预测：网格 cell 变小会永远减少候选吗？">
+  在 Lab 中保持空间细分策略，把 cell 从“至少容纳最大包围体”切到 tighter cells。先猜候选对、对象复制次数和排序 pass 哪一项会恶化，再对比 sort and sweep。
+</Callout>
+
+## 1. broad phase 只承诺“不漏掉可能碰撞”
+
+<Callout type="trap" title="误区：把 broad phase 的重叠直接当成真实碰撞">
+  **现象 →** 两个包围球相交就立刻施加碰撞响应，物体在没有真实接触时被弹开。
+
+**原因 →** 包围体通常比真实形状更大；它的重叠只能说明对象是候选，不能说明三角形或凸体真的相交。
+
+**修法 →** broad phase 只输出 potential pair，把候选交给 narrow phase 计算精确接触点、法线和响应。
+
+</Callout>
+
+<Term def="用包围体等保守规则快速筛出潜在碰撞对的阶段；允许 false positive，但不能漏掉真实可能碰撞。">
+  broad phase
+</Term>
+
+<Term def="只处理 broad phase 候选、计算精确接触点和法线的阶段；单次成本高，但候选数量已经被压缩。">
+  narrow phase
+</Term>
+
+暴力 broad phase 需要检查 `n(n-1)/2` 个对象对，复杂度是 O(n²)。当对象分布稀疏时，sort and sweep 或空间细分可以把平均工作量降到接近 O(n log n)，但最坏情况仍可能退化到 O(n²)。
+
+<GpuGems3Ch32BroadNarrowDiagram />
+
+## 2. sort and sweep 把三维包围体投影成一维区间
+
+沿 x、y 或 z 轴投影每个对象的包围体，得到一个 begin/end 区间。把全部 2n 个端点排序后，从左到右维护 active list：遇到 begin，就只和当前 active 对象生成候选；遇到 end，就把对象移出列表。
+
+<Term def="把对象包围体投影到一个坐标轴、排序所有 begin/end 端点并维护 active list 的 broad-phase 方法。">
+  sort and sweep
+</Term>
+
+两个区间如果在投影轴上完全不重叠，就不可能在三维空间相交。因此一次轴向筛选就能拒绝许多对象对。若相邻帧的端点顺序变化很小，利用空间连贯性，插入排序等方法也可能受益于近似有序输入。
+
+<GpuGems3Ch32SortSweepDiagram />
+
+它的优点是结构简单、容易从 CPU 版本验证；缺点是 active list 的长度依赖场景分布，GPU 上的动态列表和分支会让并行效率不如规则的网格路径。
+
+## 3. 空间细分把全局对象对限制在局部 cell
+
+另一种路径是把空间切成均匀网格，并让 cell 至少不小于最大的包围体。每个对象至少有一个 centroid 所在的 home cell；如果包围体跨过邻居 cell，它还会在这些 phantom cell 中留下副本。
+
+<Term def="把空间切成规则 cell、按包围体相交关系建立局部对象列表的 broad-phase 方法；只在共享 cell 的对象之间生成候选。">
+  spatial subdivision
+</Term>
+
+<Term def="对象质心所在的 cell；它是对象的主归属，用来在共享 cell 的候选中确定方向并避免重复测试。">
+  home cell
+</Term>
+
+<Term def="包围体相交但不包含对象质心的附加 cell；它让跨 cell 的真实接触不会被漏掉，同时可能带来对象复制。">
+  phantom cell
+</Term>
+
+只在对象出现在同一个 cell，且至少一个对象的 home cell 就是该 cell 时生成候选。两个对象如果都只是以 phantom 身份出现在同一个 cell，则不能仅凭这个共享记录判定它们可能相撞；这个规则既防止漏检，也能减少重复 pair。
+
+cell 过大时，很多不相邻对象被塞进同一列表；cell 过小时，包围体会复制到更多邻居。工程上的尺寸下限必须由最大对象的包围体决定，而不是只看平均对象尺寸。
+
+<GpuGems3Ch32SpatialGridDiagram />
+
+## 4. 并行更新需要把 cell 分成互不相邻的 pass
+
+空间细分在只做“测试”时可以把更多 cell 同时处理；但如果窄相位会直接更新对象速度或冲量，一个对象可能同时出现在多个相邻 cell，多个线程就可能同时写它的状态。
+
+<Callout type="trap" title="误区：所有 cell 一次性并行处理并直接写对象状态">
+  **现象 →** 同一输入在不同运行中得到不同速度，或者碰撞响应随着 block 排序变化。
+
+**原因 →** 一个包围体可以跨多个 cell；相邻 cell 中的线程可能同时更新同一个对象，没有全局顺序或归约保证。
+
+**修法 →** 把 cell 按周期性的 cell type 分成互不相邻的 pass；二维需要四类，三维需要八类，或改为输出每个对象的多份 impulse 再统一归约。
+
+</Callout>
+
+二维网格可以用 2×2 的四种 parity class 覆盖；同一 class 的 cell 之间至少隔一个 cell，因此一个对象不会在同一 pass 中被两个 cell 同时更新。三维网格对应 2×2×2 的八种 class。
+
+如果只是做候选测试而不更新状态，这个限制可以放宽；如果采用 Jacobi 式的延迟归约，也可以让 cell 同时发出独立 impulse，再在后续阶段合并。
+
+<GpuGems3Ch32PassScheduleDiagram />
+
+## 动手走一遍：从包围体到 narrow-phase 工作队列
+
+<Stepper>
+  <Step title="先为包围体生成 cell ID">
+    为每个对象生成 home cell，并检查相邻 cell 是否被包围体相交，补出 phantom cell 的 ID 和控制位。
+
+    <GpuGems3Ch32SpatialGridDiagram />
+
+  </Step>
+  <Step title="再稳定排序 cell ID">
+    对 cell ID 做稳定 radix sort，并同步重排 object ID；相同 cell 的记录因此变成连续区间。
+
+    <GpuGems3Ch32RadixSortDiagram />
+
+  </Step>
+  <Step title="然后建立 collision cell list">
+    扫描排序数组中的 ID 变化，记录每个碰撞 cell 的起点、H occupant 数和 P occupant 数。
+
+    <GpuGems3Ch32BroadNarrowDiagram />
+
+  </Step>
+  <Step title="最后按 cell type 调度候选对">
+    逐 pass 遍历局部区间，跳过已在更早 home cell pass 处理过的重复 pair，把剩余候选交给 narrow phase。
+
+    <GpuGems3Ch32PassScheduleDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch32PipelineDiagram />
+
+## 5. CUDA 实现把 cell ID、object ID 与排序分开存储
+
+每个对象可能覆盖多个 cell。若把所有属性打包成结构体，排序时会搬运许多不参与比较的字段；更节省带宽的方式是用两个平行数组：cell ID array 保存需要排序的 key，object ID array 保存对象 ID 与控制位，并在每次交换时保持相同的排列。
+
+先计算每个对象的 H cell 和 P cell，再统计有效 cell ID 总数。多个线程块的计数不能直接在 block 间同步，所以先写出每 block 计数，再启动后续 kernel 做全局累加或 prefix sum。
+
+对固定宽度 key 逐组处理 bit、通过计数和 prefix sum 计算偏移，再稳定重排数组的排序方法，称为 stable radix sort。
+
+一轮 radix pass 可以拆成三次 kernel：先 tabulate 每个 radix 的计数，再对计数做 prefix sum 得到输出 offset，最后按 offset 重排 key/value。低位到高位逐轮处理也没有问题，关键是每轮必须保持稳定性，让已经排序的低位顺序不被高位 pass 破坏。
+
+位宽 L 越大，pass 越少，但 radix counter 越多，shared memory 压力越大。把 counter 在线程组内共享，可以用更大的 L 减少排序轮数，却需要组内有序累加来避免读写冲突。
+
+<GpuGems3Ch32RadixSortDiagram />
+
+## 6. 用 CUDA Broad-Phase Collision Lab 观察候选规模
+
+<GpuGems3Ch32BroadPhaseLab />
+
+先猜一猜：把 12,000 个对象从 spatial subdivision 切到 brute force，为什么 candidate pairs 会接近 `n(n-1)/2`？再把 radix 位宽从 8 调成 4，观察 pass 数和排序资源之间的取舍。
+
+## 小结
+
+- broad phase 用保守包围体筛选候选，narrow phase 只对候选计算精确接触。
+- sort and sweep 用排序后的 begin/end 端点维护 active list，空间细分则用局部 cell 列表减少全局 pair。
+- home cell 与 phantom cell 让跨 cell 包围体不会漏检，同时提供去重线索。
+- 稳定 radix sort 把 cell ID 排成连续区间，再由 collision cell list 组织窄相位工作。
+- 更新对象状态时，二维四类、三维八类 cell pass 可以避免相邻 cell 同时写同一对象。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中保持 12,000 个对象，依次比较 spatial subdivision、sort and sweep 与 brute force，记录 candidate pairs 和相对吞吐，并说明哪一项随对象数最容易爆炸。
+
+<Answer>
+
+brute force 直接检查 `n(n-1)/2` 个 pair，候选规模按二次增长；sort and sweep 和空间细分会利用轴向区间或局部 cell 剪枝，平均候选明显更少。空间分布很稀疏时网格通常更规则；对象投影高度连贯时 sort and sweep 也可能表现良好。
+
+</Answer>
+
+**问题 2｜诊断重复碰撞响应。** 一个对象跨越多个 cell，窄相位每帧给它两次相同冲量。请列出需要检查的 cell 归属与 pass 逻辑。
+
+<Answer>
+
+先检查是否把同一对象的 home cell 与 phantom cell 都当成主归属，导致重复 pair；再检查候选规则是否要求至少一个对象在当前 cell 是 home occupant，以及二维四类或三维八类 pass 是否正确隔离了会同时写同一对象的 cell。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个 3,000 个大小相近的粒子场、一个大小差异很大的行星与小行星场、一个只想统计候选而不更新速度的检测器，分别选择网格尺寸和调度策略。
+
+<Answer>
+
+大小相近的粒子适合以最大包围体为基准的均匀网格；行星与小行星尺寸差异巨大时，单一网格会产生很多空洞或候选，应该考虑层次网格或其他多尺度结构；只统计候选的检测器不直接写对象状态，可以合并更多 cell pass，但仍需通过 home/phantom 规则去重。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="broad phase">
+    用保守包围体快速筛掉不可能碰撞的阶段，输出潜在碰撞对而不是最终接触。
+  </GlossaryItem>
+  <GlossaryItem term="narrow phase">
+    对 broad phase 候选执行精确形状测试，计算接触点、法线和响应所需数据。
+  </GlossaryItem>
+  <GlossaryItem term="sort and sweep">
+    排序对象在某条轴上的 begin/end 端点，并用 active list 产生重叠候选的算法。
+  </GlossaryItem>
+  <GlossaryItem term="spatial subdivision">
+    用均匀空间 cell 建立局部对象列表，只检查共享 cell 的候选对。
+  </GlossaryItem>
+  <GlossaryItem term="home cell">
+    包含对象质心的主 cell，用来确定对象归属和候选 pair 的去重方向。
+  </GlossaryItem>
+  <GlossaryItem term="phantom cell">
+    包围体相交但不包含对象质心的附加 cell，用来覆盖跨 cell 的可能碰撞。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 32. Broad-Phase Collision Detection with CUDA"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-32-broad-phase-collision-detection-cuda"
+/>
