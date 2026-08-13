@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T11:06:54.228Z
+> 生成时间：2026-08-13T11:15:58.560Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 475 |
-| failed | 1902 |
+| failed | 1901 |
 | queued | 218 |
-| passed | 1696 |
+| passed | 1697 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4317,7 +4317,7 @@
 - [ ] 🔴 P1 **[正式 unit cid4-10] Chapter 10. A smörgåsbord of features for concise code** — evidence 不完整；explained=3/4
     - 关联路径：`content/deep-understanding-csharp/10-official/concise-code-smorgasbord.mdx`
 
-## deep-understanding-jvm（25 个内容页面 · failed:12 passed:13 · 🚫 门禁阻断 13 项）
+## deep-understanding-jvm（25 个内容页面 · failed:11 passed:14 · 🚫 门禁阻断 12 项）
 
 - 门禁摘要：目录=未登记，manifest=23；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：deep-understanding-jvm: publication-policy-not-approved。
@@ -4361,7 +4361,7 @@
 - [x] ✅ **12-duj3-09-loading-execution-cases/duj3-09-loading-execution-cases** — passed；score 94
     - 路径：`content/deep-understanding-jvm/12-duj3-09-loading-execution-cases/duj3-09-loading-execution-cases.mdx`
     - 正式 unit：`duj3-09-loading-execution-cases` explained=13/13
-- [ ] ❌ P1 **13-duj3-part-4-compilation/duj3-part-4-compilation** — failed；score 35；门禁阻断: status=failed、score=35<90、dimensionFailures=knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: knowledge、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **13-duj3-part-4-compilation/duj3-part-4-compilation** — passed；score 96
     - 路径：`content/deep-understanding-jvm/13-duj3-part-4-compilation/duj3-part-4-compilation.mdx`
     - 正式 unit：`duj3-part-4-compilation` explained=1/1
 - [ ] ❌ P1 **14-duj3-10-frontend-compiler/duj3-10-frontend-compiler** — failed；score 42；门禁阻断: status=failed、score=42<90、dimensionFailures=pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: pedagogy、visual、practice、ux、engineering

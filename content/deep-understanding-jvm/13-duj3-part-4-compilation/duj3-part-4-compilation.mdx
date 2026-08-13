@@ -1,56 +1,296 @@
 ---
-title: 第四部分 程序编译与代码优化
-description: 第四部分 程序编译与代码优化覆盖1个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
+title: "第四部分 程序编译与代码优化"
+description: "用一条可回放证据链连接源代码、Class 文件、解释执行、分层编译与去优化：固定版本和工作量，只改变一个编译边界，再用字节码、编译事件和重放结果验收。"
 type: C
-section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
+section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
 draft: false
-math: true
-sourceUrl: 'https://github.com/fenixsoft/jvm_book'
+math: false
+sourceUrl: "https://github.com/fenixsoft/jvm_book"
 demo: true
 order: 0
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: duj3-part-4-compilation
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Duj3Part4CompilationEvidenceMap } from "@/components/mdx/deep-understanding-jvm/duj3-part4-compilation-evidence-map";
 
-{/* DUJ3_QUALITY_V2 */}
+# 第四部分 程序编译与代码优化
 
-## 为什么从“前端—JIT证据路线台”开始
+一段程序像一件要经过多道工序的产品：先把人的写法变成机器能读的中间成品，再根据真实使用情况选择更快的加工路线。只看最后的耗时，就像只看出厂时间，无法知道哪道工序改变了结果。
 
-第四部分 程序编译与代码优化不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。前端—JIT证据路线台沿“source → AST/desugar → bytecode → profile → compiled code”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+本部分解决的问题是：当“源码没改但速度变了”“同一方法有时被回退”或“优化后错误更难复现”时，如何把变化定位到可观察的阶段。没有这条链，`javac` 输出、虚拟机日志和基准测试很容易被混成一个没有证据的结论。
 
-第四部分 程序编译与代码优化固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变编译阶段或运行阶段；图中只呈现本章真实运行时对象、状态边与证据出口；高亮表示当前分析路径，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+先固定 JDK、编译器、参数、输入和预热次数，再逐层保存源码哈希、Class 哈希、字节码、编译事件与退出状态。这样读者可以区分语言合同、工具输出和某个 HotSpot 版本的实现选择。
 
-## 来源、勘误与独立重写边界
+<Objectives>
 
-第四部分 程序编译与代码优化依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。第四部分 程序编译与代码优化未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
+- 能解释源代码、Class 文件、解释执行、分层编译和去优化在同一条证据链中的位置。
+- 能修改一个预热或编译条件，采集字节码与编译事件，并用哈希和工作量说明变化来自哪里。
+- 能回答：一次优化回退时，哪些原始记录足以证明回退发生在编译策略而不是输入或环境变化？
 
-第四部分 程序编译与代码优化保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。第四部分 程序编译与代码优化的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
+</Objectives>
 
-## 本章跨层合同与章专属探针
+## 为什么从“源文件—机器码—运行时”开始
 
-、、、、。
+把编译过程想成工厂流水线：输入不变，某一台机器的设置改变，才有机会把结果差异归因到这一台机器。流水线上的每一张交接单都要保留，不能只拍最终产品的照片。
 
-第四部分 程序编译与代码优化的通过不变量是“前端语义、Class结构、编译事件和去优化在同一工作量上对齐”。第四部分 程序编译与代码优化的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
+这条直觉能解释两个常见现象：Class 文件相同不代表运行路径相同；某次运行更快也不代表所有输入都更快。我们先画证据链，再让图中的一个开关制造可复现的偏差。
 
-第四部分 程序编译与代码优化使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存AST/字节码、编译事件与去优化，不能只复制命令截图：
+## 本部分的证据合同
 
-```bash
-javac -XprintRounds Sample.java
-java -XX:+PrintCompilation Sample
-```
+本部分的基线是“相同源码、相同 Class、相同工作量；只改变一个编译观察条件”。档案至少保存 JDK 与供应商、操作系统或容器限制、VM 参数、源码与 Class 哈希、预热轮数、时间窗、未过滤日志、退出码和探针成本。
 
+原书语境保留 2019 年 JDK 12 与 JDK 13 预览期的边界；现代复核使用 [JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JDK 25 工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25 发布页](https://openjdk.org/projects/jdk/25/) 和 [OpenJDK 源码](https://github.com/openjdk/jdk)。这些链接用于重新测量，不把今天的默认值倒推成原书事实。
+
+## 六个编译诊断词
+
+正文首现用术语组件把证据字段钉住；章末 Glossary 用面向零基础的话重新解释。术语不能替代原始输出，只有能被同一输入重放的字段才具有诊断价值。
+
+<Term def="从源码到可执行结果经过的阶段顺序，每一段都要有输入、输出和可核对的边界。">
+  编译流水线
+</Term>
+
+<Term def="包含常量池、字段、方法和属性的 Class 文件结构，是源码与运行时之间可哈希的中间成品。">
+  Class 文件
+</Term>
+
+<Term def="先执行已有字节码，并在运行中收集调用次数、分支倾向等实际使用信息的路径。">
+  解释执行
+</Term>
+
+<Term def="根据运行时画像逐步把热点方法编译成更快代码，并在不同优化层之间切换的过程。">
+  分层编译
+</Term>
+
+<Term def="当优化假设不再成立时，撤销已编译路径并回到可解释的执行状态。">
+  去优化
+</Term>
+
+<Term def="把输入、版本、参数、原始日志、哈希和结果放在一起，使另一个人能按同条件再次运行。">
+  重放档案
+</Term>
+
+## 四个必须主动触发的误区
+
+<Callout type="trap" title="把 Class 相同当成运行路径相同">
+  **现象 →** 两次 `javap -v` 输出一致，就断定性能和编译路径也一定一致。 **原因
+  →** 运行时画像、线程调度、编译队列和 VM 参数仍可能不同。 **修法 →** 同时保存
+  Class 哈希、预热工作量、编译事件、退出码与环境摘要，再比较同一时间窗。
+</Callout>
+
+<Callout type="trap" title="把一次热点日志当成稳定优化">
+  **现象 →** 日志里出现 compiled，就把一次运行的耗时下降写成通用结论。 **原因
+  →** 采样窗口、输入分布和编译阈值没有冻结。 **修法 →**
+  固定输入顺序和预热轮数，重复运行并保留未过滤日志；只描述已测量的版本和工作量。
+</Callout>
+
+<Callout type="trap" title="把去优化当成随机故障">
+  **现象 →** 看到回退就重启程序或调大阈值，原始现场随之消失。 **原因 →**
+  优化假设、触发输入和首次回退位置没有被记录。 **修法 →**
+  只改变一个假设，保存回退事件前后的输入、编译日志和全新进程重放结果。
+</Callout>
 
 ## 官方目录逐项深读
 
 ### 第四部分 程序编译与代码优化
 
-**四级证据 1/1。** 第四部分 程序编译与代码优化中的第四部分 程序编译与代码优化：区分前端、解释、分层编译与去优化，固定预热和工作量后保存Class、编译事件与回退证据。第四部分 程序编译与代码优化固定运行阶段为“预热”，只把编译阶段从“javac”切到“JIT”，以AST/字节码、编译事件与去优化定位第一处变化并验证“前端语义、Class结构、编译事件和去优化在同一工作量上对齐”。
+这部分的核心不是追逐某个日志开关，而是让源码、Class 文件和运行时事件在同一个工作量上对齐。先确认输入和版本没有漂移，再判断差异属于前端生成、字节码结构、解释路径、热点编译还是优化假设失效。
 
-## 三个必须主动触发的误区
+### 1. 从源码到 Class 文件
 
+编译器把源码的语义合同落成 Class 结构；`javap -v` 能帮助我们核对常量池、方法描述符、属性和字节码，但它不能直接证明运行时已经采用某条优化路径。源码哈希和 Class 哈希必须一起保存，避免“看的是另一个构建产物”。
 
-## 练习、答案与282节点验证
+### 2. 解释执行与运行时画像
 
+解释执行提供一条可观察的基线，也让运行时有机会收集调用次数、分支倾向和类型分布。画像是运行时证据，不是源码语义；改变输入顺序或预热轮数，可能改变后续编译决策，因此实验必须把工作量写进档案。
 
+### 3. 分层编译的决策
+
+分层编译让方法从较轻的编译层逐步进入更激进的优化层。编译事件应与方法名、层级、时间窗和输入哈希关联；“出现 compiled”只说明某个事件发生，不足以推出所有调用都使用同一版本的机器码。
+
+### 4. 去优化与可解释回退
+
+当运行时假设不再成立，已编译路径可能回到解释或较低层级。去优化不是随机噪声，而是一个需要保存触发条件的状态转换：记录假设、首次回退、回退前后的编译事件，以及清理后全新进程是否能重现同一边界。
+
+### 5. 编译证据的边界
+
+JVMS 约束 Class 文件和执行合同，JDK 工具决定能观察哪些日志，HotSpot 则可能改变事件格式与默认阈值。报告中要把“规范保证”“工具呈现”和“当前实现观察”分栏，避免用一个版本的日志格式替代跨版本结论。
+
+## 实战：实现一个可回放的编译探针
+
+先猜一猜：如果源码和 Class 哈希完全不变，只把预热轮数从 1,000 改为 100,000，最先变化的是字节码、编译事件、去优化次数还是最终输出？写下预测与反证条件，再播放证据图。
+
+### 实战目标
+
+目标是构造一个小而可重复的热点方法，分别保存冷启动、预热和故障输入的原始记录。探针不生成性能评分，也不承诺某个 JDK 必然选择某个编译层；它只让编译事件与输入、版本和哈希可以交接。
+
+### 实战思路
+
+控制变量只有一个：预热轮数或输入类型分布二选一。先用 `javac` 编译固定源码，再用 `javap -v` 保存 Class 结构，最后用 `-XX:+PrintCompilation` 或现代 JDK 的统一日志观察编译事件。每轮都新建输出目录，避免旧日志伪装成当前结果。
+
+### 实战实现
+
+下面的 Java 程序把热点放在一个确定的循环中，输入由命令行参数固定。它不测量业务吞吐，只输出一个可用于核对的校验值；编译器和虚拟机日志另行保存。
+
+```java
+public final class HotPath {
+  private static long mix(int seed, int rounds) {
+    long value = seed;
+    for (int i = 0; i < rounds; i++) {
+      value = (value * 31) ^ (i + seed);
+    }
+    return value;
+  }
+
+  public static void main(String[] args) {
+    int warmup = Integer.parseInt(args[0]);
+    long checksum = 0;
+    for (int i = 0; i < warmup; i++) checksum ^= mix(i & 7, 64);
+    System.out.println("warmup=" + warmup + " checksum=" + checksum);
+  }
+}
+```
+
+先编译并记录版本与 Class 哈希，再启动探针。命令中的 `warmup` 是唯一实验轴；不要同时更换 JDK、参数和源码。
+
+```bash
+set -eu
+run_id="duj3-part4-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "evidence/$run_id"
+java -version 2> "evidence/$run_id/java-version.txt"
+javac -g HotPath.java
+javap -v HotPath > "evidence/$run_id/hotpath.javap.txt"
+sha256sum HotPath.java HotPath.class > "evidence/$run_id/hashes.txt"
+java -XX:+PrintCompilation HotPath 1000 \
+  > "evidence/$run_id/cold.stdout.txt" \
+  2> "evidence/$run_id/cold.stderr.txt"
+java -XX:+PrintCompilation HotPath 100000 \
+  > "evidence/$run_id/warm.stdout.txt" \
+  2> "evidence/$run_id/warm.stderr.txt"
+```
+
+将输出整理成一份重放档案；`unknowns` 必须保留，不能用空值掩盖未测量的实现差异。
+
+```yaml
+unit: duj3-part-4-compilation
+baseline: source-class-profile-compile-replay
+changed_axis: warmup-count
+signals: source-hash,class-hash,bytecode,compile-events,deopt,exit-code
+replay: fresh-process-same-input
+versions: jdk-vendor-vm-flags
+cleanup: output-directory-and-process-recorded
+unknowns: explicit
+```
+
+## 证据图：从输入到回退
+
+图中的每个阶段都带一个可以保存的证据出口：如果两个阶段之间的字段没有变化，就不要把差异归因到它；如果去优化只在一组输入出现，就把输入分布写进结论。
+
+<Stepper>
+  <Step title="1. 固定源码、版本与工作量">
+    保存 JDK、供应商、VM 参数、源码哈希、输入顺序和预热轮数；先确认基线能在全新进程中稳定结束。
+
+    <Duj3Part4CompilationEvidenceMap />
+
+  </Step>
+  <Step title="2. 读取 Class 结构与字节码">
+    用 `javap -v` 保存常量池、方法描述符、属性和指令；若 Class 哈希变化，先回到编译输入，不要继续解释运行时日志。
+
+    <Duj3Part4CompilationEvidenceMap />
+
+  </Step>
+  <Step title="3. 观察解释与分层编译事件">
+    只改变预热或输入分布中的一个变量，把方法、层级、时间窗和日志原文关联到同一个请求 ID。
+
+    <Duj3Part4CompilationEvidenceMap />
+
+  </Step>
+  <Step title="4. 注入一个可回退假设">
+    选择一个可逆的类型或分支变化，保留首次去优化事件、触发输入、回退前后状态和完整 stderr，不重启覆盖现场。
+
+    <Duj3Part4CompilationEvidenceMap />
+
+  </Step>
+  <Step title="5. 清理并用同输入重放">
+    清理旧进程、日志目录和缓存，以相同源码、Class 哈希和输入启动全新进程；将正常、失败和恢复记录交给未参与者核对。
+
+    <Duj3Part4CompilationEvidenceMap />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- 源码哈希、Class 哈希和运行时事件必须分层保存。
+- 解释执行提供基线，分层编译记录决策，去优化记录假设失效。
+- `javap`、编译日志和退出状态回答的是不同问题，不能互相替代。
+- 一次耗时变化只能推广到已测量的版本、输入和预热工作量。
+- 全新进程同输入重放，是确认回退和清理有效的最低证据。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：证据分层。** 源码和 Class 哈希相同，但两次运行的编译事件不同。请列出三个应先冻结的变量，并说明各自对应哪一份记录。
+
+<Answer>
+  先冻结 JDK 与供应商、VM
+  参数、输入顺序和预热轮数；版本与参数写入环境记录，输入与工作量写入请求记录，编译事件保留未过滤原文。只有这些字段同时一致，才有资格比较运行时路径。
+</Answer>
+
+**问题 2：修改 Demo 代码。** 把 `HotPath` 的 `warmup` 轴改成“输入类型分布”轴：要求输出源码哈希、Class 哈希、输入摘要和编译事件，并保持其他变量不变。
+
+<Answer>
+  保留 `HotPath.class` 的编译命令和
+  JDK，新增固定的输入序列摘要；每次只替换序列文件或参数，运行前后都计算哈希。答案应包含至少两组输入、两份
+  `PrintCompilation` 原文和一条“未测量项”说明，不能只比较最终 checksum。
+</Answer>
+
+**问题 3：回退复盘。** 如何证明一次去优化来自运行时假设失效，而不是旧日志或旧进程污染？
+
+<Answer>
+  保存去优化前后的编译事件、触发输入、PID、退出码和目录清单；清理旧进程与输出目录后，用同一源码哈希、Class
+  哈希和输入在全新进程重放。若失败边界与恢复边界都可重复，且旧 PID
+  不存在，才可把结论限定为这组版本和工作量。
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="编译流水线">
+    源码经过几道固定工序变成可运行结果的路线；每道工序都应有输入、输出和记录。
+  </GlossaryItem>
+  <GlossaryItem term="Class 文件">
+    Java
+    编译后留下的中间文件，里面有方法、字段和指令，可以用哈希确认是不是同一份。
+  </GlossaryItem>
+  <GlossaryItem term="解释执行">
+    运行时直接按已有指令推进的方法，像先用一台通用机器观察真实使用情况。
+  </GlossaryItem>
+  <GlossaryItem term="分层编译">
+    根据实际热点逐步选择不同编译力度的过程，不等于一次编译就永远固定。
+  </GlossaryItem>
+  <GlossaryItem term="去优化">
+    原先的快速假设失效后，运行时退回较保守路径并继续执行的状态转换。
+  </GlossaryItem>
+  <GlossaryItem term="重放档案">
+    把版本、输入、参数、日志、哈希和结果装在一起，让别人可以按同条件再跑一次。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《深入理解Java虚拟机（第3版）》"
+  adaptedUrl="https://github.com/fenixsoft/jvm_book"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

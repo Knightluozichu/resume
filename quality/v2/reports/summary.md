@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T11:06:54.228Z；旧版分数不迁移。
+> 2026-08-13T11:15:58.560Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1902
+- failed：1901
 - queued：218
-- passed：1696
+- passed：1697
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -103,12 +103,12 @@
 | 90 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
 | 91 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
 | 92 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 93 | deep-understanding-jvm | 25 | 12 | 0 | 13 | 36 |
-| 94 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 95 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 96 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 97 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 98 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 93 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 94 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 95 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 96 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 97 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 98 | deep-understanding-jvm | 25 | 11 | 0 | 14 | 33 |
 | 99 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 100 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 101 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
