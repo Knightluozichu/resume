@@ -13498,6 +13498,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DecoratorLayerStackLab: module0.DecoratorLayerStackLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/03-behavioral/interpreter": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/interpreter-rule-tree-lab");
+    return {
+      InterpreterRuleTreeLab: module0.InterpreterRuleTreeLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

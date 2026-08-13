@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T18:17:52.138Z；旧版分数不迁移。
+> 2026-08-13T18:27:51.664Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1874
+- failed：1873
 - queued：218
-- passed：1724
+- passed：1725
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -107,7 +107,7 @@
 | 94 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
 | 95 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 96 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 97 | design-patterns | 27 | 11 | 0 | 16 | 33 |
+| 97 | design-patterns | 27 | 10 | 0 | 17 | 30 |
 | 98 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 99 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 100 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
