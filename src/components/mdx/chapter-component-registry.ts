@@ -13441,6 +13441,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       AdapterSemanticContractLab: module0.AdapterSemanticContractLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/02-structural/bridge": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/bridge-variation-axis-lab");
+    return {
+      BridgeVariationAxisLab: module0.BridgeVariationAxisLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
