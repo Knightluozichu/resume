@@ -9063,6 +9063,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10ReflectionMetadataBoundaryMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/19-official/dynamic-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/dynamic-programming-runtime-map-diagram");
+    return {
+      Ctc10DynamicProgrammingRuntimeMapDiagram:
+        module0.Ctc10DynamicProgrammingRuntimeMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/21-official/advanced-threading": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/advanced-threading-primitive-state-diagram");
