@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T17:54:25.988Z
+> 生成时间：2026-08-14T00:00:00.000Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 473 |
-| failed | 1876 |
+| failed | 1875 |
 | queued | 218 |
-| passed | 1722 |
+| passed | 1723 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4145,7 +4145,6 @@
     - 路径：`content/deep-nodejs/07-review/dnj-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-
 ## deep-opengl（10 个内容页面 · passed:10 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=8，manifest=8；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
@@ -4397,7 +4396,8 @@
 - [x] ✅ **24-duj3-official-final-review/duj3-official-final-review** — passed；score 98
     - 路径：`content/deep-understanding-jvm/24-duj3-official-final-review/duj3-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-## design-patterns（27 个内容页面 · failed:13 passed:14 · 🚫 门禁阻断 14 项）
+
+## design-patterns（27 个内容页面 · failed:12 passed:15 · 🚫 门禁阻断 13 项）
 
 - 门禁摘要：目录=未登记，manifest=24；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：design-patterns: publication-policy-not-approved。
@@ -4444,7 +4444,7 @@
 - [x] ✅ **03-behavioral/chain-of-responsibility** — passed；score 97
     - 路径：`content/design-patterns/03-behavioral/chain-of-responsibility.mdx`
     - 正式 unit：`designpatterns-18` explained=13/13
-- [ ] ❌ P1 **03-behavioral/command** — failed；score 43；门禁阻断: status=failed、score=43<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **03-behavioral/command** — passed；score 97
     - 路径：`content/design-patterns/03-behavioral/command.mdx`
     - 正式 unit：`designpatterns-05` explained=13/13
 - [ ] ❌ P1 **03-behavioral/decorator** — failed；score 43；门禁阻断: status=failed、score=43<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: source、pedagogy、visual、practice、ux、engineering
@@ -15820,7 +15820,7 @@
 - [ ] ❌ P1 **06-engine-and-reading/wj-appendix-a-reading-guide** — failed；score 41；门禁阻断: status=failed、score=41<90、dimensionFailures=pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: pedagogy、visual、practice、ux、engineering
     - 路径：`content/windows-journey/06-engine-and-reading/wj-appendix-a-reading-guide.mdx`
     - 正式 unit：`wj-unit-27` explained=16/16
-- [ ] ❌ P1 **07-review/wj-official-final-review** — failed；score 45；门禁阻断: status=failed、score=45<90、dimensionFailures=pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing、contentHash-stale=33ac8c8f6b484e6a actual=3f19735d62e6187c；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: pedagogy、visual、practice、ux、engineering
+- [ ] ❌ P1 **07-review/wj-official-final-review** — failed；score 45；门禁阻断: status=failed、score=45<90、dimensionFailures=pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: pedagogy、visual、practice、ux、engineering
     - 路径：`content/windows-journey/07-review/wj-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 

@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T17:54:18.489Z；旧版分数不迁移。
+> 2026-08-13T18:06:41.340Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1876
+- failed：1875
 - queued：218
-- passed：1722
+- passed：1723
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -96,13 +96,13 @@
 | 83 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
 | 84 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
 | 85 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 86 | design-patterns | 27 | 13 | 0 | 14 | 39 |
-| 87 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 88 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 89 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 90 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 91 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
-| 92 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 86 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
+| 87 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 88 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 89 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 90 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
+| 91 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 92 | design-patterns | 27 | 12 | 0 | 15 | 36 |
 | 93 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 94 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
 | 95 | unity-scripting | 12 | 12 | 0 | 0 | 36 |

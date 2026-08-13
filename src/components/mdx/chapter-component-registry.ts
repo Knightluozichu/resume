@@ -13484,6 +13484,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.ChainOfResponsibilityRequestPipelineLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/03-behavioral/command": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/command-history-undo-lab");
+    return {
+      CommandHistoryUndoLab: module0.CommandHistoryUndoLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
