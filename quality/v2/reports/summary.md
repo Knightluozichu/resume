@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T19:14:16.855Z；旧版分数不迁移。
+> 2026-08-14T22:23:53.339Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1870
+- failed：1869
 - queued：218
-- passed：1728
+- passed：1729
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -96,12 +96,12 @@
 | 83 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
 | 84 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
 | 85 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 86 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 87 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 88 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 89 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 90 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
-| 91 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 86 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 87 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 88 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 89 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
+| 90 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 91 | dsa-cpp | 13 | 12 | 0 | 1 | 36 |
 | 92 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 93 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
 | 94 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
