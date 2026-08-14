@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-14T22:24:00.967Z
+> 生成时间：2026-08-14T22:40:07.166Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,10 +13,10 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 475 |
-| failed | 1869 |
+| manifest 证据不完整 unit | 474 |
+| failed | 1868 |
 | queued | 218 |
-| passed | 1729 |
+| passed | 1730 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4620,9 +4620,9 @@
     - 路径：`content/dragon-book-compilers/07-review/dbc-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## dsa-cpp（13 个内容页面 · failed:12 passed:1 · 🚫 门禁阻断 13 项）
+## dsa-cpp（13 个内容页面 · failed:11 passed:2 · 🚫 门禁阻断 12 项）
 
-- 门禁摘要：目录=未登记，manifest=13；正式概念覆盖率=96.7%；未映射 unit=0；证据不完整 unit=3。
+- 门禁摘要：目录=未登记，manifest=13；正式概念覆盖率=97.8%；未映射 unit=0；证据不完整 unit=2。
 - 其他门禁阻断：dsa-cpp: publication-policy-not-approved。
 
 - [ ] ❌ P1 **00-introduction/algorithm-analysis** — failed；score 33；门禁阻断: status=failed、score=33<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
@@ -4655,9 +4655,9 @@
 - [x] ✅ **04-design-analysis/algorithm-design-techniques** — passed；score 99
     - 路径：`content/dsa-cpp/04-design-analysis/algorithm-design-techniques.mdx`
     - 正式 unit：`dsaa3-10` explained=6/6
-- [ ] ❌ P1 **04-design-analysis/amortized-analysis** — failed；score 33；门禁阻断: status=failed、score=33<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **04-design-analysis/amortized-analysis** — passed；score 99
     - 路径：`content/dsa-cpp/04-design-analysis/amortized-analysis.mdx`
-    - 正式 unit：`dsaa3-04` explained=2/8、`dsaa3-06` explained=4/9、`dsaa3-11` explained=5/6
+    - 正式 unit：`dsaa3-11` explained=6/6
 - [ ] ❌ P1 **05-advanced/advanced-data-structures** — failed；score 33；门禁阻断: status=failed、score=33<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
     - 路径：`content/dsa-cpp/05-advanced/advanced-data-structures.mdx`
     - 正式 unit：`dsaa3-04` explained=1/8、`dsaa3-11` explained=1/6、`dsaa3-12` explained=8/8
@@ -4665,11 +4665,9 @@
     - 路径：`content/dsa-cpp/05-advanced/separate-compilation-class-templates.mdx`
     - 正式 unit：`dsaa3-01` explained=1/7、`dsaa3-02` explained=1/5、`dsaa3-a` explained=3/3
 - [ ] 🔴 P1 **[正式 unit dsaa3-06] Chapter 6 · Priority Queues (Heaps)** — evidence 不完整；explained=8/9
-    - 关联路径：`content/dsa-cpp/02-hashing-heaps/priority-queues-heaps.mdx`、`content/dsa-cpp/03-algorithms/graph-algorithms.mdx`、`content/dsa-cpp/04-design-analysis/amortized-analysis.mdx`
+    - 关联路径：`content/dsa-cpp/02-hashing-heaps/priority-queues-heaps.mdx`、`content/dsa-cpp/03-algorithms/graph-algorithms.mdx`
 - [ ] 🔴 P1 **[正式 unit dsaa3-08] Chapter 8 · The Disjoint Set Class** — evidence 不完整；explained=6/7
     - 关联路径：`content/dsa-cpp/03-algorithms/disjoint-set-class.mdx`
-- [ ] 🔴 P1 **[正式 unit dsaa3-11] Chapter 11 · Amortized Analysis** — evidence 不完整；explained=5/6
-    - 关联路径：`content/dsa-cpp/01-linear-structures/trees.mdx`、`content/dsa-cpp/02-hashing-heaps/priority-queues-heaps.mdx`、`content/dsa-cpp/04-design-analysis/amortized-analysis.mdx`、`content/dsa-cpp/05-advanced/advanced-data-structures.mdx`
 
 ## easy-cpp-5e（18 个内容页面 · passed:18 · ✅ 书级门禁条件满足）
 

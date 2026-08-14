@@ -3,57 +3,135 @@ title: "第11章 Amortized Analysis：用势能解释昂贵操作序列"
 type: C
 section: "算法设计与均摊"
 order: 10
-description: "按第3版五节完整重构无关谜题、二项队列、斜堆、Fibonacci堆与伸展树的均摊分析，并统一聚合、记账和势能方法。"
+description: "从总成本、记账和势能三种证明出发，解释二项队列、斜堆、斐波那契堆与伸展树为何能承受昂贵操作尖峰。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dsaa3-11
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  DsaAmortizedPotentialLedgerLab,
+  DsaAmortizedHeapConsolidationLab,
+  DsaAmortizedSplayAccessLab,
+} from "@/components/mdx/dsa-cpp/dsa-amortized-analysis-v2";
+
+<Objectives>
+
+- 能用 aggregate、accounting 和 potential 三种方法解释一个操作序列的总成本，而不是把均摊误写成平均概率
+- 能为 binomial queues、skew heaps 和 Fibonacci heaps 指出结构债务、势能变化与操作边界
+- 能用 rank potential 分析 splay trees 的访问序列，并复现一次昂贵操作由何处获得支付
+
+</Objectives>
 
 ## 从“昂贵的一次不代表昂贵的一串”开始
 
-均摊分析（）允许某次 operation 很贵，只要能证明这种贵操作不可能高频连续发生。Dynamic array resize 单次 O(N)，但几何扩容的一串 pushes 总成本 O(N)。
+先预测：容量从 1 开始、满时翻倍，连续插入 8 个元素时，扩容搬移了多少旧元素？扩容到 2、4、8 时分别搬 1、2、4 个，总搬移 7；第 5 次插入虽然单次搬 4 个，但前 8 次的总成本仍与操作数量同阶。
 
-先预测容量从1开始、每次满时翻倍，连续插入8个items会搬移多少旧items。扩容到2、4、8时分别搬1、2、4个，总搬移7；虽然第5次insert会搬4个，前8次的总搬移仍小于8。这正是“保留尖峰，但约束整串”的视角。
+这就是均摊分析的视角：允许一次 operation 很贵，但要证明这种尖峰不会在同一个 sequence 中无限频繁地出现。证明对象不是“随机抽一个操作的平均耗时”，而是从初始状态到最终状态的总 actual cost。
 
-三种标准视角等价但证明习惯不同：aggregate method 直接界定 total；accounting method 给便宜操作多收 credit；potential method 用 data-structure state 的储能函数 Phi。第 i 次 amortized cost：
+<Callout type="trap" title="把均摊分析写成 average-case probability">
+**现象 →** 看到动态数组扩容的总成本是线性，就说每次 push 都是概率意义上的 O(1)，或把一次 resize 的 4 个搬移忽略掉。
+
+**原因 →** amortized analysis 不依赖输入分布；它用 aggregate、credit 或 potential 约束一整段操作序列，单次操作仍可能很贵。
+
+**修法 →** 明确 sequence、初始势能和最终势能，逐项列出 actual cost 与 amortized cost；若需要概率假设，再单独标成 average-case 分析。
+
+</Callout>
+
+<Callout type="trap" title="只背势能公式，不检查结构不变量">
+**现象 →** 直接把 Phi 写成 root 数或 marked 数，却没有验证 link、cut、rotation 后势能的变化方向。
+
+**原因 →** 势能必须足够非负且能支付未来工作；错误的函数可能让某次操作的 amortized cost 变成负数，或漏掉结构维护成本。
+
+**修法 →** 先定义状态，再逐种操作计算 actual cost 和 ΔPhi；用一个最小序列重放 root、mark、child 和 parent 指针的变化。
+
+</Callout>
+
+## 官方单元与证据地图
+
+本页显式映射 manifest 的正式单元 dsaa3-11：amortized analysis 的五节结构贯穿无关谜题、二项队列、斜堆、斐波那契堆和伸展树。其他章节中的同名数据结构只作为对照，不改变本页的正式 unit 归属。
+
+| official concept   | 本页的核验问题                               | 证据                           |
+| ------------------ | -------------------------------------------- | ------------------------------ |
+| amortized analysis | 如何约束整串 actual cost                     | 三种证明方法与总式             |
+| unrelated puzzle   | 间接变量如何绕开逐段求和                     | 相遇时间模型                   |
+| binomial queues    | binary carry 的 link 由什么支付              | root-count potential           |
+| skew heaps         | right path 尖峰如何被轻边界约束              | heavy/light 与 merge           |
+| Fibonacci heaps    | lazy consolidation 与 cascading cut 如何记账 | roots、marks、degree bound     |
+| splay trees        | 单次长旋转为何不破坏序列均摊界               | rank potential 与 access lemma |
+
+<Term def="为一串操作而不是单次操作建立总成本上界的方法；它不要求每一次操作都便宜。">
+  均摊分析
+</Term>
+均摊分析
+把昂贵操作看成对整个序列的负债。只要初始势能为零、势能始终非负，并且每次的
+amortized cost 能覆盖 actual cost，整串上界就成立，不需要假设输入均匀随机。
+
+<Term def="用间接的相遇时间代替逐段追踪轨迹，从而把无限往返过程化成一个简单方程的小谜题。">
+  无关谜题
+</Term>
+无关谜题
+看似与数据结构无关，却展示了“引入一个合适状态变量”的思想。先求两只猫相遇的时间，再求母猫飞行距离，比逐段加越来越短的距离更容易核对。
+
+<Term def="把不同秩的二项树组织成森林，插入时像二进制加一一样合并相同秩树的优先队列结构。">
+  二项队列
+</Term>
+二项队列 的长插入会连续 link，像 binary counter 的 carry 一样形成一次尖峰。用
+forest 中 root 的数量作为状态，就能说明每次 link 消除的 root
+为未来操作积累了支付空间。
+
+<Term def="合并时沿右路径访问并无条件交换孩子的堆；单次路径可能很长，但重排会让后续路径变短。">
+  斜堆
+</Term>
+斜堆 不保存 leftist heap 那样的显式 rank。它用 heavy/light
+的路径论证或势能变化解释 merge 的均摊界，不能把一次观察到的短 right path
+当成不变量。
+
+<Term def="延迟整理根链表并用 marked 节点和 cascading cut 管理 decrease-key 的堆。">
+  斐波那契堆
+</Term>
+斐波那契堆 把合并和插入的整理工作延迟到 delete-min，再用 roots 数和 marked
+nonroots 数构成势能。degree 与子树大小的关系保证整理时的 degree table
+不会无限增长。
+
+<Term def="访问节点后把它旋到根附近的自调整搜索树；它不承诺每次访问便宜，而是对访问序列给出均摊界。">
+  伸展树
+</Term>
+伸展树 用 zig、zig-zig 和 zig-zag 旋转把访问历史反馈到形状中。subtree size 的
+rank potential 支付长旋转，正确性还要求旋转保持 inorder 顺序和 parent 指针。
+
+## amortized analysis
+
+均摊分析有三种等价的证明习惯。aggregate method 直接界定一段 sequence 的 total actual cost；accounting method 给便宜操作预收 credit；potential method 为状态 D 定义 Phi(D)，并使用
+$\widehat c_i=c_i+\Phi(D_i)-\Phi(D_{i-1})$。
+
+这个式子在说：本次 actual cost 加上状态储能的变化，就是本次可以向整串预算收取的 amortized cost。若 Phi(D0)=0 且 Phi(D) 始终非负，则所有 actual costs 之和不超过所有 amortized costs 之和。势能不是漂亮的标签，必须对每一种状态迁移都算得清楚。
+
+## unrelated puzzle
+
+无关谜题描述两个小猫在 100 yards 球场两端以每分钟 10 yards 相向而行，母猫以每分钟 100 yards 在两者之间往返，直到两只小猫相遇。逐段追踪母猫会得到一个无限几何级数；引入相遇时间 t 则只需解
 
 $$
-\widehat c_i=c_i+\Phi(D_i)-\Phi(D_{i-1})
+t=\frac{100}{10+10}=5\ \text{minutes},\qquad d=100t=500\ \text{yards}.
 $$
 
-若 Phi(D0)=0 且始终非负，则所有 actual costs 之和不超过 amortized costs 之和。Potential 不能凭直觉随便取；它必须让昂贵操作对应足够大的势能下降。
+这个式子在说：先求终止状态的时间，再把重复轨迹投影成一次乘法。无关谜题本身不是数据结构证明，但它训练我们为一串复杂变化寻找足够而不冗余的状态变量。
 
+## binomial queues
 
-## 11.1 An Unrelated Puzzle
-
-无关谜题（）描述两个小猫在100 yards球场两端，以每分钟10 yards 相向而行；母猫以每分钟100 yards 在两者之间往返，直到相遇。
-
-直接方法会求每一段逐渐缩短的距离并加 infinite geometric series。间接方法先求相遇时间：
-
-$$
-t=\frac{100}{10+10}=5\ \text{minutes},\qquad
-d=100t=500\ \text{yards}
-$$
-
-
-额外变量 time 把复杂轨迹投影成简单乘法。Potential 在后续 data structures 中做同一件事：不逐个追踪未来所有 rotations/links，而记录当前 state 中“尚未支付的工作”。
-
-谜题本身不是 amortized analysis，但它解释为何间接变量能让难以直接求和的过程变清楚。
-
-## 11.2 Binomial Queues
-
-二项队列（）的 insert 是把 B0 singleton 加到 forest。若低 ranks 已占用，就连续 combine，像 binary counter 加1。某次从 size `2^k-1` 插入会做 k 次 links，actual O(log N)。
-
-取 potential 为 forest 中 trees 数 t(H)。若 insert 做 k 次 links，tree count 从原有低位 k 棵加 singleton 后，降到1棵，变化为1-k。于是：
-
-$$
-\widehat c=(k+1)+(1-k)=2
-$$
-
-
-因此 insert amortized O(1)，即使某次 binary carry 很长。Merge 的 actual 与两 size bit patterns 的 carries 相关；deleteMin 仍要找 minimum root、拆 children 并 merge，amortized O(log N)。
+二项队列把 B0 singleton 组织成不同秩的 forest。插入新 singleton 时，低秩位置若已被占用就 link 两棵相同秩的树，直到找到空位；这正如 binary counter 加一。一次插入可能做很多次 link，但 root-count potential 会同步下降。
 
 ```cpp
 void insert(Key key) {
@@ -69,33 +147,27 @@ void insert(Key key) {
 }
 ```
 
-Potential proof既解释了成本，也解释了为何 representation 用one-tree-per-rank：每次 link 消除一个 root，释放先前积累的 credit。
+如果插入前低 k 个秩都已有树，实际工作约为 k+1，而 root 数从 k+1 变成 1，势能变化约为 1-k；两者相加是常数级。merge 还要考虑两棵 forest 的 bit pattern，delete-min 则要找到最小 root、拆出 children 并重新合并，证明边界不同于 insert。
 
-## 11.3 Skew Heaps
+## skew heaps
 
-斜堆（）单次 merge 沿两个 right paths，可能 linear。分析按 subtree size 把 right-path nodes 分为 heavy/light：若某 child subtree 超过 parent size 的一半，该方向是 heavy；一条 root-to-leaf path 的 light edges 至多 O(log N)。
+斜堆的 merge 沿两个 right paths 递归，单次访问可以是 linear。分析把访问到的节点按子树大小分为 heavy 与 light：沿一条 root-to-leaf 路径，light edge 的数量受子树规模翻倍约束，因此至多 logarithmic。
 
+合并后无条件交换左右孩子，许多旧的 right-heavy 节点会离开下一次 right path。势能可以记录 heavy nodes 数，actual cost 中的 heavy visits 由势能下降支付，剩下的 light visits 与势能增长共同形成均摊 logarithmic 边界。
 
-Merge 后无条件 swap children，使许多旧 right-heavy nodes 离开 right path。取 potential 为 heavy nodes 数，actual cost 中大量 heavy visits 被势能下降支付，只剩 O(log N) light visits 和新势能增长：
+这里不能声称每次 right spine 都短；那是 leftist heap 的结构性质。skew heaps 的承诺是 sequence bound，必须用多个交替 merge 的输入重放，而不是只测一个随机顺序。
+
+## Fibonacci heaps
+
+斐波那契堆通过 lazy consolidation 推迟整理：insert 和 meld 只拼接 root lists，delete-min 才把最小节点的 children 提升到 root list 并按 degree 合并。decrease-key 若破坏 heap order，就执行 cut；parent 首次丢 child 时 mark，继续丢失才触发 cascading cut。
+
+常用势能是
 
 $$
-\widehat c_{\mathrm{merge}}=O(\log N)
+\Phi(H)=t(H)+2m(H),
 $$
 
-Insert 是与 singleton merge，deleteMin 是左右 children merge，故也取得相应 amortized bounds。这里没有“每次 right spine 都 logarithmic”的 structural invariant；那是 leftist heap 的 worst-case property。
-
-
-## 11.4 Fibonacci Heaps
-
-斐波那契堆（）进一步延迟结构整理。它从两点改造前面 heaps：
-
-1. Cutting Nodes in Leftist Heaps：decrease-key 若破坏 parent order，可 cut node；但任意切会破坏结构 bound；
-2. Lazy Merging for Binomial Queues：insert/merge 只拼 root lists，不立刻合并同 degree trees；deleteMin 时再 consolidate。
-
-
-Fibonacci heap 用 circular doubly linked root/child lists，维护 min pointer。Insert 和 meld 只接 list，actual O(1)。DeleteMin 把 minimum children 提到 root list，再按 degree 合并，amortized O(log N)。
-
-Decrease-key 将违反 heap order 的 node cut 到 root list；若 parent 已经丢过一个 child（marked），继续 cascading cut。第一次丢 child 只 mark，第二次才 cut，避免 degree 与 subtree size 关系失控：
+其中 t 是 root 数，m 是 marked nonroot 数。这个式子在说：root 增长和 marked 节点都代表未来要支付的结构工作，cascading cut 把 marked 变成 root 时会释放已经积累的势能。
 
 ```cpp
 void decreaseKey(Node* x, Key key) {
@@ -109,43 +181,27 @@ void decreaseKey(Node* x, Key key) {
 }
 ```
 
-经典 potential 是 roots 数 t 加 marked nonroots 数 m 的两倍：
+degree d 的节点必须拥有足够大的子树，才能保证 degree bound 为 logarithmic；这一步是 delete-min consolidation 的前提。Fibonacci heaps 的指针和常数成本较高，只有 decrease-key、meld 比例和规模都合适时，渐近优势才可能在基准中出现。
+
+## splay trees
+
+伸展树不保存 height 或 color，而是在访问后执行 zig、zig-zig、zig-zag。一次 access 可能沿长路径旋转很多次，但经常访问的节点会靠近根，访问序列的总成本可以被 rank potential 约束。
+
+令 s(x) 为节点子树大小，rank 为 $r(x)=\log_2 s(x)$，整棵树的势能为
 
 $$
-\Phi(H)=t(H)+2m(H)
+\Phi(T)=\sum_{x\in T}\log_2 s(x).
 $$
 
-Cascading cuts actual 可能长，但每个被继续 cut 的 marked node 变 unmarked，释放2单位 potential，支付 cut 并允许 root count 增加。由 degree d node 的 descendants 至少按 Fibonacci 数增长，可得 maximum degree O(log N)，因此 deleteMin consolidation 扫描的 degree table 也 logarithmic。
-
-```cpp
-amortized = actual
-          + (rootsAfter + 2 * markedAfter)
-          - (rootsBefore + 2 * markedBefore);
-```
-
-
-实际系统中 Fibonacci heap pointer-heavy、constants大；只有 decrease-key/merge 比例高且规模合适时才可能优于 binary heap。Asymptotic table不是自动benchmark结果。
-
-## 11.5 Splay Trees
-
-伸展树（）不保存 height/color。Zig、zig-zig、zig-zag 的单次 rotation sequence 可很长，但访问后经常使用的 nodes 靠近 root。
-
-
-令 subtree size 为 s(x)，rank r(x)=log2 s(x)，tree potential 是所有 node ranks 之和：
-
-$$
-\Phi(T)=\sum_{x\in T}\log_2 s(x)
-$$
-
-Access lemma 把 splaying x 的 amortized rotation cost界定为 O(1)+3(r(root)-r(x))。因 rank difference 至多 log N，一次 access amortized O(log N)；m 次 operations 总 O(m log N)。
+这个式子在说：大子树携带更多结构信息；旋转改变节点的子树规模，也就释放或积累了可用于支付未来旋转的势能。access lemma 给出一次伸展的均摊界，而不是每次旋转的最坏界。
 
 ```cpp
 while (x->parent != nullptr) {
-    Node* p = x->parent;
-    Node* g = p->parent;
-    if (!g) rotate(x);
-    else if (sameDirection(x, p, g)) {
-        rotate(p);
+    Node* parent = x->parent;
+    Node* grand = parent->parent;
+    if (!grand) rotate(x);
+    else if (sameDirection(x, parent, grand)) {
+        rotate(parent);
         rotate(x);
     } else {
         rotate(x);
@@ -154,23 +210,132 @@ while (x->parent != nullptr) {
 }
 ```
 
-这不是每次 height bound。一次 access 可 O(N)，但 sequence 有 static optimality、working-set 等更强适应性结果。Correctness 仍需每次 rotation 保持 BST inorder sequence 和 parent pointers。
+每次旋转都必须保持 BST inorder sequence 和 parent pointers。一次 access 的实际路径很长时，不能说实现错误；要检查的是 rank 变化是否支付了序列中的总 rotation cost，以及 benchmark 是否包含重复访问、扫描访问和最坏构造。
 
-## 统一验证：actual spike与amortized bound同时报告
+## 分步验证：从尖峰到序列边界
 
+猜一猜：把一个 root、marked node 或访问路径的尖峰成本隐藏起来，均摊上界会变得更可靠吗？在下面三步中，先看预算如何储存，再看 heap 结构债务，最后重放 splay access；每一步都记录 actual、势能变化和最终状态。
+
+<Stepper>
+  <Step title="核对 aggregate、credit 与势能">
+    <DsaAmortizedPotentialLedgerLab />
+  </Step>
+  <Step title="观察 heap 结构债务">
+    <DsaAmortizedHeapConsolidationLab />
+  </Step>
+  <Step title="重放 splay 访问序列">
+    <DsaAmortizedSplayAccessLab />
+  </Step>
+</Stepper>
+
+## 代码实验：把一次尖峰放回 sequence
+
+用固定操作序列测试动态数组或 root forest：先执行若干便宜操作，再刻意触发一次 resize、link、consolidate 或 rotation。日志至少包含 operation、actual cost、state summary、Phi before、Phi after 和 amortized cost；不要只输出一个总数。
+
+```cpp
+struct AmortizedEvent {
+    std::string operation;
+    std::size_t actual{};
+    std::size_t phiBefore{};
+    std::size_t phiAfter{};
+};
+
+AmortizedEvent resizeEvent() {
+    return {"resize", "4", "3", "1"};
+}
+
+long long amortized(const AmortizedEvent& event) {
+    return static_cast<long long>(event.actual)
+         + static_cast<long long>(event.phiAfter)
+         - static_cast<long long>(event.phiBefore);
+}
+```
+
+对 binomial queues，检查每个 link 是否减少 root count；对 skew heaps，记录 right-path 上的 heavy/light 分类；对 Fibonacci heaps，记录 roots 和 marks；对 splay trees，记录访问前后每个相关子树的 size。这样才能把图示变成可复核的证据包。
+
+## 失败分诊与验收矩阵
+
+1. **势能为负或尖峰未被支付。** 检查初始势能、非负条件和每个状态迁移的 ΔPhi；错误函数应立即被最小序列暴露。
+2. **堆的实现通过单次测试却失去序列边界。** 用重复 merge、decrease-key、delete-min 和交替访问构造结构债务，而不是只测均匀随机输入。
+3. **均摊保证被误读成单次保证。** 把 actual cost、amortized cost、总 sequence bound 和 benchmark 结果分成四列报告。
+
+| 验收层             | 正常样本                   | 边界样本                    | 失败样本                 | 通过条件                               |
+| ------------------ | -------------------------- | --------------------------- | ------------------------ | -------------------------------------- |
+| amortized analysis | 动态数组扩容               | 初始容量、空序列            | 把平均概率当均摊         | sequence、初始势能和总式完整           |
+| unrelated puzzle   | 直接求相遇时间             | 无限分段、单位换算          | 逐段求和漏项             | 状态变量与终止条件清楚                 |
+| binomial queues    | 连续插入与 link            | 长 binary carry             | root count 变化不符      | potential 下降支付 link                |
+| skew heaps         | 交替 merge                 | 长 right path               | 误写成每次 logarithmic   | heavy/light 与序列重排一致             |
+| Fibonacci heaps    | decrease-key 后 delete-min | cascading cut、空 root list | mark 未清理、degree 越界 | roots、marks、degree bound 可复核      |
+| splay trees        | 重复访问热点               | 扫描序列、单次长路径        | 旋转破坏 inorder         | rank potential 与 access sequence 对齐 |
 
 ## 本章回顾
 
-1. Amortized analysis对任意sequence给总成本bound，不是average-case probability。
-2. Aggregate、accounting和potential是三种等价证明视角。
-3. 原书谜题用meeting time绕开无限分段，示范引入间接变量。
-4. Binomial insert的长binary carry由tree-count potential下降支付。
-5. Skew heap用heavy/light势能给merge amortized logarithmic，而非每次保证。
-6. Fibonacci heap以lazy consolidation和marked cascading cuts取得cheap decrease-key。
-7. Phi=t+2m同时记录root debt和marked-node debt，degree-size lemma限制deleteMin。
-8. Splay tree用subtree-rank potential支付rotations并提供amortized access bound。
+- amortized analysis 约束的是一串 actual cost，不是一次操作的平均概率。
+- aggregate、accounting、potential 是三种互相校验的证明视角。
+- unrelated puzzle 展示了用间接状态变量替代无限逐段追踪。
+- binomial queues、skew heaps、Fibonacci heaps 把结构债务放在不同状态里。
+- splay trees 用 rank potential 支付访问序列中的旋转尖峰。
 
+## 练习
 
-## 名词解释
+<Exercises>
 
+**问题 1：如何用三种方法解释动态数组扩容的均摊插入？请同时说明 amortized analysis 与 unrelated puzzle 的共同思路。**
 
+<Answer>
+  aggregate method 直接求整个 push sequence 的搬移总量；accounting method
+  给每次普通 push 预收 credit；potential method 令容量或空槽状态携带势能，在
+  resize
+  时释放。它们都先找一个足以描述未来成本的间接状态，而不是逐个追踪所有细节；unrelated
+  puzzle 通过相遇时间做同样的投影。
+</Answer>
+
+**问题 2：binomial queues、skew heaps 和 Fibonacci heaps 的结构债务分别放在哪里？**
+
+<Answer>
+  binomial queues 把 binary carry 体现为 root 数和 link；skew heaps 用
+  right-path 的 heavy/light 变化解释 merge；Fibonacci heaps 把 roots、marked
+  nonroots 和 lazy consolidation
+  放进势能。三者都必须验证状态变化和未来操作的支付关系，不能把单次尖峰删掉。
+</Answer>
+
+**问题 3：请修改 splay trees 的访问实验，记录一次长路径，并解释它为什么不立即否定均摊界。**
+
+<Answer>
+  记录访问前后的 subtree size、每次 zig、zig-zig、zig-zag rotation、Phi(T)
+  变化和后续重复访问成本。一次 access 的 actual cost 可以很高；只有把它放回完整
+  sequence，使用 rank potential 和 access lemma 计算总 amortized
+  cost，才能判断保证是否成立。
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="均摊分析">
+    给一整串操作建立成本上界，允许其中某一次操作很昂贵。
+  </GlossaryItem>
+  <GlossaryItem term="无关谜题">
+    用相遇时间等间接变量简化无限往返轨迹的小问题。
+  </GlossaryItem>
+  <GlossaryItem term="二项队列">
+    用不同秩的树组成森林，插入时像二进制进位一样 link 的优先队列。
+  </GlossaryItem>
+  <GlossaryItem term="斜堆">
+    不保存显式秩、通过合并和交换孩子让未来路径变短的堆。
+  </GlossaryItem>
+  <GlossaryItem term="斐波那契堆">
+    延迟整理，并用 marked 节点和 cascading cut 支持低成本 decrease-key 的堆。
+  </GlossaryItem>
+  <GlossaryItem term="伸展树">
+    访问后旋转节点、用访问序列而非单次高度给出均摊界的搜索树。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Data Structures and Algorithm Analysis in C++, Third Edition, Chapter 11: Amortized Analysis"
+  adaptedUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  mode="independent-rewrite"
+  sourceBasis="official-publisher-table-of-contents"
+/>
