@@ -13743,6 +13743,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DsaAlgorithmDesignSearchLab: module0.DsaAlgorithmDesignSearchLab,
     } as ChapterMdxComponents;
   },
+  "dsa-cpp/04-design-analysis/amortized-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-amortized-analysis-v2");
+    return {
+      DsaAmortizedPotentialLedgerLab: module0.DsaAmortizedPotentialLedgerLab,
+      DsaAmortizedHeapConsolidationLab:
+        module0.DsaAmortizedHeapConsolidationLab,
+      DsaAmortizedSplayAccessLab: module0.DsaAmortizedSplayAccessLab,
+    } as ChapterMdxComponents;
+  },
   "easy-cpp-5e/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/easy-cpp-5e/v2/learning-map");
