@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T19:14:23.182Z
+> 生成时间：2026-08-14T22:24:00.967Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,10 +13,10 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 473 |
-| failed | 1870 |
+| manifest 证据不完整 unit | 475 |
+| failed | 1869 |
 | queued | 218 |
-| passed | 1728 |
+| passed | 1729 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -4620,7 +4620,7 @@
     - 路径：`content/dragon-book-compilers/07-review/dbc-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## dsa-cpp（13 个内容页面 · failed:13 · 🚫 门禁阻断 14 项）
+## dsa-cpp（13 个内容页面 · failed:12 passed:1 · 🚫 门禁阻断 13 项）
 
 - 门禁摘要：目录=未登记，manifest=13；正式概念覆盖率=96.7%；未映射 unit=0；证据不完整 unit=3。
 - 其他门禁阻断：dsa-cpp: publication-policy-not-approved。
@@ -4652,9 +4652,9 @@
 - [ ] ❌ P1 **03-algorithms/sorting** — failed；score 36；门禁阻断: status=failed、score=36<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
     - 路径：`content/dsa-cpp/03-algorithms/sorting.mdx`
     - 正式 unit：`dsaa3-02` explained=1/5、`dsaa3-07` explained=11/11
-- [ ] ❌ P1 **04-design-analysis/algorithm-design-techniques** — failed；score 33；门禁阻断: status=failed、score=33<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **04-design-analysis/algorithm-design-techniques** — passed；score 99
     - 路径：`content/dsa-cpp/04-design-analysis/algorithm-design-techniques.mdx`
-    - 正式 unit：`dsaa3-07` explained=2/11、`dsaa3-10` explained=6/6
+    - 正式 unit：`dsaa3-10` explained=6/6
 - [ ] ❌ P1 **04-design-analysis/amortized-analysis** — failed；score 33；门禁阻断: status=failed、score=33<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
     - 路径：`content/dsa-cpp/04-design-analysis/amortized-analysis.mdx`
     - 正式 unit：`dsaa3-04` explained=2/8、`dsaa3-06` explained=4/9、`dsaa3-11` explained=5/6

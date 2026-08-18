@@ -13403,11 +13403,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.AbstractFactoryFamilyCompatibilityLab,
     } as ChapterMdxComponents;
   },
-  "design-patterns/01-creational/prototype": async () => {
+  "design-patterns/01-creational/builder": async () => {
     const module0 =
-      await import("@/components/mdx/design-patterns/prototype-clone-identity-lab");
+      await import("@/components/mdx/design-patterns/builder-construction-contract-lab");
     return {
-      PrototypeCloneIdentityLab: module0.PrototypeCloneIdentityLab,
+      BuilderConstructionContractLab: module0.BuilderConstructionContractLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/01-creational/factory-method": async () => {
@@ -13418,20 +13418,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.FactoryMethodCreationBoundaryLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/01-creational/prototype": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/prototype-clone-identity-lab");
+    return {
+      PrototypeCloneIdentityLab: module0.PrototypeCloneIdentityLab,
+    } as ChapterMdxComponents;
+  },
   "design-patterns/01-creational/singleton": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/singleton-ownership-boundary-lab");
     return {
-      SingletonOwnershipBoundaryLab:
-        module0.SingletonOwnershipBoundaryLab,
-    } as ChapterMdxComponents;
-  },
-  "design-patterns/01-creational/builder": async () => {
-    const module0 =
-      await import("@/components/mdx/design-patterns/builder-construction-contract-lab");
-    return {
-      BuilderConstructionContractLab:
-        module0.BuilderConstructionContractLab,
+      SingletonOwnershipBoundaryLab: module0.SingletonOwnershipBoundaryLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/02-structural/adapter": async () => {
@@ -13498,13 +13496,6 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DecoratorLayerStackLab: module0.DecoratorLayerStackLab,
     } as ChapterMdxComponents;
   },
-  "design-patterns/03-behavioral/mediator": async () => {
-    const module0 =
-      await import("@/components/mdx/design-patterns/mediator-communication-hub-lab");
-    return {
-      MediatorCommunicationHubLab: module0.MediatorCommunicationHubLab,
-    } as ChapterMdxComponents;
-  },
   "design-patterns/03-behavioral/interpreter": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/interpreter-rule-tree-lab");
@@ -13517,6 +13508,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/design-patterns/iterator-cursor-traversal-lab");
     return {
       IteratorCursorTraversalLab: module0.IteratorCursorTraversalLab,
+    } as ChapterMdxComponents;
+  },
+  "design-patterns/03-behavioral/mediator": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/mediator-communication-hub-lab");
+    return {
+      MediatorCommunicationHubLab: module0.MediatorCommunicationHubLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/memento": async () => {
@@ -13734,6 +13732,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/dsa-cpp/diagrams/lists-stacks-queues");
     return {
       DsaAdtBoundaryDiagram: module0.DsaAdtBoundaryDiagram,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/04-design-analysis/algorithm-design-techniques": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-algorithm-design-techniques-v2");
+    return {
+      DsaAlgorithmDesignDecisionLab: module0.DsaAlgorithmDesignDecisionLab,
+      DsaAlgorithmDesignRecurrenceLab: module0.DsaAlgorithmDesignRecurrenceLab,
+      DsaAlgorithmDesignSearchLab: module0.DsaAlgorithmDesignSearchLab,
     } as ChapterMdxComponents;
   },
   "easy-cpp-5e/00-intro/learning-map": async () => {
