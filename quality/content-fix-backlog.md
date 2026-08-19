@@ -2238,16 +2238,16 @@
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | linux-kernel-essence/00-guide/lke-official-learning-map.mdx | §8无要点 | ⬜ 待修复 | — |
-| 2 | linux-kernel-essence/01-foundations/lke-01-kernel-intro.mdx | §8无要点 | ⬜ 待修复 | — |
-| 3 | linux-kernel-essence/02-resources/lke-02-resource-management.mdx | §8无要点 | ⬜ 待修复 | — |
-| 4 | linux-kernel-essence/03-storage-network/lke-03-filesystems.mdx | §8无要点 | ⬜ 待修复 | — |
-| 5 | linux-kernel-essence/03-storage-network/lke-04-networking.mdx | §8无要点 | ⬜ 待修复 | — |
-| 6 | linux-kernel-essence/04-virtual-power/lke-05-virtualization.mdx | §8无要点 | ⬜ 待修复 | — |
-| 7 | linux-kernel-essence/04-virtual-power/lke-06-power-saving.mdx | §8无要点 | ⬜ 待修复 | — |
-| 8 | linux-kernel-essence/05-diagnostics/lke-07-debugging.mdx | §8无要点 | ⬜ 待修复 | — |
-| 9 | linux-kernel-essence/05-diagnostics/lke-08-profiling-tracing.mdx | §8无要点 | ⬜ 待修复 | — |
-| 10 | linux-kernel-essence/06-review/lke-official-final-review.mdx | §8无要点 | ⬜ 待修复 | — |
+| 1 | linux-kernel-essence/00-guide/lke-official-learning-map.mdx | §8小结已补、Attribution已规范、视觉巡检PASS | ✅ 已完成 | 2026-08-19 |
+| 2 | linux-kernel-essence/01-foundations/lke-01-kernel-intro.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 3 | linux-kernel-essence/02-resources/lke-02-resource-management.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 4 | linux-kernel-essence/03-storage-network/lke-03-filesystems.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 5 | linux-kernel-essence/03-storage-network/lke-04-networking.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 6 | linux-kernel-essence/04-virtual-power/lke-05-virtualization.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 7 | linux-kernel-essence/04-virtual-power/lke-06-power-saving.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 8 | linux-kernel-essence/05-diagnostics/lke-07-debugging.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 9 | linux-kernel-essence/05-diagnostics/lke-08-profiling-tracing.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
+| 10 | linux-kernel-essence/06-review/lke-official-final-review.mdx | §8无要点 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
