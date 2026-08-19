@@ -1413,21 +1413,21 @@
 
 ### 7.1 android-component-arch（11 章 · 待修 11 章 · 11 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8 小结格式修复完成（2026-08-19，11 章小结改为 ≤5 bullet 呼应学习目标）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | android-component-arch/00-official-learning-map/aca18-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | android-component-arch/01-component-foundations/aca18-01-component-foundations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | android-component-arch/02-component-programming/aca18-02-component-programming.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | android-component-arch/03-component-optimization/aca18-03-component-optimization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | android-component-arch/04-component-compilation/aca18-04-component-compilation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | android-component-arch/05-component-distribution/aca18-05-component-distribution.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | android-component-arch/06-component-circulation/aca18-06-component-circulation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | android-component-arch/07-architecture-templates/aca18-07-architecture-templates.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | android-component-arch/08-architecture-evolution/aca18-08-architecture-evolution.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | android-component-arch/09-appendix-a/aca18-appendix-a-thinking-architecture.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | android-component-arch/10-official-final-review/aca18-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | android-component-arch/00-official-learning-map/aca18-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | android-component-arch/01-component-foundations/aca18-01-component-foundations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | android-component-arch/02-component-programming/aca18-02-component-programming.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | android-component-arch/03-component-optimization/aca18-03-component-optimization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | android-component-arch/04-component-compilation/aca18-04-component-compilation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | android-component-arch/05-component-distribution/aca18-05-component-distribution.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | android-component-arch/06-component-circulation/aca18-06-component-circulation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | android-component-arch/07-architecture-templates/aca18-07-architecture-templates.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | android-component-arch/08-architecture-evolution/aca18-08-architecture-evolution.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | android-component-arch/09-appendix-a/aca18-appendix-a-thinking-architecture.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 11 | android-component-arch/10-official-final-review/aca18-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
