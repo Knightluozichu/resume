@@ -1502,243 +1502,243 @@
 
 ### 7.5 first-line-android（18 章 · 待修 18 章 · 18 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8小结修复+视觉刷新（2026-08-19，18章，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | first-line-android/00-official-learning-map/fla3-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | first-line-android/01-first-code/fla3-01-first-code.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | first-line-android/02-kotlin/fla3-02-kotlin.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | first-line-android/03-activity/fla3-03-activity.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | first-line-android/04-ui/fla3-04-ui.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | first-line-android/05-fragment/fla3-05-fragment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | first-line-android/06-broadcast/fla3-06-broadcast.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | first-line-android/07-persistence/fla3-07-persistence.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | first-line-android/08-content-provider/fla3-08-content-provider.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | first-line-android/09-multimedia/fla3-09-multimedia.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | first-line-android/10-service/fla3-10-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | first-line-android/11-network/fla3-11-network.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | first-line-android/12-material/fla3-12-material.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | first-line-android/13-jetpack/fla3-13-jetpack.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | first-line-android/14-advanced/fla3-14-advanced.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | first-line-android/15-weather-app/fla3-15-weather-app.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | first-line-android/16-permissionx/fla3-16-permissionx.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | first-line-android/17-official-final-review/fla3-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | first-line-android/00-official-learning-map/fla3-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | first-line-android/01-first-code/fla3-01-first-code.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | first-line-android/02-kotlin/fla3-02-kotlin.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | first-line-android/03-activity/fla3-03-activity.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | first-line-android/04-ui/fla3-04-ui.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | first-line-android/05-fragment/fla3-05-fragment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | first-line-android/06-broadcast/fla3-06-broadcast.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | first-line-android/07-persistence/fla3-07-persistence.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | first-line-android/08-content-provider/fla3-08-content-provider.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | first-line-android/09-multimedia/fla3-09-multimedia.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 11 | first-line-android/10-service/fla3-10-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 12 | first-line-android/11-network/fla3-11-network.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 13 | first-line-android/12-material/fla3-12-material.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 14 | first-line-android/13-jetpack/fla3-13-jetpack.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 15 | first-line-android/14-advanced/fla3-14-advanced.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 16 | first-line-android/15-weather-app/fla3-15-weather-app.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 17 | first-line-android/16-permissionx/fla3-16-permissionx.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 18 | first-line-android/17-official-final-review/fla3-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
 ### 7.6 crazy-android（21 章 · 待修 21 章 · 21 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8小结修复+视觉刷新（2026-08-19，21章，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | crazy-android/00-official-learning-map/cra4-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | crazy-android/01-environment/cra4-01-environment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | crazy-android/02-ui-programming/cra4-02-ui-programming.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | crazy-android/03-event-mechanism/cra4-03-event-mechanism.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | crazy-android/04-activity-fragment/cra4-04-activity-fragment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | crazy-android/05-intent-filter/cra4-05-intent-filter.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | crazy-android/06-application-resources/cra4-06-application-resources.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | crazy-android/07-graphics-images/cra4-07-graphics-images.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | crazy-android/08-storage-io/cra4-08-storage-io.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | crazy-android/09-content-provider/cra4-09-content-provider.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | crazy-android/10-service-broadcast/cra4-10-service-broadcast.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | crazy-android/11-multimedia/cra4-11-multimedia.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | crazy-android/12-opengl-3d/cra4-12-opengl-3d.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | crazy-android/13-network/cra4-13-network.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | crazy-android/14-system-desktop/cra4-14-system-desktop.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | crazy-android/15-sensors/cra4-15-sensors.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | crazy-android/16-gps/cra4-16-gps.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | crazy-android/17-amap/cra4-17-amap.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | crazy-android/18-metal-slug/cra4-18-metal-slug.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | crazy-android/19-auction-system/cra4-19-auction-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | crazy-android/20-official-final-review/cra4-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | crazy-android/00-official-learning-map/cra4-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | crazy-android/01-environment/cra4-01-environment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | crazy-android/02-ui-programming/cra4-02-ui-programming.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | crazy-android/03-event-mechanism/cra4-03-event-mechanism.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | crazy-android/04-activity-fragment/cra4-04-activity-fragment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | crazy-android/05-intent-filter/cra4-05-intent-filter.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | crazy-android/06-application-resources/cra4-06-application-resources.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | crazy-android/07-graphics-images/cra4-07-graphics-images.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | crazy-android/08-storage-io/cra4-08-storage-io.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | crazy-android/09-content-provider/cra4-09-content-provider.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 11 | crazy-android/10-service-broadcast/cra4-10-service-broadcast.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 12 | crazy-android/11-multimedia/cra4-11-multimedia.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 13 | crazy-android/12-opengl-3d/cra4-12-opengl-3d.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 14 | crazy-android/13-network/cra4-13-network.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 15 | crazy-android/14-system-desktop/cra4-14-system-desktop.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 16 | crazy-android/15-sensors/cra4-15-sensors.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 17 | crazy-android/16-gps/cra4-16-gps.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 18 | crazy-android/17-amap/cra4-17-amap.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 19 | crazy-android/18-metal-slug/cra4-18-metal-slug.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 20 | crazy-android/19-auction-system/cra4-19-auction-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 21 | crazy-android/20-official-final-review/cra4-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
 ### 7.7 android-advanced-decryption（19 章 · 待修 19 章 · 22 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8小结修复+视觉刷新（2026-08-19，19章，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | android-advanced-decryption/00-official-learning-map/aad8-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | android-advanced-decryption/01-chapter-01/aad8-01-android-system-architecture.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | android-advanced-decryption/02-chapter-02/aad8-02-android-system-startup.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | android-advanced-decryption/03-chapter-03/aad8-03-app-process-startup.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | android-advanced-decryption/04-chapter-04/aad8-04-four-components-workflow.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | android-advanced-decryption/05-chapter-05/aad8-05-context.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | android-advanced-decryption/06-chapter-06/aad8-06-activity-manager-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | android-advanced-decryption/07-chapter-07/aad8-07-window-manager.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | android-advanced-decryption/08-chapter-08/aad8-08-window-manager-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | android-advanced-decryption/09-chapter-09/aad8-09-jni.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 11 | android-advanced-decryption/10-chapter-10/aad8-10-java-virtual-machine.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | android-advanced-decryption/11-chapter-11/aad8-11-dalvik-art.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | android-advanced-decryption/12-chapter-12/aad8-12-class-loader.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | android-advanced-decryption/13-chapter-13/aad8-13-hotfix.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | android-advanced-decryption/14-chapter-14/aad8-14-hook.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | android-advanced-decryption/15-chapter-15/aad8-15-pluginization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | android-advanced-decryption/16-chapter-16/aad8-16-rendering-optimization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | android-advanced-decryption/17-chapter-17/aad8-17-memory-optimization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | android-advanced-decryption/18-official-final-review/aad8-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | android-advanced-decryption/00-official-learning-map/aad8-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | android-advanced-decryption/01-chapter-01/aad8-01-android-system-architecture.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | android-advanced-decryption/02-chapter-02/aad8-02-android-system-startup.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | android-advanced-decryption/03-chapter-03/aad8-03-app-process-startup.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | android-advanced-decryption/04-chapter-04/aad8-04-four-components-workflow.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | android-advanced-decryption/05-chapter-05/aad8-05-context.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | android-advanced-decryption/06-chapter-06/aad8-06-activity-manager-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | android-advanced-decryption/07-chapter-07/aad8-07-window-manager.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | android-advanced-decryption/08-chapter-08/aad8-08-window-manager-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | android-advanced-decryption/09-chapter-09/aad8-09-jni.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 11 | android-advanced-decryption/10-chapter-10/aad8-10-java-virtual-machine.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 12 | android-advanced-decryption/11-chapter-11/aad8-11-dalvik-art.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 13 | android-advanced-decryption/12-chapter-12/aad8-12-class-loader.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 14 | android-advanced-decryption/13-chapter-13/aad8-13-hotfix.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 15 | android-advanced-decryption/14-chapter-14/aad8-14-hook.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 16 | android-advanced-decryption/15-chapter-15/aad8-15-pluginization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 17 | android-advanced-decryption/16-chapter-16/aad8-16-rendering-optimization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 18 | android-advanced-decryption/17-chapter-17/aad8-17-memory-optimization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 19 | android-advanced-decryption/18-official-final-review/aad8-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
 ### 7.8 deep-android-kernel（24 章 · 待修 24 章 · 24 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8小结修复+视觉刷新（2026-08-19，24章，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-android-kernel/00-official-learning-map/dak-14-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-android-kernel/01-system-introduction/dak-14-01-system-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-android-kernel/02-source-build/dak-14-02-source-build.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-android-kernel/03-build-system/dak-14-03-build-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-android-kernel/04-os-foundations/dak-14-04-os-foundations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-android-kernel/05-process-thread/dak-14-05-process-thread.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-android-kernel/06-binder/dak-14-06-binder.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-android-kernel/07-boot/dak-14-07-boot.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-android-kernel/08-ams/dak-14-08-ams.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-android-kernel/09-surfaceflinger/dak-14-09-surfaceflinger.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-android-kernel/10-wms/dak-14-10-wms.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | deep-android-kernel/11-view/dak-14-11-view.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | deep-android-kernel/12-input/dak-14-12-input.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | deep-android-kernel/13-audio/dak-14-13-audio.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | deep-android-kernel/14-intent/dak-14-14-intent.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | deep-android-kernel/15-resources/dak-14-15-resources.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | deep-android-kernel/16-encoding/dak-14-16-encoding.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | deep-android-kernel/17-opengl/dak-14-17-opengl.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | deep-android-kernel/18-systemui/dak-14-18-systemui.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | deep-android-kernel/19-widget/dak-14-19-widget.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | deep-android-kernel/20-apk-build/dak-14-20-apk-build.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | deep-android-kernel/21-git/dak-14-21-git.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 23 | deep-android-kernel/22-debug-tools/dak-14-22-debug-tools.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 24 | deep-android-kernel/23-official-final-review/dak-14-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-android-kernel/00-official-learning-map/dak-14-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | deep-android-kernel/01-system-introduction/dak-14-01-system-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | deep-android-kernel/02-source-build/dak-14-02-source-build.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | deep-android-kernel/03-build-system/dak-14-03-build-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | deep-android-kernel/04-os-foundations/dak-14-04-os-foundations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | deep-android-kernel/05-process-thread/dak-14-05-process-thread.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | deep-android-kernel/06-binder/dak-14-06-binder.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | deep-android-kernel/07-boot/dak-14-07-boot.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | deep-android-kernel/08-ams/dak-14-08-ams.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | deep-android-kernel/09-surfaceflinger/dak-14-09-surfaceflinger.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 11 | deep-android-kernel/10-wms/dak-14-10-wms.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 12 | deep-android-kernel/11-view/dak-14-11-view.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 13 | deep-android-kernel/12-input/dak-14-12-input.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 14 | deep-android-kernel/13-audio/dak-14-13-audio.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 15 | deep-android-kernel/14-intent/dak-14-14-intent.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 16 | deep-android-kernel/15-resources/dak-14-15-resources.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 17 | deep-android-kernel/16-encoding/dak-14-16-encoding.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 18 | deep-android-kernel/17-opengl/dak-14-17-opengl.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 19 | deep-android-kernel/18-systemui/dak-14-18-systemui.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 20 | deep-android-kernel/19-widget/dak-14-19-widget.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 21 | deep-android-kernel/20-apk-build/dak-14-20-apk-build.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 22 | deep-android-kernel/21-git/dak-14-21-git.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 23 | deep-android-kernel/22-debug-tools/dak-14-22-debug-tools.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 24 | deep-android-kernel/23-official-final-review/dak-14-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
 ### 7.9 deep-android-volumes（28 章 · 待修 28 章 · 28 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8小结修复+视觉刷新（2026-08-19，28章，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-android-volumes/00-official-learning-map/dav-series-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-android-volumes/01-v1-01/dav-v1-01-preparation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-android-volumes/02-v1-02/dav-v1-02-jni.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-android-volumes/03-v1-03/dav-v1-03-init.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-android-volumes/04-v1-04/dav-v1-04-zygote.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-android-volumes/05-v1-05/dav-v1-05-common-classes.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-android-volumes/06-v1-06/dav-v1-06-binder-native.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-android-volumes/07-v1-07/dav-v1-07-audio-native.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-android-volumes/08-v1-08/dav-v1-08-surface.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-android-volumes/09-v1-09/dav-v1-09-vold-rild.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-android-volumes/10-v1-10/dav-v1-10-media-scanner.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | deep-android-volumes/11-v2-01/dav-v2-01-source-environment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | deep-android-volumes/12-v2-02/dav-v2-02-java-binder-messagequeue.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | deep-android-volumes/13-v2-03/dav-v2-03-system-server.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | deep-android-volumes/14-v2-04/dav-v2-04-package-manager-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | deep-android-volumes/15-v2-05/dav-v2-05-power-manager-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | deep-android-volumes/16-v2-06/dav-v2-06-activity-manager-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | deep-android-volumes/17-v2-07/dav-v2-07-content-provider.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | deep-android-volumes/18-v2-08/dav-v2-08-content-account-sync.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | deep-android-volumes/19-v3-01/dav-v3-01-development-environment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | deep-android-volumes/20-v3-02/dav-v3-02-java-binder-messagequeue.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | deep-android-volumes/21-v3-03/dav-v3-03-audio-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 23 | deep-android-volumes/22-v3-04/dav-v3-04-window-manager-service.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 24 | deep-android-volumes/23-v3-05/dav-v3-05-input-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 25 | deep-android-volumes/24-v3-06/dav-v3-06-view-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 26 | deep-android-volumes/25-v3-07/dav-v3-07-system-ui.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 27 | deep-android-volumes/26-v3-08/dav-v3-08-wallpaper.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 28 | deep-android-volumes/27-official-final-review/dav-series-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-android-volumes/00-official-learning-map/dav-series-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | deep-android-volumes/01-v1-01/dav-v1-01-preparation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | deep-android-volumes/02-v1-02/dav-v1-02-jni.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | deep-android-volumes/03-v1-03/dav-v1-03-init.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | deep-android-volumes/04-v1-04/dav-v1-04-zygote.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | deep-android-volumes/05-v1-05/dav-v1-05-common-classes.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | deep-android-volumes/06-v1-06/dav-v1-06-binder-native.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | deep-android-volumes/07-v1-07/dav-v1-07-audio-native.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | deep-android-volumes/08-v1-08/dav-v1-08-surface.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | deep-android-volumes/09-v1-09/dav-v1-09-vold-rild.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 11 | deep-android-volumes/10-v1-10/dav-v1-10-media-scanner.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 12 | deep-android-volumes/11-v2-01/dav-v2-01-source-environment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 13 | deep-android-volumes/12-v2-02/dav-v2-02-java-binder-messagequeue.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 14 | deep-android-volumes/13-v2-03/dav-v2-03-system-server.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 15 | deep-android-volumes/14-v2-04/dav-v2-04-package-manager-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 16 | deep-android-volumes/15-v2-05/dav-v2-05-power-manager-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 17 | deep-android-volumes/16-v2-06/dav-v2-06-activity-manager-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 18 | deep-android-volumes/17-v2-07/dav-v2-07-content-provider.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 19 | deep-android-volumes/18-v2-08/dav-v2-08-content-account-sync.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 20 | deep-android-volumes/19-v3-01/dav-v3-01-development-environment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 21 | deep-android-volumes/20-v3-02/dav-v3-02-java-binder-messagequeue.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 22 | deep-android-volumes/21-v3-03/dav-v3-03-audio-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 23 | deep-android-volumes/22-v3-04/dav-v3-04-window-manager-service.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 24 | deep-android-volumes/23-v3-05/dav-v3-05-input-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 25 | deep-android-volumes/24-v3-06/dav-v3-06-view-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 26 | deep-android-volumes/25-v3-07/dav-v3-07-system-ui.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 27 | deep-android-volumes/26-v3-08/dav-v3-08-wallpaper.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 28 | deep-android-volumes/27-official-final-review/dav-series-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
 ### 7.10 android-advanced-light（13 章 · 待修 13 章 · 65 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8小结修复+视觉刷新（2026-08-19，13章，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | android-advanced-light/00-official-learning-map/aal-17-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 2 | android-advanced-light/01-android-features/aal-17-01-android-features.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 3 | android-advanced-light/02-material-design/aal-17-02-material-design.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 4 | android-advanced-light/03-view-custom-view/aal-17-03-view-custom-view.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 5 | android-advanced-light/04-multithreading/aal-17-04-multithreading.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 6 | android-advanced-light/05-network-frameworks/aal-17-05-network-frameworks.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 7 | android-advanced-light/06-design-patterns/aal-17-06-design-patterns.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 8 | android-advanced-light/07-event-bus/aal-17-07-event-bus.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 9 | android-advanced-light/08-rxjava/aal-17-08-rxjava.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 10 | android-advanced-light/09-annotations-di/aal-17-09-annotations-di.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 11 | android-advanced-light/10-app-architecture/aal-17-10-app-architecture.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 12 | android-advanced-light/11-system-mediaplayer/aal-17-11-system-mediaplayer.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 13 | android-advanced-light/12-official-final-review/aal-17-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
+| 1 | android-advanced-light/00-official-learning-map/aal-17-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 2 | android-advanced-light/01-android-features/aal-17-01-android-features.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 3 | android-advanced-light/02-material-design/aal-17-02-material-design.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 4 | android-advanced-light/03-view-custom-view/aal-17-03-view-custom-view.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 5 | android-advanced-light/04-multithreading/aal-17-04-multithreading.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 6 | android-advanced-light/05-network-frameworks/aal-17-05-network-frameworks.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 7 | android-advanced-light/06-design-patterns/aal-17-06-design-patterns.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 8 | android-advanced-light/07-event-bus/aal-17-07-event-bus.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 9 | android-advanced-light/08-rxjava/aal-17-08-rxjava.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 10 | android-advanced-light/09-annotations-di/aal-17-09-annotations-di.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 11 | android-advanced-light/10-app-architecture/aal-17-10-app-architecture.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 12 | android-advanced-light/11-system-mediaplayer/aal-17-11-system-mediaplayer.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 13 | android-advanced-light/12-official-final-review/aal-17-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
 ### 7.11 jetpack-compose（13 章 · 待修 13 章 · 65 项）
 
-**书籍状态**：待修复
+**书籍状态**：🟡 修复进行中
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | jetpack-compose/00-official-learning-map/jpc-22-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 2 | jetpack-compose/01-new-android-ui/jpc-22-01-new-android-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 3 | jetpack-compose/02-common-ui-components/jpc-22-02-common-ui-components.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 4 | jetpack-compose/03-custom-ui/jpc-22-03-custom-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 5 | jetpack-compose/04-state-recomposition/jpc-22-04-state-recomposition.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 6 | jetpack-compose/05-rendering-pipeline/jpc-22-05-rendering-pipeline.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 7 | jetpack-compose/06-animation/jpc-22-06-animation.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 8 | jetpack-compose/07-gestures/jpc-22-07-gestures.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 9 | jetpack-compose/08-navigation-hilt/jpc-22-08-navigation-hilt.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 10 | jetpack-compose/09-third-party/jpc-22-09-third-party.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 11 | jetpack-compose/10-tetris/jpc-22-10-tetris.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 12 | jetpack-compose/11-chatty/jpc-22-11-chatty.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 13 | jetpack-compose/12-official-final-review/jpc-22-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
+| 1 | jetpack-compose/00-official-learning-map/jpc-22-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 2 | jetpack-compose/01-new-android-ui/jpc-22-01-new-android-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 3 | jetpack-compose/02-common-ui-components/jpc-22-02-common-ui-components.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 4 | jetpack-compose/03-custom-ui/jpc-22-03-custom-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 5 | jetpack-compose/04-state-recomposition/jpc-22-04-state-recomposition.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 6 | jetpack-compose/05-rendering-pipeline/jpc-22-05-rendering-pipeline.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 7 | jetpack-compose/06-animation/jpc-22-06-animation.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 8 | jetpack-compose/07-gestures/jpc-22-07-gestures.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 9 | jetpack-compose/08-navigation-hilt/jpc-22-08-navigation-hilt.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 10 | jetpack-compose/09-third-party/jpc-22-09-third-party.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 11 | jetpack-compose/10-tetris/jpc-22-10-tetris.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 12 | jetpack-compose/11-chatty/jpc-22-11-chatty.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 13 | jetpack-compose/12-official-final-review/jpc-22-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
 
 **部署记录**：—
 
 ### 7.12 big-nerd-ranch-guide（34 章 · 待修 28 章 · 85 项）
 
-**书籍状态**：待修复
+**书籍状态**：🟡 修复进行中
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | big-nerd-ranch-guide/00-official-learning-map/bnr4-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | big-nerd-ranch-guide/33-official-final-review/bnr4-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | big-nerd-ranch-guide/advanced-ui-animation/afterword.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | big-nerd-ranch-guide/advanced-ui-animation/custom-views-touch.mdx | §6超长块×2 §6缺CodeTabs §8小结>5条 §8练习数不符 | ⬜ 待修复 | — |
-| 5 | big-nerd-ranch-guide/advanced-ui-animation/property-animation.mdx | §6缺CodeTabs §8小结>5条 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 6 | big-nerd-ranch-guide/advanced-ui-animation/webview.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 7 | big-nerd-ranch-guide/background-network/broadcast-intents.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 8 | big-nerd-ranch-guide/background-network/http-background.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 9 | big-nerd-ranch-guide/background-network/looper-handler.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 10 | big-nerd-ranch-guide/background-network/more-intents-tasks.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 11 | big-nerd-ranch-guide/background-network/search.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 12 | big-nerd-ranch-guide/background-network/workmanager.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
+| 1 | big-nerd-ranch-guide/00-official-learning-map/bnr4-official-learning-map.mdx | §8缺小结 | 🟡 进行中 | — |
+| 2 | big-nerd-ranch-guide/33-official-final-review/bnr4-official-final-review.mdx | §8缺小结 | 🟡 进行中 | — |
+| 3 | big-nerd-ranch-guide/advanced-ui-animation/afterword.mdx | §8缺小结 | 🟡 进行中 | — |
+| 4 | big-nerd-ranch-guide/advanced-ui-animation/custom-views-touch.mdx | §6超长块×2 §6缺CodeTabs §8小结>5条 §8练习数不符 | 🟡 进行中 | — |
+| 5 | big-nerd-ranch-guide/advanced-ui-animation/property-animation.mdx | §6缺CodeTabs §8小结>5条 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 6 | big-nerd-ranch-guide/advanced-ui-animation/webview.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 7 | big-nerd-ranch-guide/background-network/broadcast-intents.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 8 | big-nerd-ranch-guide/background-network/http-background.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 9 | big-nerd-ranch-guide/background-network/looper-handler.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 10 | big-nerd-ranch-guide/background-network/more-intents-tasks.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 11 | big-nerd-ranch-guide/background-network/search.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 12 | big-nerd-ranch-guide/background-network/workmanager.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
 | 13 | big-nerd-ranch-guide/basics/activity-lifecycle.mdx | — | ✅ 合规 | — |
-| 14 | big-nerd-ranch-guide/basics/android-mvc.mdx | §6超长块×1 §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
+| 14 | big-nerd-ranch-guide/basics/android-mvc.mdx | §6超长块×1 §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
 | 15 | big-nerd-ranch-guide/basics/debugging.mdx | — | ✅ 合规 | — |
-| 16 | big-nerd-ranch-guide/basics/first-app.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 17 | big-nerd-ranch-guide/basics/sdk-compatibility.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 18 | big-nerd-ranch-guide/basics/second-activity.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 19 | big-nerd-ranch-guide/basics/ui-state-persistence.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
+| 16 | big-nerd-ranch-guide/basics/first-app.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 17 | big-nerd-ranch-guide/basics/sdk-compatibility.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 18 | big-nerd-ranch-guide/basics/second-activity.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 19 | big-nerd-ranch-guide/basics/ui-state-persistence.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
 | 20 | big-nerd-ranch-guide/intent-data/accessibility.mdx | — | ✅ 合规 | — |
-| 21 | big-nerd-ranch-guide/intent-data/audio-unit-testing.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 22 | big-nerd-ranch-guide/intent-data/data-binding-mvvm.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 23 | big-nerd-ranch-guide/intent-data/implicit-intents.mdx | §8练习数不符 | ⬜ 待修复 | — |
-| 24 | big-nerd-ranch-guide/intent-data/localization.mdx | §7误区<3 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
+| 21 | big-nerd-ranch-guide/intent-data/audio-unit-testing.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 22 | big-nerd-ranch-guide/intent-data/data-binding-mvvm.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 23 | big-nerd-ranch-guide/intent-data/implicit-intents.mdx | §8练习数不符 | 🟡 进行中 | — |
+| 24 | big-nerd-ranch-guide/intent-data/localization.mdx | §7误区<3 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
 | 25 | big-nerd-ranch-guide/intent-data/styles-themes.mdx | — | ✅ 合规 | — |
-| 26 | big-nerd-ranch-guide/intent-data/taking-pictures.mdx | §6超长块×1 | ⬜ 待修复 | — |
+| 26 | big-nerd-ranch-guide/intent-data/taking-pictures.mdx | §6超长块×1 | 🟡 进行中 | — |
 | 27 | big-nerd-ranch-guide/intent-data/xml-drawables.mdx | — | ✅ 合规 | — |
-| 28 | big-nerd-ranch-guide/ui-fragment/app-bar.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 29 | big-nerd-ranch-guide/ui-fragment/dialogs.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 30 | big-nerd-ranch-guide/ui-fragment/fragment-navigation.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
+| 28 | big-nerd-ranch-guide/ui-fragment/app-bar.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 29 | big-nerd-ranch-guide/ui-fragment/dialogs.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 30 | big-nerd-ranch-guide/ui-fragment/fragment-navigation.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
 | 31 | big-nerd-ranch-guide/ui-fragment/layouts-widgets.mdx | — | ✅ 合规 | — |
-| 32 | big-nerd-ranch-guide/ui-fragment/recyclerview.mdx | §6缺CodeTabs §8练习数不符 | ⬜ 待修复 | — |
-| 33 | big-nerd-ranch-guide/ui-fragment/room-database.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ⬜ 待修复 | — |
-| 34 | big-nerd-ranch-guide/ui-fragment/ui-fragments.mdx | §6缺CodeTabs §8练习数不符 | ⬜ 待修复 | — |
+| 32 | big-nerd-ranch-guide/ui-fragment/recyclerview.mdx | §6缺CodeTabs §8练习数不符 | 🟡 进行中 | — |
+| 33 | big-nerd-ranch-guide/ui-fragment/room-database.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 34 | big-nerd-ranch-guide/ui-fragment/ui-fragments.mdx | §6缺CodeTabs §8练习数不符 | 🟡 进行中 | — |
 
 **部署记录**：—
 
