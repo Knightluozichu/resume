@@ -1433,21 +1433,21 @@
 
 ### 7.2 android-perf-optimization（11 章 · 待修 11 章 · 11 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ 视觉哈希刷新通过（2026-08-19，11 章小结已合规，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | android-perf-optimization/00-official-learning-map/apo12-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | android-perf-optimization/01-optimizing-java/apo12-01-optimizing-java-code.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | android-perf-optimization/02-ndk-start/apo12-02-getting-started-ndk.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | android-perf-optimization/03-advanced-ndk/apo12-03-advanced-ndk.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | android-perf-optimization/04-memory/apo12-04-using-memory-efficiently.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | android-perf-optimization/05-multithreading/apo12-05-multithreading-synchronization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | android-perf-optimization/06-benchmarking/apo12-06-benchmarking-profiling.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | android-perf-optimization/07-battery/apo12-07-maximizing-battery-life.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | android-perf-optimization/08-graphics/apo12-08-graphics.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | android-perf-optimization/09-renderscript/apo12-09-renderscript.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | android-perf-optimization/10-official-final-review/apo12-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | android-perf-optimization/00-official-learning-map/apo12-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | android-perf-optimization/01-optimizing-java/apo12-01-optimizing-java-code.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | android-perf-optimization/02-ndk-start/apo12-02-getting-started-ndk.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | android-perf-optimization/03-advanced-ndk/apo12-03-advanced-ndk.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | android-perf-optimization/04-memory/apo12-04-using-memory-efficiently.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | android-perf-optimization/05-multithreading/apo12-05-multithreading-synchronization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | android-perf-optimization/06-benchmarking/apo12-06-benchmarking-profiling.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | android-perf-optimization/07-battery/apo12-07-maximizing-battery-life.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | android-perf-optimization/08-graphics/apo12-08-graphics.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | android-perf-optimization/09-renderscript/apo12-09-renderscript.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 11 | android-perf-optimization/10-official-final-review/apo12-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
