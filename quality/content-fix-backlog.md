@@ -1679,66 +1679,66 @@
 
 ### 7.11 jetpack-compose（13 章 · 待修 13 章 · 65 项）
 
-**书籍状态**：⬜ §8小结已修复（2026-08-19），但既有hydration错误阻塞视觉巡检（13/13 fail，非本次引入）
+**书籍状态**：✅ §8小结+hydration修复（2026-08-19，13章 Callout多行化 + Answer空行分隔，视觉13/13 PASS；剩余审计阻塞：template-copy + quality-v2-unreviewed 待内容重写）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | jetpack-compose/00-official-learning-map/jpc-22-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 2 | jetpack-compose/01-new-android-ui/jpc-22-01-new-android-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 3 | jetpack-compose/02-common-ui-components/jpc-22-02-common-ui-components.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 4 | jetpack-compose/03-custom-ui/jpc-22-03-custom-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 5 | jetpack-compose/04-state-recomposition/jpc-22-04-state-recomposition.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 6 | jetpack-compose/05-rendering-pipeline/jpc-22-05-rendering-pipeline.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 7 | jetpack-compose/06-animation/jpc-22-06-animation.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 8 | jetpack-compose/07-gestures/jpc-22-07-gestures.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 9 | jetpack-compose/08-navigation-hilt/jpc-22-08-navigation-hilt.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 10 | jetpack-compose/09-third-party/jpc-22-09-third-party.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 11 | jetpack-compose/10-tetris/jpc-22-10-tetris.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 12 | jetpack-compose/11-chatty/jpc-22-11-chatty.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 13 | jetpack-compose/12-official-final-review/jpc-22-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 1 | jetpack-compose/00-official-learning-map/jpc-22-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 2 | jetpack-compose/01-new-android-ui/jpc-22-01-new-android-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 3 | jetpack-compose/02-common-ui-components/jpc-22-02-common-ui-components.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 4 | jetpack-compose/03-custom-ui/jpc-22-03-custom-ui.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 5 | jetpack-compose/04-state-recomposition/jpc-22-04-state-recomposition.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 6 | jetpack-compose/05-rendering-pipeline/jpc-22-05-rendering-pipeline.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 7 | jetpack-compose/06-animation/jpc-22-06-animation.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 8 | jetpack-compose/07-gestures/jpc-22-07-gestures.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 9 | jetpack-compose/08-navigation-hilt/jpc-22-08-navigation-hilt.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 10 | jetpack-compose/09-third-party/jpc-22-09-third-party.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 11 | jetpack-compose/10-tetris/jpc-22-10-tetris.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 12 | jetpack-compose/11-chatty/jpc-22-11-chatty.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 13 | jetpack-compose/12-official-final-review/jpc-22-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
 ### 7.12 big-nerd-ranch-guide（34 章 · 待修 28 章 · 85 项）
 
-**书籍状态**：⬜ §8小结已修复（2026-08-19），视觉巡检超时待排查
+**书籍状态**：✅ §8小结修复+视觉刷新（2026-08-19，34章，3章验收回顾补bullet，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | big-nerd-ranch-guide/00-official-learning-map/bnr4-official-learning-map.mdx | §8缺小结 | 🟡 进行中 | — |
-| 2 | big-nerd-ranch-guide/33-official-final-review/bnr4-official-final-review.mdx | §8缺小结 | 🟡 进行中 | — |
-| 3 | big-nerd-ranch-guide/advanced-ui-animation/afterword.mdx | §8缺小结 | 🟡 进行中 | — |
-| 4 | big-nerd-ranch-guide/advanced-ui-animation/custom-views-touch.mdx | §6超长块×2 §6缺CodeTabs §8小结>5条 §8练习数不符 | 🟡 进行中 | — |
-| 5 | big-nerd-ranch-guide/advanced-ui-animation/property-animation.mdx | §6缺CodeTabs §8小结>5条 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 6 | big-nerd-ranch-guide/advanced-ui-animation/webview.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 7 | big-nerd-ranch-guide/background-network/broadcast-intents.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 8 | big-nerd-ranch-guide/background-network/http-background.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 9 | big-nerd-ranch-guide/background-network/looper-handler.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 10 | big-nerd-ranch-guide/background-network/more-intents-tasks.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 11 | big-nerd-ranch-guide/background-network/search.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 12 | big-nerd-ranch-guide/background-network/workmanager.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 1 | big-nerd-ranch-guide/00-official-learning-map/bnr4-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | big-nerd-ranch-guide/33-official-final-review/bnr4-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | big-nerd-ranch-guide/advanced-ui-animation/afterword.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | big-nerd-ranch-guide/advanced-ui-animation/custom-views-touch.mdx | §6超长块×2 §6缺CodeTabs §8小结>5条 §8练习数不符 | ✅ 已完成 | 2026-08-19 |
+| 5 | big-nerd-ranch-guide/advanced-ui-animation/property-animation.mdx | §6缺CodeTabs §8小结>5条 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 6 | big-nerd-ranch-guide/advanced-ui-animation/webview.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 7 | big-nerd-ranch-guide/background-network/broadcast-intents.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 8 | big-nerd-ranch-guide/background-network/http-background.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 9 | big-nerd-ranch-guide/background-network/looper-handler.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 10 | big-nerd-ranch-guide/background-network/more-intents-tasks.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 11 | big-nerd-ranch-guide/background-network/search.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 12 | big-nerd-ranch-guide/background-network/workmanager.mdx | §6超长块×1 §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
 | 13 | big-nerd-ranch-guide/basics/activity-lifecycle.mdx | — | ✅ 合规 | — |
-| 14 | big-nerd-ranch-guide/basics/android-mvc.mdx | §6超长块×1 §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 14 | big-nerd-ranch-guide/basics/android-mvc.mdx | §6超长块×1 §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
 | 15 | big-nerd-ranch-guide/basics/debugging.mdx | — | ✅ 合规 | — |
-| 16 | big-nerd-ranch-guide/basics/first-app.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 17 | big-nerd-ranch-guide/basics/sdk-compatibility.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 18 | big-nerd-ranch-guide/basics/second-activity.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 19 | big-nerd-ranch-guide/basics/ui-state-persistence.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 16 | big-nerd-ranch-guide/basics/first-app.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 17 | big-nerd-ranch-guide/basics/sdk-compatibility.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 18 | big-nerd-ranch-guide/basics/second-activity.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 19 | big-nerd-ranch-guide/basics/ui-state-persistence.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
 | 20 | big-nerd-ranch-guide/intent-data/accessibility.mdx | — | ✅ 合规 | — |
-| 21 | big-nerd-ranch-guide/intent-data/audio-unit-testing.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 22 | big-nerd-ranch-guide/intent-data/data-binding-mvvm.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 23 | big-nerd-ranch-guide/intent-data/implicit-intents.mdx | §8练习数不符 | 🟡 进行中 | — |
-| 24 | big-nerd-ranch-guide/intent-data/localization.mdx | §7误区<3 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 21 | big-nerd-ranch-guide/intent-data/audio-unit-testing.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 22 | big-nerd-ranch-guide/intent-data/data-binding-mvvm.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 23 | big-nerd-ranch-guide/intent-data/implicit-intents.mdx | §8练习数不符 | ✅ 已完成 | 2026-08-19 |
+| 24 | big-nerd-ranch-guide/intent-data/localization.mdx | §7误区<3 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
 | 25 | big-nerd-ranch-guide/intent-data/styles-themes.mdx | — | ✅ 合规 | — |
-| 26 | big-nerd-ranch-guide/intent-data/taking-pictures.mdx | §6超长块×1 | 🟡 进行中 | — |
+| 26 | big-nerd-ranch-guide/intent-data/taking-pictures.mdx | §6超长块×1 | ✅ 已完成 | 2026-08-19 |
 | 27 | big-nerd-ranch-guide/intent-data/xml-drawables.mdx | — | ✅ 合规 | — |
-| 28 | big-nerd-ranch-guide/ui-fragment/app-bar.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 29 | big-nerd-ranch-guide/ui-fragment/dialogs.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 30 | big-nerd-ranch-guide/ui-fragment/fragment-navigation.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
+| 28 | big-nerd-ranch-guide/ui-fragment/app-bar.mdx | §6缺CodeTabs §7缺误区 §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 29 | big-nerd-ranch-guide/ui-fragment/dialogs.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 30 | big-nerd-ranch-guide/ui-fragment/fragment-navigation.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
 | 31 | big-nerd-ranch-guide/ui-fragment/layouts-widgets.mdx | — | ✅ 合规 | — |
-| 32 | big-nerd-ranch-guide/ui-fragment/recyclerview.mdx | §6缺CodeTabs §8练习数不符 | 🟡 进行中 | — |
-| 33 | big-nerd-ranch-guide/ui-fragment/room-database.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | 🟡 进行中 | — |
-| 34 | big-nerd-ranch-guide/ui-fragment/ui-fragments.mdx | §6缺CodeTabs §8练习数不符 | 🟡 进行中 | — |
+| 32 | big-nerd-ranch-guide/ui-fragment/recyclerview.mdx | §6缺CodeTabs §8练习数不符 | ✅ 已完成 | 2026-08-19 |
+| 33 | big-nerd-ranch-guide/ui-fragment/room-database.mdx | §6缺CodeTabs §8练习数不符 §8缺独立题 | ✅ 已完成 | 2026-08-19 |
+| 34 | big-nerd-ranch-guide/ui-fragment/ui-fragments.mdx | §6缺CodeTabs §8练习数不符 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
