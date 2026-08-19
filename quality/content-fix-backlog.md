@@ -1476,27 +1476,27 @@
 
 ### 7.4 android-art-exploration（17 章 · 待修 17 章 · 17 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8小结格式修复（2026-08-19，17章段落→bullet，audit=0）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | android-art-exploration/00-official-learning-map/adae15-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | android-art-exploration/01-activity/adae15-01-activity-lifecycle-launch-mode.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | android-art-exploration/02-ipc/adae15-02-ipc.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | android-art-exploration/03-view-system/adae15-03-view-event-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | android-art-exploration/03-view-system/adae15-04-view-working-principles.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | android-art-exploration/04-cross-process-ui/adae15-05-remoteviews.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | android-art-exploration/04-cross-process-ui/adae15-06-drawable.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | android-art-exploration/04-cross-process-ui/adae15-07-animation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | android-art-exploration/05-framework-internals/adae15-08-window-windowmanager.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | android-art-exploration/05-framework-internals/adae15-09-four-components.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | android-art-exploration/05-framework-internals/adae15-10-message-mechanism.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | android-art-exploration/06-resources-performance/adae15-11-threads-pools.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | android-art-exploration/06-resources-performance/adae15-12-bitmap-cache.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | android-art-exploration/06-resources-performance/adae15-13-integrated-techniques.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | android-art-exploration/07-native-boundary/adae15-14-jni-ndk.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | android-art-exploration/08-performance/adae15-15-performance-optimization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | android-art-exploration/16-official-final-review/adae15-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | android-art-exploration/00-official-learning-map/adae15-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 2 | android-art-exploration/01-activity/adae15-01-activity-lifecycle-launch-mode.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 3 | android-art-exploration/02-ipc/adae15-02-ipc.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 4 | android-art-exploration/03-view-system/adae15-03-view-event-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 5 | android-art-exploration/03-view-system/adae15-04-view-working-principles.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 6 | android-art-exploration/04-cross-process-ui/adae15-05-remoteviews.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 7 | android-art-exploration/04-cross-process-ui/adae15-06-drawable.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 8 | android-art-exploration/04-cross-process-ui/adae15-07-animation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 9 | android-art-exploration/05-framework-internals/adae15-08-window-windowmanager.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 10 | android-art-exploration/05-framework-internals/adae15-09-four-components.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 11 | android-art-exploration/05-framework-internals/adae15-10-message-mechanism.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 12 | android-art-exploration/06-resources-performance/adae15-11-threads-pools.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 13 | android-art-exploration/06-resources-performance/adae15-12-bitmap-cache.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 14 | android-art-exploration/06-resources-performance/adae15-13-integrated-techniques.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 15 | android-art-exploration/07-native-boundary/adae15-14-jni-ndk.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 16 | android-art-exploration/08-performance/adae15-15-performance-optimization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
+| 17 | android-art-exploration/16-official-final-review/adae15-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-19 |
 
 **部署记录**：—
 
