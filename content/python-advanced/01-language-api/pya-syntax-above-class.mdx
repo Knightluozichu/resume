@@ -1,26 +1,46 @@
 ---
 title: "第3章 类以上层级的语法最佳实践"
 type: C
-section: "Python高级编程 · 语言与API"
+section: "Python高级编程"
 order: 3
-description: "按原书第3章 Syntax Best Practices—Above the Class Level重建：内置类型子类化、super与MRO、描述符与property、slots与对象布局、元编程。"
+description: "第3章 类以上层级的语法最佳实践"
 demo: true
 math: false
 sourceUrl: "https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pya-03"
+draft: true
 ---
+import { PyaInteractionLab } from "@/components/mdx/python-advanced/v2/pya-syntax-above-class";
 
+<Objectives>
 
-## 先做预测
+- 能解释 内置类型子类化、super 与 MRO、描述符与 property、slots 与对象布局、元编程 各自解决什么问题、在类创建链里处于什么位置
+- 能独立修改 `__init_subclass__` 钩子与数据描述符代码，并说明 super 链条为何要保持菱形只执行一次
+- 能回答：为什么 `property` 能被实例直接赋值绕过，而数据描述符不能？
 
-先预测：一个示例在作者机器上运行成功，是否足以证明它可维护？不能。还要明确解释器与依赖、输入边界、失败路径、可观察结果和重建步骤。给出本章的第一个契约，把它放进可重复流程。
+</Objectives>
 
+## 为什么要在"类以上"动脑筋
+
+写 Python 时常有人把"能跑通"当成"写对了"。这就像工厂流水线只盯最后一道工序的成品，却没人管前面几台机器怎么衔接——换条产线、加个新零件，原来"刚好能跑"的拼接就出问题。
+
+本章关心的是比单个类更高一层的规矩：怎么继承才不踩坑、几个父类的方法该按什么顺序找、属性的读写要不要交给专人管、对象能不能预先定好占多少内存、造类的时候能不能自动登记。这些是流水线的"工序衔接"，而不是某台机器内部的事。
+
+没有这些规矩，类一多就会出现"改父类坏了子类""同名方法不知道用哪个""校验被人绕过"这类怪事。读完本章，你应该能看出这些坑从哪来、怎么提前躲开。
 
 ## 原书骨架与现代迁移
 
-官方章节围绕内置类型子类化、super与MRO、描述符与property、slots与对象布局、元编程展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释“为什么”的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
+官方章节围绕内置类型子类化、super与MRO、描述符与property、slots与对象布局、元编程展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释"为什么"的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
 
 承接前两项，把局部语法或工具放回应用数据流。阅读时沿输入、协议、状态、输出和证据追踪，避免只背API名称。
+
+把<Term def="子类被创建时自动触发的钩子，常用来替代元类做注册或校验">__init_subclass__</Term>这类类创建钩子用代码固化下来，下面两种视角对比同一段 `__init_subclass__` 逻辑：
+
+<CodeTabs>
+  <Tab label="Python · __init_subclass__ 钩子">
 
 ```python
 class Named:
@@ -32,12 +52,33 @@ class Job(Named, label="job"):
     pass
 ```
 
+  </Tab>
+  <Tab label="概念 · 类创建钩子拆解">
+
+```text
+Named       基类 —— 定义钩子，子类创建时自动触发
+label       关键字必传 —— 写在子类声明里，拼错即报错
+super()     继续链条 —— 让其他基类的钩子也执行
+cls.label   注入属性 —— 每个子类获得专属标签，无需写元类
+```
+
+  </Tab>
+</CodeTabs>
+
+下面用交互台把本章五个核心概念——内置类型子类化、super 与 MRO、描述符与 property、slots 与对象布局、元编程——逐个摆出来；打开"注入常见故障"还能看每个环节怎么失败。
+
+<PyaInteractionLab chapter="syntax-above-class" />
+
 ## 机制一：责任与数据流
 
-直接继承list或dict时部分C级操作可能绕过重写方法；先确认需要的是名义子类型、协议实现还是组合包装，避免只为复用存储而继承。 super沿方法解析顺序继续协作调用，不等同于固定父类；多重继承中的每个实现要使用兼容签名并继续链条，才能保持菱形结构只执行一次。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
+直接<Term def="把 list、dict 等 Python 自带类型当作父类来继承">内置类型子类化</Term>时部分C级操作可能绕过重写方法；先确认需要的是名义子类型、协议实现还是组合包装，避免只为复用存储而继承。 super沿方法解析顺序继续协作调用，不等同于固定父类；多重继承中的每个实现要使用兼容签名并继续链条，才能保持菱形结构只执行一次。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
 
 提醒我们：抽象不能消除成本，只会改变成本出现的位置。包装、生成器、构建系统、CI或缓存都必须说明资源、顺序和异常传播。
 
+描述符把属性读写委托给类属性对象，其中实现了 `__set__` 的<Term def="实现了 __set__ 的描述符，赋值会被它拦截，优先级高于实例字典">数据描述符</Term>优先级最高，下面两种视角对比同一段数据描述符逻辑：
+
+<CodeTabs>
+  <Tab label="Python · 描述符验证属性">
 
 ```python
 class Positive:
@@ -48,11 +89,29 @@ class Positive:
         obj.__dict__[self.name] = value
 ```
 
+  </Tab>
+  <Tab label="概念 · 描述符查找优先级">
+
+```text
+数据描述符  定义了 __set__ —— 优先级最高，覆盖实例字典
+实例字典    __dict__ —— 普通属性存这里
+非数据描述符 只定义 __get__ —— 优先级最低，被实例字典覆盖
+__set_name__ Python 3.6+ 自动调用，绑定属主与属性名
+```
+
+  </Tab>
+</CodeTabs>
+
 ## 机制二：失败与边界
 
-描述符把属性读取、写入和删除委托给类属性对象，property是常用封装；数据描述符、实例字典与非数据描述符有确定查找优先级。 slots声明固定属性槽并可减少实例字典开销，但会影响弱引用、继承和动态属性；只有测量大量实例后才应为内存使用它。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
+描述符把属性读取、写入和删除委托给类属性对象，property是常用封装；数据描述符、实例字典与非数据描述符有确定查找优先级。 用<Term def="类里预先声明的固定属性清单，能省掉每个实例的字典开销">__slots__</Term>声明固定属性槽并可减少实例字典开销，但会影响弱引用、继承和动态属性；只有测量大量实例后才应为内存使用它。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
 
 历史工具不等于无价值。正确迁移是先提取声明式配置、隔离、持续反馈和可回滚发布等不变量，再用维护中的接口重写；错误做法是机械替换命令却保留隐式环境和不可追踪副作用。
+
+方法查找顺序由<Term def="多重继承时 Python 查找方法的先后顺序，由 C3 线性化算出">MRO</Term>决定，下面两种视角对比同一段菱形继承逻辑：
+
+<CodeTabs>
+  <Tab label="Python · MRO 菱形继承">
 
 ```python
 class A: pass
@@ -61,6 +120,20 @@ class C(A): pass
 class D(B, C): pass
 assert D.__mro__ == (D, B, C, A, object)
 ```
+
+  </Tab>
+  <Tab label="概念 · MRO 查找路径">
+
+```text
+D        查找起点 —— 先找 D 自身
+B        D 的第一基类 —— 在 C 之前查找
+C        D 的第二基类 —— 与 B 同级时排后
+A        B 和 C 共同基类 —— 菱形顶点，只访问一次
+object   所有类的终点 —— MRO 的最后一站
+```
+
+  </Tab>
+</CodeTabs>
 
 ## 机制三：证据闭环
 
@@ -79,12 +152,81 @@ assert D.__mro__ == (D, B, C, A, object)
 
 ## 常见误区
 
+### 误区 1
+**现象 →** 继承 `list`/`dict` 后重写方法不生效
+**原因 →** C 级操作（如 `append`、`update`）可能绕过 Python 层重写的方法
+**修法 →** 确认需求是名义子类型还是组合包装；优先用 `collections.UserList`/`UserDict`
+
+### 误区 2
+**现象 →** 多重继承中 `super()` 调用父类方法报参数错误
+**原因 →** 各层签名不兼容，或没有继续 `super()` 链条导致菱形断裂
+**修法 →** 所有层用 `**kwargs` 透传，统一调用 `super()`，保证菱形只执行一次
+
+### 误区 3
+**现象 →** `property` 验证逻辑被实例直接赋值绕过
+**原因 →** `property` 是非数据描述符，实例字典 `__dict__` 优先级更高
+**修法 →** 用数据描述符（定义 `__set__`）而非 `property`，或用 `__slots__` 禁止动态属性
+
+### 误区 4
+**现象 →** 滥用 `__slots__` 导致无法添加弱引用或动态属性
+**原因 →** `__slots__` 固定属性槽，影响 `__weakref__`、继承和 `__dict__`
+**修法 →** 先测量大量实例的内存占用，确有瓶颈再用，并测试弱引用与继承场景
 
 ## 本章回顾
 
 本章逐项覆盖内置类型子类化、super与MRO、描述符与property、slots与对象布局、元编程。方法是用可读接口表达责任，用边界测试证明失败语义，再以可重建环境和制品证据完成闭环。
 
+## 小结
 
-## 术语表
+- 继承内置类型需谨慎：C 级操作可能绕过 Python 层重写
+- `super()` 沿 MRO 协作调用，不等同于固定父类
+- 数据描述符优先级高于实例字典，非数据描述符反之
+- `__slots__` 减内存但影响弱引用与动态属性，先测后用
+- 优先 `__init_subclass__` 和类装饰器，元类留到最后
 
+## 练习与验收
 
+<Exercises>
+
+**问题 1：** 为什么 `D(B, C)` 的 MRO 是 `(D, B, C, A, object)` 而非 `(D, B, A, C, A)`？
+
+<Answer>
+
+C3 线性化保证每个类在 MRO 中只出现一次，且子类在父类之前、声明顺序保持。菱形顶点 `A` 被合并到最后，避免重复访问，所以是 `(D, B, C, A, object)`。
+
+</Answer>
+
+**问题 2：** 数据描述符和非数据描述符在属性查找时优先级有何不同？
+
+<Answer>
+
+数据描述符（定义了 `__set__`）优先级高于实例字典 `__dict__`，赋值会被拦截验证；非数据描述符（只定义 `__get__`）优先级低于实例字典，实例一旦在 `__dict__` 写入同名属性就会遮蔽描述符。
+
+</Answer>
+
+**问题 3：** 用 `__init_subclass__` 实现一个注册表基类：子类声明时自动注册到全局字典，要求子类必须传 `label` 关键字参数，并能通过 `label` 反查子类。（独立实现）
+
+<Answer>
+
+基类维护 `registry = {}`，在 `__init_subclass__` 中校验 `label` 后写入 `registry[label] = cls`。子类 `class User(Base, label="user")` 声明即注册，之后 `Base.registry["user"]` 可反查类对象。相比元类，`__init_subclass__` 不改变类对象创建流程，更简单。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="内置类型子类化">想"借用" list、dict 这些现成容器的能力，就直接继承它们。但底层用 C 写的操作可能跳过你重写的方法，所以多数时候用 collections 里的 UserList/UserDict 更稳。</GlossaryItem>
+  <GlossaryItem term="__init_subclass__">写子类时自动触发的一段代码，常用来登记子类或检查参数。它不动类对象的创建过程，比元类简单，能不用元类就尽量用它。</GlossaryItem>
+  <GlossaryItem term="数据描述符">一种"属性管家"对象，它实现了 `__set__`，所以你往它身上赋值时会被它先拦下检查。它的优先级比实例自己的字典还高，校验不会被绕过。</GlossaryItem>
+  <GlossaryItem term="__slots__">在类里写死的属性清单。用了它，每个实例就不再带一个随身的字典，省内存；代价是不能随便加新属性，弱引用等也会受影响，先量过内存再决定要不要用。</GlossaryItem>
+  <GlossaryItem term="MRO">一个类有多个父类时，Python 按一条固定顺序去找方法，这条顺序就叫方法解析顺序（MRO）。它保证每个父类只被访问一次，子类排在父类前面。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Tarek Ziade《Expert Python Programming》"
+  adaptedUrl="https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
+/>

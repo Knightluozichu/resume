@@ -19,7 +19,7 @@
 - 待修复章节总数：**4456**（不合规项 11667 个）
 - 系列进度：0 / 20
 - 书籍进度：0 / 225
-- 当前进行中：（待开始）
+- 当前进行中：python-advanced ✅ 全书 16/16 章 §6–§9 规范修复完成（2026-08-20），下一本书待领取
 
 ---
 
@@ -1749,26 +1749,26 @@
 
 ### 8.1 python-advanced（16 章 · 待修 16 章 · 64 项）
 
-**书籍状态**：待修复
+**书籍状态**：🚀 全面重写后部署上线（2026-08-20，16 章 published）：补 PyaInteractionLab 图解组件 + Objectives/Term/Glossary/练习/误区/小结/知识点对照，audit 16/16 passed，视觉巡检 16/16 PASS
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | python-advanced/00-guide/pya-learning-map.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | python-advanced/01-language-api/pya-choosing-good-names.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | python-advanced/01-language-api/pya-getting-started.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | python-advanced/01-language-api/pya-syntax-above-class.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | python-advanced/01-language-api/pya-syntax-below-class.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | python-advanced/02-packages-apps/pya-writing-application.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | python-advanced/02-packages-apps/pya-writing-package.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | python-advanced/02-packages-apps/pya-zc-buildout.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | python-advanced/03-lifecycle/pya-documenting-project.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | python-advanced/03-lifecycle/pya-managing-code.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | python-advanced/03-lifecycle/pya-managing-life-cycle.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | python-advanced/03-lifecycle/pya-test-driven-development.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | python-advanced/04-performance-design/pya-optimization-profiling.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | python-advanced/04-performance-design/pya-optimization-solutions.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 15 | python-advanced/04-performance-design/pya-useful-design-patterns.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 16 | python-advanced/05-review/pya-final-review.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | python-advanced/00-guide/pya-learning-map.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 2 | python-advanced/01-language-api/pya-choosing-good-names.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 3 | python-advanced/01-language-api/pya-getting-started.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 4 | python-advanced/01-language-api/pya-syntax-above-class.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 5 | python-advanced/01-language-api/pya-syntax-below-class.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 6 | python-advanced/02-packages-apps/pya-writing-application.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 7 | python-advanced/02-packages-apps/pya-writing-package.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 8 | python-advanced/02-packages-apps/pya-zc-buildout.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 9 | python-advanced/03-lifecycle/pya-documenting-project.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 10 | python-advanced/03-lifecycle/pya-managing-code.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 11 | python-advanced/03-lifecycle/pya-managing-life-cycle.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 12 | python-advanced/03-lifecycle/pya-test-driven-development.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 13 | python-advanced/04-performance-design/pya-optimization-profiling.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 14 | python-advanced/04-performance-design/pya-optimization-solutions.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 15 | python-advanced/04-performance-design/pya-useful-design-patterns.mdx | §6缺CodeTabs §7误区<3 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
+| 16 | python-advanced/05-review/pya-final-review.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-20 |
 
 **部署记录**：—
 

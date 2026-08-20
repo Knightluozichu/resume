@@ -1,26 +1,46 @@
 ---
 title: "第14章 Python中的实用设计模式"
 type: C
-section: "Python高级编程 · 性能与设计"
+section: "Python高级编程"
 order: 14
-description: "按原书第14章 Useful Design Patterns重建：创建型模式与Singleton、Adapter与接口、Proxy与Facade、Observer与Visitor、Template模式。"
+description: "第14章 Python中的实用设计模式"
 demo: true
 math: false
 sourceUrl: "https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pya-14"
+draft: true
 ---
+import { PyaInteractionLab } from "@/components/mdx/python-advanced/v2/pya-useful-design-patterns";
 
+<Objectives>
 
-## 先做预测
+- 能为 Singleton、Adapter、Observer、Template 四个模式各写一段最小 Python 实现，并说明它解决了什么问题、付出什么代价
+- 能用依赖注入替代隐藏全局单例、用高阶函数替代深继承，并指出各自的可测试性收益
+- 自测：Observer 里一个订阅者抛异常时，后续订阅者还该不该收到事件？为什么？
 
-先预测：一个示例在作者机器上运行成功，是否足以证明它可维护？不能。还要明确解释器与依赖、输入边界、失败路径、可观察结果和重建步骤。给出本章的第一个契约，把它放进可重复流程。
+</Objectives>
 
+## 为什么背下模式名字还不算会用
+
+先预测：把 Singleton、Adapter、Observer 这些名字背下来，是不是就能写出好维护的代码？不能。名字只是标签，真正决定可维护性的是责任怎么分、失败怎么传、换一个实现要改几处。本章不堆名词，而是把每个模式拆成「它解决什么问题、不用它会怎样、用了它付出什么代价」三件事。
+
+Python 比别的语言多了几条捷径：模块本身就能当单例，鸭子类型让接口不必显式继承，函数也能替代层层继承。这意味着不少经典模式在 Python 里要瘦身，甚至不用专门写出来——想清楚这一点，才不会把别处抄来的类结构硬塞进 Python。
+
+把每个模式放回数据流里看：输入从哪进来、责任分给谁、失败往哪传、结果怎么验证。顺着这条线读，而不是只记类图形状——本章就用原书的设计模式案例演示这套看法。
 
 ## 原书骨架与现代迁移
 
 官方章节围绕创建型模式与Singleton、Adapter与接口、Proxy与Facade、Observer与Visitor、Template模式展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释“为什么”的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
 
 承接前两项，把局部语法或工具放回应用数据流。阅读时沿输入、协议、状态、输出和证据追踪，避免只背API名称。
+
+把适配旧接口为新协议用代码固化下来，这里引入<Term def="在旧对象外面包一层，把它的旧接口翻译成调用者想要的新接口，旧代码零修改">适配器</Term>，下面两种视角对比同一段 Adapter 逻辑：
+
+<CodeTabs>
+  <Tab label="Python · Adapter 适配旧接口">
 
 ```python
 from typing import Protocol
@@ -33,12 +53,29 @@ class LegacyAdapter:
     def read(self, key): return self.legacy.fetch(key).encode()
 ```
 
+  </Tab>
+  <Tab label="概念 · 适配方向拆解">
+
+```text
+Reader        目标协议 —— 定义 read，调用者只依赖此接口
+LegacyAdapter 适配器 —— 持有旧对象，把 fetch 转为 read
+self.legacy   被适配者 —— 旧接口返回 str，适配器转 bytes
+不改变旧类    —— 适配器包一层，旧代码零修改
+```
+
+  </Tab>
+</CodeTabs>
+
 ## 机制一：责任与数据流
 
-原书比较Singleton和Borg共享状态；Python模块常已提供单实例命名空间，显式依赖注入通常比隐藏全局对象更易测试。 Adapter把既有对象转换为调用者期望的协议，接口定义最小能力；动态类型不取消契约，只是可通过鸭子类型或Protocol表达。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
+原书比较Singleton和Borg共享状态；Python模块常已提供单实例命名空间，显式的<Term def="把要用到的实例通过参数明明白白传进去，而非藏在全局单例里，便于替换和测试">依赖注入</Term>通常比隐藏全局对象更易测试。 Adapter把既有对象转换为调用者期望的协议，接口定义最小能力；动态类型不取消契约，只是可通过鸭子类型或Protocol表达。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
 
 提醒我们：抽象不能消除成本，只会改变成本出现的位置。包装、生成器、构建系统、CI或缓存都必须说明资源、顺序和异常传播。
 
+Observer 把事件生产者与订阅者解耦，这里引入<Term def="让事件生产者只管广播事件、不关心谁订阅，订阅者各自独立处理">观察者</Term>，下面两种视角对比同一段 EventBus 逻辑：
+
+<CodeTabs>
+  <Tab label="Python · EventBus 发布订阅">
 
 ```python
 class EventBus:
@@ -49,11 +86,31 @@ class EventBus:
             handler(event)
 ```
 
+  </Tab>
+  <Tab label="概念 · 发布订阅边界">
+
+```text
+subscribe    注册订阅 —— handler 加入列表，生产者不知具体实现
+publish      遍历通知 —— tuple() 快照防止遍历中增删 handler
+解耦         生产者只管发事件 —— 不关心谁订阅、怎么处理
+失败隔离     某 handler 抛异常 —— 需 try/except 隔离，否则中断后续
+```
+
+  </Tab>
+</CodeTabs>
+
+<PyaInteractionLab chapter="useful-design-patterns" />
+
 ## 机制二：失败与边界
 
 Proxy在同一接口前控制访问、缓存或远程调用，Facade为复杂子系统提供较小入口；两者都不应改变调用者无法察觉的错误语义。 Observer把事件生产者与订阅者解耦，但需要退订、顺序和失败隔离；Visitor集中不同操作，代价是新增元素类型时要更新访问者。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
 
 历史工具不等于无价值。正确迁移是先提取声明式配置、隔离、持续反馈和可回滚发布等不变量，再用维护中的接口重写；错误做法是机械替换命令却保留隐式环境和不可追踪副作用。
+
+模板方法固定算法骨架并让步骤可替换，下面两种视角对比同一段 Template 逻辑：
+
+<CodeTabs>
+  <Tab label="Python · 高阶函数模板方法">
 
 ```python
 def export(load, transform, save):
@@ -62,9 +119,22 @@ def export(load, transform, save):
     return save(checked)
 ```
 
+  </Tab>
+  <Tab label="概念 · 模板方法边界">
+
+```text
+load()       步骤一 —— 加载数据，可替换为文件/DB/API 实现
+transform()  步骤二 —— 转换逻辑，骨架不变、实现可换
+save()       步骤三 —— 保存结果，可替换为不同存储
+高阶函数     组合优于继承 —— 三个步骤各自独立，无需深继承链
+```
+
+  </Tab>
+</CodeTabs>
+
 ## 机制三：证据闭环
 
-负责收束验收。模板方法固定算法骨架并让步骤可替换；Python也可用高阶函数和组合避免深继承，选择依据是扩展轴与状态共享。 保存解释器、依赖锁定、输入、命令、退出状态、关键输出和制品摘要，才能让另一台干净机器重放同一结论。
+本节负责收束<Term def="保存解释器、依赖锁、输入、命令、退出状态与制品摘要，使干净机器能重放同一结论">证据闭环</Term>。原书用<Term def="固定一套流程的骨架，把会变的步骤留成可替换的函数或方法">模板方法</Term>固定算法骨架并让步骤可替换；Python也可用高阶函数和组合避免深继承，选择依据是扩展轴与状态共享。 保存解释器、依赖锁定、输入、命令、退出状态、关键输出和制品摘要，才能让另一台干净机器重放同一结论。
 
 ## 实战验收清单
 
@@ -79,12 +149,86 @@ def export(load, transform, save):
 
 ## 常见误区
 
+### 误区 1
+**现象 →** 用 Singleton/Borg 后测试状态互相污染
+**原因 →** 全局共享状态在测试间不重置，依赖注入被隐藏
+**修法 →** 优先依赖注入显式传实例；必须单例时用 fixture 在测试前重建
+
+### 误区 2
+**现象 →** Observer 中一个 handler 抛异常，后续 handler 全部不执行
+**原因 →** publish 遍历时无 try/except 隔离，一个失败中断全链
+**修法 →** 每个 handler 调用包 try/except，记录失败后继续通知后续 handler
+
+### 误区 3
+**现象 →** Adapter 层越包越厚，调试时不知问题在适配器还是旧代码
+**原因 →** 适配器混入了转换以外的逻辑，职责膨胀
+**修法 →** 适配器只做接口转换，不夹带校验、缓存、业务逻辑
+
+### 误区 4
+**现象 →** 用继承做 Template，新增一个步骤要改父类影响所有子类
+**原因 →** 继承链耦合，扩展轴与共享状态纠缠
+**修法 →** 用高阶函数组合替代深继承，各步骤独立可替换
 
 ## 本章回顾
 
 本章逐项覆盖创建型模式与Singleton、Adapter与接口、Proxy与Facade、Observer与Visitor、Template模式。方法是用可读接口表达责任，用边界测试证明失败语义，再以可重建环境和制品证据完成闭环。
 
+## 小结
 
-## 术语表
+- Singleton 隐藏全局状态，优先依赖注入显式传实例
+- Adapter 包一层做接口转换，不夹带业务逻辑
+- Proxy 控制访问、缓存或远程调用，Facade 简化子系统入口
+- Observer 解耦生产者与订阅者，需退订、顺序与失败隔离
+- 高阶函数组合优于深继承，步骤独立可替换
 
+## 练习与验收
 
+<Exercises>
+
+**问题 1：** 为什么优先依赖注入而非 Singleton？
+
+<Answer>
+
+Singleton 把共享状态藏在全局，测试时无法替换实例、无法重置状态、无法隔离并发。依赖注入把实例显式传入，测试可注入 fake，并发各自持有独立实例，依赖关系在签名上一目了然。
+
+</Answer>
+
+**问题 2：** EventBus 的 `tuple(self._handlers)` 有什么作用？
+
+<Answer>
+
+`tuple()` 创建 handlers 列表的快照副本：遍历时如果某个 handler 在执行中调用 `subscribe` 或退订，原列表增删不会影响正在进行的遍历，避免"遍历中修改列表"导致的跳过或重复通知。
+
+</Answer>
+
+**问题 3：** 为一个"数据导出管道"设计 Template 模式：用高阶函数固定 load→transform→save 骨架，要求三个步骤可独立替换，并编写一个使用 Adapter 把旧版 CSV 加载器适配为新接口的示例。（独立实现）
+
+<Answer>
+
+骨架 `def export(load, transform, save): return save(transform(load()))`，三步骤各自是普通函数，可替换为文件、DB、API 实现。Adapter：`class CsvAdapter: def __init__(self, legacy_csv): self.legacy = legacy_csv; def __call__(self): return self.legacy.load_rows()`，把旧版返回 list 的 `load_rows` 适配为 `load` 接口期望的可调用对象，旧 CSV 代码零修改。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="适配器">
+    在旧对象外面包一层，把它的旧接口翻译成调用者想要的新接口，旧代码一行都不用改。
+  </GlossaryItem>
+  <GlossaryItem term="依赖注入">
+    把要用到的实例通过参数明明白白传进去，而不是藏在某个全局单例里，这样测试时能换成假对象，依赖关系一眼可见。
+  </GlossaryItem>
+  <GlossaryItem term="观察者">
+    一件事发生了，发通知的人只管广播，不关心谁来听；听的人各自处理、互不干扰，随时可以加新订阅者。
+  </GlossaryItem>
+  <GlossaryItem term="证据闭环">
+    把解释器版本、依赖、输入、命令、退出状态和产物摘要都记下来，换一台干净机器照着跑能复现同一个结果。
+  </GlossaryItem>
+  <GlossaryItem term="模板方法">
+    把一套流程的骨架固定下来，哪些步骤会变就把它留成可替换的函数或方法，换实现不用动整条流程。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="authorized-sample" workTitle="Tarek Ziade《Expert Python Programming》" adaptedUrl="https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/" />

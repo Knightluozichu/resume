@@ -23738,6 +23738,121 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       PP2ThreeProblemsMap: module0.PP2ThreeProblemsMap,
     } as ChapterMdxComponents;
   },
+  "python-advanced/00-guide/pya-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-learning-map");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/01-language-api/pya-choosing-good-names": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-choosing-good-names");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/01-language-api/pya-getting-started": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-getting-started");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/01-language-api/pya-syntax-above-class": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-syntax-above-class");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/01-language-api/pya-syntax-below-class": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-syntax-below-class");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/02-packages-apps/pya-writing-application": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-writing-application");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/02-packages-apps/pya-writing-package": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-writing-package");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/02-packages-apps/pya-zc-buildout": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-zc-buildout");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/03-lifecycle/pya-documenting-project": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-documenting-project");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/03-lifecycle/pya-managing-code": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-managing-code");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/03-lifecycle/pya-managing-life-cycle": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-managing-life-cycle");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/03-lifecycle/pya-test-driven-development": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-test-driven-development");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
+  "python-advanced/04-performance-design/pya-optimization-profiling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/python-advanced/v2/pya-optimization-profiling");
+      return {
+        PyaInteractionLab: module0.PyaInteractionLab,
+      } as ChapterMdxComponents;
+    },
+  "python-advanced/04-performance-design/pya-optimization-solutions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/python-advanced/v2/pya-optimization-solutions");
+      return {
+        PyaInteractionLab: module0.PyaInteractionLab,
+      } as ChapterMdxComponents;
+    },
+  "python-advanced/04-performance-design/pya-useful-design-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/python-advanced/v2/pya-useful-design-patterns");
+      return {
+        PyaInteractionLab: module0.PyaInteractionLab,
+      } as ChapterMdxComponents;
+    },
+  "python-advanced/05-review/pya-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/python-advanced/v2/pya-final-review");
+    return {
+      PyaInteractionLab: module0.PyaInteractionLab,
+    } as ChapterMdxComponents;
+  },
   "ray-tracing-weekend/01-output/rtw-01-output-image": async () => {
     const module0 =
       await import("@/components/mdx/ray-tracing-weekend/v2/rtw-01-output-image");

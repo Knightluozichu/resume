@@ -1,26 +1,46 @@
 ---
 title: "第6章 编写模块化应用"
 type: C
-section: "Python高级编程 · 包与应用"
+section: "Python高级编程"
 order: 6
-description: "按原书第6章 Writing an Application重建：Atomisator案例、整体架构与工作环境、测试运行器与包结构、parser、db与feed API、应用分发与依赖。"
+description: "第6章 编写模块化应用"
 demo: true
 math: false
 sourceUrl: "https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pya-06"
+draft: true
 ---
+import { PyaInteractionLab } from "@/components/mdx/python-advanced/v2/pya-writing-application";
 
+<Objectives>
 
-## 先做预测
+- 能把一个应用拆成解析、存储、生成、编排四个可独立测试的包，并画出它们之间的依赖方向
+- 能用 frozen dataclass 与 Protocol 让基础设施依赖领域，而非领域反向依赖基础设施
+- 自测：换掉一个存储实现后，哪些测试需要改、哪些不需要？为什么？
 
-先预测：一个示例在作者机器上运行成功，是否足以证明它可维护？不能。还要明确解释器与依赖、输入边界、失败路径、可观察结果和重建步骤。给出本章的第一个契约，把它放进可重复流程。
+</Objectives>
 
+## 为什么一个能跑的脚本还不算应用
+
+先预测：一个示例在作者机器上跑通，是否足以证明它可维护？答案是不能。一个能跑的例子只说明在那一刻、那台机器上输入对了；它没有说清解释器与依赖、输入边界、失败路径、可观察结果和重建步骤。本章把这些写成可检查的契约，再放进可重复的流程。
+
+把职责切开是第一步。解析、存储、生成和编排各自能单独测试，改一个不会牵连另一个；先画清输入源、解析器、数据库、输出和主程序之间的依赖方向，再在隔离环境里跑起来。基础设施只能依赖接口，不能反过来把数据库细节漏进业务模型。
+
+本章用原书的 Atomisator 案例——一个聚合订阅源的小应用——演示这套切法。原书成书于早期工具生态，命令会按当前 Python 与 PyPA 文档迁移，但“为什么这样切”的结构原样保留。
 
 ## 原书骨架与现代迁移
 
 官方章节围绕Atomisator案例、整体架构与工作环境、测试运行器与包结构、parser、db与feed API、应用分发与依赖展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释“为什么”的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
 
 承接前两项，把局部语法或工具放回应用数据流。阅读时沿输入、协议、状态、输出和证据追踪，避免只背API名称。
+
+原书把数据契约固化为<Term def="用 frozen dataclass 声明、跨包传递且不携带 ORM 会话或全局连接的不可变数据契约">领域值</Term>，下面两种视角对比同一段数据契约：
+
+<CodeTabs>
+  <Tab label="Python · frozen dataclass">
 
 ```python
 from dataclasses import dataclass
@@ -32,12 +52,29 @@ class Entry:
     url: str
 ```
 
+  </Tab>
+  <Tab label="概念 · 领域值对象">
+
+```text
+@dataclass     自动生成 __init__/__repr__/__eq__
+frozen=True    不可变 —— 实例创建后字段不能改，可哈希可作字典键
+source/title/url 字段 —— 显式声明类型，解析器/存储/feed 共享同一形状
+Entry          领域值 —— 跨包传递，不泄漏 ORM 会话或全局连接
+```
+
+  </Tab>
+</CodeTabs>
+
 ## 机制一：责任与数据流
 
-原书用Atomisator聚合订阅源，展示应用不是一个大脚本，而是解析、存储、生成和编排等可独立测试的包。 先画输入源、解析器、数据库、输出feed和主程序的依赖方向，再配置隔离环境；基础设施只能依赖接口，不反向污染领域模型。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
+原书用Atomisator聚合订阅源，展示应用不是一个大脚本，而是解析、存储、生成和编排等可独立测试的包。 先画输入源、解析器、数据库、输出feed和主程序的依赖方向，再配置隔离环境；这里依赖方向遵循<Term def="基础设施实现依赖领域定义的接口，领域不反向 import 基础设施">依赖倒置</Term>，基础设施只能依赖接口，不反向污染领域模型。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
 
 提醒我们：抽象不能消除成本，只会改变成本出现的位置。包装、生成器、构建系统、CI或缓存都必须说明资源、顺序和异常传播。
 
+基础设施只能依赖接口，下面两种视角对比同一段依赖注入逻辑：
+
+<CodeTabs>
+  <Tab label="Python · Protocol 依赖注入">
 
 ```python
 from typing import Protocol
@@ -49,11 +86,31 @@ def ingest(parser, store: EntryStore, payload: bytes) -> int:
     return store.save(parser.parse(payload))
 ```
 
+  </Tab>
+  <Tab label="概念 · 接口隔离方向">
+
+```text
+EntryStore    协议接口 —— 定义 save，不关心实现是 DB 还是内存
+ingest        编排函数 —— 依赖协议而非具体类，可替换实现
+parser.parse  解析阶段 —— 产出领域值 Entry，不接触存储细节
+store.save    存储阶段 —— 接收领域值，不泄漏 ORM 会话
+```
+
+  </Tab>
+</CodeTabs>
+
+<PyaInteractionLab chapter="writing-application" />
+
 ## 机制二：失败与边界
 
-测试入口和包结构在写业务前建立反馈环；单元测试隔离解析与存储，集成测试再连接临时数据库和真实格式样本。 解析器输出稳定记录，数据库负责事务，feed只渲染查询结果；跨包API传领域值与显式错误，不泄漏ORM会话或全局连接。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
+测试入口和包结构在写业务前建立反馈环；这种反馈环靠<Term def="单元层用内存桩隔离业务、集成层连临时数据库与真实样本、两层各自独立退出码">测试分层</Term>建立：单元测试隔离解析与存储，集成测试再连接临时数据库和真实格式样本。 解析器输出稳定记录，数据库负责事务，feed只渲染查询结果；跨包API传领域值与显式错误，不泄漏ORM会话或全局连接。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
 
 历史工具不等于无价值。正确迁移是先提取声明式配置、隔离、持续反馈和可回滚发布等不变量，再用维护中的接口重写；错误做法是机械替换命令却保留隐式环境和不可追踪副作用。
+
+测试入口在写业务前建立反馈环，下面两种视角对比同一段测试编排：
+
+<CodeTabs>
+  <Tab label="Bash · 分层测试入口">
 
 ```bash
 python -m unittest tests.unit
@@ -61,9 +118,22 @@ python -m unittest tests.integration
 python -m atomisator --check-config
 ```
 
+  </Tab>
+  <Tab label="概念 · 测试分层边界">
+
+```text
+tests.unit          单元层 —— 解析器/存储隔离测试，不连真实 DB
+tests.integration   集成层 —— 连临时数据库与真实格式样本
+--check-config      启动检查 —— 验证入口点、依赖锁、配置完整
+三层各自独立退出码 —— 失败可定位到具体层，不混在一起
+```
+
+  </Tab>
+</CodeTabs>
+
 ## 机制三：证据闭环
 
-负责收束验收。应用由多个包组成时要区分库依赖和部署配置，锁定完整运行环境并验证入口点；分发成功还要证明迁移、启动和关闭。 保存解释器、依赖锁定、输入、命令、退出状态、关键输出和制品摘要，才能让另一台干净机器重放同一结论。
+本节负责收束<Term def="保存解释器、依赖锁、输入、命令、退出状态与制品摘要，使干净机器能重放同一结论">证据闭环</Term>：应用由多个包组成时要区分库依赖和部署配置，锁定完整运行环境并验证入口点；分发成功还要证明迁移、启动和关闭。 保存解释器、依赖锁定、输入、命令、退出状态、关键输出和制品摘要，才能让另一台干净机器重放同一结论。
 
 ## 实战验收清单
 
@@ -78,12 +148,83 @@ python -m atomisator --check-config
 
 ## 常见误区
 
+### 误区 1
+**现象 →** 领域模型里直接 import ORM 类，换存储引擎要改模型
+**原因 →** 领域模型反向依赖基础设施，违反依赖倒置
+**修法 →** 领域值用 `dataclass`/`Protocol` 定义，存储实现依赖领域接口而非反之
+
+### 误区 2
+**现象 →** 单元测试连真实数据库，CI 慢且不稳定
+**原因 →** 没有隔离单元层与集成层，测试共享同一环境
+**修法 →** 单元测试用内存桩，集成测试连临时数据库，两层分开运行
+
+### 误区 3
+**现象 →** 跨包传递 ORM 会话对象，改一处接口全链路报错
+**原因 →** 泄漏基础设施细节到领域层，包之间强耦合
+**修法 →** 跨包 API 只传领域值与显式错误，不传会话、连接或全局状态
+
+### 误区 4
+**现象 →** 部署后启动失败，本地却正常
+**原因 →** 依赖未锁定，部署环境装了不同版本的包
+**修法 →** 用 `pyproject` 声明依赖、lock 锁定版本，在干净机器验证启动与关闭
 
 ## 本章回顾
 
 本章逐项覆盖Atomisator案例、整体架构与工作环境、测试运行器与包结构、parser、db与feed API、应用分发与依赖。方法是用可读接口表达责任，用边界测试证明失败语义，再以可重建环境和制品证据完成闭环。
 
+## 小结
 
-## 术语表
+- 应用不是大脚本：解析、存储、生成、编排各自独立可测的包
+- 领域值用 `frozen dataclass`，跨包传递不泄漏基础设施
+- `Protocol` 定义接口，基础设施依赖领域而非反向
+- 测试分层：单元隔离、集成连真实，两层分开运行
+- 分发要锁依赖、验入口，干净机器能重放启动与关闭
 
+## 练习与验收
 
+<Exercises>
+
+**问题 1：** 为什么 `Entry` 要用 `frozen=True`？
+
+<Answer>
+
+`frozen=True` 使实例不可变，创建后字段不能修改。好处有三：可哈希（能作字典键和集合元素）、线程安全（无竞态修改）、跨包传递时不会被意外篡改，保证领域值在解析器→存储→feed 全链路一致。
+
+</Answer>
+
+**问题 2：** `EntryStore` 用 `Protocol` 而非具体类有什么好处？
+
+<Answer>
+
+`Protocol` 实现结构子类型（鸭子类型）：任何有 `save` 方法的类都满足协议，无需显式继承。这样存储实现可在内存桩、SQL 数据库、NoSQL 之间替换，`ingest` 函数不依赖具体类，单元测试可注入内存桩而无需连真实数据库。
+
+</Answer>
+
+**问题 3：** 为一个“聚合 RSS 订阅源”的应用设计包结构与分层测试入口：要求解析、存储、feed 三个包各自独立可测，集成测试连临时数据库，并提供启动配置检查入口。（独立实现）
+
+<Answer>
+
+包结构：`atomisator.parser`（解析 RSS→`Entry`）、`atomisator.db`（实现 `EntryStore` 协议存取）、`atomisator.feed`（查询→渲染输出）、`atomisator.cli`（编排入口）。单元测试各包隔离（内存桩），`tests.integration` 连临时 SQLite。入口 `python -m atomisator --check-config` 验证依赖锁与配置完整。跨包只传 `Entry` 领域值，不传 ORM 会话。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="领域值">
+    用不可变数据类装着的业务数据，解析、存储、生成各包都认它，但它不带数据库连接或会话，换存储不用改业务。
+  </GlossaryItem>
+  <GlossaryItem term="依赖倒置">
+    业务定义接口，数据库等基础设施去实现它；业务代码不反过来 import 数据库类，换底层不影响业务。
+  </GlossaryItem>
+  <GlossaryItem term="测试分层">
+    单元测试用假数据隔离跑业务逻辑，集成测试连临时数据库跑真实样本，两层分开跑、各有各的退出码，失败能定位到具体层。
+  </GlossaryItem>
+  <GlossaryItem term="证据闭环">
+    把解释器版本、依赖锁、输入、命令、退出状态和产物摘要都存下来，换一台干净机器照着做能复现同一结果。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="authorized-sample" workTitle="Tarek Ziade《Expert Python Programming》" adaptedUrl="https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/" />

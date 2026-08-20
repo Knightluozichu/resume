@@ -1,26 +1,51 @@
 ---
 title: "第5章 编写与分发包"
 type: C
-section: "Python高级编程 · 包与应用"
+section: "Python高级编程"
 order: 5
-description: "按原书第5章 Writing a Package重建：统一包结构、构建与分发命令、包元数据、模板化创建、开发与发布周期。"
+description: "第5章 编写与分发包"
 demo: true
 math: false
 sourceUrl: "https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pya-05"
+draft: true
 ---
+import { PyaInteractionLab } from "@/components/mdx/python-advanced/v2/pya-writing-package";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
+<Objectives>
 
-## 先做预测
+- 能用 src 布局、`pyproject` 和 `build`/`pip` 命令把一个包从源码组织成可安装制品，并说出每一步留下的证据。
+- 能比较原书 `setup.py` 时代与当前 PyPA 流程在元数据来源、构建后端和发布周期上的不变量与差异。
+- 能回答“换一台干净机器重装同一个包，该用 sdist 还是 wheel、依据哪份元数据校验？”并完成一次可重放构建。
 
-先预测：一个示例在作者机器上运行成功，是否足以证明它可维护？不能。还要明确解释器与依赖、输入边界、失败路径、可观察结果和重建步骤。给出本章的第一个契约，把它放进可重复流程。
+</Objectives>
 
+## 为什么作者电脑上能跑通不等于能交付
+
+一段代码在你自己电脑上跑通了，能不能直接交给别人用？不能。别人用的电脑、安装方式、所处的环境都可能不一样。“能跑”只证明此刻这台机器凑齐了所有条件，不证明换一台机器还能跑。
+
+把代码做成“包”，就是把这些隐藏条件写清楚：它叫什么、是第几版、需要哪些配套的东西、装上去之后怎么调用。写清楚之后，别人按同一套说明安装，得到的才是同一个东西，而不是“碰巧能跑”。
+
+本章不讲某个工具的菜单怎么点，而是讲怎么让“打包与分发”这条链路能被别人重复验证：每一步留下什么痕迹，换一台干净的电脑能不能还原同一个结果。
 
 ## 原书骨架与现代迁移
 
-官方章节围绕统一包结构、构建与分发命令、包元数据、模板化创建、开发与发布周期展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释“为什么”的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
+官方章节围绕统一包结构、构建与分发命令、包元数据、模板化创建、开发与发布周期展开。原书出版于 Python 2.5 与早期敏捷工具生态，本章保留它解释“为什么”的结构；命令和安全默认按当前 Python、标准库与 PyPA 维护文档迁移，不把 EasyInstall、distutils 安装命令、旧 CI 或旧项目平台直接当成新项目默认。
 
-承接前两项，把局部语法或工具放回应用数据流。阅读时沿输入、协议、状态、输出和证据追踪，避免只背API名称。
+承接前两项，把局部语法或工具放回应用数据流。阅读时沿输入、协议、状态、输出和证据追踪，避免只背 API 名称。
+
+构建声明从单一文件出发：
+
+<CodeTabs>
+  <Tab label="pyproject.toml">
 
 ```toml
 [build-system]
@@ -33,12 +58,25 @@ version = "1.0.0"
 requires-python = ">=3.11"
 ```
 
+  </Tab>
+</CodeTabs>
+
+## 核心词汇
+
+本章固定五个词作为共同语言：<Term def="把源码放在 src/ 目录下，让测试只能导入已安装的包而非工作区源码的目录约定">src 布局</Term>是目录约定；<Term def="声明构建系统、项目元数据与依赖的单一配置文件，取代散落的 setup.py">pyproject</Term>是构建声明；<Term def="名称、版本、Python 要求、依赖、入口点与许可证等描述包并影响解析与安装的信息">包元数据</Term>是包的身份证；<Term def="build 产出的 sdist 源码分发包与 wheel 二进制分发包，是发布与安装的实际载体">构建制品</Term>是发布载体；<Term def="pip install --editable，把源码目录链接进环境、改代码即时生效的开发期安装">可编辑安装</Term>是开发期捷径。
+
+每一次构建都要能回答：源码来自哪个布局，元数据由哪份文件声明，制品是 sdist 还是 wheel，安装用的是可编辑还是正式方式，干净环境能否还原同一结论。
+
 ## 机制一：责任与数据流
 
-源码、测试、文档、许可证和构建元数据应有稳定位置；src布局可避免测试意外导入工作区源码，安装后的包才是验收对象。 原书围绕setup.py的sdist、bdist、install和develop讲生命周期；当前PyPA流程由pyproject声明后端，用build产出sdist与wheel并用pip安装。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
+源码、测试、文档、许可证和构建元数据应有稳定位置；src 布局可避免测试意外导入工作区源码，安装后的包才是验收对象。原书围绕 setup.py 的 sdist、bdist、install 和 develop 讲生命周期；当前 PyPA 流程由 pyproject 声明后端，用 build 产出 sdist 与 wheel 并用 pip 安装。先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
 
-提醒我们：抽象不能消除成本，只会改变成本出现的位置。包装、生成器、构建系统、CI或缓存都必须说明资源、顺序和异常传播。
+提醒我们：抽象不能消除成本，只会改变成本出现的位置。包装、生成器、构建系统、CI 或缓存都必须说明资源、顺序和异常传播。
 
+src 布局下，项目骨架这样组织：
+
+<CodeTabs>
+  <Tab label="目录结构">
 
 ```text
 project/
@@ -49,11 +87,25 @@ project/
   LICENSE
 ```
 
+  </Tab>
+</CodeTabs>
+
+下面的实验台固定源码、元数据和输入，只切换布局、构建命令或安装方式。先写下你预测的归属与结果，再用时间线观察安装、构建与发布各阶段的证据。
+
+<PyaInteractionLab chapter="writing-package" />
+
+每切换一次条件，记录解释器、依赖锁定、命令、退出状态和制品摘要，确认干净环境能还原同一结论。
+
 ## 机制二：失败与边界
 
-名称、版本、Python要求、依赖、入口点和许可证影响解析与安装；元数据应来自单一来源，在构建制品中复查而不是只看配置文件。 原书用Python Paste模板统一项目骨架；现代脚手架仍有价值，但模板必须版本化、可升级并保持最小，避免复制长期无人维护的配置。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
+名称、版本、Python 要求、依赖、入口点和许可证影响解析与安装；元数据应来自单一来源，在构建制品中复查而不是只看配置文件。原书用 Python Paste 模板统一项目骨架；现代脚手架仍有价值，但模板必须版本化、可升级并保持最小，避免复制长期无人维护的配置。边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
 
 历史工具不等于无价值。正确迁移是先提取声明式配置、隔离、持续反馈和可回滚发布等不变量，再用维护中的接口重写；错误做法是机械替换命令却保留隐式环境和不可追踪副作用。
+
+构建与安装的现代命令路径：
+
+<CodeTabs>
+  <Tab label="构建与安装">
 
 ```bash
 python -m pip install --editable .
@@ -61,9 +113,12 @@ python -m build
 python -m pip install --force-reinstall dist/*.whl
 ```
 
+  </Tab>
+</CodeTabs>
+
 ## 机制三：证据闭环
 
-负责收束验收。编辑安装、测试、构建、检查、测试索引和正式发布组成流水线；每个版本从干净标签构建，同一制品经过验证后再提升。 保存解释器、依赖锁定、输入、命令、退出状态、关键输出和制品摘要，才能让另一台干净机器重放同一结论。
+负责收束验收。编辑安装、测试、构建、检查、测试索引和正式发布组成流水线；每个版本从干净标签构建，同一制品经过验证后再提升。保存解释器、依赖锁定、输入、命令、退出状态、关键输出和制品摘要，才能让另一台干净机器重放同一结论。
 
 ## 实战验收清单
 
@@ -74,16 +129,90 @@ python -m pip install --force-reinstall dist/*.whl
 
 ## 迁移决策题
 
-设想团队正在维护一个已经运行多年的Python服务：它仍依赖本章对应的历史工具，但业务不能停机。先不要直接重写。第一步列出统一包结构承担的真实输入和输出，再用构建与分发命令识别构建或运行时依赖；第二步把包元数据放进隔离实验，证明当前行为与失败类型；第三步用模板化创建设计兼容层，让旧入口和新入口在同一组契约测试下运行；最后以开发与发布周期保存制品摘要、性能或行为差异与回滚条件。只有新路径在正常、边界和故障输入上都达到既定条件，才逐步切换流量或调用者。这样迁移的是可验证契约，而不是把一个旧命令盲目替换为一个新命令。
+设想团队正在维护一个已经运行多年的 Python 服务：它仍依赖本章对应的历史工具，但业务不能停机。先不要直接重写。第一步列出统一包结构承担的真实输入和输出，再用构建与分发命令识别构建或运行时依赖；第二步把包元数据放进隔离实验，证明当前行为与失败类型；第三步用模板化创建设计兼容层，让旧入口和新入口在同一组契约测试下运行；最后以开发与发布周期保存制品摘要、性能或行为差异与回滚条件。只有新路径在正常、边界和故障输入上都达到既定条件，才逐步切换流量或调用者。这样迁移的是可验证契约，而不是把一个旧命令盲目替换为一个新命令。
 
 ## 常见误区
 
+### 误区 1
+**现象 →** 测试在工作区直接 import 源码通过，装成包后却失败
+**原因 →** 没用 src 布局，测试导入的是工作区源码而非安装产物，掩盖了打包缺陷
+**修法 →** 改用 src 布局，测试只 import 已安装的包；先 `pip install --editable .` 再跑测试
+
+### 误区 2
+**现象 →** 版本号在 setup.py、pyproject 和文档里各写一份，发布后对不上
+**原因 →** 元数据散落多处，没有单一来源，改一处漏另一处
+**修法 →** 元数据只在 pyproject 的 `[project]` 声明，构建制品中复查版本，删除其余副本
+
+### 误区 3
+**现象 →** 把 `pip install --editable .` 当成生产安装，部署到目标机器报错
+**原因 →** 可编辑安装是开发期链接源码目录，目标机器没有源码且依赖未锁定
+**修法 →** 开发用可编辑安装，发布与部署用 build 产出的 wheel 并锁定依赖
+
+### 误区 4
+**现象 →** 发布的包在干净机器装不上或行为不一致
+**原因 →** 发布未从干净标签构建，残留缓存或本地路径混入制品
+**修法 →** 每个版本从干净标签构建，验证同一制品摘要后再提升，干净机器重放
 
 ## 本章回顾
 
 本章逐项覆盖统一包结构、构建与分发命令、包元数据、模板化创建、开发与发布周期。方法是用可读接口表达责任，用边界测试证明失败语义，再以可重建环境和制品证据完成闭环。
 
+## 小结
 
-## 术语表
+- src 布局隔离源码，安装后的包才是验收对象
+- pyproject 声明构建后端，build 产出 sdist 与 wheel
+- 包元数据来自单一来源，构建制品中复查
+- 脚手架模板须版本化、可升级、保持最小
+- 每个版本从干净标签构建，验证后再提升
 
+## 练习与验收
 
+<Exercises>
+
+**问题 1：** 为什么要用 src 布局，而不是把源码放在项目根目录？
+
+<Answer>
+
+src 布局把源码放在 `src/` 下，测试只能导入已安装的包，而不是工作区里的源码。这样测试验收的对象和用户安装的对象一致：如果打包漏了文件或 import 路径错了，测试会先失败，而不是等到用户安装后才暴露。
+
+</Answer>
+
+**问题 2：** 包元数据为什么要来自单一来源？
+
+<Answer>
+
+元数据散落在 setup.py、pyproject 和文档多处时，改一处会漏另一处，发布版本与实际制品对不上。单一来源（pyproject 的 `[project]` 表）让名称、版本、依赖和入口点只有一份声明，构建后在制品里复查，保证安装者看到的就是声明者写下的。
+
+</Answer>
+
+**问题 3：** 为一个“聚合订阅源并导出 feed”的库设计包结构与发布流程：要求源码与测试隔离、元数据单一来源、发布可重放。（独立实现）
+
+<Answer>
+
+包结构用 src 布局：`src/atomisator_core/` 放源码，`tests/` 只 import 已安装的包，根目录放 `pyproject.toml`、`README.md`、`LICENSE`。元数据全部写在 `pyproject.toml` 的 `[project]` 表，不另设 setup.py。发布流程：从干净 git 标签 `python -m build` 产出 sdist 与 wheel，记录解释器、依赖锁、命令与制品摘要，干净机器 `pip install dist/*.whl` 重放验证后再提升。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="src 布局">
+    把源码放在 src/ 目录下，让测试只能导入已安装的包而不是工作区源码的目录约定，保证测试验收对象与用户安装对象一致。
+  </GlossaryItem>
+  <GlossaryItem term="pyproject">
+    声明构建系统、项目元数据和依赖的单一配置文件，取代过去散落在 setup.py 里的配置。
+  </GlossaryItem>
+  <GlossaryItem term="包元数据">
+    名称、版本、Python 要求、依赖、入口点和许可证等描述一个包并影响解析与安装的信息。
+  </GlossaryItem>
+  <GlossaryItem term="构建制品">
+    build 产出的 sdist 源码分发包和 wheel 二进制分发包，是发布与安装的实际载体。
+  </GlossaryItem>
+  <GlossaryItem term="可编辑安装">
+    pip install --editable，把源码目录链接进运行环境、改代码即时生效的开发期安装方式，不用于生产部署。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="authorized-sample" workTitle="Tarek Ziade《Expert Python Programming》" adaptedUrl="https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/" />

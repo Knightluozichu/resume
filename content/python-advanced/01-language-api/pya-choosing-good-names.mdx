@@ -1,26 +1,46 @@
 ---
 title: "第4章 选择好名字与设计API"
 type: C
-section: "Python高级编程 · 语言与API"
+section: "Python高级编程"
 order: 4
-description: "按原书第4章 Choosing Good Names重建：PEP 8与命名风格、参数设计、名称指南、命名空间与API、弃用与质量工具。"
+description: "第4章 选择好名字与设计API"
 demo: true
 math: false
 sourceUrl: "https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pya-04"
+draft: true
 ---
+import { PyaInteractionLab } from "@/components/mdx/python-advanced/v2/pya-choosing-good-names";
 
+<Objectives>
 
-## 先做预测
+- 能解释关键字限定参数、显式导出和弃用告警各自解决什么问题
+- 能改写出带星号分隔符与 `__all__` 白名单的接口代码
+- 能回答：为什么用 `**kwargs` 吞掉所有可选参数会让 API 不可维护？
 
-先预测：一个示例在作者机器上运行成功，是否足以证明它可维护？不能。还要明确解释器与依赖、输入边界、失败路径、可观察结果和重建步骤。给出本章的第一个契约，把它放进可重复流程。
+</Objectives>
 
+## 为什么好名字重要
+
+想象一条工厂流水线，每个工位都贴着标签，告诉你手里这个零件是什么、要往哪送、送错了会怎样。代码里的名字就是这些标签。一个叫 `data` 的箱子，你知道里面有东西，却不知道是什么、单位是几个，只能拆开看。
+
+没有好名字，读者每碰上一段代码都得钻进去搞清楚它要什么、给出什么、什么时候会出错。一个团队写了几个月，新人接手时面对满屏 `info`、`manager`、`tmp`，光理清谁调谁就要好几天，改一处还怕牵连一片。
+
+好名字加上清楚的参数写法，就是让代码自己说话：名字告诉你这是什么、单位是多少，写法告诉你什么必传、什么可选、拼错了立刻报错。这样别人不用读你的实现，也能放心地用。
 
 ## 原书骨架与现代迁移
 
-官方章节围绕PEP 8与命名风格、参数设计、名称指南、命名空间与API、弃用与质量工具展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释“为什么”的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
+官方章节围绕PEP 8与命名风格、参数设计、名称指南、命名空间与API、弃用与质量工具展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释"为什么"的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
 
 承接前两项，把局部语法或工具放回应用数据流。阅读时沿输入、协议、状态、输出和证据追踪，避免只背API名称。
+
+把关键字参数边界用代码固化下来：必需项用 <Term def="按位置顺序传入、调用时不可省略的必需参数">位置参数</Term> 承担，可选项用 <Term def="用星号分隔符强制调用方必须写参数名的参数">关键字限定参数</Term> 隔离，下面两种写法对比同一个"加载记录"接口：
+
+<CodeTabs>
+  <Tab label="Python · 关键字限定签名">
 
 ```python
 def load_records(path, *, encoding="utf-8", strict=True):
@@ -28,12 +48,32 @@ def load_records(path, *, encoding="utf-8", strict=True):
     ...
 ```
 
+  </Tab>
+  <Tab label="概念 · 参数边界拆解">
+
+```text
+path     位置必传 —— 每次调用都要给，不能遗漏
+encoding 关键字可选 —— 调用方写全名，拼错即报错
+strict   关键字开关 —— 默认严格，宽松模式需显式声明
+```
+
+  </Tab>
+</CodeTabs>
+
+下面用交互台把参数边界摆出来：先预测把可选项改成只能按名字传、拼错名字会怎样，再动手验证；打开"注入故障"还能看接口怎么失败。
+
+<PyaInteractionLab chapter="choosing-good-names" />
+
 ## 机制一：责任与数据流
 
 名字应按变量、常量、函数、类和模块的角色保持一致；风格检查能发现形式偏差，但语义是否准确仍需领域评审。 参数从真实用例迭代出来，必需项、默认值和关键字边界共同形成API；任意参数能扩展接口，也可能吞掉拼写错误和破坏可发现性。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
 
 提醒我们：抽象不能消除成本，只会改变成本出现的位置。包装、生成器、构建系统、CI或缓存都必须说明资源、顺序和异常传播。
 
+弃用旧 API 时，替代路径要和 <Term def="标记旧接口将被删除、引导调用方迁移的标准告警类型">弃用告警</Term> 同时给出，下面两种视角对比同一段迁移逻辑：
+
+<CodeTabs>
+  <Tab label="Python · 弃用告警模式">
 
 ```python
 import warnings
@@ -43,11 +83,29 @@ def old_api(value):
     return new_api(value)
 ```
 
+  </Tab>
+  <Tab label="概念 · 弃用四要素">
+
+```text
+替代路径  指向 new_api，调用方能立即迁移
+告警类型  DeprecationWarning，工具链可捕获
+调用深度  stacklevel=2，告警指向调用方而非本函数
+删除期限  需在文档标明主版本号，到期才删除
+```
+
+  </Tab>
+</CodeTabs>
+
 ## 机制二：失败与边界
 
-布尔名称表达判断，序列用复数，映射说明键值含义，并避免data、manager等泛称；名称应让读者无需展开实现即可预测单位和失败。 模块树决定用户导入路径，公共API要小而稳定；内部重排通过显式导出隔离，不能把所有实现细节暴露为偶然契约。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
+布尔名称表达判断，序列用复数，映射说明键值含义，并避免data、manager等泛称；名称应让读者无需展开实现即可预测单位和失败。 模块树决定用户导入路径，公共API要小而稳定；内部重排通过 <Term def="模块中声明哪些名字对外可见的白名单">显式导出</Term> 隔离，不能把所有实现细节暴露为偶然契约。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
 
 历史工具不等于无价值。正确迁移是先提取声明式配置、隔离、持续反馈和可回滚发布等不变量，再用维护中的接口重写；错误做法是机械替换命令却保留隐式环境和不可追踪副作用。
+
+公共 API 要小而稳定，`__all__` 把内部重排隔离起来，下面两种视角对比同一段导出逻辑：
+
+<CodeTabs>
+  <Tab label="Python · 显式导出">
 
 ```python
 __all__ = ["Client", "connect"]
@@ -55,6 +113,18 @@ __all__ = ["Client", "connect"]
 from .client import Client
 from .transport import connect
 ```
+
+  </Tab>
+  <Tab label="概念 · 导出契约边界">
+
+```text
+__all__  白名单 —— 只有这些名字对 from package import * 可见
+Client   类导出 —— 内部拆分不影响外部导入路径
+connect  函数导出 —— 实现可从 transport 模块迁移，签名不变即可
+```
+
+  </Tab>
+</CodeTabs>
 
 ## 机制三：证据闭环
 
@@ -73,12 +143,80 @@ from .transport import connect
 
 ## 常见误区
 
+### 误区 1
+**现象 →** 用 `data`、`manager`、`info` 等泛称命名
+**原因 →** 读者无法从名字预测单位和失败，必须展开实现才能理解
+**修法 →** 名字含领域语义：`user_count` 而非 `data`，`retry_queue` 而非 `manager`
+
+### 误区 2
+**现象 →** 用 `**kwargs` 吞掉所有可选参数
+**原因 →** 拼写错误不报错，IDE 无法提示，API 不可发现
+**修法 →** 必需项位置参数，可选项关键字参数，`*` 分隔符阻止位置穿透
+
+### 误区 3
+**现象 →** 弃用 API 只加注释不告警
+**原因 →** 调用方看不到提示，升级后突然报错
+**修法 →** 用 `warnings.warn` 加 `DeprecationWarning` + `stacklevel=2`，标明删除版本
+
+### 误区 4
+**现象 →** 模块里所有函数都暴露为公共 API
+**原因 →** 内部重排会破坏外部导入路径，改动牵连面过大
+**修法 →** 用 `__all__` 白名单隔离内部实现，只暴露稳定接口
 
 ## 本章回顾
 
 本章逐项覆盖PEP 8与命名风格、参数设计、名称指南、命名空间与API、弃用与质量工具。方法是用可读接口表达责任，用边界测试证明失败语义，再以可重建环境和制品证据完成闭环。
 
+## 小结
 
-## 术语表
+- 命名按角色一致：布尔用判断词、序列用复数、映射说明键值含义
+- 参数边界：必需项位置、可选项关键字，`*` 分隔防位置穿透
+- 公共 API 要小而稳定，用 `__all__` 隔离内部重排
+- 弃用须给替代路径、告警、期限和兼容窗口
+- 风格检查发现形式偏差，语义准确仍需领域评审
 
+## 练习与验收
 
+<Exercises>
+
+**问题 1：** 为什么 `def f(a, *, b)` 中 `b` 只能用关键字传？
+
+<Answer>
+
+`*` 是关键字限定分隔符：它吃掉之后的 positional arguments，迫使调用方写 `f(1, b=2)`。拼错 `f(1, c=2)` 会立即报 `unexpected keyword argument`，而不是被 `**kwargs` 静默吞掉。
+
+</Answer>
+
+**问题 2：** `warnings.warn` 的 `stacklevel=2` 有什么作用？
+
+<Answer>
+
+`stacklevel=2` 让告警指向调用 `old_api` 的那一行代码，而不是 `old_api` 内部的 `warnings.warn` 行。这样用户看到的是"你在第 X 行调了旧 API"，能直接定位并迁移。
+
+</Answer>
+
+**问题 3：** 为一个"重试连接"功能设计命名与签名，要求名称能预测单位和失败、可选参数用关键字限定、并提供弃用旧入口的告警。（独立实现）
+
+<Answer>
+
+名称：`retry_connect(host, *, retries=3, timeout=5, backoff=1.0)` —— `retries` 是次数、`timeout` 是秒、`backoff` 是倍率，调用方一看便知单位。旧入口 `connect(host)` 加 `warnings.warn("use retry_connect", DeprecationWarning, stacklevel=2)` 并转发调用。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="位置参数">按位置顺序传入、每次调用都不能省的必需参数，写在签名最前面。</GlossaryItem>
+  <GlossaryItem term="关键字限定参数">星号 `*` 之后的参数，调用时必须写全参数名才能传；名字拼错会立刻报错，不会被 `**kwargs` 偷偷吞掉。</GlossaryItem>
+  <GlossaryItem term="弃用告警">用 `warnings.warn` 配合 `DeprecationWarning` 发出的提醒，告诉调用方这个旧接口要删了、该改用哪条新路径。</GlossaryItem>
+  <GlossaryItem term="显式导出">模块里用 `__all__` 列出的对外可见名单，只有名单里的名字能被外部导入，内部怎么重排都不影响调用方。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Tarek Ziade《Expert Python Programming》"
+  adaptedUrl="https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
+/>
