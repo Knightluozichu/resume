@@ -23853,6 +23853,63 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       PyaInteractionLab: module0.PyaInteractionLab,
     } as ChapterMdxComponents;
   },
+  "python-crash-course/00-basics/pcc-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/pcc-learning-map");
+    return {
+      PccLearningMapLab: module0.PccLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/01-official/getting-started": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/pcc-getting-started");
+    return {
+      PccGettingStartedLab: module0.PccGettingStartedLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/02-official/variables-and-simple-data-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/python-crash-course/v2/variables-and-simple-data-types");
+      return {
+        PccVariablesLabelsLab: module0.PccVariablesLabelsLab,
+      } as ChapterMdxComponents;
+    },
+  "python-crash-course/03-official/introducing-lists": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/introducing-lists");
+    return {
+      PccIntroducingListsLab: module0.PccIntroducingListsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/03-projects/pcc-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/pcc-final-review");
+    return {
+      PccFinalReviewLab: module0.PccFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/04-official/working-with-lists": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/working-with-lists");
+    return {
+      PccWorkingWithListsLab: module0.PccWorkingWithListsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/05-official/if-statements": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/if-statements");
+    return {
+      PccIfStatementsLab: module0.PccIfStatementsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/06-official/dictionaries": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/dictionaries");
+    return {
+      PccDictionariesLab: module0.PccDictionariesLab,
+    } as ChapterMdxComponents;
+  },
   "ray-tracing-weekend/01-output/rtw-01-output-image": async () => {
     const module0 =
       await import("@/components/mdx/ray-tracing-weekend/v2/rtw-01-output-image");

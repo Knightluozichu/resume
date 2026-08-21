@@ -1774,18 +1774,18 @@
 
 ### 8.2 python-crash-course（22 章 · 待修 22 章 · 88 项）
 
-**书籍状态**：待修复
+**书籍状态**：🔧 修复中（8/22 章完成，2026-08-21：新增 dictionaries 补 PccDictionariesLab 真可视化组件 + §6 CodeTabs + §7 ≥3 误区 + §8 小结/独立题 + v2 frontmatter；tsc 0、render 200、visual audit PASS）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | python-crash-course/00-basics/pcc-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 2 | python-crash-course/01-official/getting-started.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 3 | python-crash-course/02-official/variables-and-simple-data-types.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 4 | python-crash-course/03-official/introducing-lists.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 5 | python-crash-course/03-projects/pcc-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 6 | python-crash-course/04-official/working-with-lists.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 7 | python-crash-course/05-official/if-statements.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
-| 8 | python-crash-course/06-official/dictionaries.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
+| 1 | python-crash-course/00-basics/pcc-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-20 |
+| 2 | python-crash-course/01-official/getting-started.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-20 |
+| 3 | python-crash-course/02-official/variables-and-simple-data-types.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-20 |
+| 4 | python-crash-course/03-official/introducing-lists.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-20 |
+| 5 | python-crash-course/03-projects/pcc-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-20 |
+| 6 | python-crash-course/04-official/working-with-lists.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-20 |
+| 7 | python-crash-course/05-official/if-statements.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-20 |
+| 8 | python-crash-course/06-official/dictionaries.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ✅ 已完成 | 2026-08-21 |
 | 9 | python-crash-course/07-official/user-input-and-while-loops.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
 | 10 | python-crash-course/08-official/functions.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |
 | 11 | python-crash-course/09-official/classes.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺独立题 | ⬜ 待修复 | — |

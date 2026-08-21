@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pcc3-06"
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,9 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccDictionariesLab } from "@/components/mdx/python-crash-course/v2/dictionaries";
+
+{/* 知识点清单：key-value binding(键空间格图)/CRUD add-modify-remove-get(交互键空间)/missing-key policy 对比(对比图)/dictionary views items-keys-values(对比图)/nested shape list-of-dicts-dict-of-lists-dict-of-dicts(分层结构图)/hashable key(比喻)/sentinel 区分缺失与None(代码对照) */}
 
 <Objectives>
 
@@ -28,7 +35,7 @@ import { Attribution } from "@/components/mdx/attribution";
 
 ## 为什么dictionary首先定义一个key space
 
-list用位置回答“第几个”，dictionary用hashable key回答“哪个名字对应哪个值”。key必须唯一，因此再次给同一key赋值会替换value；value可重复、可为任意对象。这个模型适合record fields、lookup table和按identity索引的数据。
+list用位置回答"第几个"，dictionary用hashable key回答"哪个名字对应哪个值"。key必须唯一，因此再次给同一key赋值会替换value；value可重复、可为任意对象。这个模型适合record fields、lookup table和按identity索引的数据。
 
 先预测`alien["points"]`在key不存在时发生什么，`alien.get("points", 0)`是否会把0写回dictionary，以及两个不同key能否指向同一list。语法都像读取，但missing policy和ownership不同。
 
@@ -49,15 +56,41 @@ list用位置回答“第几个”，dictionary用hashable key回答“哪个名
 
 <Term def="当前dictionary中所有可查询key的集合；CRUD会以不同方式改变或读取这个空间。">key space</Term>
 
+> 猜一猜：给已有key赋新值会增加第二个同名key吗？`del`和`pop`在删除行为上有什么区别？切到下方交互图验证。
+
+<PccDictionariesLab />
+
+<CodeTabs>
+  <Tab label="CRUD 操作">
+
 ```python
 alien = {"color": "green", "points": 5}
-alien["x_position"] = 0
-alien["color"] = "yellow"
+alien["x_position"] = 0      # add
+alien["color"] = "yellow"    # modify
 
-earned = alien.pop("points")
-speed = alien.get("speed", "medium")
+earned = alien.pop("points") # remove 并返回 value
+speed = alien.get("speed", "medium")  # get 只读
 print(earned, speed, alien)
 ```
+
+  </Tab>
+  <Tab label="hashable key 与 mutable value">
+
+```python
+# key 必须 hashable
+valid = {("x", 0): "origin"}   # tuple 可 hash
+# invalid = {[1, 2]: "bad"}   # list 不可 hash → TypeError
+
+# value 可以是 mutable；多个 key 引用同一对象
+shared = [1, 2]
+a = {"x": shared}
+b = {"y": shared}
+a["x"].append(3)
+print(b["y"])  # [1, 2, 3] — 同一对象
+```
+
+  </Tab>
+</CodeTabs>
 
 方括号赋值既可add也可modify，行为取决于key是否已存在。`del mapping[key]`找不到key会KeyError；`pop(key)`删除并返回value，也可提供default。先决定调用方是否需要被删value，再选del或pop。
 
@@ -69,9 +102,11 @@ value可以是list、dictionary或class instance。多个key若引用同一mutab
 
 ## Using get to Access Values
 
-`mapping[key]`表达“该key必须存在”，缺失时KeyError；`mapping.get(key, default)`表达“缺失是预期分支”，返回default且不写入mapping。若value本身可能是None，`get`返回None无法区分missing和present-but-None，可先用`key in mapping`或使用独特sentinel。
+`mapping[key]`表达"该key必须存在"，缺失时KeyError；`mapping.get(key, default)`表达"缺失是预期分支"，返回default且不写入mapping。若value本身可能是None，`get`返回None无法区分missing和present-but-None，可先用`key in mapping`或使用独特sentinel。
 
 <Term def="对key不存在时应报错、返回default、创建值还是跳过的明确业务规则。">missing-key policy</Term>
+
+> 猜一猜：`profile.get("timezone")` 返回 None 时，能确定这个 key 缺失吗？下方代码展示了 sentinel 如何区分。
 
 ```python
 profile = {"name": "Ada", "nickname": None}
@@ -106,6 +141,9 @@ print(timezone is sentinel)  # True: missing
 
 <Term def="items、keys、values返回的动态视图，反映dictionary当前内容并为迭代暴露不同元素单位。">dictionary view</Term>
 
+<CodeTabs>
+  <Tab label="三种 view 迭代">
+
 ```python
 favorite_languages = {
     "ada": "python",
@@ -122,9 +160,27 @@ for name in sorted(favorite_languages):
 print(set(favorite_languages.values()))
 ```
 
+  </Tab>
+  <Tab label="迭代中修改的两种安全方式">
+
+```python
+# 方式一：快照迭代后再删
+mapping = {"a": 1, "b": 2, "c": 3}
+for key in list(mapping):
+    if key == "b":
+        del mapping[key]
+
+# 方式二：构建新 dictionary
+mapping = {"a": 1, "b": 2, "c": 3}
+filtered = {k: v for k, v in mapping.items() if k != "b"}
+```
+
+  </Tab>
+</CodeTabs>
+
 ### 迭代时修改key space会破坏遍历
 
-在for mapping中add/remove key可能触发“dictionary changed size during iteration”。如果需要筛选删除，先对`list(mapping)`快照迭代，或构建新dictionary。只修改已有key对应value虽不改变size，也要确保循环的读写contract清晰。
+在for mapping中add/remove key可能触发"dictionary changed size during iteration"。如果需要筛选删除，先对`list(mapping)`快照迭代，或构建新dictionary。只修改已有key对应value虽不改变size，也要确保循环的读写contract清晰。
 
 大dictionary的view是动态的，不等于独立snapshot。若后续逻辑需要固定输入，显式复制keys或items；若要实时反映变化，保持view但不要跨越复杂异步边界。
 
@@ -164,25 +220,35 @@ for username, info in users.items():
 
 ## 选择dictionary还是list
 
-若主要问题是“第几个”和顺序遍历，list更自然；若是“给定唯一key取value”，dictionary更自然。用list反复线性查ID会隐藏lookup意图，用dictionary保存允许重复且无唯一key的records则会被迫制造脆弱key。
+若主要问题是"第几个"和顺序遍历，list更自然；若是"给定唯一key取value"，dictionary更自然。用list反复线性查ID会隐藏lookup意图，用dictionary保存允许重复且无唯一key的records则会被迫制造脆弱key。
 
 有时两者并存：list保存展示顺序，dictionary按ID索引详情。双结构提高查询效率也带来一致性成本，任何add/remove都必须同时更新；在小型学习程序中优先选择单一source of truth。
 
 <Callout type="trap" title="get(key, default) 会把default写进dictionary">
-get只读取。缺失时返回default但mapping不变；若后续需要持久化默认值，显式赋值或采用有清楚副作用契约的创建方法。
+**现象 →** 误以为 `get` 缺失时会把 default 自动写入 mapping，于是 `d.get("tags", []).append("new")` 期待下次能读到。
+**原因 →** `get` 只读取，返回的 default list 是独立对象，不会自动进入 dictionary。
+**修法 →** 要持久化先显式 `d["tags"] = d.get("tags", []) + ["new"]` 或改用 `setdefault` / `defaultdict`。
 </Callout>
 
 <Callout type="trap" title="dictionary有插入顺序，所以所有输出都天然稳定">
-插入顺序稳定不等于业务需要的排序。数据来源和构建顺序变化会改变输出；用户可见或snapshot测试需要字母/数值规则时显式sorted并写key。
+**现象 →** 依赖 insertion order 做业务排序，认为"Python 3 字典有序所以没问题"。
+**原因 →** insertion order 不等于业务需要的字母/数值顺序；数据来源和构建顺序变化会改变输出。
+**修法 →** 用户可见或 snapshot 测试需要稳定顺序时，显式 `sorted(mapping, key=...)` 并写清规则。
 </Callout>
 
-## 本章回顾：key、view与shape
+<Callout type="trap" title="遍历中直接删除或添加 key">
+**现象 →** 在 `for k in d:` 循环里执行 `del d[k]`，抛出 `RuntimeError: dictionary changed size during iteration`。
+**原因 →** dictionary iterator 在遍历时检测底层 size 变化，防止丢失元素或重复访问。
+**修法 →** 先对 `list(d)` 快照再删除，或构建新 dictionary：`{k: v for k, v in d.items() if keep(k)}`。
+</Callout>
 
-1. dictionary由唯一key-value binding组成，add/modify/remove改变key space或value。
-2. 方括号表示required key，get表示可选missing-key policy且不会写入default。
-3. items、keys、values是不同dictionary views，顺序和去重规则要显式。
-4. nested data shape让每层container表达identity、fields、order或multiplicity。
-5. 结构复杂时先声明schema、路径和ownership，再写访问代码。
+## 小结
+
+- dictionary 由唯一 key-value binding 组成，add 扩大、modify 更新、remove 缩小 key-space
+- 方括号 `[]` 表示 required key（缺失抛 KeyError），get 表示可选 missing-key policy 且不写入 default
+- items、keys、values 是不同 dictionary views，顺序和去重规则要显式声明
+- nested data shape 让每层 container 表达 identity、fields、order 或 multiplicity
+- 结构复杂时先声明 schema、路径和 ownership，再写访问代码
 
 <Exercises>
 
@@ -198,6 +264,32 @@ get只读取。缺失时返回default但mapping不变；若后续需要持久化
 
 <Answer>主要按顺序展示且记录可重复时用list of dicts；频繁按唯一username查找时用dict of dicts，外层key表达identity、内层fields表达record。若同时需要自定义顺序，可保留单一records mapping并另外保存ID order，但要测试一致性。</Answer>
 
+**问题 4：独立实现 `safe_get_path(data, path, default)` —— 输入嵌套字典和点分路径（如 `"users.ada.city"`），安全逐层 get 并在任一中间层缺失时返回 default（独立实现）**
+
+<Answer>
+
+```python
+from typing import Any
+
+def safe_get_path(data: dict[str, Any], path: str, default: Any = None) -> Any:
+    current: Any = data
+    for key in path.split("."):
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current
+
+# 测试
+sample = {"users": {"ada": {"city": "london"}, "grace": {}}}
+assert safe_get_path(sample, "users.ada.city") == "london"
+assert safe_get_path(sample, "users.grace.city") is None
+assert safe_get_path(sample, "users.alan.city") is None
+assert safe_get_path(sample, "users.ada.country", "unknown") == "unknown"
+```
+
+关键：逐层检查 `isinstance(current, dict)` 和 `key in current`，任一失败立即返回 default，避免 AttributeError 或 KeyError。点分路径比多重括号更易读，但边界验证不能省略。
+</Answer>
+
 </Exercises>
 
 ## 术语表
@@ -210,4 +302,4 @@ get只读取。缺失时返回default但mapping不变；若后续需要持久化
   <GlossaryItem term="nested data shape" definition="多层container分别表达identity、fields、order或multiplicity的结构。" />
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 6: Dictionaries" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+<Attribution />
