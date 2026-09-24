@@ -270,3 +270,10 @@ B10全部关闭/服务退出/tmp清理/归档后TS0完成后开始。四个互�
 B11清理确认：四worker已关闭，所属PID91440/91441/91469退出，3100空，原/tmp批次目录不存在；证据归档`quality/artifacts/repair-batches/2026-09-24-11/session/`。移除本批2个运行时/软链路径和17个生成二进制，归档无TS-family文件，归档后全库TypeScript exit0。原dirty/.next/repo tmp/依赖保留。首次清理脚本因PID清单格式不同在发送信号前失败，已留日志并修正读取格式后完成。
 
 提交范围说明：本轮B1–B11共41篇实际修订章及其必要组件/文档/视觉驱动修复；以HEAD为底单独合成提交快照，仅合入这些章节的质量条目并重建注册表、汇总与待办。原先未提交的16篇python-advanced发布开关与PCC2–5章不纳入本次push，原文件仍留工作区。因此提交快照为1833failed/200queued/1747passed/829published，与包含用户原修改的工作区总数不同，不应混为发布退回或本批退步。未修订的4568项提交台账保持HEAD原值。
+
+### B11 push / 服务器更新尝试与停止点
+
+- 内容提交 `d3336110ae5a618bc8e073d704587b46aea3c7ec` 已推送 `origin/main`，远端SHA核对一致。独立提交快照全库TypeScript/4609MDX/内链通过；四本实时审计中本轮41章全部通过，未纳入的PCC2–5及有效管理其余13章失败如实保留。Markdown两空格换行是正文语义，不为消除diff空白提示改动已验证正文。
+- push后在该已测提交快照实际执行 `bash deploy.sh --book dsa-cpp` 与 `bash deploy.sh --book effective-executive`，均exit1，停于1/5发布资格。DSA C++除未批准发布外，整书官方概念覆盖率86.8%低于90%；有效管理其余13章失败且未批准发布。章节passed并不等于整书发布门禁通过。
+- 未开始生产构建，未上传release/切换服务器，线上版本本任务未改动。没有添加白名单、设置draft:false或使用allow-incomplete/skip-visual。完整门禁日志随提交验收日志保存于本批本地归档。
+- **第11批已验收、已清理、代码已push；服务器更新被既有门禁阻止。按用户命令暂停，等待新指令，未开启第12批。**
