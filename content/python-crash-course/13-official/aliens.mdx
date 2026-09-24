@@ -1,259 +1,431 @@
 ---
-title: "第13章：Aliens!"
+title: "第13章：外星人舰队"
 type: C
-section: "Part II · Projects · Alien Invasion"
+section: "第二部分 · 项目 · 外星人入侵"
 order: 13
-description: "建立Alien fleet的布局、移动、collision与game-over闭环，把多个Sprite组织成可验证状态机。"
+description: "用坐标推导舰队布局，统一处理碰边、子弹命中和生命状态，运行不依赖图片的完整 Pygame 示例。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+practiceMode: code
+officialUnitId: pcc3-13
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccAliensLab } from "@/components/mdx/python-crash-course/v2/aliens";
+
+{/* 需求分析（先于实现）：原稿存在空 Stepper、图片资源缺失、无专属可视化、 中英文混杂，以及行列公式与 while 边界不一致。目标是读者能从坐标解释一次 舰队更新，而不是记住接口名。范围仅 pcc3-13，不借用第12章未交付组件。 知识点→视觉→验证映射： 1. Alien Class / 精灵、矩形：实际尺寸轮廓＋碰撞放大图；术语入词典；代码块2。 2. Building the Alien Fleet / 舰队布局：二维坐标阵列，宽度改变列数；词典；练习1。 3. Moving the Fleet / 碰边、共享方向：同边两目标＋逐帧回放；布局概念内展开；练习2。 4. Bullet Collisions / 矩形碰撞：贴边、1像素重叠、两弹争同一目标、补队；词典；练习3。 5. Ship Collisions / Game Over / 生命状态：碰船或触底统一出口，3→2→1→0；词典；练习3。 空间设计：340宽SVG内绘制真实192–320×300战场；小图放大4倍显示碰撞区间。 时间设计：帧起点→子弹移动→groupcollide→补队→舰队移动→生命结算； useTeachingTimeline标记落在各阶段起点；纯函数重算，支持回退而不重复扣血。 错误样本：两只同时碰边时按数量重复下降；正常仅聚合一次。 来源：2026-09-23出版社403；目录范围outline-only；官方sprite/rect和作者公开配套200。 只依据公开资料独立重写，不声称读到原书全文，不沿用其授权。 实现差异显式说明：完整槽位布局、整型步长、当前生命计数、无阻塞重生。 工程：此任务不改registry/quality；浏览器双视口与注册由main验收。 */}
 
 <Objectives>
 
-- 能计算Alien fleet的rows与columns，实现由screen、ship和alien尺寸决定的二维布局
-- 能分析edge detection、fleet_direction与drop speed的协作，实现整队移动且不穿越screen boundary
-- 能设计bullet-alien、alien-ship和bottom collision的状态转换，并验证repopulate、ship limit与game_active
+- 能推导行列数和每只外星人的坐标，修改窗口宽度后验证队形仍在边界内。
+- 能改出整队只下降一次的碰边逻辑，并运行带射击、补队和生命计数的独立程序。
+- 能回答：子弹仅贴边会命中吗？两颗子弹争同一目标时谁被移除？最后一条生命用完后哪些更新停止？
 
 </Objectives>
 
-## 为什么多个 Aliens 需要 fleet 级规则
+## 先把队伍排好，再让整队行动
 
-单个Alien只需要image、rect和水平update；一支fleet还需要formation、共享direction、edge transition和整体重建。若每个Alien独立随机换向，队形会散开；若每个对象碰边都执行一次drop，同一帧可能下移多次。正确层次是：Alien报告自己是否到edge，AlienInvasion聚合结果并对全Group执行一次fleet transition。
+在一张平面地图上安排许多敌人，不只是多画几个角色。间距要一致，边缘的角色走不动时，其他角色也要一起转向，否则整队很快散开。
 
-先预测三个场景：screen变窄时一行数量怎样变化；最右Alien碰边时左侧Alien是否也应换向；最后一个Alien被击中后下一帧应为空还是重建fleet。把答案写成formation与state invariants，再运行交互图观察变化。
+我们还要判断谁击中了谁，以及什么时候重新开局。如果每个角色都独立扣生命，一次撞击可能结束整场游戏。本章把“单个角色的位置”和“整场游戏的决定”分开管理。
 
-<Term def="按统一间距、方向与下移规则组织的一组Alien Sprite。">alien fleet</Term>
+## 五个概念，组成一条更新链
 
-本章仍沿用第12章主循环：check events、update ship、update bullets、update aliens、draw。新增复杂度来自Groups之间的关系，而不是另起一套loop。每个transition只发生在一个owner中，才能判断对象为何消失、life为何减少或game为何停止。
+### 1. 外星人对象：形状和位置分开
 
-## Creating the Alien Class
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center [&_a]:justify-center"><Term def="继承 pygame.sprite.Sprite 的游戏对象，可被组统一更新、绘制和移除。">精灵</Term></span>不是一张图片本身。Pygame 的组绘制需要对象提供 `image` 和 `rect`；`Alien`
+类负责生成自己的外观与位置，舰队的共同方向则由外层维护。
 
-`Alien`继承`Sprite`，加载image并取得rect；初始位置可放在左上margin，`x`保存float horizontal position。它只知道settings与screen，不直接知道ship lives、score或整个fleet。局部职责越小，后面collision删除Sprite时越少隐藏副作用。
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center [&_a]:justify-center"><Term def="用整数坐标记录左、上、宽、高的轴对齐区域；右边和下边不包含在区域内。">矩形</Term></span>对应 `pygame.Rect`。`rect.x` 是左边，`rect.right = rect.x +
+rect.width`，纵坐标向下增加。它参与碰撞，与画出来的眼睛、透明角落不是一回事。下方实验的蓝框就是实际检测区域，不是装饰边框。
+
+### 2. 舰队布局：每只外星人占一个固定槽位
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center [&_a]:justify-center"><Term def="按行列坐标排列多个精灵，并让它们共享水平移动和下降规则的队形。">舰队布局</Term></span>先决定容量，再创建对象。本章固定外星人宽 24、高 18，飞船高
+16；左右各留一个外星人宽度，每个槽位含一个物体和一个同宽空隙。
+
+本章选择**完整槽位法**，并非逐字复现作者第三版的 `while` 循环。即使尾部还能挤下半个槽位，也不再放置外星人。这样容量公式与创建循环严格一致。
+
+- 横向可用空间：`W - 2 × 24`；列数为 `max(0, (W - 48) // 48)`。
+- 纵向预留三个外星人高度和一个飞船高度；行数为 `max(0, (H - 54 - 16) // 36)`。
+- 第 `c` 列、第 `r` 行的左上角：`x = 24 + 48 × c`，`y = 18 + 36 × r`，下标从 0 开始。
+
+窗口为 320×300 时，横向 272÷48 取整为 5，纵向 230÷36 取整为 6，共 30 只。最后一只位于 `(216, 198)`，右下角 `(240, 216)`，不占据飞船顶边 `y=272`。实验调到宽 272 时只剩 4 列；增加窗口宽度不一定立即增加列数，必须够一个完整槽位。
+
+### 3. 碰边是整队决策，不是每只各自换向
+
+先问“是否有外星人的左边不大于 0，或右边不小于 W”，得到一个布尔值。如果有，所有外星人下降 18，共享方向乘以 −1；随后整队水平移动 `2 × direction`。同一帧最多下降一次。
+
+实验的“两只同时碰右边”中，两只的 `x=296`，右边都为 320。正常结果是 `x=294`，两只的纵坐标从 18、54 变为 36、72。错误模式却下降两次、翻转两次，得到 `x=298`、右边 322，队形越界。
+
+这里用小整数步长且初始坐标对齐；真实游戏若速度大于离边距离，单纯“先检查当前位置，再移动”可能越界。需要预判下一位置或限制统一位移，不能对每只分别夹紧，否则会挤坏队形。本例不声称解决任意高速移动。
+
+### 4. 子弹命中：先明确矩形和删除语义
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center [&_a]:justify-center"><Term def="两个矩形在横向和纵向都有正长度重叠；仅共享一条边不算命中。">矩形碰撞</Term></span>用于调用 `pygame.sprite.groupcollide(bullets, aliens, True,
+True)`，默认检查 `rect`。两个 `True`
+让命中的子弹和目标执行
+`kill()`，从其所属的所有组移除；没有命中的子弹不在返回字典中。
+
+实验中目标的纵区间是 `[90, 108)`。子弹移动后顶边为 108，只贴边，不命中；顶边为 107，则重叠 1 像素。这符合官方的半开边界，不是按中心点或透明像素检测。
+
+Pygame 2.6.1 的 `groupcollide` 按第一组的遍历顺序处理子弹，立即从第二组移除命中目标。样本中 B1 先入组并消灭 A1，B2 就不能再命中 A1。**不能先算全部碰撞对，再统一删除**，那会错误地移除 B2。一弹同时重叠多个尚存目标时，则会移除这些目标。
+
+命中后若舰队为空，先清除剩余子弹，再创建新舰队。本章还将方向恢复为向右；同一帧随后会移动新舰队。实验“命中最后一只”可看到补队阶段首个坐标为 `(24,18)`，下一阶段变为 `(26,18)`。
+
+### 5. 生命状态：碰船与触底共用一次出口
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center [&_a]:justify-center"><Term def="由当前可用生命数和 game_active 共同决定能否继续更新的游戏状态。">生命状态</Term></span>把多个危险条件收敛到一个决定。先用 `pygame.sprite.spritecollideany(ship, aliens)` 检查飞船矩形：返回一个碰撞对象或 `None`，它本身不删除对象。再检查是否有 `alien.rect.bottom >= H`。把两项用 `or` 合并后，最多调用一次失去生命处理。
+
+本章 `lives=3` **包含当前正在用的飞船**，所以三次受击依次为 2、1、0；到 0 当次就令 `game_active=False`。这不是照抄作者配套的备用飞船判断约定。仍有生命时清弹、重建舰队、飞船居中；没有生命时停止位置更新，但仍处理退出、重开和绘图事件。
+
+实验下方的状态图用 3→2→1→0 表达实际转移。“飞船被撞”和“外星人触底”走同一条边；最后一条生命样本可验证结束后不能继续模拟下一帧。
+
+## 交互实验：先预测，再逐阶段核对
+
+猜一猜：窗口宽从 320 减到 272，会少几列？两只同时碰边该下降多少？选好样本，先写下判断，再按“下一步”到检测阶段观察坐标。
+
+<PccAliensLab />
+
+建议按以下顺序操作；每次改参数都会从帧起点重新开始：
+
+1. **完整舰队**：比较宽 320 与 272 的首行数量，验证 5 列变 4 列，行间距仍为 36。
+2. **两只同时碰右边**：到“舰队移动”阶段，正常下降 18；勾选错误模式重试，观察下降 36、方向没变及右侧越界。
+3. **子弹仅贴边 / 重叠 1 像素**：在“子弹上移”和“矩形命中”间来回切换，看放大图与删除轮廓。
+4. **两弹争同一目标 / 命中最后一只**：前者在命中阶段留下 B2，后者先清空舰队、再补队并移动；不要把这两步看成同时发生。
+5. **飞船被撞 / 触底 / 最后一条生命**：到生命结算观察 3→2 或 1→0。最后按“完整重置”，确认宽度、样本、错误模式、帧数、生命和方向全部复原。
+
+<Callout type="info">
+  这是固定坐标、固定步长的浏览器教学模型，不运行
+  Pygame。播放速度只是讲解速度，不是游戏帧率；它模拟下方程序的矩形检测和更新顺序，不模拟图片遮罩、声音或连续碰撞。默认组遍历次序的双弹样本依据
+  Pygame 2.6.1 源码核验，实际引擎行为以你安装的版本为准。
+</Callout>
+
+## 从空目录运行：八段拼成一个文件
+
+下面是独立重写的最小程序，不需要第 12 章文件，不读取 `images/alien.bmp`，也没有缺失的 `Settings` 或 `Ship` 类。**将下面编号 1—8 的 Python 代码块按顺序原样拼到同一个 `aliens_min.py`，块间保留换行**；安装命令不要拼进去。
+
+使用 Python 3，在自己的练习目录执行：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install pygame==2.6.1
+# 保存下方八段代码后执行：
+python aliens_min.py
+```
+
+Windows 用 `.venv\Scripts\activate` 激活环境。需要有图形桌面；没有显示设备时无法交互窗口。本次修复环境未安装 Pygame，未声称真实窗口运行成功；已做的语法与模型检查见交付说明。
+
+### 1. 定义战场和共享状态
+
+窗口尺寸与实验一致。方向只存一份；`lives` 是当前生命，不是额外备用数量。组负责管理对象成员。
+
+```python
+import pygame
+
+W, H = 320, 300
+AW, AH, SH = 24, 18, 16
+BG, BLUE, WHITE = (20, 25, 35), (90, 170, 235), (235, 240, 245)
+pygame.init()
+screen = pygame.display.set_mode((W, H))
+clock = pygame.time.Clock()
+aliens = pygame.sprite.Group()
+bullets = pygame.sprite.Group()
+state = dict(direction=1, lives=3, game_active=True, wave=1)
+```
+
+### 2. 构造外星人、飞船和子弹
+
+`Surface` 在内存中产生实心图形，不加载资源文件。外星人只保存位置，不自己翻转整队方向。飞船和子弹用相同的精灵属性约定，但尺寸不同。
 
 ```python
 class Alien(pygame.sprite.Sprite):
-    def __init__(self, game) -> None:
+    def __init__(self, x, y):
         super().__init__()
-        self.screen = game.screen
-        self.settings = game.settings
-        self.image = pygame.image.load("images/alien.bmp")
-        self.rect = self.image.get_rect()
-        self.rect.x = self.rect.width
-        self.rect.y = self.rect.height
-        self.x = float(self.rect.x)
+        self.image = pygame.Surface((AW, AH))
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect(topleft=(x, y))
 
-    def update(self) -> None:
-        self.x += self.settings.alien_speed * self.settings.fleet_direction
-        self.rect.x = self.x
 
-    def check_edges(self) -> bool:
-        screen_rect = self.screen.get_rect()
-        return self.rect.right >= screen_rect.right or self.rect.left <= 0
+def block(x, y, width, height):
+    obj = pygame.sprite.Sprite()
+    obj.image = pygame.Surface((width, height))
+    obj.image.fill(WHITE)
+    obj.rect = obj.image.get_rect(topleft=(x, y))
+    return obj
+
+
+ship = block(W // 2 - 16, H - 28, 32, SH)
 ```
 
-`fleet_direction`使用1和-1，把方向与speed magnitude分开。不要把left speed写成负配置、right speed写成正配置并在多个位置翻转；共享sign提供单一source of truth。`check_edges()`是query，不修改direction，这让聚合者可先检查再统一transition。
+### 3. 按公式创建舰队与完整重开
 
-## Building the Alien Fleet：从可用空间推导行列
-
-一行不是硬编码8只。可用horizontal space等于screen width减去左右margin，书中以alien width作为margin和spacing单位：
+当尺寸太小，不能创建有效队伍时，明确报错而不是每帧不断补空队。这里只允许固定窗口，不处理运行中缩放。每次补队和重生都恢复统一方向。
 
 ```python
-available_space_x = settings.screen_width - (2 * alien_width)
-number_aliens_x = available_space_x // (2 * alien_width)
+def create_fleet():
+    columns = max(0, (W - 2 * AW) // (2 * AW))
+    rows = max(0, (H - 3 * AH - SH) // (2 * AH))
+    if columns == 0 or rows == 0:
+        raise ValueError("窗口不足以容纳一个完整槽位")
+    aliens.empty()
+    for row in range(rows):
+        for column in range(columns):
+            aliens.add(Alien(AW + 2 * AW * column,
+                             AH + 2 * AH * row))
+    state["direction"] = 1
 
-available_space_y = (
-    settings.screen_height - (3 * alien_height) - ship_height
-)
-number_rows = available_space_y // (2 * alien_height)
+
+def restart():
+    state.update(lives=3, game_active=True, wave=1)
+    bullets.empty()
+    ship.rect.midbottom = (W // 2, H - 12)
+    create_fleet()
 ```
 
-integer division只创建完整可容纳的slot，余数留作边缘空间。每个Alien的位置由column与row确定：`x = alien_width + 2 * alien_width * column`，`y = alien_height + 2 * alien_height * row`。这里的2倍包含对象自身width和一个width的gap。
+### 4. 移动子弹、命中和补队
 
-<Stepper>
-  <Step title="调整screen并推导fleet shape">
-  </Step>
-  <Step title="先计算capacity再创建Sprites">
-    用一个prototype Alien取得真实rect尺寸；不要假设image像素与配置常量永远一致。
-  </Step>
-  <Step title="验证formation invariant">
-    每个rect在screen内，任意相邻列间距一致，最后一行不会覆盖ship的初始区域。
-  </Step>
-</Stepper>
-
-<Term def="由可用screen空间、Sprite尺寸和间距共同决定的fleet二维排列。">formation layout</Term>
+迭代副本时删除出界子弹，避免改动正在遍历的集合。碰撞调用中的两个布尔值缺一不可：只删目标会保留穿透子弹，只删子弹会让外星人不消失。清完最后一只后，剩余子弹也必须清掉。
 
 ```python
-def _create_fleet(self) -> None:
-    alien = Alien(self)
-    alien_width, alien_height = alien.rect.size
-    current_x, current_y = alien_width, alien_height
-
-    while current_y < self.settings.screen_height - 3 * alien_height:
-        while current_x < self.settings.screen_width - 2 * alien_width:
-            self._create_alien(current_x, current_y)
-            current_x += 2 * alien_width
-        current_x = alien_width
-        current_y += 2 * alien_height
-```
-
-第三版可用while按实际space创建，也可先算columns/rows后嵌套range；两者核心相同：layout来自geometry。测试不同screen尺寸、不同alien image和极小可用空间，确保不会创建负数或screen外对象。
-
-## Moving the Fleet：检测一次，整队改变一次
-
-每帧更新Aliens前，先遍历Group检查是否任一成员到edge。若是，所有Aliens向下移动`fleet_drop_speed`，然后`fleet_direction *= -1`；再执行Group update产生下一步horizontal movement。若先update再check，对象可能已穿过boundary；若每发现一个edge Alien都调用drop，多个边缘成员会重复下移。
-
-<Term def="任一Alien接近左右screen boundary时触发的整支fleet下移并翻转方向。">edge transition</Term>
-
-```python
-def _check_fleet_edges(self) -> None:
-    for alien in self.aliens.sprites():
-        if alien.check_edges():
-            self._change_fleet_direction()
-            break
-
-def _change_fleet_direction(self) -> None:
-    for alien in self.aliens.sprites():
-        alien.rect.y += self.settings.fleet_drop_speed
-    self.settings.fleet_direction *= -1
-
-def _update_aliens(self) -> None:
-    self._check_fleet_edges()
-    self.aliens.update()
-```
-
-`break`非常关键：一个frame最多发生一次edge transition。direction放在settings是本书的简洁做法，但它属于可重置dynamic state；新game必须恢复为1，否则上一局game over时的方向会泄漏到下一局。第14章会把动态速度与方向统一初始化。
-
-<Stepper>
-  <Step title="逐帧执行drop-and-reverse">
-  </Step>
-  <Step title="检查最左与最右成员">
-    edge query必须使用rect footprint；只检查center会让半个image越界。
-  </Step>
-  <Step title="证明每帧至多一次transition">
-    给多个Aliens同时放在edge，调用一次update后fleet y只增加一个drop speed，direction只翻转一次。
-  </Step>
-</Stepper>
-
-## Bullet Collisions：Groups之间的批量关系
-
-`pygame.sprite.groupcollide(bullets, aliens, True, True)`检查两个Groups，返回collision dictionary，并按两个boolean删除碰撞双方。对于一发bullet消灭一只Alien，双方删除合理；若设计穿透弹，则第一个delete flag应为false。API参数表达game rule，不是固定模板。
-
-<Term def="两个Sprite或Group的rect重叠并触发对象删除、生命变化或得分等规则。">collision resolution</Term>
-
-```python
-def _update_bullets(self) -> None:
-    self.bullets.update()
-    for bullet in self.bullets.copy():
+def update_bullets():
+    for bullet in bullets.sprites():
+        bullet.rect.y -= 8
         if bullet.rect.bottom <= 0:
             bullet.kill()
-
-    pygame.sprite.groupcollide(
-        self.bullets, self.aliens, True, True
-    )
-
-    if not self.aliens:
-        self.bullets.empty()
-        self._create_fleet()
+    pygame.sprite.groupcollide(bullets, aliens, True, True)
+    if not aliens:
+        bullets.empty()
+        create_fleet()
+        state["wave"] += 1
 ```
 
-collision必须在bullets位置更新后检查，否则命中使用上一帧位置。fleet为空时清空残余bullets再重建，避免屏幕上方旧bullet立即击中新fleet。`if not self.aliens`依赖Group的truthiness；日志最好记录before count、collision count和after count，能区分“没检测到”与“已删完并重建”。
+### 5. 整队碰边只执行一次
 
-### 高速对象与tunneling边界
-
-基础项目用rect overlap离散检测。如果bullet每帧位移大于alien高度，它可能从一侧跳到另一侧而从未重叠，这叫tunneling。入门配置速度足够小；扩展时可限制step、substep update或做swept collision。理解这个边界能避免误判Group API失效。
-
-## Ship Collisions and Bottom Boundary
-
-`spritecollideany(ship, aliens)`检测任一Alien是否撞ship。另一个失败条件是Alien到达screen bottom；遍历Aliens，只要`rect.bottom >= screen_rect.bottom`就调用同一个`_ship_hit()`。两条检测路径必须汇聚到同一transition，避免一条减少life而另一条忘记清空objects。
-
-`_ship_hit()`的顺序是：若仍有ships，`ships_left -= 1`；清空Aliens和Bullets；创建新fleet；ship重新center；暂停短暂时间。暂停发生前应drain/控制输入，否则按住space可能在恢复瞬间创建多发bullet。更成熟实现可用timer state而不是blocking sleep，但本书checkpoint强调可见反馈。
-
-<Stepper>
-  <Step title="选择collision path并追踪状态">
-  </Step>
-  <Step title="复用ship-hit transition">
-    alien碰ship和到达bottom都调用同一helper；测试两条入口产生一致的clear、recenter与life结果。
-  </Step>
-  <Step title="区分life consumed与game over">
-    有剩余life时重建round；减到0时停止world update并显示可重新开始的inactive状态。
-  </Step>
-</Stepper>
-
-## Game Over：停止更新而不是销毁主循环
-
-`game_active`控制world是否更新：inactive时仍要处理event并绘制静态screen，窗口才能响应下一章的Play button。不要退出main loop后期待screen继续处理点击。game state从active经最后一次hit变inactive，restart会重置dynamic settings、statistics、Groups和ship位置，再设为active。
-
-<Term def="决定游戏world是否继续update，同时保留窗口事件与静态绘制的运行状态。">game active state</Term>
+`any(...)` 在首次真值处结束检查。先统一决定，再统一移动；这与在每个对象循环里改变共享方向不是同一回事。
 
 ```python
-while self.running:
-    self._check_events()
-    if self.stats.game_active:
-        self.ship.update()
-        self._update_bullets()
-        self._update_aliens()
-    self._update_screen()
-    self.clock.tick(60)
+def move_fleet():
+    at_edge = any(a.rect.left <= 0 or a.rect.right >= W
+                  for a in aliens)
+    if at_edge:
+        state["direction"] *= -1
+        for alien in aliens:
+            alien.rect.y += 18
+    for alien in aliens:
+        alien.rect.x += 2 * state["direction"]
 ```
 
-inactive期间不移动fleet或bullets，但event queue仍每帧读取。mouse cursor可重新显示，为第14章restart入口做准备。测试最后一条life：碰撞前`ships_left=1, game_active=True`，调用transition后应是0与false，且下一帧alien position不再变化。
+### 6. 危险检查与生命结算
 
-## 按状态不变量调试整个章节
+一帧顺序与实验严格一致：子弹先检测，舰队后移动，最后检查飞船和底线。若目标在本帧子弹阶段被消灭，它就不会再撞船；这是规则，不是视觉显示的先后错觉。本例不阻塞等待半秒，以免暂停期间停止处理窗口事件。
 
-formation invariant：所有Alien rect在screen内且spacing一致。motion invariant：一帧最多一次drop，所有成员共享direction。collision invariant：被删除Sprite不再留在Group。life invariant：一次hit只消耗一条ship，0时game inactive。repopulation invariant：fleet清空后恰好创建一支新fleet并移除旧bullets。
+```python
+def lose_life():
+    state["lives"] -= 1
+    bullets.empty()
+    aliens.empty()
+    state["game_active"] = state["lives"] > 0
+    if state["game_active"]:
+        ship.rect.midbottom = (W // 2, H - 12)
+        create_fleet()
 
-若出现偶发多减life，记录每帧调用`_ship_hit()`次数，通常是ship overlap持续多个frames或同一帧bottom与ship两条路径都触发。transition后立即clear Groups并return，可防止重复入口。若fleet突然跳很远，记录edge aliens数量和drop调用次数，检查是否遗漏`break`。
 
-<Callout type="trap" title="每个Alien碰边时各自翻转方向">
-fleet direction是共享规则。若成员独立翻转，队形会散开；若循环中每个edge成员都让整队drop，同一帧会重复下移。聚合一次edge结果，只执行一次transition并break。
+def tick():
+    if not state["game_active"]:
+        return
+    update_bullets()
+    move_fleet()
+    ship_hit = pygame.sprite.spritecollideany(ship, aliens) is not None
+    bottom_hit = any(a.rect.bottom >= H for a in aliens)
+    if ship_hit or bottom_hit:
+        lose_life()
+```
+
+### 7. 处理键盘输入
+
+方向键移动，空格发射，R 完整重开，Esc 退出。结束后仍处理事件，但不再移动和开火。子弹在按下空格时产生，以飞船当前的矩形位置为准。
+
+```python
+def handle_events():
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                return False
+            if event.key == pygame.K_r:
+                restart()
+            if (event.key == pygame.K_SPACE and state["game_active"]
+                    and len(bullets) < 3):
+                bullets.add(block(ship.rect.centerx - 2,
+                                  ship.rect.top - 8, 4, 8))
+    return True
+```
+
+### 8. 主循环：更新停止，绘图仍继续
+
+生命和波次直接显示在窗口标题里。当前阶段没有计分、音效或关卡升级；它们不是验证本章队形和碰撞所必需的部分。`tick(60)` 限制最高帧率，步长仍按帧计算；卡顿时不会自动按时间补偿距离。
+
+```python
+restart()
+running = True
+while running:
+    running = handle_events()
+    if not running:
+        break
+    if state["game_active"]:
+        keys = pygame.key.get_pressed()
+        ship.rect.x += 4 * (int(keys[pygame.K_RIGHT])
+                            - int(keys[pygame.K_LEFT]))
+        ship.rect.clamp_ip(screen.get_rect())
+        tick()
+    screen.fill(BG)
+    aliens.draw(screen)
+    bullets.draw(screen)
+    screen.blit(ship.image, ship.rect)
+    status = "RUN" if state["game_active"] else "GAME OVER - R"
+    pygame.display.set_caption(
+        f"Lives {state['lives']} | Wave {state['wave']} | {status}")
+    pygame.display.flip()
+    clock.tick(60)
+pygame.quit()
+```
+
+首次运行应见 5 列×6 行蓝色外星人、底部白色飞船和标题 `Lives 3`。左右键控制飞船；空格射中目标后双方消失。清空一波后波次增加，失败到 0 时画面仍响应 R 和 Esc。
+
+要精确复现边界，不必靠手速：在第 8 段的 `restart()` 后、`running = True` 前临时插入 `aliens.empty()`，再插入 `aliens.add(Alien(W - AW, 18), Alien(W - AW, 54))`。第一帧应统一下降一次。碰撞样本则换为 `aliens.add(Alien(96, 90), Alien(24, 18))`，并插入 `bullets.add(block(108, 116, 4, 8))`；首帧仅贴边，把 116 改成 115 才命中。验证后删掉这几行，R 也能恢复完整布局。
+
+## 常见误区
+
+<Callout type="trap">
+  **现象 →** 同时到边缘的外星人越多，下降越快。 **原因 →**
+  在每只外星人的检测分支里调用整队下降。 **修法 →** 聚合成一次
+  `any`，或在第一次处理后 `break`；用实验的双目标错误模式比较。
 </Callout>
 
-<Callout type="trap" title="game over时退出主循环最简单">
-退出loop后窗口不再处理event，也无法接收restart。用game_active停止world update，但继续event与draw；真正关闭窗口只由QUIT控制。
+<Callout type="trap">
+  **现象 →** 明明边缘碰到了，子弹却没消失。 **原因 →**
+  将接触误当成有面积重叠，或以为默认检测透明像素。 **修法 →** 输出双方 `rect`
+  的区间；贴边返回假。需要像素遮罩时才另用 `collide_mask`，不能悄悄更换规则。
 </Callout>
 
-## 本章回顾：从对象集合到可验证状态机
+<Callout type="trap">
+  **现象 →** 两颗子弹同时消失，Python 实际却留下第二颗。 **原因 →**
+  教学模拟先收集全部命中对，忽略了 `groupcollide(..., True, True)` 的即时删除。
+  **修法 →** 每颗子弹只检查仍存活的目标；固定组插入顺序验证。
+</Callout>
 
-1. Alien负责局部geometry与horizontal update，fleet规则由game聚合。
-2. rows与columns由screen、ship和alien尺寸推导，而不是硬编码数量。
-3. edge transition一帧只执行一次：整队drop，再翻转共享direction。
-4. groupcollide与spritecollideany把重叠映射到删除、重建与life变化。
-5. game_active停止world update但保留event loop，为restart提供入口。
+<Callout type="trap">
+  **现象 →** 飞船碰撞且有外星人触底时，一帧丢两条生命。 **原因 →**
+  两条独立分支都执行了失去生命函数。 **修法 →**
+  合并为一个危险条件；减生命后立即计算是否结束，避免 0 生命还重生一次。
+</Callout>
+
+## 小结与练习
+
+- 按完整槽位推导行列，再从行列生成坐标。
+- 整队共享方向，一帧只下降一次。
+- 严格矩形重叠才命中，删除顺序影响第二颗子弹。
+- 清队后先清弹补队，危险合并后只扣一次生命。
+- 生命归零停止更新，事件与绘图仍运行。
+
+<div className="[&_button]:min-h-11 [&_button]:min-w-11">
 
 <Exercises>
 
-**问题 1：如何验证fleet layout在不同screen和image尺寸下仍正确？**
+**问题 1：** 把程序的 `W` 改为 272，保持 `H=300`。先手算列数、行数和最后一只外星人的左上角，再在实验里验证。为什么不能把列数向上取整？
 
-<Answer>由available width/height和alien rect推导columns与rows，检查每个rect都在screen内、相邻间距一致、最后一行不侵入ship区域。测试窄屏、宽屏、不同alien尺寸和只能容纳一列的边界，不用固定期望数量代替geometry invariant。</Answer>
+<Answer>
 
-**问题 2：多个Aliens同帧到edge时，为什么只能执行一次drop-and-reverse？**
+列数 `(272-48)//48=4`，行数 `(300-54-16)//36=6`，共 24 只。最后一只下标为 `(3,5)`，左上角是 `(168,198)`，右下角是 `(192,216)`。完整槽位法只接受整个 48 像素槽位，向上取整会违反预留空间与槽位规则；不是说尾部任何空隙都绝对不能画角色，而是不能混用另一种排列约定。
 
-<Answer>edge是fleet级事件。遍历成员发现第一个true就调用一次_change_fleet_direction并break；否则同一帧会按edge成员数量重复下移或把direction翻转偶数次。测试同时放两个成员在boundary，断言y只加一个drop speed且direction只乘一次-1。</Answer>
+</Answer>
 
-**问题 3：最后一条ship被撞后应检查哪些状态？**
+**问题 2：** 改 Demo 对应的 Python 代码，将下降距离从 18 改为 9。独立编写断言验证：在双目标碰右边样本中，两只纵坐标应变为 27、63，横坐标均为 294，方向为 −1；无论多少只碰边都只下降一次。
 
-<Answer>一次collision只让ships_left从1到0，game_active变false，world后续帧不再移动；event与draw仍运行。Aliens和Bullets按restart policy清理，ship重新定位或等待重启；mouse可见。bottom collision与direct ship collision必须得到同一结果。</Answer>
+<Answer>
+
+只改 `move_fleet()` 里 `alien.rect.y += 18` 为 `+= 9`，不要在外星人循环中翻转方向。在第 8 段主循环前临时运行以下检查；`restart()` 恢复正常游戏。
+
+```python
+aliens.empty()
+aliens.add(Alien(W - AW, 18), Alien(W - AW, 54))
+state["direction"] = 1
+move_fleet()
+positions = [(a.rect.x, a.rect.y) for a in aliens]
+assert positions == [(W - AW - 2, 27), (W - AW - 2, 63)]
+assert state["direction"] == -1
+restart()
+```
+
+当 `W=320`，表达式 `W-AW-2` 就是 294。原实验不提供下降距离滑块，这道题要求修改可执行 Python；网页正常模式仍用 18 作对照。
+
+</Answer>
+
+**问题 3：** B1、B2 按此顺序入组，移动后均与同一只 A1 重叠，另有一只远处的 A2。调用 `groupcollide(bullets, aliens, True, True)` 后剩谁？如果飞船只剩 1 条生命，且同一危险阶段同时碰船和触底，是否还能重生？
+
+<Answer>
+
+B1 先命中 A1，两者被移除；B2 检查时已没有 A1，因此留下 B2 与 A2，命中字典只有 B1 对应 A1。不要用“所有命中对的集合”重建这个结果。若没有 A2，后续补队阶段还会清掉 B2，但那不是第二次命中。
+
+危险条件只求一次 `ship_hit or bottom_hit`，所以生命从 1 降到 0，而非 −1。`game_active=False`，不重建舰队，不再更新位置或接受开火；仍能处理退出和 R 重开。若同一只危险目标已经在本帧子弹阶段被消灭，则不会出现在后面的危险检查中。
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+</div>
+
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="alien fleet" definition="按统一间距、方向与下移规则组织的一组Alien Sprite。" />
-  <GlossaryItem term="formation layout" definition="由可用screen、Sprite尺寸和间距推导出的二维排列。" />
-  <GlossaryItem term="edge transition" definition="任一成员触边时整队下移并翻转方向的转换。" />
-  <GlossaryItem term="collision resolution" definition="rect重叠后执行对象删除、life变化或得分的规则。" />
-  <GlossaryItem term="game active state" definition="停止或继续world update，同时保留窗口event和draw的状态。" />
+  <GlossaryItem term="精灵">
+    可加入 Pygame
+    组的游戏对象。图像用于画出来，矩形用于定位；组可以批量绘制，kill
+    会把对象从其所属组移除。
+  </GlossaryItem>
+  <GlossaryItem term="矩形">
+    左、上、宽、高组成的整数区域。右边等于左边加宽，下边等于上边加高；右、下边界不包含在检测面积里。
+  </GlossaryItem>
+  <GlossaryItem term="舰队布局">
+    用行列和固定间距排出的队形。个体保存位置，整队共用方向与下降决定。
+  </GlossaryItem>
+  <GlossaryItem term="矩形碰撞">
+    横向、纵向都存在正长度重叠才算命中。默认 groupcollide 和 spritecollideany
+    用的就是精灵矩形，不是画面中不透明像素。
+  </GlossaryItem>
+  <GlossaryItem term="生命状态">
+    本章用 lives 表示包含当前飞船的剩余次数，用 game_active
+    决定是否更新。每次危险最多扣一次，到零当次结束。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 13: Aliens!" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 来源与核验边界
+
+本章对应 Eric Matthes《Python Crash Course》第三版第 13 章 **Aliens!**。2026-09-23 抓取出版社图书页返回 **HTTP 403**，不能声称取得或核对了原书全文；书籍访问级别为 **outline-only**。以下技术事实来自可公开访问的官方文档及作者配套代码，并据此独立重写教学结构与最小程序。
+
+- [出版社书籍页](https://nostarch.com/python-crash-course-3rd-edition)：书籍出处；本次访问受限，不作为全文证据。
+- [作者第三版配套站](https://ehmatthes.github.io/pcc_3e/)与[第 13 章公开代码目录](https://github.com/ehmatthes/pcc_3e/tree/main/chapter_13)：核对从创建外星人、建队、移动、射击到结束游戏的范围。
+- [作者 ending_the_game/alien_invasion.py](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_13/ending_the_game/alien_invasion.py)：核对先更新子弹及补队，再移动舰队与检查危险；碰边后 `break` 保证统一换向一次。本文的槽位公式、当前生命计数、方向重置和无阻塞重生是明确的教学选择，不称为原文实现。
+- [Pygame Sprite 文档](https://www.pygame.org/docs/ref/sprite.html#pygame.sprite.Sprite)：精灵及组所需的属性；[groupcollide](https://www.pygame.org/docs/ref/sprite.html#pygame.sprite.groupcollide)、[spritecollideany](https://www.pygame.org/docs/ref/sprite.html#pygame.sprite.spritecollideany)与[collide_rect](https://www.pygame.org/docs/ref/sprite.html#pygame.sprite.collide_rect)：核对默认碰撞方式、删除参数及返回值。
+- [Pygame Rect 文档](https://www.pygame.org/docs/ref/rect.html#pygame.Rect.colliderect)：核对整数坐标、半开边界和仅贴边不相交。
+- [Pygame 2.6.1 sprite.py 源码](https://github.com/pygame/pygame/blob/2.6.1/src_py/sprite.py)：核对 `groupcollide` 逐颗子弹调用 `spritecollide` 并立即删除的顺序。文档抓取页显示 v2.6.0，示例固定安装 2.6.1，此处以固定标签源码补足顺序事实。
+
+<Attribution
+  sourceUrl={frontmatter.sourceUrl}
+  workTitle="Python Crash Course，第3版，第13章：Aliens!"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

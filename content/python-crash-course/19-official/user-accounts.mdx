@@ -1,168 +1,353 @@
 ---
-title: "第19章：User Accounts"
+title: "第19章：用户账户与私人学习记录"
 type: C
-section: "Part II · Projects · Web Applications"
+section: "第二部分 · 项目 · Web 应用"
 order: 19
-description: "为Learning Log加入ModelForm、POST/CSRF、login/logout/register、owner关系和逐对象authorization。"
+description: "在 Django 5.2 中实现表单、注册登录与退出，并用所有者限定查询和真实客户端测试守住私人记录边界。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+practiceMode: code
+officialUnitId: pcc3-19
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
-import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccUserAccountsLab } from "@/components/mdx/python-crash-course/v2/user-accounts";
+
+{/* 先行决策卡：C 型、code 实践，pcc3-19 六组知识归入五个机制。
+1 ModelForm/GET/POST/CSRF → 表单代码 + 请求边界图，术语模型表单、CSRF，练习1。
+2 新增编辑 Entry/validate/redirect/PRG → instance 对照 + 可切换的校验与回读支路，术语PRG，练习1。
+3 accounts app/login/POST logout/register → cookie-session-user 真实关系图 + 官方视图与客户端会话断言，术语认证，练习3。
+4 login_required/LoginRequiredMixin → 匿名断路 + 函数与类视图代码，术语归入认证，练习2。
+5 Topic.owner/ForeignKey User → 用户、文件夹Topic、页Entry归属边，代码与旧数据迁移核验，术语外键，练习3。
+6 Http404/authorization → owner范围内查找 + 他人/未知对象断路，术语授权，练习2。
+独立组件PccUserAccountsLab：332宽纵向双层关系/请求图、所有文字模型16px、五个原生控件、无动画、完整reset、status；不使用通用卡片或评分滑块。 */}
+
+<div className="min-w-0 [&_button]:min-h-11 [&_button]:min-w-11 [&_a]:break-words">
 
 <Objectives>
 
-- 能实现Topic/Entry ModelForm的GET、invalid POST、valid POST与redirect流程，并分析CSRF和validation errors
-- 能设计accounts app的login、logout和register session状态，实现login_required与safe next-page navigation
-- 能区分authentication与authorization，把Topic连接到owner并验证用户不能查看或编辑他人Entry
+- 能搭建独立可运行的学习记录站点，实现新增主题、新增条目与编辑条目，并显示校验错误。
+- 能为函数视图和类视图加上登录保护，再验证列表、详情和写入都只允许访问本人的数据。
+- 能回答：Alice 带着合法表单凭证提交 Bob 的条目编号，为什么仍应得到 404，而不是保存成功？
 
 </Objectives>
 
-## 为什么“用户已登录”仍不等于数据安全
+## 一、同一张地图，不应打开所有人的房间
 
-authentication回答“request是谁”，authorization回答“这个identity能否对这个object执行这个action”。若view只加`@login_required`，Alice仍可能把URL中的entry_id改成Bob的id并编辑；这属于object-level authorization缺失。安全设计必须同时限制list query、detail lookup、create ownership和edit lookup。
+把学习记录看成地图上的私人房间：每人可以进入自己的房间，写下今天学到的事。只检查“来访者报过姓名”，却不检查“房间属于谁”，改变门牌号就可能读到别人的笔记。
 
-先预测：invalid form应redirect还是保留用户输入；browser刷新valid POST页面为何可能重复创建；Alice访问Bob的topic id应看到403、404还是内容。接下来把这些选择写进request-state matrix并用tests验证。
+本章既要让人写得进去，也要让不该进入的人停在门外。最终检验不是页面上有没有隐藏按钮，而是直接输入别人的门牌号，服务器也不会交出内容。
 
-<Term def="把request.POST绑定到Form instance、保留submitted values并产生cleaned_data或field errors的过程。">form binding</Term>
+## 二、五个机制，不把安全寄托在页面上
 
-本章从read-only页面增加writes与identity，风险明显上升。每个write view都遵循method gate、CSRF、binding、validation、ownership、save与redirect顺序，不把安全检查散落在template。
+### 1. 模型表单：把“能填什么”变成白名单
 
-## ModelForm: Let the Model Define Data Shape
+<Term def="根据模型字段生成输入项并执行字段校验的 Django 表单类，即 ModelForm。">模型表单</Term>连接浏览器输入与数据库，但不会自动知道当前用户是否有权修改这条记录。`TopicForm` 和 `EntryForm` 都只开放 `text`：即使请求带有 `owner=2`、`topic=2`，这些额外字段也不进入表单的有效数据。
 
-`ModelForm`根据Model fields生成form fields并复用validation。TopicForm只暴露`text`，EntryForm只暴露`text`；`topic`与`owner`不能由browser自由提交，否则攻击者可把record连接到他人对象。
+读取表单用 GET；提交用 POST。必须按 `request.method` 判断，不能用 `request.POST or None`：空 POST 是一次应报错的提交，不是“没提交”。失败时返回原来的绑定表单，既保留输入，又展示错误；成功才保存。实验的“text 非空”模拟本章必填校验，完整代码还会检查主题的 200 字符上限。
+
+### 2. CSRF：浏览器会替你带 cookie，不代表你同意写入
+
+<Term def="跨站请求伪造防护：Django 对不安全请求检查令牌，并在适用时检查 Origin 或 Referer；不负责对象访问权限。">CSRF</Term>防护阻止第三方页面借浏览器自动携带的凭证发起非预期写入。模板里的 `csrf_token` 产生隐藏字段，中间件负责验证；默认 GET 不要求令牌，也不能用来保存数据。
+
+**CSRF 不是授权，也不是“请求可信”的总证明。** Alice 从本站表单获得正确令牌后，仍能手动修改 URL 和 POST。我们既不关闭中间件，也不把令牌通过当成所有权通过。实验中缺令牌的 POST 在登录装饰器之前就返回 403；合法令牌访问别人的对象则会走到所有权检查并返回 404。这两个错误由不同的边界产生。
+
+### 3. 认证：cookie 是查会话的线索，不是用户名声明
+
+<Term def="确认请求对应哪个用户；Django 的登录会话把后续请求关联到已认证用户，即 authentication。">认证</Term>负责回答“你是谁”。本章沿用默认数据库会话：浏览器持有 `sessionid` cookie，服务端会话保存用户标识等信息，认证中间件得到 `request.user`。匿名请求也可能有会话 cookie，但没有已认证用户关联，不能据此创建有主人的主题。
+
+`login()` 建立登录会话并轮换相关凭证；`logout()` 清空当前会话，不删除用户或笔记。函数视图用 `login_required`，类视图用放在继承列表最左侧的 `LoginRequiredMixin`。两者只限制匿名者，不替你筛选数据。看实验上半部：换用户时，会话连向不同的人；房间的归属边却不随访客改变。
+
+### 4. 外键与授权：从“我的对象”中找，而不是先交出对象
+
+<Term def="保存对另一张表中记录的引用；ForeignKey 在这里表达 Topic 属于哪个 User、Entry 属于哪个 Topic。">外键</Term>让归属成为数据关系。`Topic.owner` 指向用户，`Entry.topic` 指向主题；条目不重复保存 owner，以免出现“条目归 Alice、主题归 Bob”的矛盾。本章新增 owner，第 18 章的基础模型并没有这个字段。
+
+<Term def="判断当前用户是否可以对指定对象执行某个动作，即 authorization；已登录不是自动获准。">授权</Term>在查询处落实：`get_object_or_404(Topic, pk=topic_id, owner=request.user)`。Entry 则沿关系限定 `topic__owner=request.user`。编号存在但属于别人、编号根本不存在，都在“我的范围”里找不到，统一返回 404，避免用详情响应区分私人对象是否存在。列表同样要过滤；只保护编辑接口仍会泄露正文。
+
+### 5. PRG：保存之后，刷新应该重读而不是重写
+
+<Term def="POST 成功后返回重定向，浏览器再发 GET 读取结果；即 POST-Redirect-GET。">PRG</Term>把写入与结果页分开。本章成功保存返回 302，接下来的 GET 展示主题；刷新结果页只重复 GET。校验失败则直接返回 200 和错误，不应重定向丢掉绑定表单。
+
+PRG 不等于幂等：双击提交或网络重试仍可能发送两次 POST，产生两条记录。高价值操作还需唯一约束、事务或幂等键。本章不把“成功后刷新安全”夸大为“任何重发都安全”。实验中 POST 成功才出现末端回读弯线；GET 和无效 POST 都没有这条线。
+
+## 三、先预测，再改变请求边界
+
+猜一猜：把对象从 Alice 的 Entry 11 改为 Bob 的 Entry 22，即使保留有效 CSRF，路径会在哪停下？
+
+<PccUserAccountsLab />
+
+1. 初始为 Alice、GET、Entry 11。会话连向 Alice，Entry 经 Topic 也连向 Alice，响应为 200。
+2. 对象改成 22，归属线改连 Bob，请求在 owner 查询处断开；改为 999 时，实体与归属边消失，但都是 404。
+3. 选 POST，关闭有效 CSRF。拦截移到最前面；此时换匿名身份，仍先得到 403，而非登录重定向。
+4. 打开 CSRF，匿名会被导向登录；选 Bob 访问 22，关闭“text 非空”，则到达校验边界但不写入。
+5. 恢复非空，看到保存后的回读支路。点击“重置全部请求条件”，检查五项输入、连线和状态全部回到第一步。
+
+图是对下方 `edit_entry` 的有限模型，不执行数据库操作，不存放真实 cookie。`owner/topic` 伪造用后面的真实测试验证；不要把浏览器里的模拟结果当成服务器安全证据。
+
+## 四、从空目录复现：项目、数据和表单
+
+### 1. 固定可运行契约
+
+使用 **Python 3.12、Django 5.2 LTS**；本次代码在 **3.12.12 / 5.2.17** 验证。项目包名是 `learning_log`，业务应用是 `learning_logs`，认证应用是新建的 `accounts`。本节完整给出模型、路由、视图、模板，不需要另一章尚未完成的文件。
+
+以下命令供读者在自己的练习目录运行，不要在本站仓库安装 Django 或改项目依赖。有现成且同版本的虚拟环境时直接使用其中的 Python，跳过安装。
+
+```bash
+mkdir accounts-practice && cd accounts-practice
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install "Django==5.2.17"
+python -m django startproject learning_log .
+python manage.py startapp learning_logs
+python manage.py startapp accounts
+```
+
+所有代码块首行标明文件。**首次出现时替换该文件；标注“续”的代码按顺序追加**。`settings.py` 是唯一例外：只在生成文件末尾追加下列配置。保留生成的中间件、模板配置、SQLite、密码验证器；不要删掉 `SessionMiddleware`、`CsrfViewMiddleware`、`AuthenticationMiddleware`。
 
 ```python
+# learning_log/settings.py（追加到生成配置末尾）
+INSTALLED_APPS += ["learning_logs", "accounts"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "learning_logs:topics"
+LOGOUT_REDIRECT_URL = "accounts:login"
+```
+
+这是本地实验配置，不是生产部署配置。`DEBUG=True` 与生成的开发密钥只用于本地；真正上线还需 HTTPS、安全 cookie、秘密管理、登录限速等，本章不声称覆盖这些部署问题。
+
+### 2. 新数据库：直接建立带 owner 的最终模型
+
+`settings.AUTH_USER_MODEL` 默认指向 Django 的 User，避免把实现写死为某个用户类。`CASCADE` 表示删除被引用对象时一并删除其依赖数据；删除用户会删除其主题，再删除其条目。实际产品若要求留档，应重新设计删除政策，而不是随意更换外键行为。
+
+```python
+# learning_logs/models.py
+from django.conf import settings
+from django.db import models
+
+
+class Topic(models.Model):
+    text = models.CharField(max_length=200)
+    date_added = models.DateTimeField(auto_now_add=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+    )
+
+    def __str__(self):
+        return self.text
+
+
+class Entry(models.Model):
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE)
+    text = models.TextField()
+    date_added = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.text[:50]
+```
+
+下面的白名单故意不含 owner 和 topic。`commit=False` 让视图先取得未落库的对象，补上由服务端决定的关系，再保存。`EntryForm(instance=entry)` 才是编辑：漏掉 `instance` 会新建一条，而不是更新原记录。
+
+```python
+# learning_logs/forms.py
 from django import forms
 from .models import Entry, Topic
+
 
 class TopicForm(forms.ModelForm):
     class Meta:
         model = Topic
         fields = ["text"]
-        labels = {"text": ""}
+        labels = {"text": "主题（最多 200 字符）"}
+
 
 class EntryForm(forms.ModelForm):
     class Meta:
         model = Entry
         fields = ["text"]
-        labels = {"text": ""}
-        widgets = {"text": forms.Textarea(attrs={"cols": 80})}
+        labels = {"text": "学习条目"}
+        widgets = {"text": forms.Textarea(attrs={"rows": 6})}
 ```
 
-`fields`是write allowlist。使用`"__all__"`会让未来新增owner/internal fields意外暴露。ModelForm提供required、max_length等基础checks，domain规则可在`clean_text()`或`clean()`中实现；validation失败必须显示具体errors。
+### 3. 已有第 18 章数据：不能把默认 owner 填成第一个用户
 
-## GET and POST Form Lifecycle
+**新练习库跳过本节迁移分支。已有数据则先备份、停止对外访问和写入，不要直接给非空外键随便填默认值。** 如果把全部旧主题分给刚注册的第一个用户，他会立刻看到所有旧笔记；即使迁移成功，也已经泄露。
 
-GET创建unbound form并返回200。POST用`request.POST`创建bound form；`is_valid()`执行field parse与validation。valid后save并redirect，invalid则用同一个bound form重新render，让用户看到原input和errors。
+采用两阶段方案：先将上面的 `owner` 临时声明为 `null=True`，保留所有查询的 owner 限定，生成并应用“可空外键”迁移。未认领数据的 owner 为 NULL，不会匹配任何普通登录用户；迁移窗口不能继续运行第 18 章不带过滤的旧视图。然后由管理员依据可核实的外部归属记录建立映射，不按姓名相似度或最小 ID 猜测。
+
+下面是**需人工填入已核实映射**的数据迁移函数。放进 `makemigrations --empty learning_logs` 生成的迁移文件，保留生成的依赖，并把 `migrations.RunPython(assign_verified)` 加进 `operations`。它先验证映射覆盖全部待认领主题和有效用户，再统一写入；默认空映射在有旧数据时会中止，而非偷偷分配。
 
 ```python
+# 旧库专用迁移函数；不能作为新库 models.py 的一部分
+from django.conf import settings
+from django.db import transaction
+
+
+def assign_verified(apps, schema_editor):
+    Topic = apps.get_model("learning_logs", "Topic")
+    User = apps.get_model(*settings.AUTH_USER_MODEL.split("."))
+    db = schema_editor.connection.alias
+    verified = {}  # 管理员填入 {topic_id: 已确认的user_id}
+    with transaction.atomic(using=db):
+        pending = set(Topic.objects.using(db).filter(
+            owner__isnull=True).values_list("pk", flat=True))
+        if not pending:  # 全新空库也必须能够重放这条迁移
+            return
+        users = set(User.objects.using(db).values_list("pk", flat=True))
+        if set(verified) != pending or not set(verified.values()) <= users:
+            raise RuntimeError("归属证据不完整，停止迁移")
+        for topic_id, user_id in verified.items():
+            Topic.objects.using(db).filter(pk=topic_id).update(owner_id=user_id)
+```
+
+映射是每个部署自己的证据，不是可以复用的教学常量。迁移依赖必须包含前一步可空字段迁移及用户模型的迁移依赖（跨应用依赖可用 `migrations.swappable_dependency(settings.AUTH_USER_MODEL)`）；函数使用历史模型，不能直接导入当前 `models.py`；无待认领行时直接返回，让新安装和测试空库也能重放迁移。无法确认归属的数据继续隔离且暂停完成迁移，或按既定政策离线归档，不能交给任意“占位用户”。
+
+核对 NULL 数量为零及逐用户列表后，去掉 `null=True`，再生成非空约束迁移；若命令询问一次性默认值，不选择任意用户，而选择已通过数据迁移处理的路径。最后在备份副本运行本章授权测试，再恢复服务。这个流程是不可自动猜测归属的运维操作，不要对未备份的真实库试错。
+
+## 五、业务视图：先限定对象，再绑定表单
+
+### 1. 列表与详情都要保护
+
+新建 `learning_logs/views.py`。列表采用类视图，明确展示 `LoginRequiredMixin`；其余用函数视图。`get_queryset()` 不是界面筛选，而是服务器真正只查询当前用户的主题。下面所有标“续”的片段接在同一文件。
+
+```python
+# learning_logs/views.py
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_http_methods
+from django.views.generic import ListView
+from .forms import EntryForm, TopicForm
+from .models import Entry, Topic
+
+
+class TopicsView(LoginRequiredMixin, ListView):
+    template_name = "learning_logs/topics.html"
+    context_object_name = "topics"
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        return Topic.objects.filter(owner=self.request.user).order_by("-date_added")
+
 
 @login_required
+@require_http_methods(["GET"])
+def topic(request, topic_id):
+    item = get_object_or_404(Topic, pk=topic_id, owner=request.user)
+    entries = item.entry_set.order_by("-date_added")
+    return render(request, "learning_logs/topic.html", {
+        "topic": item, "entries": entries,
+    })
+```
+
+`get_object_or_404` 在给定查询条件找不到对象时抛出 `Http404`，由 Django 转成 404 响应。这里按隐私需求合并“无此对象”和“对象不属于你”，并非所有应用都必须用 404：公开存在的资源有时可用 403。但不要先向客户端返回对象内容，事后才检查所有权。
+
+### 2. 新主题的主人只能来自 request.user
+
+GET 用未绑定表单；POST 用请求数据绑定。验证通过以后，先填 owner 再写库。字段白名单与服务端赋值缺一不可：前者限制可修改的字段，后者建立必需的归属关系。
+
+```python
+# learning_logs/views.py（续）
+@login_required
+@require_http_methods(["GET", "POST"])
 def new_topic(request):
-    if request.method != "POST":
-        form = TopicForm()
-    else:
-        form = TopicForm(data=request.POST)
-        if form.is_valid():
-            new_topic = form.save(commit=False)
-            new_topic.owner = request.user
-            new_topic.save()
-            return redirect("learning_logs:topics")
-
-    return render(request, "learning_logs/new_topic.html", {"form": form})
+    form = TopicForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        item = form.save(commit=False)
+        item.owner = request.user
+        item.save()
+        return redirect("learning_logs:topic", topic_id=item.pk)
+    return render(request, "learning_logs/form.html", {
+        "form": form, "title": "新建主题",
+    })
 ```
 
-只允许GET/POST可用`@require_http_methods`; 不支持method应返回405而不是当GET显示空form。`commit=False`先创建unsaved instance，server设置owner后再save，避免trust client-controlled owner id。
+### 3. 新条目也要检查目标主题，不能只保护编辑
 
-<Term def="在成功write后返回redirect，让browser以GET读取结果页面并避免refresh重复提交。">POST-redirect-GET</Term>
-
-<Stepper>
-  <Step title="切换GET、invalid/valid POST与CSRF failure">
-  </Step>
-  <Step title="验证invalid POST不丢input">
-    response 200包含bound form、field errors和用户原值；database record count不变。
-  </Step>
-  <Step title="验证valid POST只创建一次">
-    save后302到named URL，follow-up GET显示record；refresh GET不会再次执行POST。
-  </Step>
-</Stepper>
-
-## CSRF Protection
-
-浏览器会自动附带site cookies，恶意site可诱导用户向Learning Log发送POST。Django CSRF middleware要求form中存在与cookie/session上下文匹配的token，证明request来自站点生成的form，而非第三方页面。
-
-<Term def="用不可预测token把state-changing request绑定到合法site context、抵御跨站伪造的机制。">CSRF token</Term>
-
-```django
-<form action="{% url 'learning_logs:new_topic' %}" method="post">
-  {% csrf_token %}
-  {{ form.as_div }}
-  <button name="submit">Add topic</button>
-</form>
-```
-
-CSRF不是authentication，也不判断owner；它只防跨站伪造。不要用`@csrf_exempt`修复missing token。API若用不同authentication model，应采用对应防护并明确same-site、CORS与token policy。
-
-## Adding and Editing Entries
-
-new entry URL包含topic id，但view必须从database取得且限定owner。form只提交text，server把new entry关联到已授权topic。edit view先取得Entry，再检查`entry.topic.owner == request.user`，然后用`instance=entry`绑定。
+常见漏洞是只检查“编辑条目”的 owner，却允许任何登录用户往别人的主题里新增内容。下面先在当前用户范围取 Topic；URL 参数与 POST 的 `topic` 都不能跳过这一步。表单只读取 text，保存时使用已经授权的 item。
 
 ```python
-from django.shortcuts import get_object_or_404
-
+# learning_logs/views.py（续）
 @login_required
+@require_http_methods(["GET", "POST"])
 def new_entry(request, topic_id):
-    topic = get_object_or_404(Topic, id=topic_id, owner=request.user)
-    if request.method != "POST":
-        form = EntryForm()
-    else:
-        form = EntryForm(data=request.POST)
-        if form.is_valid():
-            entry = form.save(commit=False)
-            entry.topic = topic
-            entry.save()
-            return redirect("learning_logs:topic", topic_id=topic.id)
-    return render(request, "learning_logs/new_entry.html", {"topic": topic, "form": form})
+    item = get_object_or_404(Topic, pk=topic_id, owner=request.user)
+    form = EntryForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        entry = form.save(commit=False)
+        entry.topic = item
+        entry.save()
+        return redirect("learning_logs:topic", topic_id=item.pk)
+    return render(request, "learning_logs/form.html", {
+        "form": form, "title": f"向 {item.text} 添加条目",
+    })
 ```
 
+### 4. 编辑在授权后的 instance 上执行
+
+Entry 的归属沿 `topic__owner` 查询。即使攻击者提交自己的 topic 编号，也不能把别人的 Entry “搬到自己名下”再改。查找发生在创建表单之前，因此越权请求不会得到带别人原文的表单，也不会进入验证或保存。
+
 ```python
+# learning_logs/views.py（续）
 @login_required
+@require_http_methods(["GET", "POST"])
 def edit_entry(request, entry_id):
     entry = get_object_or_404(
-        Entry.objects.select_related("topic"),
-        id=entry_id,
-        topic__owner=request.user,
+        Entry, pk=entry_id, topic__owner=request.user,
     )
-    topic = entry.topic
-    form = EntryForm(instance=entry) if request.method != "POST" else EntryForm(
-        instance=entry, data=request.POST
+    form = EntryForm(
+        request.POST if request.method == "POST" else None,
+        instance=entry,
     )
     if request.method == "POST" and form.is_valid():
         form.save()
-        return redirect("learning_logs:topic", topic_id=topic.id)
-    return render(request, "learning_logs/edit_entry.html", {"entry": entry, "form": form})
+        return redirect("learning_logs:topic", topic_id=entry.topic_id)
+    return render(request, "learning_logs/form.html", {
+        "form": form, "title": "编辑条目",
+    })
 ```
 
-把owner condition放进lookup比先`Entry.objects.get()`再if更不易忘记，也统一返回404。`instance`在GET显示existing text，在POST确保update同一record而非insert duplicate。
+不支持的方法由 `require_http_methods` 返回 405。装饰器的内外顺序也会影响失败响应：匿名安全请求先被登录检查重定向；缺少 CSRF 的不安全请求则可能在视图运行之前被中间件拦下。测试不能把所有失败都粗略归为“被保护了”。
 
-## Setting Up an Accounts App
+## 六、accounts：使用框架认证，不手写密码检查
 
-authentication是独立capability，创建`accounts` app并include其URLs。Django内置auth views可处理login/logout，减少password/session实现风险。project root router把`accounts/` include到app routes。
+### 1. 注册后建立登录会话
 
-```bash
-python manage.py startapp accounts
+`UserCreationForm` 会验证两次密码一致、用户名可用以及已配置的密码策略，并用密码哈希保存，而不是把明文密码写入数据库。本例默认使用 Django User；自定义用户模型需要相应调整注册表单。
+
+```python
+# accounts/views.py
+from django.contrib.auth import login
+from django.contrib.auth.forms import UserCreationForm
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_http_methods
+
+
+@require_http_methods(["GET", "POST"])
+def register(request):
+    if request.user.is_authenticated:
+        return redirect("learning_logs:topics")
+    form = UserCreationForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
+        login(request, user)
+        return redirect("learning_logs:topics")
+    return render(request, "learning_logs/form.html", {
+        "form": form, "title": "注册账户",
+    })
 ```
+
+### 2. 登录与退出使用内置视图
+
+新建 `accounts/urls.py`。Django 5.2 的 `LogoutView` 用 **POST 退出**，不是点击一个 GET 链接。退出也是状态改变，必须带 CSRF。登录失败保留表单并显示错误，不应自己把错误用户名与错误密码分开暴露。
 
 ```python
 # accounts/urls.py
@@ -172,195 +357,411 @@ from . import views
 
 app_name = "accounts"
 urlpatterns = [
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    path("login/", auth_views.LoginView.as_view(
+        template_name="registration/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("register/", views.register, name="register"),
 ]
 ```
 
-`LOGIN_URL`或默认route决定`login_required`的redirect destination；successful login的`next` parameter应只允许safe local URLs，防open redirect。新版Django logout通常使用POST，更符合state-changing action的method semantics；以项目所用version文档为准。
+匿名访问受保护页面时，登录 URL 会携带 `next`，例如 `/accounts/login/?next=/topics/`。内置 `LoginView` 验证重定向目标的主机与协议，外站 next 回退到 `LOGIN_REDIRECT_URL`；不要改写成 `redirect(request.POST["next"])`。登录完成后仍要执行目标视图的授权检查：站内 next 可以指向别人的编号，但不能因此获得内容。
 
-## Authentication and Session State
+### 3. 连接两层路由
 
-login form验证username/password，`login()`把authenticated user id与backend写入session；后续request由middleware设置`request.user`。password以hash存储，不可恢复明文。logout清除auth session，navigation应使用POST form而非可被crawler触发的GET link。
-
-<Term def="验证credentials并把request关联到某个User identity的过程。">authentication</Term>
-
-<Stepper>
-  <Step title="执行register、login、logout与protected visit">
-  </Step>
-  <Step title="区分anonymous与authenticated navigation">
-    base template对`user.is_authenticated`显示用户名/logout，否则显示login/register；display不替代server checks。
-  </Step>
-  <Step title="验证session rotation与logout">
-    login成功后旧anonymous session fixation不可继续；logout后访问protected URL重定向到login。
-  </Step>
-</Stepper>
-
-```django
-{% if user.is_authenticated %}
-  Hello, {{ user.username }}.
-  <form action="{% url 'accounts:logout' %}" method="post">
-    {% csrf_token %}<button name="submit">Log out</button>
-  </form>
-{% else %}
-  <a href="{% url 'accounts:login' %}">Log in</a>
-  <a href="{% url 'accounts:register' %}">Register</a>
-{% endif %}
-```
-
-template conditional只改善UX。攻击者可直接请求URL，所以view decorators、query scopes和object checks才是security boundary。
-
-## Registering Users Safely
-
-Django `UserCreationForm`验证username uniqueness、password confirmation与password policy，并正确hash password。valid registration保存User后调用`login(request, new_user)`，再redirect home；invalid保留errors。
+新建业务应用路由。所有模板和视图使用带命名空间的 URL 名称，避免把路径硬编码到每个文件。
 
 ```python
-from django.contrib.auth import login
-from django.contrib.auth.forms import UserCreationForm
+# learning_logs/urls.py
+from django.urls import path
+from . import views
 
-def register(request):
-    if request.method != "POST":
-        form = UserCreationForm()
-    else:
-        form = UserCreationForm(data=request.POST)
-        if form.is_valid():
-            new_user = form.save()
-            login(request, new_user)
-            return redirect("learning_logs:index")
-    return render(request, "registration/register.html", {"form": form})
+app_name = "learning_logs"
+urlpatterns = [
+    path("", views.TopicsView.as_view(), name="home"),
+    path("topics/", views.TopicsView.as_view(), name="topics"),
+    path("topics/new/", views.new_topic, name="new_topic"),
+    path("topics/<int:topic_id>/", views.topic, name="topic"),
+    path("topics/<int:topic_id>/entries/new/", views.new_entry, name="new_entry"),
+    path("entries/<int:entry_id>/edit/", views.edit_entry, name="edit_entry"),
+]
 ```
 
-不要自行保存raw password。错误信息需帮助合法用户，但login不要暴露“username存在而password错误”等过多账户枚举信息。production还需rate limit、email verification或MFA等策略，本章先建立正确Django auth primitives。
-
-## Restricting Access with login_required
-
-在topics、topic、new_topic、new_entry、edit_entry上使用`@login_required`。class-based views则用`LoginRequiredMixin`并把它放在inheritance list左侧，让dispatch先执行auth check。
+将生成的项目路由替换为下面的完整入口。这里省略后台管理入口，不影响 Django 默认认证、会话和用户表。
 
 ```python
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView
+# learning_log/urls.py
+from django.urls import include, path
 
-class TopicListView(LoginRequiredMixin, ListView):
-    model = Topic
-
-    def get_queryset(self):
-        return Topic.objects.filter(owner=self.request.user).order_by("date_added")
+urlpatterns = [
+    path("accounts/", include("accounts.urls")),
+    path("", include("learning_logs.urls")),
+]
 ```
 
-`login_required`只做authentication gate，不自动filter QuerySet。每个list/detail/update仍需owner scope。测试anonymous request重定向login，authenticated wrong owner得到404，owner得到200。
+## 七、模板：把正确请求真正发出去
 
-## Connecting Data to Users
+### 1. 基础页面里的退出按钮
 
-给Topic添加`owner = models.ForeignKey(User, on_delete=models.CASCADE)`。数据库已有Topics时，migration必须为现有rows指定临时owner；书中可在prompt选择已有superuser id，之后model field本身不应保留default，避免未来Topic错误归给该用户。
+创建下列目录。模板发现使用生成配置的 `APP_DIRS=True`；因此不必依赖一个未提供的全局 templates 目录。
 
-```python
-from django.contrib.auth.models import User
-
-class Topic(models.Model):
-    text = models.CharField(max_length=200)
-    date_added = models.DateTimeField(auto_now_add=True)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+```bash
+mkdir -p learning_logs/templates/learning_logs
+mkdir -p accounts/templates/registration
 ```
+
+保存基础模板。默认自动转义保留，用户输入用 `linebreaksbr` 展示换行，但不使用 `safe` 关闭转义。基础样式让表单在窄屏缩放，按钮与输入保持至少 44px 高。
+
+```html
+<!-- learning_logs/templates/learning_logs/base.html -->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>私人学习记录</title>
+  <style>
+    body { max-width: 46rem; margin: 1rem auto; padding: 0 1rem; }
+    * { box-sizing: border-box; }
+    input, textarea { max-width: 100%; min-height: 44px; }
+    button, nav a { min-height: 44px; display: inline-flex; align-items: center; }
+  </style>
+</head>
+<body>
+<nav aria-label="账户导航">
+  <a href="{% url 'learning_logs:topics' %}">我的主题</a>
+  {% if user.is_authenticated %}
+    <span>当前用户：{{ user.username }}</span>
+    <form action="{% url 'accounts:logout' %}" method="post">
+      {% csrf_token %}<button type="submit">退出登录</button>
+    </form>
+  {% else %}
+    <a href="{% url 'accounts:login' %}">登录</a>
+    <a href="{% url 'accounts:register' %}">注册</a>
+  {% endif %}
+</nav>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>
+```
+
+### 2. 同一个表单模板服务新增、编辑与注册
+
+没有 action 的表单提交到当前 URL。`form.as_p` 输出字段及其错误；失败时视图传回同一个绑定表单，用户不必重新输入所有内容。密码字段按安全默认不会回显原密码。
+
+```html
+<!-- learning_logs/templates/learning_logs/form.html -->
+{% extends "learning_logs/base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">保存</button>
+</form>
+{% endblock %}
+```
+
+登录使用独立模板，隐藏 next 仅用于把目标传回框架，不是直接执行跳转的指令。`form.as_p` 同样输出认证错误。
+
+```html
+<!-- accounts/templates/registration/login.html -->
+{% extends "learning_logs/base.html" %}
+{% block content %}
+<h1>登录</h1>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <input type="hidden" name="next" value="{{ next }}">
+  <button type="submit">登录</button>
+</form>
+{% endblock %}
+```
+
+### 3. 列表只展示后端已经过滤的结果
+
+不要在模板里对全部主题做 `if topic.owner == user` 来代替查询过滤。那种写法容易遗漏分页、计数或其他出口；这里的 `topics` 从源头就是用户自己的集合。
+
+```html
+<!-- learning_logs/templates/learning_logs/topics.html -->
+{% extends "learning_logs/base.html" %}
+{% block content %}
+<h1>我的主题</h1>
+<a href="{% url 'learning_logs:new_topic' %}">新建主题</a>
+<ul>
+  {% for topic in topics %}
+    <li><a href="{% url 'learning_logs:topic' topic.pk %}">{{ topic.text }}</a></li>
+  {% empty %}<li>还没有主题。</li>{% endfor %}
+</ul>
+{% endblock %}
+```
+
+详情只拿已授权 Topic 的反向条目集合。隐藏按钮并不是权限机制；直接请求下面的新增和编辑链接，视图仍会重新检查用户与对象关系。
+
+```html
+<!-- learning_logs/templates/learning_logs/topic.html -->
+{% extends "learning_logs/base.html" %}
+{% block content %}
+<h1>{{ topic.text }}</h1>
+<a href="{% url 'learning_logs:new_entry' topic.pk %}">新增条目</a>
+{% for entry in entries %}
+  <article>
+    <p>{{ entry.date_added }}</p>
+    <p>{{ entry.text|linebreaksbr }}</p>
+    <a href="{% url 'learning_logs:edit_entry' entry.pk %}">编辑条目</a>
+  </article>
+{% empty %}<p>还没有条目。</p>{% endfor %}
+{% endblock %}
+```
+
+### 4. 创建数据库并手动走完闭环
+
+新数据库执行下面两条命令。若你走的是旧数据迁移分支，应先完成归属核实与约束迁移，不要把“新库一次建好”与“旧库分阶段升级”混在一起。
 
 ```bash
 python manage.py makemigrations learning_logs
 python manage.py migrate
+python manage.py check
+python manage.py runserver
 ```
 
-delete User时CASCADE删除Topics，进而删除Entries，是强lifecycle policy；若product需要保留匿名化data，应选择不同on_delete与migration方案。owner关系是data-level foundation，view authorization建立在它上面。
+读者可在本地打开 `http://127.0.0.1:8000/accounts/register/`，注册 Alice，新建主题与条目，编辑后刷新结果页，确认数量不增加。退出后注册 Bob：列表应为空，直接输入 Alice 的主题或条目 URL 应为 404。匿名访问它们则应先去登录。开发服务器仅供读者本地操作；本次验证使用下节测试客户端，不启动服务。
 
-## Protecting User Data with Object-Level Authorization
+## 八、真实测试：状态码之外还要检查数据库与会话
 
-topics list只查询`owner=request.user`。topic detail把id与owner一起交给`get_object_or_404`。Entry通过Topic间接拥有owner，edit lookup使用`topic__owner=request.user`。返回404可避免向非owner确认object存在；403也可用，但全站policy要一致。
+### 1. 授权矩阵必须包括四种身份/对象组合
 
-<Term def="在identity已确认后，根据object owner与requested action决定allow、deny或not-found。">authorization</Term>
+以下是本文实现对编辑页的预期；“有效 POST”同时要求 CSRF 有效和 text 非空。未知 ID 与他人 ID 的 404 是同一个隐私策略，而不是忽略错误。
 
-<Stepper>
-  <Step title="组合user、owner与action">
-  </Step>
-  <Step title="检查四个数据入口">
-    list filter、detail lookup、create parent lookup与edit target lookup都必须scope owner，少一个就可能泄漏或篡改。
-  </Step>
-  <Step title="执行两用户隔离测试">
-    Alice和Bob各有Topic/Entry；双方list看不到对方，直接猜id得到404，且POST后database不改变他人record。
-  </Step>
-</Stepper>
+| 访问者与对象 | GET 编辑 | 有效 POST 编辑 | 无 CSRF 的 POST | 数据变化 |
+| --- | --- | --- | --- | --- |
+| 匿名，任意 ID | 302 登录，带 next | 302 登录 | 403 | 无 |
+| Alice，本人的 Entry | 200 原值 | 302 到 Topic，再 GET 200 | 403 | 只改此 Entry |
+| Alice，Bob 的 Entry | 404 | 404 | 403 | 无 |
+| Alice，未知 ID | 404 | 404 | 403 | 无 |
+
+默认 `Client()` 会绕过 CSRF 检查，所以这里显式使用 `Client(enforce_csrf_checks=True)`。只用 `force_login()` 无法证明登录表单能工作；下面真的提交用户名密码，并检查退出后的 session。客户端不执行浏览器 JavaScript，也不替代真实 HTTPS、cookie 属性和部署安全验收。
+
+### 2. 可复制的回归测试
+
+替换生成的 `learning_logs/tests.py`，按顺序拼接以下四段。测试使用独立临时数据库，不碰练习数据。`post()` 先 GET 站内表单获取 CSRF cookie，再提交匹配令牌；实际模板的隐藏 token 也已保留。
 
 ```python
-@login_required
-def topics(request):
-    topics = Topic.objects.filter(owner=request.user).order_by("date_added")
-    return render(request, "learning_logs/topics.html", {"topics": topics})
+# learning_logs/tests.py
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from .models import Entry, Topic
 
-@login_required
-def topic(request, topic_id):
-    topic = get_object_or_404(Topic, id=topic_id, owner=request.user)
-    entries = topic.entry_set.order_by("-date_added")
-    return render(request, "learning_logs/topic.html", {
-        "topic": topic, "entries": entries,
-    })
+
+class PrivateNotesTests(TestCase):
+    def setUp(self):
+        self.password = "River-stone-592!"
+        User = get_user_model()
+        self.alice = User.objects.create_user("alice", password=self.password)
+        self.bob = User.objects.create_user("bob", password=self.password)
+        self.a = Topic.objects.create(text="Alice的主题", owner=self.alice)
+        self.b = Topic.objects.create(text="Bob的秘密", owner=self.bob)
+        self.entry = Entry.objects.create(topic=self.a, text="旧内容")
+        self.other = Entry.objects.create(topic=self.b, text="不可泄露")
+        self.c = Client(enforce_csrf_checks=True)
+
+    def post(self, url, data):
+        self.c.get("/accounts/login/")
+        token = self.c.cookies["csrftoken"].value
+        return self.c.post(url, {**data, "csrfmiddlewaretoken": token})
+
+    def sign_in(self):
+        response = self.post("/accounts/login/", {
+            "username": "alice", "password": self.password,
+        })
+        self.assertEqual(response.status_code, 302)
 ```
 
-## Security Tests as a Matrix
-
-对每个protected view测试anonymous、owner和other user；对write再测试GET、invalid POST、valid POST与CSRF enforcement。断言status不够，还要检查database before/after：unauthorized POST必须不改变record，invalid POST不创建object，valid POST owner来自request而非submitted field。
+矩阵每轮换一个对象，既测读取，又测带正确令牌的写入。拒绝时还检查响应不含 Bob 的原文，最后从数据库重新读取以防测试只检查了 Python 内存中的旧对象。
 
 ```python
-def test_other_user_cannot_edit_entry(client, alice, bob_entry):
-    client.force_login(alice)
-    before = bob_entry.text
-    response = client.post(
-        reverse("learning_logs:edit_entry", args=[bob_entry.id]),
-        {"text": "stolen"},
-    )
-    assert response.status_code == 404
-    bob_entry.refresh_from_db()
-    assert bob_entry.text == before
+# learning_logs/tests.py（续，方法属于 PrivateNotesTests）
+    def test_authorization_matrix(self):
+        for pk in (self.entry.pk, self.other.pk, 99999):
+            url = f"/entries/{pk}/edit/"
+            response = self.c.get(url)
+            self.assertEqual(response.status_code, 302)
+            self.assertIn("next=", response.url)
+            self.assertEqual(self.post(url, {"text": "匿名"}).status_code, 302)
+        self.sign_in()
+        for pk, expected in ((self.entry.pk, 200), (self.other.pk, 404), (99999, 404)):
+            url = f"/entries/{pk}/edit/"
+            self.assertEqual(self.c.get(url).status_code, expected)
+            response = self.post(url, {"text": "本人修改"})
+            self.assertEqual(response.status_code, 302 if expected == 200 else 404)
+            self.assertNotContains(response, "不可泄露", status_code=response.status_code)
+            self.assertEqual(self.c.post(url, {"text": "缺令牌"}).status_code, 403)
+        self.other.refresh_from_db()
+        self.assertEqual(self.other.text, "不可泄露")
+        self.assertEqual(Entry.objects.count(), 2)
+        self.assertContains(self.c.get("/topics/"), "Alice的主题")
+        self.assertNotContains(self.c.get("/topics/"), "Bob的秘密")
 ```
 
-CSRF在Django test client默认不强制，可用`Client(enforce_csrf_checks=True)`做专门test。unit tests不应只依赖template隐藏edit link，因为URL仍可直接请求。
+表单测试分别确认：空提交留下错误、伪造关系不会迁移条目、成功回读不再写入。它故意发送合法 CSRF，才能测试到真正的授权与表单路径，而不是全部被 403 提前挡住。
 
-<Callout type="trap" title="加上login_required后用户数据就隔离了">
-decorator只证明request有identity，不检查object owner。所有list、detail、create parent和edit target queries都要scope到request.user，并测试第二个用户直接猜id。
-</Callout>
+```python
+# learning_logs/tests.py（续，方法属于 PrivateNotesTests）
+    def test_validation_relations_and_prg(self):
+        self.sign_in()
+        url = f"/entries/{self.entry.pk}/edit/"
+        invalid = self.post(url, {"text": ""})
+        self.assertEqual(invalid.status_code, 200)
+        self.assertIn("text", invalid.context["form"].errors)
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.text, "旧内容")
+        response = self.post(url, {
+            "text": "新内容", "owner": self.bob.pk, "topic": self.b.pk,
+        })
+        self.assertRedirects(response, f"/topics/{self.a.pk}/")
+        self.c.get(response.url)
+        self.c.get(response.url)
+        self.entry.refresh_from_db()
+        self.assertEqual((self.entry.text, self.entry.topic_id), ("新内容", self.a.pk))
+        self.assertEqual(Entry.objects.count(), 2)
+        response = self.post("/topics/new/", {"text": "新的", "owner": self.bob.pk})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Topic.objects.get(text="新的").owner, self.alice)
+```
 
-<Callout type="trap" title="owner字段放在form中让用户提交最方便">
-client-controlled owner允许篡改归属。ModelForm排除owner，valid后用commit=False由server设置request.user；Entry parent也必须从已授权Topic lookup得到。
-</Callout>
+登录和退出必须改变服务端会话。GET 退出应为 405；没有令牌的 POST 退出为 403，且用户仍保持登录；带令牌退出后，不再有 `_auth_user_id`，随后读取私人列表回到登录页。
 
-## 本章回顾：write、identity与ownership形成三层边界
+```python
+# learning_logs/tests.py（续，方法属于 PrivateNotesTests）
+    def test_login_logout_session(self):
+        bad = self.post("/accounts/login/", {
+            "username": "alice", "password": "wrong",
+        })
+        self.assertEqual(bad.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.c.session)
+        response = self.post("/accounts/login/", {
+            "username": "alice", "password": self.password,
+            "next": "https://attacker.invalid/collect",
+        })
+        self.assertRedirects(response, "/topics/")
+        self.assertEqual(self.c.session["_auth_user_id"], str(self.alice.pk))
+        self.assertEqual(self.c.get("/accounts/logout/").status_code, 405)
+        self.assertEqual(self.c.post("/accounts/logout/").status_code, 403)
+        self.assertIn("_auth_user_id", self.c.session)
+        self.assertRedirects(self.post("/accounts/logout/", {}), "/accounts/login/")
+        self.assertNotIn("_auth_user_id", self.c.session)
+        self.assertEqual(self.c.get("/topics/").status_code, 302)
+```
 
-1. ModelForm以fields allowlist控制可写属性，invalid POST保留bound data与errors。
-2. CSRF保护cookie-authenticated writes，POST-redirect-GET避免refresh重复提交。
-3. Django auth views与UserCreationForm负责credentials、session和password hashing。
-4. login_required检查authentication，owner-scoped queries执行authorization。
-5. 两用户security matrix验证list、detail、create与edit都不泄漏或篡改他人data。
+执行 `python manage.py test learning_logs -v 2`，预期三项测试通过。测试集合仍需扩展，尤其不能漏掉新增条目的目标主题检查、注册失败与成功、匿名缺令牌 POST、主题长度边界；练习给出具体补测方式。本次施工另运行了扩展用例，最终结果与证据路径在交付说明列出，不把页面中的三项冒充整个覆盖范围。
+
+## 九、四个容易“看起来没问题”的漏洞
+
+### 1. 有登录装饰器，却能访问他人的编号
+
+**现象 →** Alice 改 URL 编号后读到 Bob 的条目。<br />
+**原因 →** 只做认证，没有限定对象的所有者。<br />
+**修法 →** 使用带 `owner` 或 `topic__owner` 的 `get_object_or_404`；实验切换 Entry 22 检查 404 断路。
+
+### 2. 令牌有效，就把所有 POST 字段都保存
+
+**现象 →** 用户可把 owner 改成他人，或把条目移到其他主题。<br />
+**原因 →** 把 CSRF 当授权，或使用 `fields="__all__"` 暴露关系。<br />
+**修法 →** 白名单只开放 text，服务端赋 owner 与已授权 topic；测试主动伪造这两个字段。
+
+### 3. 点击退出链接，得到 405
+
+**现象 →** GET `/accounts/logout/` 不再退出。<br />
+**原因 →** 使用了旧版 GET 退出思路；Django 5.2 的内置退出视图要求 POST。<br />
+**修法 →** 使用含 `csrf_token` 的 POST 表单，测试会话被清空，而不是仅检查页面显示“退出”。
+
+### 4. 迁移填了默认主人，突然有人多出旧笔记
+
+**现象 →** 新注册账户看到原来的全部数据。<br />
+**原因 →** 为通过非空外键迁移，随意选了一个用户作为所有旧行的默认值。<br />
+**修法 →** 停服备份、可空隔离、逐条核实归属，再设非空；不明归属宁可中止，也不自动认领。
+
+## 十、小结与练习
+
+- 表单只接收 text；关系由服务端决定。
+- 登录确定身份，限定查询才保护具体对象。
+- CSRF、所有权与校验是三道不同的边界。
+- 成功用 PRG；失败保留输入与错误。
+- 旧数据必须有归属证据，不能猜主人。
 
 <Exercises>
 
-**问题 1：new_topic的valid与invalid POST应分别发生什么？**
+**问题 1：** 给 `PrivateNotesTests` 增加新条目测试：Alice 向自己的主题提交 text，同时伪造 Bob 的 topic；再向 Bob 的主题 URL 提交相同数据。各是什么结果？把实验切成合法 POST 后对照解释。
 
-<Answer>两者先经CSRF与TopicForm binding。invalid返回200并重绘同一bound form、显示errors，database不变；valid用commit=False由server设置owner=request.user，save后302 redirect到topics，随后GET显示结果，refresh不重复创建。</Answer>
+<Answer>
 
-**问题 2：为什么login_required不能替代owner check？**
+第一次 URL 指向已授权主题，POST 中的 topic 不在白名单内，创建成功且仍属于 Alice 的主题；第二次在创建表单之前返回 404。不能只断言 302/404，还要断言 Entry 数量与 topic_id。
 
-<Answer>它只确认request.user不是anonymous，不知道object属于谁。攻击者可修改topic_id/entry_id访问他人record。list filter、detail lookup、create parent与edit target都要限定owner；wrong owner返回404/deny且database before/after不变。</Answer>
+```python
+# 加在 PrivateNotesTests 类中
+    def test_new_entry_owner_boundary(self):
+        self.sign_in()
+        before = Entry.objects.count()
+        response = self.post(f"/topics/{self.a.pk}/entries/new/", {
+            "text": "实验记录", "topic": self.b.pk, "owner": self.bob.pk,
+        })
+        self.assertRedirects(response, f"/topics/{self.a.pk}/")
+        self.assertEqual(Entry.objects.get(text="实验记录").topic, self.a)
+        response = self.post(f"/topics/{self.b.pk}/entries/new/", {"text": "越权"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(Entry.objects.count(), before + 1)
+```
 
-**问题 3：给已有Topic增加owner ForeignKey时如何安全迁移？**
+再独立补一个空 text 用例：应为 200，form.errors 含 text，数据库不增行；这才区分“合法身份但数据无效”与“没有权限访问目标”。
 
-<Answer>先决定existing rows归属并在migration中提供一次性值或data migration，再应用schema migration；model field不保留通用default，未来create必须由server设置request.user。检查CASCADE lifecycle是否符合保留策略，并用两用户fixtures验证隔离。</Answer>
+</Answer>
+
+**问题 2：** 修改实验代码，让模型同时支持“安全查询”和“仅按 pk 查找”的错误模式。错误模式下 Alice 访问 Entry 22 会怎样？为什么加一项 CSRF 检查不能修好它？
+
+<Answer>
+
+在本地实验组件副本增加默认关闭的 `unsafeLookup` 开关；错误模式只判断对象是否存在，例如 `owner !== null`，安全模式仍判断 `owner === identity`。错误模式打开且 Alice 携带有效 CSRF 时，请求线错误地穿过所有权边界，GET 会展示 Bob 原文，POST 会修改它。生产视图不能照此修改。
+
+应同时让图上的越权贯通线显著变化、状态标注“模拟泄露”，并将新开关加入 reset。CSRF 只阻止非预期跨站提交；Alice 本人有合法令牌，漏洞仍在对象查询。修复仍是 `topic__owner=request.user`，并补回他人/未知 ID 的 GET 与 POST 断言。
+
+</Answer>
+
+**问题 3：** 独立补测注册和迁移：重复用户名、密码不一致、成功注册后会话分别是什么状态？如果旧 Topic 没有可核实的主人，能否给新注册用户以便完成迁移？
+
+<Answer>
+
+前两种注册返回 200 和错误，用户数不变且匿名客户端没有 `_auth_user_id`；成功注册返回 302，用户数加一、密码通过 `check_password()` 而非明文相等，session 指向新用户。先 GET 注册表单再用正确令牌提交，才能测到注册规则；缺令牌另测 403。
+
+旧主题不能自动交给新用户。先让 owner 为 NULL，保持所有入口按 owner 查询，此时任何普通账户都看不到；映射不完整的数据迁移应主动失败且不部分写入。只有逐条确认归属后才能改为非空。保留隔离或按政策离线归档，比为了迁移成功而制造泄露更重要。
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="form binding" definition="把POST绑定到Form并产生cleaned_data或field errors的过程。" />
-  <GlossaryItem term="POST-redirect-GET" definition="成功write后redirect并以GET显示结果、避免refresh重复提交的模式。" />
-  <GlossaryItem term="CSRF token" definition="把state-changing request绑定到合法site context的防伪token。" />
-  <GlossaryItem term="authentication" definition="验证credentials并把request关联到User identity的过程。" />
-  <GlossaryItem term="authorization" definition="按identity、object owner与action决定allow或deny的检查。" />
+  <GlossaryItem term="模型表单">ModelForm 从模型生成输入和校验；本章只开放 text，不能把它当对象权限检查。</GlossaryItem>
+  <GlossaryItem term="CSRF">跨站请求伪造防护。令牌与来源检查帮助阻止浏览器被借用发送写请求，但不决定对象属于谁。</GlossaryItem>
+  <GlossaryItem term="认证">Authentication，确定请求对应谁。Cookie 是浏览器随请求携带的小数据；默认 session 是服务端会话，sessionid 是查找线索；login_required 和 LoginRequiredMixin 都只是登录门禁。</GlossaryItem>
+  <GlossaryItem term="外键">ForeignKey 表达记录间的引用。Topic.owner 引用 User，Entry.topic 引用 Topic；CASCADE 让依赖行随被引用对象删除。</GlossaryItem>
+  <GlossaryItem term="授权">Authorization，判断某人能否对某对象执行某动作。限定所有者的查询无结果时，由 Http404 转成 404 响应；与 403 的拒绝原因不同。</GlossaryItem>
+  <GlossaryItem term="PRG">POST-Redirect-GET，成功写入后重定向读取。Validation 是保存前的有效性检查；失败仍展示绑定表单，成功 redirect 后刷新不重发上次 POST。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 19: User Accounts" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 出处与核验边界
+
+本文对应 Eric Matthes《Python Crash Course》第三版 **第 19 章 User Accounts（pcc3-19）** 的六组主题：允许用户输入、新增编辑条目、账户设置、限制访问、数据关联用户、保护用户数据。中文解释、示例结构、图和测试均为独立编写，不逐句复现原书，不声称拥有原书的改编授权。
+
+2026-09-23 实际 HTTP 核验：[出版社书页](https://nostarch.com/python-crash-course-3rd-edition) 返回 **403**，保存了返回头与拒绝页正文；因此 `sourceAccess: outline-only` 只表示本章基于已登记目录限定范围，不表示读到了出版社整章。事实以以下公开作者资料及 Django 5.2 官方文档交叉核对，它们本次均返回 **200**。
+
+- [作者第 19 章公开练习与解答](https://ehmatthes.github.io/pcc_3e/solutions/chapter_19/)：核对账户、归属检查、保护 new_entry 与受保护博客等范围；这里的私人学习记录并不采用公开博客的读取政策。
+- [Django 5.2 模型表单](https://docs.djangoproject.com/en/5.2/topics/forms/modelforms/)与[表单处理](https://docs.djangoproject.com/en/5.2/topics/forms/)：字段白名单、绑定、校验、instance、commit=False。
+- [Django 5.2 认证](https://docs.djangoproject.com/en/5.2/topics/auth/default/)：LoginView、LogoutView、UserCreationForm、session、login_required 和 LoginRequiredMixin。
+- [CSRF 参考](https://docs.djangoproject.com/en/5.2/ref/csrf/)与[快捷函数](https://docs.djangoproject.com/en/5.2/topics/http/shortcuts/)：请求校验边界、redirect、限定查询与 Http404。
+- [测试工具](https://docs.djangoproject.com/en/5.2/topics/testing/tools/)与[编写迁移](https://docs.djangoproject.com/en/5.2/howto/writing-migrations/)：强制 CSRF 的客户端、历史模型与分阶段数据迁移。
+
+HTTP 成功只是可访问证据，不是作品开放许可。实测覆盖本地 SQLite、默认 User 与默认数据库 session；没有验证生产数据库并发、反向代理、真实 HTTPS 或邮件找回密码。本章保留草稿，响应式浏览器集成与发布门禁另行验收。
+
+<Attribution sourceUrl="https://nostarch.com/python-crash-course-3rd-edition" workTitle="Python Crash Course, 3rd Edition · Eric Matthes · 第19章 User Accounts" mode="independent-rewrite" sourceBasis="outline-only" />
+
+</div>

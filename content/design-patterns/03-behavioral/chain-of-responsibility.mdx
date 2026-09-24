@@ -11,7 +11,7 @@ qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
 officialUnitId: designpatterns-18
-draft: false
+draft: true
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -58,7 +58,7 @@ import { ChainOfResponsibilityRequestPipelineLab } from "@/components/mdx/design
 
 ## 来源、版次与独立重写边界
 
-本章以 [InformIT 官方书目与授权样章页](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)核对 GoF 模式目录范围，并用 [Pearson/Addison-Wesley 官方书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)核对版次信息。模式语言的历史语境参考 [GoF 作者十年回顾](https://www.informit.com/articles/article.aspx?p=1327762)，TypeScript 的类与接口表达参考 [TypeScript 官方类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)。
+本章以 [InformIT 官方书目与授权样章页](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)核对 GoF 模式目录范围，并用 [Pearson/Addison-Wesley 官方书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)核对版次信息。模式语言的历史语境参考 [GoF 作者十五周年回顾](https://www.informit.com/articles/article.aspx?p=1327762)，TypeScript 的类与接口表达参考 [TypeScript 官方类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)。
 
 本文的报告请求、身份与配额规则、路由处理链、TypeScript 切片、交互实验和练习均为独立教学重写，不声称复现原书正文、原书代码或任何生产网关的完整实现。实验只用于观察处理顺序与结果合同，不代表真实鉴权、计费或路由系统的安全决策。
 
@@ -66,7 +66,7 @@ import { ChainOfResponsibilityRequestPipelineLab } from "@/components/mdx/design
 
 每个节点都实现同一套<Term def="请求发送者与处理者之间稳定的请求输入、终局结果和诊断语义">处理合同</Term>；负责规则的<Term def="能够处理请求、拒绝请求或把请求交给后继者的链上节点">处理者</Term>持有下一个<Term def="当前处理者在无法终结请求时交接给的下一个节点">后继者</Term>。
 
-请求中的身份、额度与路由信息组成<Term def="让每个处理者做出局部判断所需的请求数据">请求上下文</Term>。请求经过某个节点后得到的成功、拒绝、继续或未处理状态，是<Term def="描述请求在链上是否终结以及为什么终结的统一状态">处理结果</Term>；没有节点接手时，专门负责报告末端状态的节点就是<Term def="链条末端把无人处理转换为明确结果的终止节点">链尾</Term>。
+请求中的身份、额度与路由信息组成<Term def="让每个处理者做出局部判断所需的请求数据">请求上下文</Term>。请求沿链传递，直到得到成功、拒绝或未处理的终态，这就是<Term def="描述请求在链上是否终结以及为什么终结的统一状态">处理结果</Term>；继续是交给后继的动作，不是第四种终态。没有节点接手时，专门负责报告末端状态的节点就是<Term def="链条末端把无人处理转换为明确结果的终止节点">链尾</Term>。
 
 | 评审卡 | 要回答的问题 | 通过信号 |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ import { ChainOfResponsibilityRequestPipelineLab } from "@/components/mdx/design
 
 ### 结构
 
-结构由 `Client`、`RequestHandler`、`AuthHandler`、`QuotaHandler`、`RouteHandler` 和 `ChainTail` 组成。客户端提交上下文，处理者持有后继者，规则节点按顺序传递或终结，链尾负责明确的未处理结果。
+结构由 `Client`、`RequestHandler`（代码名 `Handler`）、`AuthHandler`、`QuotaHandler`、`RouteHandler` 和 `ChainTail` 组成。客户端提交上下文，处理者持有后继者，规则节点按顺序传递或终结，链尾负责明确的未处理结果。
 
 ### 参与者
 
@@ -110,7 +110,7 @@ import { ChainOfResponsibilityRequestPipelineLab } from "@/components/mdx/design
 
 ### 协作
 
-客户端调用链首的 `handle(request)`。节点先判断自己能否给出终局结果；能处理或拒绝就停止，不能处理就调用后继者。后继者为空时进入链尾，返回“未处理”及可追踪原因。
+客户端通过 `dispatch(request, head)` 调用链首的 `handle(request, trace)`。节点先判断自己能否给出终局结果；能处理或拒绝就停止，不能处理就调用后继者。后继者为空时进入链尾，返回“未处理”及可追踪原因。
 
 ### 后果
 
@@ -118,24 +118,81 @@ import { ChainOfResponsibilityRequestPipelineLab } from "@/components/mdx/design
 
 ### 实现
 
-实现时让处理者的 next 引用只能指向后续节点，构造链时检测回环，并为成功、拒绝、继续和未处理定义统一结果。不要让一个节点既偷偷修改别人的状态，又把请求无条件传递给所有节点。
+生产装配应检测回环；本例只用构造器由尾到首连接已有节点，`next` 为只读，不提供重接操作，不实现任意可变图的回环检测。终局统一为成功、拒绝、未处理；继续则调用后继，不是第四种终态。不要让一个节点既偷偷修改别人的状态，又把请求无条件传递给所有节点。
 
 ### 示例代码
 
-下面的 TypeScript 切片展示一个处理者如何在无法终结时交给后继者，并让链尾生成显式结果：
+**组装前提：** 本节与后文 `dispatch` 是同一个示例，不是两个可任意拼接的独立片段。建立 `chain.ts`，按标记 1/4 → 4/4 追加；练习另建 `chain.test.ts`，按 1/3 → 3/3 追加并导入它。`ChainRequest` 是本章自有类型，不是浏览器的 `Request`。所有终局只用 `ChainResult`，终结者字段统一为 `handler`，不再混用 `by`。
+
+`Handler` 的原始返回允许 `undefined`，**只为演示静默尾故障**，它不是合法终态；后文的正常入口 `dispatch` 会把空值升级为错误。正常尾部始终返回带请求标识和原因的 `unhandled`。访问轨迹作为本次调用的数组传递，不存进共享节点。
 
 ```ts
-type Result =
-  | { kind: "handled"; by: string }
-  | { kind: "rejected"; by: string; reason: string }
-  | { kind: "unhandled"; reason: string };
+// chain.ts — 1/4
+export type ChainRequest = {
+  id: string; traceId: string; authenticated: boolean;
+  quota: number; path: string;
+};
+export type ChainResult =
+  | { kind: "handled"; handler: string }
+  | { kind: "rejected"; handler: string; reason: string }
+  | { kind: "unhandled"; requestId: string; reason: string };
 
-abstract class Handler {
-  constructor(protected next?: Handler) {}
-  abstract handle(request: Request): Result;
+export abstract class Handler {
+  constructor(protected readonly next?: Handler) {}
+  abstract handle(
+    request: ChainRequest, trace: string[],
+  ): ChainResult | undefined;
+  protected forward(request: ChainRequest, trace: string[]) {
+    return (this.next ?? new ChainTail()).handle(request, trace);
+  }
 }
 ```
 
+`chain.ts` 2/4：身份与额度节点先记录访问，再决定拒绝或转交；拒绝分支直接返回，不能被后续路由的成功覆盖。额度只读，不模拟扣费。
+
+```ts
+// chain.ts — 2/4
+export class AuthHandler extends Handler {
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("AuthHandler");
+    if (!request.authenticated) {
+      return { kind: "rejected", handler: "AuthHandler", reason: "未登录" };
+    }
+    return this.forward(request, trace);
+  }
+}
+export class QuotaHandler extends Handler {
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("QuotaHandler");
+    if (request.quota <= 0) {
+      return { kind: "rejected", handler: "QuotaHandler", reason: "额度已用尽" };
+    }
+    return this.forward(request, trace);
+  }
+}
+```
+
+`chain.ts` 3/4：路由处理 `/reports` 时停止；否则到尾部。没有显式后继也会补上正常尾部。故障开关只改变尾部的真实返回，不改变成功或已拒绝的请求。
+
+```ts
+// chain.ts — 3/4
+export class RouteHandler extends Handler {
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("RouteHandler");
+    return request.path === "/reports"
+      ? { kind: "handled", handler: "RouteHandler" }
+      : this.forward(request, trace);
+  }
+}
+export class ChainTail extends Handler {
+  constructor(private readonly silent = false) { super(); }
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("ChainTail");
+    if (this.silent) return undefined; // 仅供故障注入，非合法终态
+    return { kind: "unhandled", requestId: request.id, reason: "没有匹配路由" };
+  }
+}
+```
 ### 已知应用
 
 HTTP 中间件、事件冒泡、审批流、日志过滤和命令分发都可能使用责任链。识别应用时要检查是否存在候选处理者、是否允许提前终止以及未处理请求如何返回；“有多个步骤”本身不足以证明采用责任链。
@@ -146,7 +203,7 @@ HTTP 中间件、事件冒泡、审批流、日志过滤和命令分发都可能
 
 ## 章专属实验：让请求传递可观察
 
-先预测：未登录请求会在第几个节点停止？没有匹配路由时，链尾应该返回什么？然后切换到静默链尾反例，观察“无响应”为什么不能作为有效结果。
+先预测：未登录请求会在第几个节点停止？没有匹配路由时，链尾应该返回什么？竖向图用实线显示实际访问路径、虚线显示未执行路径，请求标记与停止线落在真实终止节点。然后切换到静默链尾反例，观察“无响应”为什么不能作为有效结果。
 
 <Stepper>
   <Step title="1. 观察处理者与后继者">
@@ -177,21 +234,30 @@ HTTP 中间件、事件冒泡、审批流、日志过滤和命令分发都可能
 
 ## 把终局结果写进 TypeScript
 
-责任链不能只返回空值或布尔值，否则调用方无法知道哪个节点终结了请求。下面的切片把“处理、拒绝、未处理”区分开：
+`chain.ts` 4/4 续接前文 `Handler`，不另造结果接口。组合根负责由尾到首装配，调用方只依赖入口。空链等价于直接到正常尾部；`dispatch` 原样透传合法结果（包括拒绝），不做“失败就试下一个”的重试。同步、无环、单次执行是本例前提；不覆盖异步、真实权限、计费或并发修改。
 
 ```ts
-type ChainResult =
-  | { kind: "handled"; handler: string }
-  | { kind: "rejected"; handler: string; reason: string }
-  | { kind: "unhandled"; requestId: string };
-
-function dispatch(request: Request, head: Handler): ChainResult {
-  const result = head.handle(request);
-  return result.kind === "unhandled"
-    ? { kind: "unhandled", requestId: request.id }
-    : result;
+// chain.ts — 4/4
+export function dispatch(
+  request: ChainRequest, head?: Handler, trace: string[] = [],
+): ChainResult {
+  const result = (head ?? new ChainTail()).handle(request, trace);
+  if (result === undefined) throw new Error("链尾静默丢弃请求");
+  return result;
+}
+export function buildChain(silentTail = false): Handler {
+  return new AuthHandler(new QuotaHandler(
+    new RouteHandler(new ChainTail(silentTail)),
+  ));
+}
+export function runRequestPipeline(request: ChainRequest, silentTail = false) {
+  const trace: string[] = [];
+  const result = buildChain(silentTail).handle(request, trace);
+  return { result, trace }; // 实验保留故障空值；正常调用方使用 dispatch
 }
 ```
+
+实验组件使用同一套节点与类型：`runRequestPipeline` 返回实际执行的 `{ result, trace }`，图中已访问数包含实际到达的 `ChainTail`。选择和切换会重新执行纯模型作预览，运行按钮记录一次执行，重置恢复成功预览并清空次数/日志。实验为了展示故障而保留空值；业务调用必须用 `dispatch`，不可把空值归为 `unhandled`。
 
 这个合同让监控与重试拥有明确依据：拒绝是业务决策，未处理通常指向配置或覆盖范围问题。若所有节点都必须执行，应重新评估装饰器或管线，而不是让责任链失去提前停止语义。
 
@@ -201,10 +267,101 @@ function dispatch(request: Request, head: Handler): ChainResult {
 
 本组练习覆盖：模式名称与分类；意图；别名；动机；适用性；结构；参与者；协作；后果；实现；示例代码；已知应用；相关模式。
 
-**问题 1：改 Demo 代码。** 为实验增加一个 `AuditHandler`，记录每个请求的 `traceId`。它应该放在链首、链尾，还是替代现有处理者？请说明如何避免它把请求误处理掉。
+**问题 1：改 Demo 代码。** 在上述可执行模型前加 `AuditHandler`，为每次请求记录一次 `traceId`，不能返回伪成功吞掉拒绝。先自行实现，再将下列参考解放入 `chain.test.ts`：验证三种终态及访问顺序、拒绝短路、显式尾部/缺省后继/空链，以及静默尾确实触发错误。为什么审计应位于链首而非链尾？
 
 <Answer>
-  如果审计只记录而不终结请求，可以把它作为显式的前置步骤或重新评估装饰器；若把它作为责任链节点，就必须在记录后把请求交给后继者，并保留原有终局结果。不要让审计节点返回成功来掩盖后续拒绝或未处理。
+
+审计若只记录不终结，应放在链首并原样返回后继结果；放在链尾就记录不到已成功或拒绝的请求。也可以作为调用链外的前置步骤；这里沿用现有选型题，在责任链节点中实作。`chain.test.ts` 1/3 定义审计节点及输入，不替代原模型。
+
+```ts
+// chain.test.ts — 1/3
+import * as assert from "node:assert/strict";
+import {
+  Handler, ChainTail, AuthHandler, RouteHandler,
+  buildChain, dispatch, runRequestPipeline,
+  type ChainRequest, type ChainResult,
+} from "./chain";
+
+class AuditHandler extends Handler {
+  constructor(next: Handler, private readonly audit: string[]) { super(next); }
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("AuditHandler");
+    this.audit.push(request.traceId);
+    return this.forward(request, trace);
+  }
+}
+const request: ChainRequest = {
+  id: "r1", traceId: "t1", authenticated: true, quota: 1, path: "/reports",
+};
+const guest = { ...request, authenticated: false };
+const unknown = { ...request, path: "/unknown" };
+const success: ChainResult = { kind: "handled", handler: "RouteHandler" };
+const denied: ChainResult = {
+  kind: "rejected", handler: "AuthHandler", reason: "未登录",
+};
+const missed: ChainResult = {
+  kind: "unhandled", requestId: "r1", reason: "没有匹配路由",
+};
+```
+
+`chain.test.ts` 2/3：不仅比较终态，也比较实际访问轨迹。尤其未登录请求的路由本来能成功，仍不得被调用。空链与缺省后继都落到明确尾部。
+
+```ts
+// chain.test.ts — 2/3
+assert.deepEqual(runRequestPipeline(request), {
+  result: success, trace: ["AuthHandler", "QuotaHandler", "RouteHandler"],
+});
+assert.deepEqual(runRequestPipeline(guest), {
+  result: denied, trace: ["AuthHandler"],
+});
+assert.deepEqual(runRequestPipeline({ ...request, quota: 0 }), {
+  result: { kind: "rejected", handler: "QuotaHandler", reason: "额度已用尽" },
+  trace: ["AuthHandler", "QuotaHandler"],
+});
+assert.deepEqual(runRequestPipeline(unknown), {
+  result: missed,
+  trace: ["AuthHandler", "QuotaHandler", "RouteHandler", "ChainTail"],
+});
+for (const head of [undefined, new ChainTail(), new RouteHandler()]) {
+  const trace: string[] = [];
+  assert.deepEqual(dispatch(unknown, head, trace), missed);
+  assert.deepEqual(trace, head instanceof RouteHandler
+    ? ["RouteHandler", "ChainTail"] : ["ChainTail"]);
+}
+assert.deepEqual(dispatch(guest, new AuthHandler(new RouteHandler())), denied);
+```
+
+`chain.test.ts` 3/3：一个审计节点复用三次，三终态与后继轨迹均不变。故障尾只影响真正到达它的请求；成功和拒绝仍应短路。
+
+```ts
+// chain.test.ts — 3/3
+const audit: string[] = [];
+const head = new AuditHandler(buildChain(), audit);
+for (const [input, expected] of [
+  [request, success], [guest, denied], [unknown, missed],
+] as const) {
+  const trace: string[] = [];
+  assert.deepEqual(dispatch(input, head, trace), expected);
+  assert.deepEqual(trace, ["AuditHandler", ...runRequestPipeline(input).trace]);
+}
+assert.deepEqual(audit, ["t1", "t1", "t1"]);
+assert.deepEqual(runRequestPipeline(unknown, true), {
+  result: undefined,
+  trace: ["AuthHandler", "QuotaHandler", "RouteHandler", "ChainTail"],
+});
+assert.throws(() => dispatch(unknown, buildChain(true)), /链尾静默丢弃/);
+assert.deepEqual(dispatch(guest, buildChain(true)), denied);
+assert.deepEqual(dispatch(request, buildChain(true)), success);
+console.log("PASS: 三终态、拒绝短路、尾部/空链、审计透传、静默故障");
+```
+
+在已安装 TypeScript、Node.js 和 `@types/node` 的项目中，将两文件放在同一目录（模块导出避免污染全局），运行以下命令。预期编译退出 0，执行打印 `PASS`；把审计节点改成无条件返回 `handled` 或让拒绝后继续转交，断言必须失败。这不是生产网关测试。
+
+```sh
+node node_modules/typescript/bin/tsc --strict --skipLibCheck --target ES2022 --module commonjs --types node --outDir /tmp/chain-out chain.ts chain.test.ts
+node /tmp/chain-out/chain.test.js
+```
+
 </Answer>
 
 **问题 2：做一次拒绝决定。** 一个流程要求身份、配额和路由三个检查全部完成，并且每层都要追加审计信息。为什么不应直接套用责任链？

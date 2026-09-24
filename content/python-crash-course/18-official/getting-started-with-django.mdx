@@ -1,101 +1,135 @@
 ---
-title: "第18章：Getting Started with Django"
+title: "第18章：Django 入门——让学习记录从数据库走到页面"
 type: C
 section: "Part II · Projects · Web Applications"
 order: 18
-description: "从virtual environment创建Learning Log，建立Topic/Entry模型、migrations、admin与URL-view-template请求链。"
+description: "从空目录搭建 Learning Log，追踪 Topic 与 Entry 的外键、迁移、管理后台，以及从地址匹配到模板继承的只读请求链。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+officialUnitId: pcc3-18
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+practiceMode: code
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
-import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Exercises, Answer } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccDjangoLab } from "@/components/mdx/python-crash-course/v2/getting-started-with-django";
+
+{/* 知识点清单：C 型，按五组机制组织 manifest 八单元，不删减官方范围。
+1 Setting Up a Project：需求规格、虚拟环境；契约表及解释器命令。
+2 Creating a Django Project：Django、项目、startproject、runserver；目录树及系统检查。
+3 Starting an App：应用、startapp、INSTALLED_APPS；文件对照。
+4 Defining Models：模型、Topic、Entry、ForeignKey、CASCADE；实体行与一对多连线 SVG、真实删除测试。
+5 Activating Models：迁移、makemigrations、migrate、admin；迁移状态命令、无表故障图与隔离数据库实验。
+6 Django Shell：shell、ORM；创建、关联、反向查询的可执行样本。
+7 Pages and URLs：URL 路由、视图、ORM、上下文、模板；请求链 SVG、200/404/405/500 测试。
+8 Template Inheritance：模板继承；嵌套页面图、base/child 文件、继承和转义断言。Term 与 Glossary 精确同名闭环。 */}
 
 <Objectives>
 
-- 能区分Django project与app职责，创建virtual environment、runserver并诊断interpreter或configuration错误
-- 能实现Topic与Entry的ForeignKey models，执行makemigrations/migrate并验证admin与shell中的database state
-- 能分析URL pattern、view、ORM query、template与inheritance请求链，实现index、topics和topic页面
+- 能从空目录建立两个关联的数据表，用迁移、后台和命令行分别检查结构与记录。
+- 能实现首页、主题列表和主题详情，并用自动测试验证空列表、记录顺序与公共导航。
+- 能回答：同一个详情地址为什么可能返回正常页面、找不到记录或数据库异常？应先检查哪一层？
 
 </Objectives>
 
-## 为什么先画 Learning Log 的数据与请求边界
+## 为什么先修通一条完整路线
 
-Learning Log让用户创建learning topics，并在每个topic下记录entries。最小spec包含两条关系：一个Topic有多条Entry，每条Entry只属于一个Topic；三类页面分别是home、topic list和topic detail。先定义model与URL行为，Django commands才有目标，不会变成照抄目录。
+把学习笔记想成一座小城：主题是地点，笔记挂在所属地点下。访客沿着地址找到地点，再看到那里的记录。若地址能到达、记录却不存在，就不该把一片空白伪装成成功。
 
-先预测：只改models.py而不执行migrate时database会怎样；`/topics/7/`找不到id时应返回500还是404；child template未声明`{% extends %}`时navigation是否出现。预测帮助区分model state、routing和presentation错误。
+这一章先把这条路线修通，只让访客查看。没有这条最小路线，后面同时加入登录、编辑和上线，任何故障都可能来自多个地方，排查就失去了起点。
 
-<Term def="包含site级settings、root URLs、WSGI/ASGI入口并协调多个apps的Django容器。">project boundary</Term>
+## 一、先定范围，再建目录
 
-本章先完成read-only vertical slice。第19章再加入forms与users，第20章处理style与deployment。每一步都保留可运行server、可查询database与可追踪request。
+### 需求规格：什么才算完成
 
-## Setting Up a Project and Virtual Environment
+<Term def="在编码之前写清功能、输入、输出及失败行为的约定。">需求规格</Term>（spec）不是“做一个网站”这样的大目标。本章的 Learning Log 有以下可检验边界；代码、图和测试都按它工作。
 
-在project directory创建`.venv`，用同一environment安装Django并记录version。activation只修改当前shell的PATH；真正证据是`sys.executable`与`python -m django --version`。editor、terminal和deployment应明确使用哪个interpreter。
+| 对象或地址 | 本章约定 | 验收方法 |
+| --- | --- | --- |
+| Topic | `text` 最长 200 字符，`date_added` 自动记录创建时间 | 字段检查、长度校验 |
+| Entry | 一个 `topic`，不限制长度的 `text`，创建时间 `date_added` | 关联查询、删除传播测试 |
+| `/` | 首页，包含公共导航 | 200、父模板被使用 |
+| `/topics/` | 按创建时间、<Term def="唯一标识一行记录的字段，本章使用默认自动生成的整数 id。">主键</Term>升序显示主题；没有主题时明确提示 | 空列表与顺序测试 |
+| `/topics/<整数>/` | 只显示该主题的记录；不存在则 404 | 归属隔离、两类 404 |
+| 公共页面 | 只接受查看请求，无新增、编辑、删除入口 | 视图拒绝 POST；见下方方法边界 |
+
+这里的“只读”指公共页面；开发者仍可在后台或命令行准备数据。本章**没有 `owner` 字段，也没有用户注册或内容归属权限**，所有主题都是公开样本。第19章再增加 owner 和认证；不要提前加入一个没有权限检查的 owner 假装安全。
+
+### 项目与应用：不是两个同义目录
+
+<Term def="用 Python 编写、提供地址分派、数据访问和页面生成等工具的 Web 框架。">Django</Term>把基础工作组织起来，但不会替你确定业务边界。<Term def="保存站点级配置和总地址入口，组合一个或多个功能应用的容器。">项目</Term>（project）命名为 `learning_log`。它选择数据库并把地址交给功能模块。
+
+<Term def="围绕一项业务组织数据定义、视图、地址和模板的模块。">应用</Term>（app）命名为 `learning_logs`。注意末尾的 **s**：主题与笔记的代码都属于它。项目可以装多个应用；本章只做一个。下面的树是完成步骤后的责任地图，不必手写自动生成的启动文件。
+
+```text
+learning_log_workspace/
+├── manage.py                      # 带站点配置的命令入口
+├── learning_log/
+│   ├── settings.py                # 数据库、已安装应用等
+│   └── urls.py                    # 总地址入口
+└── learning_logs/
+    ├── models.py                  # 数据结构
+    ├── migrations/                # 数据结构变更历史
+    ├── admin.py                   # 后台注册
+    ├── views.py                   # 查询并返回页面
+    ├── urls.py                    # 业务地址
+    ├── tests.py                   # 自动验收
+    └── templates/learning_logs/   # 页面及公共骨架
+```
+
+### 虚拟环境：确认运行的是哪一个 Python
+
+<Term def="为一个项目隔离第三方包的 Python 环境，不会隔离项目数据文件。">虚拟环境</Term>（venv）解决“另一个项目安装的包影响了这里”的问题。以下读者命令面向 macOS/Linux，使用 Python 3.12；Windows 可用 `py -3.12 -m venv .venv`，后续直接调用 `.venv\Scripts\python.exe`。本章实际核验版本是 **Python 3.12.12、Django 5.2.17（5.2 LTS 系列）**，不把旧版书中截图当作当前接口规范。
 
 ```bash
-python3 -m venv .venv
+mkdir learning_log_workspace
+cd learning_log_workspace
+python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install django
-python -c "import sys; print(sys.executable)"
-python -m django --version
+python -m pip install "Django==5.2.17"
+python -c "import sys, django; print(sys.executable); print(django.get_version())"
+python -m django startproject learning_log .
+python manage.py startapp learning_logs
 ```
 
-spec先写出entities、pages与用户动作。不要一开始加入authentication、rich editor和cloud database；范围过大时无法从migration、template或permission中定位最早错误。
+`django-admin startproject learning_log .` 是常见等价写法；这里用 `python -m django`，确保创建项目和之后运行命令使用同一个解释器。末尾的点表示使用当前目录，避免多包一层。`manage.py` 随后负责选择 `learning_log.settings`。本章测试使用已准备的隔离环境，不会在读者机器上替你执行安装。
 
-## Creating the Django Project
+编辑 `learning_log/settings.py`：**只在自动生成的 `INSTALLED_APPS` 列表内添加**下面这一项；保留原有 admin、auth、sessions 等条目，不要用这一行覆盖整个文件。
 
-`django-admin startproject learning_log .`在当前directory创建`manage.py`和project package。`.`避免再嵌套一层同名folder。`python manage.py runserver`执行system checks、启动development server并监听本地端口。
-
-```bash
-django-admin startproject learning_log .
-python manage.py migrate
-python manage.py runserver
+```python
+    "learning_logs.apps.LearningLogsConfig",
 ```
 
-第一次`migrate`应用Django内置auth、admin、sessions等migrations。development server只用于本地，自动reload虽方便，却可能让module import执行两次；不要在import时启动background job或写data。
+`startapp` 只生成文件，不会自动启用应用。保留默认 <Term def="把数据库存放在本地文件中、无需单独启动数据库服务器的数据库引擎。">SQLite</Term> 数据库、`USE_TZ = True` 以及模板配置中的 `APP_DIRS = True`。后者让 Django 在已启用应用的 `templates/` 下找页面。SQLite 在本章是一个本地数据库文件，不需另装数据库服务器。
 
-server错误先分类：command找不到通常environment未激活；`No module named django`是interpreter/package；settings import是cwd或project layout；port occupied则换port或停止旧process。不要通过重复安装掩盖path问题。
+## 二、模型与外键：类的变化如何落到表上
 
-## Starting an App and Understanding Ownership
+### 两种记录，而不是一个越写越长的字符串
 
-`python manage.py startapp learning_logs`创建domain app。把`"learning_logs"`加入`INSTALLED_APPS`，Django才会发现models、migrations与templates。project可包含多个apps；app应围绕可复用capability，而不是每个页面一个app。
+<Term def="用 Python 类声明一类记录有哪些字段及关联关系，并提供数据库操作入口。">模型</Term>（model）决定记录形状。每个 Topic 只有一个名称，Entry 才保存每条笔记，因此新增笔记无需重写主题。Django 默认给每行生成整数 `id`，它是唯一定位这行的主键。
 
-<Term def="封装一组domain models、views、URLs、templates与migrations的Django功能模块。">app boundary</Term>
-
-<Stepper>
-  <Step title="选择project与app文件职责">
-  </Step>
-  <Step title="验证app已被project发现">
-    `python manage.py check`无错误，makemigrations能发现models，template loader能找到namespaced path。
-  </Step>
-  <Step title="避免双重configuration owner">
-    site database与middleware放project settings；Topic/Entry behavior放learning_logs app，不在两处复制。
-  </Step>
-</Stepper>
-
-## Defining Models: Topic and Entry
-
-Model class描述domain fields与relationships。Topic有短text和date_added；Entry有指向Topic的ForeignKey、long text与date_added。`on_delete=models.CASCADE`表示删除Topic时其Entries一起删除，这是明确data lifecycle rule，不只是语法参数。
-
-<Term def="通过ForeignKey把many端records连接到one端object，并定义删除与反向查询语义的ORM关系。">ORM relationship</Term>
+用下面的完整内容替换 `learning_logs/models.py`：
 
 ```python
 from django.db import models
+
 
 class Topic(models.Model):
     text = models.CharField(max_length=200)
     date_added = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self) -> str:
+    def __str__(self):
         return self.text
+
 
 class Entry(models.Model):
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE)
@@ -105,49 +139,41 @@ class Entry(models.Model):
     class Meta:
         verbose_name_plural = "entries"
 
-    def __str__(self) -> str:
-        return f"{self.text[:50]}..."
+    def __str__(self):
+        return self.text[:50] + ("..." if len(self.text) > 50 else "")
 ```
 
-`__str__`影响admin与shell可读性，不应返回敏感或无限长content。`entry.topic`访问parent，`topic.entry_set.all()`使用默认reverse manager；成熟design可设置`related_name="entries"`，但应与书中代码和templates保持一致。
+`auto_now_add` 在首次保存时设置时间，不是每次编辑更新时间。`__str__` 只决定后台和交互窗口如何显示对象，不会截短数据库里的正文；50 字符的笔记没有省略号，51 字符才有。
 
-### Model invariants and query cost
+### 外键：值在多的一侧
 
-Entry没有Topic就不合法，database ForeignKey维持referential integrity。一个topic detail页面访问entries时产生query；列表中逐个访问related objects可能形成N+1，后续可用`select_related`/`prefetch_related`优化。本章先通过Django debug/log理解query来源，不提前复杂化。
+<Term def="存放另一张表中某行标识的字段，让当前记录明确属于那一行。">外键</Term>（ForeignKey）在 Entry 这一侧，因为每条笔记恰好属于一个主题。Python 中 `entry.topic` 是 Topic 对象，数据库列 `topic_id` 保存其标识；`topic.entry_set.all()` 从主题反向取出多条笔记。图中的三条连线不是三份主题副本。
 
-## Activating Models with Migrations
+<Term def="通过 Django 删除父记录时，同时删除依赖它的子记录的策略。">级联删除</Term>（CASCADE）意味着 `topic.delete()` 会连同它的 Entry 一起删除。删一条 Entry 不会反过来删 Topic。这里是 Django 删除收集器的行为，**不能推断手写数据库删除语句也会执行相同的级联策略**。后面的练习在测试数据库里删除，不在真实笔记上试。
 
-`makemigrations learning_logs`比较当前models与migration graph，生成versioned operations file；`migrate`按dependency把operations应用到database。migration file是source-controlled schema history，不能只在本机生成却不提交。
+`max_length=200` 同时影响表定义和 Django 的长度校验，但 `save()`、`objects.create()` **不会自动调用 `full_clean()`**。尤其在默认 SQLite 中，不应依赖它拒绝 201 字符；直接写入前主动校验。后台表单会做校验，公共页面暂时没有写入入口。最后的长度测试用 `full_clean()` 验证规则，而不是错误地期待所有数据库都自动拒绝。
 
-<Term def="把model state变化记录为有序operations，并可重复应用到database schema的版本步骤。">migration</Term>
+## 三、激活模型，再证明数据确实存在
+
+### 迁移：生成计划与执行计划是两件事
+
+<Term def="记录并依次应用数据库结构变化的版本文件及其执行机制。">迁移</Term>（migration）把模型声明变成数据库可以使用的表。`makemigrations` 比较当前模型与迁移历史，生成文件；`migrate` 才把未执行的文件应用到当前配置指向的数据库。**它不是每次查询时自动同步的机制**。
+
+在有 `manage.py` 的目录执行：
 
 ```bash
 python manage.py makemigrations learning_logs
-python manage.py sqlmigrate learning_logs 0001
 python manage.py migrate
 python manage.py showmigrations learning_logs
+python manage.py check
+python manage.py makemigrations --check --dry-run
 ```
 
-<Stepper>
-  <Step title="切换model、migration与database状态">
-  </Step>
-  <Step title="区分生成与应用">
-    makemigrations只创建file，migrate才改变database；两步之间可用sqlmigrate审查SQL。
-  </Step>
-  <Step title="验证所有environment同一migration graph">
-    local、test与deployment从同一files应用；禁止手改production table后不补migration。
-  </Step>
-</Stepper>
+首次生成 `learning_logs/migrations/0001_initial.py`，含 Topic 和 Entry 的建表操作；迁移后应看到 `[X] 0001_initial`。系统检查无问题并不能代替迁移，最后的检查也只说明“模型与迁移文件一致”，不代表数据库已经更新。迁移文件应随源码保留，数据库文件则是本地数据，不用删数据库来掩盖漏迁移。
 
-常见`no such column`表示code预期新schema但database未migrate；`No changes detected`可能app未加入INSTALLED_APPS或编辑了错误model。先用showmigrations和migration files读取事实，不删除database作为默认修复。
+### 管理后台：注册的是模型，不是新建数据表
 
-## The Django Admin Site
-
-创建superuser并在`admin.py`注册Topic、Entry，admin提供经过authentication的CRUD界面。它适合site operators录入初始data，不是最终user experience。
-
-```bash
-python manage.py createsuperuser
-```
+<Term def="供授权管理人员维护已注册模型数据的内置界面。">管理后台</Term>（admin）适合开发期录入样本，不等于面向访客的产品页面。把 `learning_logs/admin.py` 替换为：
 
 ```python
 from django.contrib import admin
@@ -157,31 +183,52 @@ admin.site.register(Topic)
 admin.site.register(Entry)
 ```
 
-若admin看不到model，检查registration、INSTALLED_APPS与server reload；若保存失败，读取form errors和database exception。superuser credentials不应写进repository或共享文档。
+后台注册不生成表，也不授予匿名访问权限。模型准备好后，读者可在本机创建管理员并启动开发服务器；**下面两条交互式命令是手工检查步骤，本次施工未启动服务器或操作后台浏览器**。
 
-## Exploring Data in the Django Shell
-
-`python manage.py shell`加载project settings与Django app registry，可通过ORM查询实际database。shell用于验证models与relationships，不应成为不可复现的production data migration工具；重要操作写成data migration或management command。
-
-```python
-from learning_logs.models import Topic
-
-topics = Topic.objects.all()
-topic = Topic.objects.get(id=1)
-entries = topic.entry_set.order_by("-date_added")
-print(topic, entries.count())
+```bash
+python manage.py createsuperuser
+python manage.py runserver 127.0.0.1:8000
 ```
 
-`.get()`预期恰好一个object，0个抛DoesNotExist，多于一个抛MultipleObjectsReturned；view中按primary key通常用`get_object_or_404`映射成HTTP 404。`.filter()`则返回可能为空的QuerySet，二者表达不同contract。
+打开 `http://127.0.0.1:8000/admin/`，登录后录入主题再录入笔记。`runserver` 用于本地开发，不能替代生产服务器；它成功监听也不能证明每个页面都能查询。端口占用时先检查已有进程或换端口，不要反复重装 Django。还没写公共地址时，首页不是本章最终页面，这是正常的施工中状态。
 
-## Pages and URLs: Request Dispatch
+### 命令行窗口：绕过页面直接核查关系
 
-root `learning_log/urls.py`把空前缀include到app URLs；app定义`app_name`和named patterns。命名后template使用`{% url 'learning_logs:topics' %}`反向生成path，route调整时link无需手改。
-
-<Term def="Django按ordered URL patterns匹配request path、提取parameters并调用对应view的过程。">request dispatch</Term>
+<Term def="加载当前 Django 配置和应用后执行 Python 的交互窗口。">Django shell</Term>可以区分“没数据”和“模板没显示”。执行 `python manage.py shell`，再逐行输入下列完整样本。这里使用显式导入，不依赖 5.2 的自动导入功能。
 
 ```python
-# learning_log/urls.py
+from learning_logs.models import Entry, Topic
+
+topic, _ = Topic.objects.get_or_create(text="Python")
+entry, _ = Entry.objects.get_or_create(topic=topic, text="先验证关联")
+print(entry.topic_id == topic.pk)
+print(list(topic.entry_set.values_list("text", flat=True)))
+print(Topic.objects.filter(pk=999999).exists())
+```
+
+在本章新建数据库中输出依次为 `True`、`['先验证关联']`、`False`。`get_or_create` 让这个演示在同一份干净数据上重复执行时不重复添加记录；它不替代数据库唯一约束，`text` 本身也不是唯一字段。
+
+<Term def="把对 Python 对象的查询转换为数据库操作的映射层。">ORM</Term>（对象关系映射）让 `filter()` 等操作表达筛选条件。`filter()` 返回可迭代的查询集合，很多查询直到遍历才真正执行。`get()` 要求恰好一行；缺失会抛异常，多于一行也会抛异常。详情按唯一 `pk` 查询，不按可能重名的 `text` 查询。
+
+## 四、交互实验：哪条线先断了
+
+先预测：选择 `/topics/999/` 与 `/topics/nope/` 都得到 404，它们会走到同一位置吗？再选择正常详情并勾选“尚未 migrate”，模板还会被读取吗？
+
+<PccDjangoLab />
+
+这不是在浏览器里运行 Django，而是按下方真实代码构建的确定性教具。实体图展示两个主题和三条笔记的固定样本；切换主题会改变选中行与外键连线。未迁移时表消失，只有虚线结构计划。请求图用路径推进表现 URL → view → ORM → template → HTML；错误会截断路径，而不会让后续节点假装成功。
+
+默认暂停。用“下一步”逐层追踪，或拖动进度；减弱动态效果偏好下仍可单步操作。“完整重置”同时恢复第一条详情地址、已迁移状态、第一步与暂停状态。注意图中的固定 id 只用于解释关系，读者数据库中的 id 应从 shell 或页面链接获得，不能保证一定是 1。
+
+## 五、从地址到页面：按文件完成闭环
+
+### 路由只负责找入口，不负责找记录
+
+<Term def="按路径规则选择处理函数，并提取路径参数的分派规则。">URL 路由</Term>先决定请求能不能进入业务代码。`<int:topic_id>` 接受非负整数字段并转换成 Python `int`，但不保证该编号存在。带负号或字母的地址不匹配；编号 0 虽然匹配，通常也没有对应记录。
+
+把 `learning_log/urls.py` 替换为总入口。`include()` 将已匹配前缀之后的剩余路径交给应用；空前缀意味着业务地址保持 `/topics/`，不是 `/learning_logs/topics/`。
+
+```python
 from django.contrib import admin
 from django.urls import include, path
 
@@ -189,8 +236,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("learning_logs.urls")),
 ]
+```
 
-# learning_logs/urls.py
+新建 `learning_logs/urls.py`。`app_name` 给地址名划出命名空间，之后可以按名字生成链接，不把 `/topics/` 硬写进每个模板。
+
+```python
 from django.urls import path
 from . import views
 
@@ -202,122 +252,367 @@ urlpatterns = [
 ]
 ```
 
-patterns自上而下匹配。动态converter `<int:topic_id>`先验证path segment是integer并作为keyword传给view；不匹配返回404而不会调用view。route name是public navigation contract，应在tests中反向解析。
+### 视图负责查询和响应边界
 
-## Views, ORM Queries, and Context
+<Term def="接收请求及路径参数，决定查询什么并返回响应的函数或类。">视图</Term>（view）在 URL 已经匹配之后才执行。<Term def="传给模板的一组命名数据，让模板可以用名字读取查询结果。">上下文</Term>（context）是这里的 `{"topic": selected, "entries": entries}`，不是全局变量。
 
-view把HTTP request映射到response。它查询models、构造context并调用`render()`；不要在template中执行复杂business logic。topic detail使用`get_object_or_404`并按date排序entries。
+完整替换 `learning_logs/views.py`：
 
 ```python
 from django.shortcuts import get_object_or_404, render
+from django.views.decorators.http import require_safe
 from .models import Topic
 
+
+@require_safe
 def index(request):
     return render(request, "learning_logs/index.html")
 
-def topics(request):
-    topics = Topic.objects.order_by("date_added")
-    return render(request, "learning_logs/topics.html", {"topics": topics})
 
+@require_safe
+def topics(request):
+    rows = Topic.objects.order_by("date_added", "pk")
+    return render(request, "learning_logs/topics.html", {"topics": rows})
+
+
+@require_safe
 def topic(request, topic_id):
-    topic = get_object_or_404(Topic, id=topic_id)
-    entries = topic.entry_set.order_by("-date_added")
-    context = {"topic": topic, "entries": entries}
+    selected = get_object_or_404(Topic, pk=topic_id)
+    entries = selected.entry_set.order_by("date_added", "pk")
+    context = {"topic": selected, "entries": entries}
     return render(request, "learning_logs/topic.html", context)
 ```
 
-context keys是view-template contract。改名后template会渲染空值而不一定抛明显error；tests应assert response context和关键content。404是expected client-visible outcome，不应被broad except变成200 empty page。
+`get_object_or_404` 只把“对象不存在”变为 404，不会把数据库故障吞成 404。缺表通常是服务端异常，非调试环境表现为 500。详情先查 Topic，再查它的 Entry，所以另一个主题的笔记不会混入。排序加入 `pk` 是为了在创建时间相同时仍可重复验证。
 
-## Templates and Template Inheritance
+`require_safe` 允许 GET 和 HEAD，其他方法在抵达视图时返回 405。默认的 <Term def="检查修改类请求的安全令牌等信息，以阻止其他网站冒用用户身份发起请求的防护。">CSRF 防护</Term>可能提前拦下缺少令牌的 POST，返回 403。Django 测试客户端默认不执行这项检查，因此本章的 405 断言测的是视图方法边界，不是声称所有真实 POST 都返回 405。
 
-base template定义site title、navigation与`{% block content %}`；child template首先`{% extends "learning_logs/base.html" %}`，再填充block。extends必须是template首个tag附近，避免前置HTML形成意外输出。
+方法限制不是用户认证。页面展示的是公开样本；即使没有编辑表单，也不能放入私密笔记。保留自动生成的安全中间件，不要为了把 403 改成 405 而关闭防护。
 
-```django
-{# base.html #}
-<p><a href="{% url 'learning_logs:index' %}">Learning Log</a></p>
-{% block content %}{% endblock content %}
+### 模板与继承：共同骨架只写一次
+
+<Term def="将上下文中的数据填入文本结构并生成页面的文件。">模板</Term>不应负责决定“当前用户能不能看”，也不该到处重复查询。<Term def="子模板扩展公共骨架，只替换指定区块而复用其余结构的机制。">模板继承</Term>让导航只维护一处；它和 Python 类继承不是同一套执行机制。
+
+先创建目录 `learning_logs/templates/learning_logs/`。第二层应用名防止不同应用使用相同模板名发生冲突。新建 `base.html`，这是完整文件：
+
+```html
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学习记录</title>
+</head>
+<body>
+  <nav aria-label="主导航">
+    <a href="{% url 'learning_logs:index' %}">首页</a>
+    <a href="{% url 'learning_logs:topics' %}">主题</a>
+  </nav>
+  <main>{% block content %}{% endblock content %}</main>
+</body>
+</html>
 ```
 
-```django
-{# topics.html #}
+同目录新建 `index.html`。`extends` 放在首个模板标签位置；只写 `block` 而不继承，不会自动出现父模板的导航。
+
+```html
 {% extends "learning_logs/base.html" %}
 {% block content %}
-  <p>Topics</p>
-  <ul>
-    {% for topic in topics %}
-      <li><a href="{% url 'learning_logs:topic' topic.id %}">{{ topic.text }}</a></li>
-    {% empty %}
-      <li>No topics have been added yet.</li>
-    {% endfor %}
-  </ul>
+<h1>学习记录</h1>
+<p>按主题查看你已经整理的知识。</p>
 {% endblock content %}
 ```
 
-`{% empty %}`明确处理empty QuerySet，避免blank page。Django默认escape `{{ topic.text }}`，不要用`safe`显示user input。template inheritance复用structure，不意味着所有页面塞进一个巨大base；blocks应对应稳定layout regions。
+同目录新建 `topics.html`。`empty` 属于这个循环：集合为空时显示一句明确提示，不是返回 404。
 
-<Stepper>
-  <Step title="切换三条request路径">
-  </Step>
-  <Step title="定位404、500与空页面">
-    pattern不匹配或object不存在是404；view exception是500；context key错误可能是200但content缺失，三者证据不同。
-  </Step>
-  <Step title="验证inheritance与reverse URLs">
-    每个child包含base navigation，named route能reverse，修改path后templates仍生成有效links。
-  </Step>
-</Stepper>
-
-## Testing the Read-Only Vertical Slice
-
-model tests创建Topic/Entry并验证relationship与string representation；URL tests用`reverse()`检查names；view tests通过Django test client检查200、template、context ordering与missing topic 404。test database由Django隔离，不能依赖手工admin data。
-
-```python
-def test_topic_page_returns_404_for_missing_topic(client):
-    response = client.get("/topics/999999/")
-    assert response.status_code == 404
+```html
+{% extends "learning_logs/base.html" %}
+{% block content %}
+<h1>主题列表</h1>
+<ul>
+  {% for topic in topics %}
+  <li><a href="{% url 'learning_logs:topic' topic.id %}">{{ topic }}</a></li>
+  {% empty %}
+  <li>还没有主题。</li>
+  {% endfor %}
+</ul>
+{% endblock content %}
 ```
 
-runserver手测补充浏览器layout，但不替代自动contract。每次model变化先migration，再tests；每次route变化检查reverse；每次template变化检查empty与nonempty states。
+最后新建 `topic.html`。模板变量默认会转义特殊字符；`linebreaksbr` 保留笔记换行，但不应为了显示正文添加 `safe` 过滤器。
 
-<Callout type="trap" title="models.py改完并保存，database schema会自动同步">
-Django不会自动改table。先makemigrations生成operations，再migrate应用；用showmigrations确认environment状态，不能把删除database当常规同步方法。
+```html
+{% extends "learning_logs/base.html" %}
+{% block content %}
+<h1>{{ topic.text }}</h1>
+<ul>
+  {% for entry in entries %}
+  <li>
+    <time>{{ entry.date_added|date:'Y-m-d H:i' }}</time>
+    <p>{{ entry.text|linebreaksbr }}</p>
+  </li>
+  {% empty %}
+  <li>这个主题还没有笔记。</li>
+  {% endfor %}
+</ul>
+{% endblock content %}
+```
+
+至此，请求一次详情会先匹配地址、查主题、构造关联查询，再在模板遍历时取出笔记。`render()` 合并子模板和公共骨架，最后返回 HTML。数据库里已有主题但没有笔记是合法空状态，返回 200；主题本身不存在才是 404。HTML 是响应内容，不是新建的数据记录。
+
+## 六、真实验收：不启动服务器也能测到页面
+
+Django 的测试客户端在进程内调用真正的地址、视图和模板，不建立网络监听。它能检查状态、模板和上下文，但不能代替浏览器对布局、触控、键盘及水合的验收。测试运行器另建测试数据库，下面的删除不会删除开发数据库里的笔记。
+
+### 先写模型和路由测试
+
+用下面内容替换 `learning_logs/tests.py`。后续标注“追加”的代码接在同一文件末尾，保持四空格缩进，仍属于 `LearningLogTests` 类。
+
+```python
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+from django.urls import reverse
+from .models import Entry, Topic
+
+
+class LearningLogTests(TestCase):
+    def detail(self, pk):
+        return reverse("learning_logs:topic", args=[pk])
+
+    def test_empty_topics(self):
+        response = self.client.get(reverse("learning_logs:topics"))
+        self.assertContains(response, "还没有主题。")
+
+    def test_two_kinds_of_404(self):
+        self.assertEqual(self.client.get(self.detail(999999)).status_code, 404)
+        self.assertEqual(self.client.get("/topics/nope/").status_code, 404)
+
+    def test_length_validation(self):
+        Topic(text="字" * 200).full_clean()
+        with self.assertRaises(ValidationError):
+            Topic(text="字" * 201).full_clean()
+```
+
+追加继承与数据隔离测试。测试中故意给另一个主题添加笔记，如果视图误写成 `Entry.objects.all()`，就会失败。两次查询的断言也防止无意增加逐条查询。
+
+```python
+    def test_detail_relation_and_inheritance(self):
+        topic = Topic.objects.create(text="Python")
+        other = Topic.objects.create(text="Django")
+        Entry.objects.create(topic=other, text="不属于这里")
+        first = Entry.objects.create(topic=topic, text="第一条")
+        second = Entry.objects.create(topic=topic, text="第二条")
+        with self.assertNumQueries(2):
+            response = self.client.get(self.detail(topic.pk))
+        self.assertTemplateUsed(response, "learning_logs/topic.html")
+        self.assertTemplateUsed(response, "learning_logs/base.html")
+        self.assertContains(response, 'aria-label="主导航"')
+        self.assertNotContains(response, "不属于这里")
+        self.assertEqual(list(response.context["entries"]), [first, second])
+
+    def test_empty_detail_and_safe_text(self):
+        topic = Topic.objects.create(text="<script>alert(1)</script>")
+        response = self.client.get(self.detail(topic.pk))
+        self.assertContains(response, "这个主题还没有笔记。")
+        self.assertContains(response, "&lt;script&gt;")
+        self.assertNotContains(response, "<script>")
+```
+
+追加删除与方法边界测试。先删子记录证明不会误删主题，再删父记录验证级联；这样不是只测了一种方向。
+
+```python
+    def test_cascade_direction(self):
+        topic = Topic.objects.create(text="临时样本")
+        entry = Entry.objects.create(topic=topic, text="可删除")
+        entry.delete()
+        self.assertTrue(Topic.objects.filter(pk=topic.pk).exists())
+        Entry.objects.create(topic=topic, text="随主题删除")
+        topic.delete()
+        self.assertEqual(Entry.objects.count(), 0)
+
+    def test_public_pages_reject_post(self):
+        topic = Topic.objects.create(text="只读")
+        paths = ["/", "/topics/", self.detail(topic.pk)]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertEqual(self.client.post(path).status_code, 405)
+
+    def test_home_inherits_base(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "learning_logs/base.html")
+```
+
+执行以下命令。正文提供的测试类共 **8 个测试方法**，`subTest` 中的三个地址不是三个额外测试方法；不要混报测试数字。
+
+```bash
+python manage.py check
+python manage.py test learning_logs -v 2
+```
+
+### 故障重现应在另一份数据库进行
+
+最容易误诊的情况是“`makemigrations` 说没有变化，但查询仍然报错”。不要删除现有数据库试验。复制下面内容到临时的 `learning_log/unmigrated_settings.py`，仅在这个教学实验中使用；它导入原设置，但把数据库换成内存数据库。
+
+```python
+from .settings import *
+
+DATABASES = {"default": {
+    "ENGINE": "django.db.backends.sqlite3",
+    "NAME": ":memory:",
+}}
+```
+
+同一项目中新建 `probe_unmigrated.py`。这是完整脚本，运行的进程没有执行 migrate，因此应用表确实不存在。将客户端设为不重新抛异常，才可以检查实际 500；生产程序不能用这种办法隐藏错误。
+
+```python
+import os
+os.environ["DJANGO_SETTINGS_MODULE"] = "learning_log.unmigrated_settings"
+import django
+django.setup()
+from django.test import Client, override_settings
+
+with override_settings(DEBUG=False, ALLOWED_HOSTS=["testserver"]):
+    client = Client(raise_request_exception=False)
+    assert client.get("/").status_code == 200
+    assert client.get("/topics/nope/").status_code == 404
+    response = client.get("/topics/")
+    assert response.status_code == 500
+    assert response.exc_info[0].__name__ == "OperationalError"
+    assert "learning_logs_topic" in str(response.exc_info[1])
+print("无查询首页 200；路由不匹配 404；缺表查询 500")
+```
+
+运行 `python probe_unmigrated.py`，应看到最后一行。首页不查表，所以这里仍是 200；无效路径在查表前就结束；列表触发查询才出现 500。正常项目中修复方法是检查解释器、设置模块与数据库路径，再执行对应数据库的 `migrate`，不是把查询异常全改成“没有主题”。此实验不改变开发数据库。
+
+本次施工实际执行了上述 8 个正文测试，另用独立测试覆盖同时间排序、HEAD、负数地址、CSRF 的 403 与视图的 405 边界、后台注册与权限、正文转义和 50/51 字符边界，并在隔离数据库验证未迁移与重复迁移。**未执行**网络监听、交互式管理员创建、真实浏览器页面与移动端操作；这些不包含在测试通过的含义中。
+
+## 七、常见误区：按第一处失败定位
+
+<Callout type="trap" title="只生成迁移文件，列表仍然报缺表">
+
+**现象 →** 列表返回 500，错误含 `no such table`。<br />
+**原因 →** `makemigrations` 只写计划；当前数据库尚未执行计划，或命令连到另一份库。<br />
+**修法 →** 核对配置与路径，查看 `showmigrations`，再执行 `migrate`。在图中打开未迁移开关观察查询处截断。
+
 </Callout>
 
-<Callout type="trap" title="template显示为空说明database没有data">
-也可能是view context key错误、QuerySet filter错误或child未填正确block。检查response context、query和rendered template，再判断database。
+<Callout type="trap" title="把所有 404 都当成没有这条数据">
+
+**现象 →** `/topics/nope/` 和不存在的整数编号都显示找不到。<br />
+**原因 →** 前者没匹配路由；后者已进入视图并查询。<br />
+**修法 →** 先查转换器与末尾斜杠，再查主键；不要在路由外随意补默认对象。
+
 </Callout>
 
-## 本章回顾：从schema到HTML的完整路径
+<Callout type="trap" title="页面有正文，却没有公共导航">
 
-1. project协调site settings与root routes，app封装Learning Log domain。
-2. Topic与Entry通过ForeignKey表达one-to-many及cascade lifecycle。
-3. makemigrations记录model变化，migrate把migration graph应用到database。
-4. admin与shell验证实际ORM state，但重要data操作应可复现。
-5. request经URL pattern、view、ORM、context和template inheritance生成response。
+**现象 →** 详情能显示笔记，但缺少首页和主题链接。<br />
+**原因 →** 子模板未继承 base，或把文件放在错误的模板目录。<br />
+**修法 →** 检查 `extends`、模板路径和 `block content`，用 `assertTemplateUsed` 验证父模板确实参与生成。
+
+</Callout>
+
+<Callout type="trap" title="认为 200 字符限制会自动拦住所有写入">
+
+**现象 →** 直接 `create()` 后 SQLite 中出现 201 字符。<br />
+**原因 →** 模型保存不自动做完整校验，数据库行为也有差异。<br />
+**修法 →** 写入边界执行 `full_clean()` 或表单校验；本章只读页面不承担输入验证入口。
+
+</Callout>
+
+## 小结
+
+- 项目管理全站配置，应用承载具体业务。
+- 模型、迁移文件和数据库状态必须分别核查。
+- 外键在笔记一侧，删除方向不能想当然。
+- 同为 404，可能止于地址，也可能止于查询。
+- 继承复用页面骨架，测试回收只读路线的契约。
+
+## 练习与答案
 
 <Exercises>
 
-**问题 1：修改Entry增加字段后出现no such column，应如何诊断？**
+**问题 1：** 不启动服务器，在测试数据库中创建两个主题，各写两条笔记。删掉第一个主题后，第二个主题和它的笔记必须仍然存在。你会怎样实现断言？这与删掉一条笔记有何不同？
 
-<Answer>检查app在INSTALLED_APPS、models.py变更和migration files；运行makemigrations生成operations，用sqlmigrate审查，再migrate应用，并用showmigrations确认标记。不要先删除database，因为那会丢data且掩盖migration history问题。</Answer>
+<Answer>
 
-**问题 2：`/topics/7/`从request到HTML经过哪些contract？**
+在 `LearningLogTests` 类末尾追加以下方法并运行测试。它同时检查保留和删除，不能只断言总数减少了二。
 
-<Answer>root router include app URLs，int converter提取topic_id=7，view用get_object_or_404查询Topic并取得ordered entries，context提供topic/entries，child template extends base并填content block，render返回HTML。route missing/object missing为404，view异常为500。</Answer>
+```python
+    def test_delete_one_topic_keeps_other(self):
+        a = Topic.objects.create(text="甲")
+        b = Topic.objects.create(text="乙")
+        for topic in (a, b):
+            for text in ("一", "二"):
+                Entry.objects.create(topic=topic, text=text)
+        old_id = a.pk
+        a.delete()
+        self.assertFalse(Topic.objects.filter(pk=old_id).exists())
+        self.assertFalse(Entry.objects.filter(topic_id=old_id).exists())
+        self.assertTrue(Topic.objects.filter(pk=b.pk).exists())
+        self.assertEqual(b.entry_set.count(), 2)
+```
 
-**问题 3：如何自动验证template inheritance和empty state？**
+删父对象会沿依赖关系删除它的笔记；单独删笔记没有向上级联行为，主题仍然存在。这不是根据列表中看不到某行推测，而是直接检查数据库中的相关行。
 
-<Answer>用test client访问named URL，assert 200、使用预期child/base templates、页面包含base navigation；无Topics时显示empty message，有data时按顺序显示links并可reverse detail URL。还要检查missing topic 404，不能只在runserver手看。</Answer>
+</Answer>
+
+**问题 2：** 先在图中比较两种 404，再比较正常详情的“已迁移／未迁移”。如果错误处理把所有异常都返回 404，会丢掉哪一项诊断信息？如何从实际代码证明？
+
+<Answer>
+
+字母参数止于路由，缺失整数止于 Topic 查询；未迁移则在查询处发生数据库异常，而不是记录缺失。统一变为 404 会把运维故障伪装成用户地址错误。运行正文的 `test_two_kinds_of_404`，再运行隔离库的 `probe_unmigrated.py`，分别得到两次 404 和一次缺表 500。默认测试客户端会重抛服务端异常，故障脚本显式设置 `raise_request_exception=False` 才检查状态；这不是建议业务视图广泛捕获异常。
+
+</Answer>
+
+**问题 3：** 把详情改成“新笔记在前”，同时修改教具的笔记展示顺序。两条笔记时间完全相同时仍须稳定；主题列表保持原顺序。给出实现和自动验收思路。
+
+<Answer>
+
+只把详情视图的关联查询换为 `selected.entry_set.order_by("-date_added", "-pk")`；不要改主题列表，也不要在模板里反转字符串。正文的顺序断言随后应改为 `[second, first]`。为了验证时间相同的边界，先把这两条 Entry 的 `date_added` 更新成同一时间，再发请求，仍应是较大主键在前。
+
+教具中把 `ENTRIES` 的三条样本按 id 降序排列（样本约定 id 与创建顺序一致），并把说明改成“新笔记在前”；连线必须仍按 `topicId` 连接，不能按行号猜归属。图的排序变化只能说明想法；后端测试才证明真实查询规则。完成后用“完整重置”确认地址、故障与进度全部复原。
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="project boundary" definition="包含site settings、root URLs和server entry并协调apps的Django容器。" />
-  <GlossaryItem term="app boundary" definition="封装domain models、views、URLs、templates和migrations的功能模块。" />
-  <GlossaryItem term="ORM relationship" definition="通过ForeignKey连接many端与one端并定义删除、反向查询语义的关系。" />
-  <GlossaryItem term="migration" definition="把model变化记录为operations并应用到database schema的版本步骤。" />
-  <GlossaryItem term="request dispatch" definition="按URL patterns匹配path、提取parameters并调用view的过程。" />
+  <GlossaryItem term="需求规格">写清做什么、输入输出是什么，以及异常情况应该怎样回应的验收约定。</GlossaryItem>
+  <GlossaryItem term="主键">唯一定位一行记录的字段；本章的整数 id 由数据库自动生成，不能假定永远从 1 连续排列。</GlossaryItem>
+  <GlossaryItem term="Django">替 Python 网站组织地址分派、数据访问和页面生成的框架；业务规则仍由你编写。</GlossaryItem>
+  <GlossaryItem term="项目">全站配置和总地址入口的容器，本章为 learning_log。</GlossaryItem>
+  <GlossaryItem term="应用">围绕一项业务组织模型、视图和模板的模块，本章为 learning_logs。</GlossaryItem>
+  <GlossaryItem term="虚拟环境">把第三方包与其他项目分开的 Python 环境，不会把数据库文件自动隔离。</GlossaryItem>
+  <GlossaryItem term="SQLite">无需单独运行数据库服务、通常将表和记录存入一个本地文件的数据库引擎。</GlossaryItem>
+  <GlossaryItem term="模型">声明一种记录的字段、关系并提供操作入口的 Python 类。</GlossaryItem>
+  <GlossaryItem term="外键">保存另一张表的行标识的字段；本章每条笔记借此指向一个主题。</GlossaryItem>
+  <GlossaryItem term="级联删除">通过 Django 删除主题时，把属于该主题的笔记一起删除；不会反向删除。</GlossaryItem>
+  <GlossaryItem term="迁移">把模型结构变化写成版本文件，再按顺序应用到数据库的机制。</GlossaryItem>
+  <GlossaryItem term="管理后台">授权管理员录入和维护已注册模型的界面，不是公开产品页。</GlossaryItem>
+  <GlossaryItem term="Django shell">已加载项目设置与应用、可直接查询模型的 Python 交互窗口。</GlossaryItem>
+  <GlossaryItem term="ORM">把对象查询转换成数据库操作的工具层；查询集合可能在遍历时才访问数据库。</GlossaryItem>
+  <GlossaryItem term="URL 路由">用地址规则选择视图并提取参数；匹配成功不保证记录存在。</GlossaryItem>
+  <GlossaryItem term="视图">接收请求、选择数据并返回响应的处理入口，不是 HTML 文件。</GlossaryItem>
+  <GlossaryItem term="上下文">传入模板的一组命名数据，例如 topic 和 entries。</GlossaryItem>
+  <GlossaryItem term="CSRF 防护">检查修改类请求的安全令牌等信息，防止其他网站借用户身份发起操作；缺少令牌时可能在视图前返回 403。</GlossaryItem>
+  <GlossaryItem term="模板">将数据填入页面结构的文件，默认会转义变量中的特殊字符。</GlossaryItem>
+  <GlossaryItem term="模板继承">子页面复用公共骨架，只替换指定区块的机制。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 18: Getting Started with Django" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 来源与核验边界
+
+本文是围绕《Python Crash Course》第三版第18章目录范围的**独立重写**，不是译文，不复现付费正文，也不声称获得原书的开放改编许可。2026-09-23 实际 HTTP 获取出版社页面为 **200**，可见简介与第18章目录；这仍是 `outline-only`，不是全书正文。其他访问环境若得到 403，应保留失败记录，不能把拒绝访问算作读过正文。
+
+- [出版社书目页](https://nostarch.com/python-crash-course-3rd-edition)：核对第三版和第18章范围。
+- [作者第18章公开配套练习](https://ehmatthes.github.io/pcc_3e/solutions/chapter_18/)：实际 200；核对新建项目、Entry 外键与短文本显示等教学范围，并非完整章节。
+- [Django 5.2 教程一](https://docs.djangoproject.com/en/5.2/intro/tutorial01/)与[教程二](https://docs.djangoproject.com/en/5.2/intro/tutorial02/)：实际 200；核对项目／应用、模型、迁移、shell 与后台。
+- [Django 5.2 教程三](https://docs.djangoproject.com/en/5.2/intro/tutorial03/)与[模板语言](https://docs.djangoproject.com/en/5.2/ref/templates/language/)：实际 200；核对地址命名、对象不存在时的 404、继承与默认转义。
+- [迁移说明](https://docs.djangoproject.com/en/5.2/topics/migrations/)、[字段说明](https://docs.djangoproject.com/en/5.2/ref/models/fields/)及[测试工具](https://docs.djangoproject.com/en/5.2/topics/testing/tools/)：实际 200；核对迁移职责、外键行为和测试客户端边界。
+
+来源 HTTP 状态、响应快照、内容摘要与 SHA-256，以及提取自本文的运行项目和测试输出，均留在本批次施工证据目录；浏览器与共享集成验收另由主任务完成。自动测试通过不等于已通过出版质量与视觉验收，本文保持草稿。
+
+<Attribution mode="independent-rewrite" sourceBasis="outline-only" adaptedFrom="Python Crash Course, Third Edition, Chapter 18: Getting Started with Django" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

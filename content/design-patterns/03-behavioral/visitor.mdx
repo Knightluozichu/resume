@@ -1,104 +1,532 @@
 ---
-title: "访问者模式"
-type: A
+title: "访问者模式：同一棵树上的两种操作"
+type: C
 section: "行为型模式"
 order: 23
-description: "访问者模式：把作用于稳定元素结构的新操作集中到访问者，并通过双分派选择实现"
+description: "在稳定的表达式树上分离求值与排版，用 accept/visit 轨迹、覆盖矩阵和可执行反例检查双分派与遍历边界。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
-draft: false
+officialUnitId: designpatterns-23
+draft: true
 ---
 
+import { VisitorDoubleDispatchAstLab } from "@/components/mdx/design-patterns/visitor-double-dispatch-ast-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+{/* 图形决策：稳定节点→表达式父子树；双分派→accept/visit单步；新增操作/类型→行列矩阵；遍历所有权→漏右/重复左故障。事件步进无时间动画。五个术语均在Glossary回收。 */}
 
-每新增一项横切操作都修改所有节点，会让元素类被无关职责填满 因此，访问者模式 的第一步不是画类图，而是写清 **语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+<Objectives>
 
-在实验前先预测：沿 遍历元素 → 调用 accept → 回调 visit → 处理具体类型 → 汇总结果 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+- 能解释同一个节点如何先进入 accept，再回调当前访问者的具体方法。
+- 能新增统计节点数的操作，不改两种节点，并用执行次数断言抓住重复遍历。
+- 能回答：新增 Negate 节点时，为什么“旧访问者仍能编译”不一定意味着它能正确处理新类型？
 
+</Objectives>
 
-## 问题合同与术语
+## 直觉：同一批零件，不同检查工位
 
-**意图。** 把作用于稳定元素结构的新操作集中到访问者，并通过双分派选择实现。**适用边界。** 元素类型集合稳定而操作频繁增加，且操作需要依赖具体元素类型。本页验收不变量是：**新增一种分析操作不应修改现有 AST 节点类，且所有节点都有明确处理**。
+工厂里有一批组合好的零件。一个工位计算用料，另一个工位打印装配单；它们查看的是同一套部件，却做完全不同的事。
 
-、、、、、
-## 官方目录结构的逐项解释
+如果每增加一种检查，就要改所有部件的制造说明，检查规则很快会混进部件定义。我们希望部件告诉工位“我是哪种零件”，而检查步骤留在各自工位；但新增一种零件时，每个工位仍要知道如何处理它。
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+## 模式名称与分类
 
-### 模式名称与分类
+本章的 <Term def="将一组对象上的操作独立封装，并由对象回调与自身具体类型对应的方法。">访问者模式</Term>（Visitor）属于行为型模式。这里的操作不是给节点加标签，而是实际返回数值或字符串。节点保持形状和数据，访问者组织某一种操作在全部节点类型上的行为；下面矩阵的每一行就是一套独立操作。
 
-“访问者模式”归入行为型模式，名称只用于定位 把作用于稳定元素结构的新操作集中到访问者，并通过双分派选择实现，不能替代问题证据。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+## 意图
 
-### 意图
+访问者让我们在**不修改现有元素类**的前提下增加作用于它们的新操作。本章元素限定为数字和二元加法：求值、带括号排版分别属于两个访问者。这个承诺有条件——元素类必须已经提供 `accept` 协议；它不承诺增加一种全新元素也无需修改任何访问者。
 
-“意图”回答模式想改变什么：把作用于稳定元素结构的新操作集中到访问者，并通过双分派选择实现。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+## 别名
 
-### 别名
+本章保留 Visitor／访问者这一名称，不把“遍历器”或“回调”写成它的正式别名。遍历器解决先后到达哪些对象；访问者解决到达一种对象后执行哪个操作。实验中可以保持节点与访问方法不变，却故意漏走右子树，正说明这两个责任不能混叫。
 
-“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+## 动机
 
-### 动机
+这里的 <Term def="省去原始标点细节，用不同节点类型表达程序组成关系的树。">抽象语法树</Term>（AST）把 `2 + (3 + 4)` 表示成两个 Add 和三个 Literal。若把
+`evaluate`、`print`、`count`
+全部加进每个节点类，每新增一个报表都要改动整个节点集合。把同一操作集中起来，可以一次审阅这项操作如何处理全部类型。
 
-“动机”从具体压力出发：每新增一项横切操作都修改所有节点，会让元素类被无关职责填满。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+先预测：把故障改成“重复左子树”，求值仍会是 9 吗？若仍是 9，能否断定没有问题？先走完正常轨迹，再重置试故障；观察树上的次数和矩阵，而不只看结果。
 
-### 适用性
+<VisitorDoubleDispatchAstLab />
 
-“适用性”要求同时满足：元素类型集合稳定而操作频繁增加，且操作需要依赖具体元素类型。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+动手试：正常嵌套树结束时 Literal 列累计 3 次、Add 列 2 次，求值为 9；切换 Print 会重开一轮，结果为 `(2 + (3 + 4))`。漏右侧只剩根和左叶被访问；重复左侧让 n2、n3 各访问两次。切到单叶后，两个故障都不会触发，因为根本没有 Add。
 
-### 结构
+## 适用性
 
-“结构”由 AstElement、AnalysisVisitor、BinaryNode 以及它们之间的引用方向共同确定。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+当节点类型相对稳定、操作持续增加，而且操作需要节点专有数据时，访问者能减少“新增操作”的改动面。这里 Literal 的值与 Add 的两个孩子不同，矩阵中每列确实需要不同实现；若所有元素只共享一个 `name`，普通遍历加函数已经够用。
 
-### 参与者
+如果业务每周新增语法节点，而只有一个求值操作，把求值留在节点或采用有穷类型分支可能更直接。还有一个前提是你能修改或包装元素以接入 `accept`；不可控的第三方 JSON 不会自动获得这个协议。先判断变化方向，再决定是否承担矩阵整列扩展的成本。
 
-“参与者”逐一说明 AstElement、AnalysisVisitor、BinaryNode 谁保存状态、谁发起调用以及谁承担变化。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+## 结构
 
-### 协作
+本例的结构由 `Expr` 协议、Literal/Add 元素和 `AstVisitor<R>` 协议构成。Add 持有孩子；元素通过 `accept(visitor)` 依赖访问者接口，而不依赖某个求值器。具体访问者读取对应元素字段，形成“元素能回调操作、操作能读取元素”的相互依赖。
 
-“协作”的运行协议是：Element.accept 把自身传给 Visitor 的对应 visit 方法，结构负责遍历。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+树图显示对象持有关系，矩阵显示职责分布。两者不是同一张类图：树里有三个 Literal 实例，协议里只有一个 `visitLiteral` 方法。矩阵数值是执行次数，不是实现数量。每行增加一个访问者，每列增加一种节点；不能把一格“未运行”解释成未实现。
 
-### 后果
+## 参与者
 
-“后果”必须连同收益和成本记录：新增操作容易，但新增元素类型必须修改所有访问者，且可能暴露内部数据。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+参与者的职责在这棵小树中可以逐个定位。客户端只选操作；节点只回调；本例的具体访问者同时负责该操作的递归顺序。记录轨迹是教学辅助，移除日志不会改变模式关系。
 
-### 实现
+| 角色            | 本例                          | 必须承担的责任                   |
+| --------------- | ----------------------------- | -------------------------------- |
+| Visitor         | `AstVisitor<R>`               | 为 Literal、Add 分别声明必需方法 |
+| ConcreteVisitor | `EvalVisitor`、`PrintVisitor` | 用节点字段实现同一操作的各分支   |
+| Element         | `Expr`                        | 声明 `accept` 入口及稳定 id      |
+| ConcreteElement | Literal、Add                  | 将自身传给匹配的访问方法         |
+| ObjectStructure | 以 Expr 为根的树              | 保存父子关系；本例不处理图中的环 |
+| Client          | `runVisitor`                  | 构造输入、选访问者、读取返回结果 |
 
-“实现”落地时遵守：显式覆盖所有元素类型，决定遍历归属，并避免用默认分支吞掉新节点。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+## 协作
 
-### 示例代码
+所谓 <Term def="先按元素对象进入 accept，再由具体访问者对象执行该元素对应的访问方法。">双分派</Term>在这里是一条两次方法调用组成的协作链，而不是一次神奇的多参数分派。运行到 Add
+对象时进入 `Add.accept`；该方法明确调用 `visitor.visitAdd(this)`；当前对象若是
+PrintVisitor，就执行它的排版逻辑。第二次调用的方法名由第一步保留下来的元素类型决定。
 
-“示例代码”使用本页 TypeScript 最小切片验证“新增一种分析操作不应修改现有 AST 节点类，且所有节点都有明确处理”，代码是独立教学示例。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+沿实验单步：`a.accept → Eval.visitAdd → n2.accept → Eval.visitLiteral → b.accept → Eval.visitAdd`，随后才进入 n3 和 n4。注意 visitAdd 在递归前记录，所以轨迹是进入顺序，不是最终数值返回顺序；根结果要等孩子的结果返回后才产生。树图高亮当前对象，矩阵高亮当前访问方法所在格，两者共同回答“谁在处理谁”。
 
-### 已知应用
+## 后果
 
-“已知应用”可在这些场景识别：编译器语法树、文档导出、对象结构审计和报表生成常用访问者，但名称相似不构成采用证据。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+新增操作会增加矩阵的一行：节点不必变化，但新访问者必须实现全部列。新增节点却会增加一列：访问者协议以及每一行都要补齐处理。访问者因此偏向“稳定数据类型、变化操作”，不同时解决两个方向的扩展问题。
 
-### 相关模式
+操作集中也有代价：访问者需要读取节点细节，过多公开字段可能削弱封装；双方接口相互关联，跨包版本不匹配会让运行时缺少方法。对于含 N 个节点、最大深度 H 的树，本例正常单次操作访问 N 次，递归栈占用随 H 增长；轨迹和绘图另外保存了 N 级别的记录，不能把教学日志空间算成零。
 
-“相关模式”用于比较边界：迭代器负责遍历顺序；组合提供对象结构；解释器把行为留在表达式节点。 对“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”先保存基线，再改变一个条件；若出现“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”，就拒绝 访问者模式 方案并回到更简单结构。
+## 实现
 
-## 常见误区与反例
+首先确定 <Term def="指定唯一一方负责进入子节点，避免节点与访问者同时递归。">遍历所有权</Term>必须先定下来。本例由 `visitAdd` 递归，`accept`
+只负责回调。另一种实现可以把递归放到统一遍历器，再让访问方法只处理当前节点，但不能两个地方都走孩子；也不能一个地方都不走。实验的故障模式正是对此合同的实际破坏。
 
+**TypeScript 与 C++ 的语言边界。** 经典 C++ 写法会用虚函数 `accept` 选择具体元素；进入 `Add::accept` 后，编译器凭 `this` 的静态类型选择重载 `visit(Add&)`，再经虚函数调用选择具体访问者实现。C++ 的重载选择本身不是按两个参数的运行时类型自动进行；直接拿一个基类引用去调用 `visit`，不会自动补出这条链。[重载文档](https://learn.microsoft.com/en-us/cpp/cpp/function-overloading?view=msvc-170)和[虚函数文档](https://learn.microsoft.com/en-us/cpp/cpp/virtual-functions?view=msvc-170)分别说明这两个机制。
 
-另一个易错点是把结构相似当作语义相同。迭代器负责遍历顺序；组合提供对象结构；解释器把行为留在表达式节点；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+TypeScript 的 overload 是同一个 JavaScript 函数前的多个类型签名，最终只有一个实现体；接口也不留下运行时的类型开关。因此本例显式命名 `visitLiteral`、`visitAdd`，由各自 `accept` 选择名字，再由实际访问者对象提供行为。若改成同名 `visit`，实现体仍要自己判断节点，不能声称 overload 自动 runtime dispatch。下方断言专门验证两个签名可以进入同一个错误实现体。
 
-## 术语表
+本例要求的 <Term def="在类型检查时要求操作覆盖全部已登记节点类型，而不是用兜底悄悄忽略。">穷尽性</Term>由必需方法和严格检查支持，不由模式名称保证。遗漏 `visitAdd` 的对象不能赋给
+AstVisitor；强转、JavaScript 插件或版本错配仍会绕过检查。闭合的 `kind`
+联合也意味着新增 Negate
+必须明确迁移节点协议，不能只写一个新类就宣布全系统已经支持。
 
+## 示例代码
 
-## 练习与答案
+以下七段**按顺序拼成同一个 `visitor.ts`**，是完整模型，不需要 React 或浏览器。为了看清分派，错误模式也保留在代码中；生产实现应删掉故障选项。页面组件使用同一合同，后面的验收同时检查结果与事件次数。
 
+**片段 1/7：共同协议。** `AstVisitor<R>` 的两种方法是必需的，不是任意字符串索引。`R` 让求值返回数值、排版返回字符串；`events` 只是实验记录器，并非模式必备成员。
 
-## 本章小结
+```typescript title="visitor.ts · 1/7"
+export type AstKind = "Literal" | "Add";
+export type AstShape = "leaf" | "pair" | "nested";
+export type VisitorFault = "none" | "skip-right" | "repeat-left";
+export type VisitorOperation = "evaluate" | "print";
+export type VisitEvent = {
+  phase: "accept" | "visit";
+  id: string;
+  kind: AstKind;
+};
+export interface AstVisitor<R> {
+  events: VisitEvent[];
+  visitLiteral(node: Literal): R;
+  visitAdd(node: Add): R;
+}
+export abstract class Expr {
+  constructor(public readonly id: string) {}
+  abstract readonly kind: AstKind;
+  abstract accept<R>(visitor: AstVisitor<R>): R;
+}
+```
 
-访问者模式 把“语法树节点类型稳定，但持续新增格式化、类型检查和指标统计操作”收敛为 AstElement、AnalysisVisitor、BinaryNode 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“元素类型频繁变化时，访问者会造成跨所有操作的同步修改”这一反例、重置实验，并根据 新增操作容易，但新增元素类型必须修改所有访问者，且可能暴露内部数据 接受或拒绝方案。
+**片段 2/7：叶节点。** `Literal.accept` 不计算，也不识别访问者类型。它把自身传给名字明确的 `visitLiteral`，从而保留具体节点类型的信息。
 
-## 前后导航
+```typescript title="visitor.ts · 2/7"
+export class Literal extends Expr {
+  readonly kind = "Literal" as const;
+  constructor(
+    id: string,
+    public readonly value: number,
+  ) {
+    super(id);
+  }
+  accept<R>(visitor: AstVisitor<R>): R {
+    visitor.events.push({ phase: "accept", id: this.id, kind: this.kind });
+    return visitor.visitLiteral(this);
+  }
+}
+```
 
-- [上一页：模板方法模式](/learn/design-patterns/03-behavioral/template-method)
-- [下一页：解释器模式](/learn/design-patterns/03-behavioral/interpreter)
+**片段 3/7：内部节点。** `Add` 持有左右子节点，但 `accept` 不递归。观察这里没有 `left.accept`；树的持有关系与遍历责任是两件事。
 
+```typescript title="visitor.ts · 3/7"
+export class Add extends Expr {
+  readonly kind = "Add" as const;
+  constructor(
+    id: string,
+    public readonly left: Expr,
+    public readonly right: Expr,
+  ) {
+    super(id);
+  }
+  accept<R>(visitor: AstVisitor<R>): R {
+    visitor.events.push({ phase: "accept", id: this.id, kind: this.kind });
+    return visitor.visitAdd(this);
+  }
+}
+```
+
+**片段 4/7：数值操作。** 递归只在 `visitAdd` 中发生。正常模式左右各访问一次；漏右侧用 0 伪装结果；重复左侧丢弃额外返回值，专门暴露“结果正确但访问次数错误”。这两种故障都是刻意注入的坏实现。
+
+```typescript title="visitor.ts · 4/7"
+export class EvalVisitor implements AstVisitor<number> {
+  events: VisitEvent[] = [];
+  constructor(public readonly fault: VisitorFault = "none") {}
+  visitLiteral(node: Literal): number {
+    this.events.push({ phase: "visit", id: node.id, kind: node.kind });
+    return node.value;
+  }
+  visitAdd(node: Add): number {
+    this.events.push({ phase: "visit", id: node.id, kind: node.kind });
+    const left = node.left.accept(this);
+    if (this.fault === "repeat-left") node.left.accept(this);
+    const right = this.fault === "skip-right" ? 0 : node.right.accept(this);
+    return left + right;
+  }
+}
+```
+
+**片段 5/7：排版操作。** 每层都保留括号，因而能看见原来的树形而不误读结合顺序。排版不调用求值，求值也不依赖排版。两者只是遵守相同的节点访问协议。
+
+```typescript title="visitor.ts · 5/7"
+export class PrintVisitor implements AstVisitor<string> {
+  events: VisitEvent[] = [];
+  constructor(public readonly fault: VisitorFault = "none") {}
+  visitLiteral(node: Literal): string {
+    this.events.push({ phase: "visit", id: node.id, kind: node.kind });
+    return String(node.value);
+  }
+  visitAdd(node: Add): string {
+    this.events.push({ phase: "visit", id: node.id, kind: node.kind });
+    const left = node.left.accept(this);
+    if (this.fault === "repeat-left") node.left.accept(this);
+    const right = this.fault === "skip-right" ? "?" : node.right.accept(this);
+    return `(${left} + ${right})`;
+  }
+}
+```
+
+**片段 6/7：输入与检查目录。** `makeAst` 每次创建同样的树；`astNodes` 仅为验证和绘图枚举应出现的节点，不替访问者执行操作。示例不接受环和共享子树，节点 id 在一棵树中必须唯一。
+
+```typescript title="visitor.ts · 6/7"
+export function makeAst(shape: AstShape): Expr {
+  const left = new Literal("n2", 2);
+  if (shape === "leaf") return left;
+  const right =
+    shape === "pair"
+      ? new Literal("n3", 3)
+      : new Add("b", new Literal("n3", 3), new Literal("n4", 4));
+  return new Add("a", left, right);
+}
+export function astNodes(root: Expr): Expr[] {
+  return root instanceof Add
+    ? [root, ...astNodes(root.left), ...astNodes(root.right)]
+    : [root];
+}
+```
+
+**片段 7/7：客户端选择操作。** 分支只在最外层选访问者，不在每个节点内部按操作名判断。返回记录供实验逐事件展示；两个分支分别保持返回类型检查。
+
+```typescript title="visitor.ts · 7/7"
+export function runVisitor(
+  shape: AstShape,
+  operation: VisitorOperation,
+  fault: VisitorFault,
+) {
+  const root = makeAst(shape);
+  if (operation === "evaluate") {
+    const visitor = new EvalVisitor(fault);
+    return { root, result: root.accept(visitor), events: visitor.events };
+  }
+  const visitor = new PrintVisitor(fault);
+  return { root, result: root.accept(visitor), events: visitor.events };
+}
+```
+
+**可运行验收。** 下列三段按顺序拼成 `checks.ts`，与 `visitor.ts` 放在同一目录。第一段检查正常输入，第二段击穿“只看结果”，第三段检查类型擦除后的实际边界。这里的 assert 失败会抛异常，而不是只打印一张表。
+
+```typescript title="checks.ts · 1/3"
+import {
+  Add,
+  Literal,
+  Expr,
+  EvalVisitor,
+  PrintVisitor,
+  runVisitor,
+  astNodes,
+  type AstVisitor,
+} from "./visitor";
+export function assert(ok: unknown, message: string): asserts ok {
+  if (!ok) throw new Error(message);
+}
+for (const [shape, value, text] of [
+  ["leaf", 2, "2"],
+  ["pair", 5, "(2 + 3)"],
+  ["nested", 9, "(2 + (3 + 4))"],
+] as const) {
+  for (const op of ["evaluate", "print"] as const) {
+    const run = runVisitor(shape, op, "none");
+    assert(run.result === (op === "evaluate" ? value : text), "result");
+    for (const node of astNodes(run.root)) {
+      assert(
+        run.events.filter((e) => e.phase === "visit" && e.id === node.id)
+          .length === 1,
+        "one visit per node",
+      );
+    }
+  }
+}
+```
+
+下面直接调用同一个求值器，验证 0、负数和 128 层树。深度 128 只是已测边界，不是任意深度的保证；极深输入应改为显式栈，循环图还需要另设检测与停止策略。
+
+```typescript title="checks.ts · 2/3"
+const edge = new Add("z", new Literal("zero", 0), new Literal("neg", -3));
+assert(edge.accept(new EvalVisitor()) === -3, "negative and zero");
+assert(edge.accept(new PrintVisitor()) === "(0 + -3)", "print signs");
+let deep: Expr = new Literal("base", 0);
+for (let i = 0; i < 128; i++) {
+  deep = new Add(`a${i}`, deep, new Literal(`n${i}`, 1));
+}
+const depthVisitor = new EvalVisitor();
+assert(deep.accept(depthVisitor) === 128, "deep value");
+assert(depthVisitor.events.length === 514, "257 nodes, two events each");
+const duplicate = runVisitor("nested", "evaluate", "repeat-left");
+assert(duplicate.result === 9, "same result masks repeated work");
+assert(
+  duplicate.events.filter((e) => e.phase === "visit").length === 7,
+  "duplicate traversal exposed",
+);
+assert(
+  runVisitor("nested", "evaluate", "skip-right").result === 2,
+  "missing right subtree",
+);
+assert(
+  runVisitor("nested", "print", "skip-right").result === "(2 + ?)",
+  "missing print branch",
+);
+```
+
+多签名并不自动派发。下面先验证两个签名进入相同实现，再故意把没有 visitAdd 的对象强转为接口，确认异常真的来自 Add 的回调。坏对象仅限反例，不能作为修复。
+
+```typescript title="checks.ts · 3/3"
+function oneBody(node: Literal): string;
+function oneBody(node: Add): string;
+function oneBody(_node: Expr): string {
+  return "same body";
+}
+assert(oneBody(new Literal("x", 1)) === "same body", "literal overload");
+assert(oneBody(edge) === "same body", "add overload, no auto dispatch");
+const unsafe = {
+  events: [],
+  visitLiteral: (n: Literal) => n.value,
+} as unknown as AstVisitor<number>;
+let missingHandler = false;
+try {
+  edge.accept(unsafe);
+} catch (error) {
+  missingHandler = error instanceof TypeError;
+}
+assert(missingHandler, "erased interface cannot supply visitAdd");
+console.log("visitor checks passed");
+```
+
+执行方式：使用已安装的 TypeScript 编译器，将 `visitor.ts checks.ts` 以 `--strict --target ES2022 --module commonjs --outDir out` 编译，再运行 `node out/checks.js`；预期打印 `visitor checks passed`。以下练习中的正确文件可以加入这次编译；名字含 `.invalid.ts` 的文件必须单独检查，不能混入正常构建。
+
+## 已知应用
+
+Clang 官方的 [RecursiveASTVisitor 教程](https://clang.llvm.org/docs/RAVFrontendAction.html)演示通过 `VisitCXXRecordDecl` 查找指定名字的类，并用 `TraverseDecl` 进入语法树。这是可核验的现代访问式 AST 应用：操作按节点类型组织，遍历入口与节点处理钩子分开，能帮助定位本例各职责。
+
+但它不是“GoF 原书此章列出的应用”的证据，也不等同于本例的运行时双分派实现。教程采用模板派生的 RecursiveASTVisitor，且可以只覆盖感兴趣的钩子；本例则要求 AstVisitor 中的方法全部存在。不要把名称相似误读成调度机制、默认处理规则都相同。
+
+## 相关模式
+
+Composite 侧重把单个对象与组合对象组织成一致结构；本章 Expr／Add 的树可承载访问者，但仅有一棵树并不能证明存在访问者。Iterator 侧重到达元素的顺序，可承担外部遍历；若采用它，访问者就不应再次递归。Interpreter 可以把表达式求值直接放进各节点；当求值就是主要且稳定的操作时，不一定值得另拆访问者。
+
+区别也可从图上读取：Composite 对应父子边，Iterator 对应走哪些边以及顺序，Visitor 对应矩阵中当前操作与节点类型的交点。Strategy 通常替换一个统一入口背后的算法，不要求为每种节点配一列专用方法；把求值器叫“策略”不会自动解释本例的 accept/visit 合同。
+
+## 常见误区
+
+<Callout type="trap" title="结果为 9，不代表遍历正确">
+  **现象 →** 重复左侧模式仍返回 9。**原因 →**
+  多算的结果被丢掉，但副作用、耗时和访问次数已改变。**修法 →**
+  同时断言每节点恰好一次；实验会标出 n2、n3 的重复环。
+</Callout>
+
+<Callout type="trap" title="accept 和 visitAdd 都递归">
+  **现象 →** 子树被重复处理，嵌套越深越严重。**原因 →**
+  两边都以为自己拥有遍历。**修法 →** 固定唯一所有者；本例 accept 只能回调，由
+  visitAdd 进入孩子。
+</Callout>
+
+<Callout type="trap" title="加一个 overload 就支持新类型">
+  **现象 →** 类型签名看起来齐全，新节点却走错逻辑或缺方法。**原因 →** TS
+  签名不生成运行时实现，强转也不补齐方法。**修法 →**
+  补真实方法、迁移节点协议，并保留缺实现的编译反例。
+</Callout>
+
+## 小结
+
+- accept 确定元素分支，实际访问者提供操作实现。
+- 新增操作加一行；结果与逐节点次数都要验收。
+- 新增类型加一列，类型检查不能替代运行时边界。
+
+## 练习
+
+<Exercises>
+
+**问题 1：预测漏处理和重复遍历。** 对嵌套树分别运行两个故障，写出求值、排版和 visit 总次数。再说明为何单叶不受这些故障影响。
+
+<Answer>
+  漏右侧返回 2、`(2 + ?)`，只访问根 a 与左叶 n2，共 2 次；内部 b 连同 n3、n4
+  都没有进入。重复左侧返回 9、`(2 + (3 + 4))`，n2 与 n3 各多走一次，所以共 7
+  次而不是 5 次。单叶的 accept 只进入 visitLiteral，故障判断在 visitAdd
+  中，不会触发。对照验收代码再观察图中未进入的虚线边与重复计数。
+</Answer>
+
+**问题 2：改代码新增 CountVisitor。** 不修改 Expr、Literal、Add，新增一个统计全部节点数的访问者。要求同一棵嵌套树返回 5；单叶返回 1；前面的 128 层树返回 257。沿用事件合同，不准调用 EvalVisitor 来假装计数。
+
+<Answer>
+将下面保存为 `count.ts`。内部节点贡献 1，再分别累加两个孩子；如果只加孩子，就会漏掉两个 Add。第二段是可执行验收，把它追加到 checks.ts，再将 count.ts 加入编译输入即可。
+
+```typescript title="count.ts"
+import { type AstVisitor, type VisitEvent, Literal, Add } from "./visitor";
+export class CountVisitor implements AstVisitor<number> {
+  events: VisitEvent[] = [];
+  visitLiteral(node: Literal): number {
+    this.events.push({ phase: "visit", id: node.id, kind: node.kind });
+    return 1;
+  }
+  visitAdd(node: Add): number {
+    this.events.push({ phase: "visit", id: node.id, kind: node.kind });
+    return 1 + node.left.accept(this) + node.right.accept(this);
+  }
+}
+```
+
+这个新操作增加矩阵的一行，但没有增加任何节点类型列。验收还核对每节点一次，避免只靠一个偶然正确的总数。
+
+```typescript title="checks.ts · 追加 Count 验收"
+import { CountVisitor } from "./count";
+import { makeAst } from "./visitor";
+for (const [root, expected] of [
+  [makeAst("nested"), 5],
+  [makeAst("leaf"), 1],
+  [deep, 257],
+] as const) {
+  const visitor = new CountVisitor();
+  assert(root.accept(visitor) === expected, "count result");
+  for (const node of astNodes(root)) {
+    assert(
+      visitor.events.filter((e) => e.phase === "visit" && e.id === node.id)
+        .length === 1,
+      "count visits once",
+    );
+  }
+}
+console.log("count exercise passed");
+```
+
+</Answer>
+
+**问题 3：新增 Negate，旧操作会自动适配吗？** 假设类型集合要增加一元取负。为什么不能把 `visitNegate` 做成可选方法后就宣布完成迁移？请运行下方独立编译反例，再比较强转后的行为。
+
+<Answer>
+新增一列意味着现有每个操作都要处理它。先用实际 AstVisitor 接口做一个**协议扩展探针**：下列正确文件定义新协议及处理函数，但尚未把 Negate 接入 Expr 的闭合 kind 和 Add 孩子类型，因此不冒充已经完成整棵树的 V2 迁移。
+
+```typescript title="extension.ts"
+import { type AstVisitor, type Expr } from "./visitor";
+export interface Negate {
+  readonly operand: Expr;
+}
+export interface VisitorV2<R> extends AstVisitor<R> {
+  visitNegate(node: Negate): R;
+}
+export function applyNegate<R>(node: Negate, visitor: VisitorV2<R>): R {
+  return visitor.visitNegate(node);
+}
+```
+
+只对下列 `missing-handler.invalid.ts` 单独执行 `tsc --strict --noEmit --target ES2022 --module commonjs`，预期报告 `visitNegate` 缺失。它导入的就是前面真实 EvalVisitor、PrintVisitor，而非另造一个空接口来演示失败。
+
+```typescript title="missing-handler.invalid.ts"
+import { EvalVisitor, PrintVisitor } from "./visitor";
+import { type VisitorV2 } from "./extension";
+const oldEval: VisitorV2<number> = new EvalVisitor();
+const oldPrint: VisitorV2<string> = new PrintVisitor();
+```
+
+不要把这个文件放进成功构建。下面追加到 checks.ts：强转能消掉诊断，却不能创建方法；真正补实现后，协议探针才可以计算 -5。把这个探针升级成可嵌套的新节点，还需统一更新 Expr.kind、accept 合同以及所有具体访问者并测试嵌套 Negate，不能只改变声明。
+
+```typescript title="checks.ts · 追加扩展边界验收"
+import { applyNegate, type Negate, type VisitorV2 } from "./extension";
+const negated: Negate = { operand: makeAst("pair") };
+let v2Failed = false;
+try {
+  applyNegate(negated, new EvalVisitor() as unknown as VisitorV2<number>);
+} catch (error) {
+  v2Failed = error instanceof TypeError;
+}
+assert(v2Failed, "new type with old runtime visitor must fail");
+class EvalV2 extends EvalVisitor implements VisitorV2<number> {
+  visitNegate(node: Negate): number {
+    return -node.operand.accept(this);
+  }
+}
+class PrintV2 extends PrintVisitor implements VisitorV2<string> {
+  visitNegate(node: Negate): string {
+    return `(-${node.operand.accept(this)})`;
+  }
+}
+assert(applyNegate(negated, new EvalV2()) === -5, "implemented negate");
+assert(applyNegate(negated, new PrintV2()) === "(-(2 + 3))", "negate print");
+console.log("extension boundary checks passed");
+```
+
+可选方法加默认忽略会掩盖这一列没有实现的事实。如果业务允许“只关注某些类型”，必须另订忽略语义和结果合同；那不是本章每个节点恰好处理一次的合同。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="访问者模式">
+    把同一种操作对不同对象的处理放在一起，由对象告诉它该调用哪个处理入口。
+  </GlossaryItem>
+  <GlossaryItem term="抽象语法树">
+    用节点和父子边保存表达式组成关系；本例中的加法是内部节点，数字是叶子。
+  </GlossaryItem>
+  <GlossaryItem term="双分派">
+    先进入具体元素的 accept，再回调具体访问者的对应方法；不是 TS
+    重载自动判断运行时参数。
+  </GlossaryItem>
+  <GlossaryItem term="遍历所有权">
+    明确谁负责继续走到孩子。本例只有 visitAdd 递归，accept 不再重复走树。
+  </GlossaryItem>
+  <GlossaryItem term="穷尽性">
+    要求每个已登记类型都有处理，不允许悄悄掉进无意义的默认分支；强转仍可能绕过检查。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改写边界
+
+范围对应《Design Patterns: Elements of Reusable Object-Oriented Software》访问者单元（本站 designpatterns-23）。[InformIT 官方书目](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)可核查版本、作者、23 个模式和宏观目录；该页公开样章不是访问者章，不能据此声称读过本章全文。13 个字段是描述骨架，不代表本页复现了原书全部论证和已知应用。
+
+语言事实核对 [TypeScript 函数与重载](https://www.typescriptlang.org/docs/handbook/2/functions.html#function-overloads)、[TypeScript 类](https://www.typescriptlang.org/docs/handbook/2/classes.html)，以及实现节的 Microsoft C++ 文档。已知应用仅依据 Clang 的公开教程。本次均于 2026-09-24 真实 GET 并得到 HTTP 200；原始响应、最终 URL、时间与 SHA-256 已留存施工证据。官方网页可读不等于 GoF 原书具有开放改编许可证。
+
+本页中文解释、表达式示例、组件和练习为独立重写，不翻译或复现原书正文，不将其他模式样章的授权外推到访问者；也不声称现代 Clang 示例来自 GoF 原书。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Design Patterns: Elements of Reusable Object-Oriented Software（Gamma、Helm、Johnson、Vlissides）"
+  sourceUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+/>

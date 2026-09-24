@@ -1,13 +1,13 @@
 ---
-title: "第6章：Dictionaries"
+title: "第6章：字典 Dictionaries"
 type: C
 section: "Part I · Basics"
 order: 6
-description: "掌握dictionary的key-value CRUD、缺失语义、迭代视图和嵌套shape。"
+description: "用键查值，观察增删与插入顺序，区分缺失和 None，并实现三种嵌套结构的访问。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+draft: true
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
@@ -16,290 +16,321 @@ officialUnitId: "pcc3-06"
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
 import { PccDictionariesLab } from "@/components/mdx/python-crash-course/v2/dictionaries";
 
-{/* 知识点清单：key-value binding(键空间格图)/CRUD add-modify-remove-get(交互键空间)/missing-key policy 对比(对比图)/dictionary views items-keys-values(对比图)/nested shape list-of-dicts-dict-of-lists-dict-of-dicts(分层结构图)/hashable key(比喻)/sentinel 区分缺失与None(代码对照) */}
+{/* 知识点清单（五组）：字典键值绑定、空字典、增改删、插入顺序→绑定顺序 SVG/练习1；可哈希键、值共享引用→代码对照/误区4；缺失策略、None、成员测试→缺失操作 SVG/练习1；keys-values-items 动态视图、排序、去重、快照遍历→投影 SVG+代码/练习2；三种嵌套形态及逐层类型→容器路径 SVG/练习3。五个核心术语均进 Glossary。 */}
 
 <Objectives>
 
-- 能解释dictionary的key-value模型，实现add、modify、remove并判断missing key语义
-- 能比较items、keys、values与sorted view，设计顺序和重复值可观察的迭代
-- 能分析list of dictionaries、dictionary of lists和dictionary of dictionaries的嵌套访问路径
+- 能修改字典的键值，并用输出验证新增、更新、删除和重新插入对长度及顺序的影响。
+- 能选择 keys、values、items 完成遍历，区分动态视图、排序列表与快照。
+- 能实现嵌套资料查询，并回答：`get("city", "unknown")` 返回 `None`，意味着键缺失吗？
 
 </Objectives>
 
-## 为什么dictionary首先定义一个key space
+## 为什么需要按名字取资料
 
-list用位置回答"第几个"，dictionary用hashable key回答"哪个名字对应哪个值"。key必须唯一，因此再次给同一key赋值会替换value；value可重复、可为任意对象。这个模型适合record fields、lookup table和按identity索引的数据。
+给游戏角色保存颜色、分数和速度时，如果只记住“第二项是分数”，插入一个新项目就可能让后面的读取全部错位。我们需要让每份资料带上名字，不必靠位置猜含义。
 
-先预测`alien["points"]`在key不存在时发生什么，`alien.get("points", 0)`是否会把0写回dictionary，以及两个不同key能否指向同一list。语法都像读取，但missing policy和ownership不同。
+这一章先做一份角色资料，再做多人资料。目标不是把所有读取都写得“不报错”，而是分清：哪些资料必须有，哪些允许暂时没有。
 
-<Term def="dictionary中唯一key到value引用的映射关系；给已有key赋值会更新binding而不是增加第二个同名key。">key-value binding</Term>
+## 1. 字典：键指向值，而不是位置指向值
 
-## Working with Dictionaries：add、modify、remove
+Python 的 <Term def="把唯一的键关联到值的可修改容器，按键而非位置查找。">字典</Term>（dict）用大括号创建，冒号左边是键，右边是值。键回答“查哪项”，值回答“这项是什么”。同一个键只能有一条绑定，值却可以重复；`len(d)` 数的是绑定条数。空字典写成 `{}`。
 
-<Stepper>
-  <Step title="切换四种CRUD场景">
-  </Step>
-  <Step title="比较操作前后key space">
-    add扩大key集合，modify只改变value，del缩小key集合，get不改变state。
-  </Step>
-  <Step title="记录missing key策略">
-    必填字段用方括号让KeyError可见，可选字段用get和明确default，不能到处随意吞掉缺失。
-  </Step>
-</Stepper>
+```python
+alien = {}
+alien["color"] = "green"
+alien["points"] = 5
+alien["points"] = 10
+print(alien["points"], len(alien))  # 10 2
+print("green" in alien)           # False：in 默认检查键
+print("color" in alien)           # True
+```
 
-<Term def="当前dictionary中所有可查询key的集合；CRUD会以不同方式改变或读取这个空间。">key space</Term>
+前两次赋值新增绑定，第三次找到已有键并替换值，不会保留两个 points。字典里的整数键 `0` 也只是一个键，并非“第一项”：`{0: "zero"}[0]` 能读取，是因为真的有键 0。
 
-> 猜一猜：给已有key赋新值会增加第二个同名key吗？`del`和`pop`在删除行为上有什么区别？切到下方交互图验证。
+### 专属实验：绑定、顺序与访问路径
+
+**先预测：把 points 从 5 改成 10 会多一行吗？删除 color 再写入，是否回到第一行？** 点击“下一步”，观察行数、键指向的值与顺序；遇到 speed 缺失时，比较 get 与方括号读取。用“重置实验”恢复样本再试。
 
 <PccDictionariesLab />
 
-<CodeTabs>
-  <Tab label="CRUD 操作">
+图中的竖向箭头表示**插入顺序**，横向箭头表示**键到值的绑定**，不是哈希桶或真实内存地址。“视图与快照”复用同一组操作并投影遍历结果；“嵌套路径”则沿两次方括号访问进入容器。实验是固定样本模拟，下面的 Python 代码才是实际语言执行。
+
+### 删除与重新插入
+
+`del d[key]` 删除绑定；`d.pop(key)` 还会返回删掉的值，适合“领取积分后移除积分项”。两者在键缺失时默认都抛 `KeyError`；`pop(key, default)` 可指定缺失时返回什么。
 
 ```python
 alien = {"color": "green", "points": 5}
-alien["x_position"] = 0      # add
-alien["color"] = "yellow"    # modify
-
-earned = alien.pop("points") # remove 并返回 value
-speed = alien.get("speed", "medium")  # get 只读
-print(earned, speed, alien)
+alien["x"] = 0
+alien["points"] = 10
+removed = alien.pop("color")
+alien["color"] = "yellow"
+print(removed)      # green
+print(list(alien))  # ['points', 'x', 'color']
+del alien["x"]
+print(alien)        # {'points': 10, 'color': 'yellow'}
 ```
 
-  </Tab>
-  <Tab label="hashable key 与 mutable value">
+Python **3.7 起**保证字典保留插入顺序。更新已有键不移动位置；删除后重新插入会放到末尾。插入顺序不等于字母顺序，更不等于按分数排名。这个保证也不意味着字典支持用位置切片。[事实依据：dict](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)。
+
+## 2. 什么可以当键，值会不会被复制
+
+键必须 <Term def="对象的哈希值在其生命周期内不变；比较相等的对象必须有相同哈希值。">可哈希</Term>。可以把哈希理解为查找时使用的编号，但相同编号不一定是同一键，还需要相等比较。字符串、整数通常可用；列表和字典不可用。元组只有在**所有元素都可哈希**时才可用，并非加一层圆括号就安全。
 
 ```python
-# key 必须 hashable
-valid = {("x", 0): "origin"}   # tuple 可 hash
-# invalid = {[1, 2]: "bad"}   # list 不可 hash → TypeError
-
-# value 可以是 mutable；多个 key 引用同一对象
-shared = [1, 2]
-a = {"x": shared}
-b = {"y": shared}
-a["x"].append(3)
-print(b["y"])  # [1, 2, 3] — 同一对象
+locations = {("row", 0): "origin"}
+print(locations[("row", 0)])  # origin
+try:
+    invalid = {("row", []): "bad"}
+except TypeError:
+    print("元组含列表，不能作键")
 ```
 
-  </Tab>
-</CodeTabs>
+这里不深入哈希算法，只需要遵守键的契约。此外，“键唯一”以相等关系为准，不是以书写形式为准：`1`、`1.0` 与 `True` 比较相等，作为键会指向同一个条目；不要用它们表示三种身份。[定义依据：hashable](https://docs.python.org/3/glossary.html#term-hashable)。
 
-方括号赋值既可add也可modify，行为取决于key是否已存在。`del mapping[key]`找不到key会KeyError；`pop(key)`删除并返回value，也可提供default。先决定调用方是否需要被删value，再选del或pop。
-
-### key必须hashable，但value没有此限制
-
-string、number、tuple of immutable values通常可做key；list不可hash，不能直接做key。hashability要求key在dictionary生命周期内保持可稳定查找。若身份由多个字段组成，可用tuple key，但字段含义复杂时定义明确类型或规范化字符串更易读。
-
-value可以是list、dictionary或class instance。多个key若引用同一mutable value，对其中一个路径mutation会通过另一路径可见；dictionary只管理key到引用的映射，不复制对象。
-
-## Using get to Access Values
-
-`mapping[key]`表达"该key必须存在"，缺失时KeyError；`mapping.get(key, default)`表达"缺失是预期分支"，返回default且不写入mapping。若value本身可能是None，`get`返回None无法区分missing和present-but-None，可先用`key in mapping`或使用独特sentinel。
-
-<Term def="对key不存在时应报错、返回default、创建值还是跳过的明确业务规则。">missing-key policy</Term>
-
-> 猜一猜：`profile.get("timezone")` 返回 None 时，能确定这个 key 缺失吗？下方代码展示了 sentinel 如何区分。
+值不要求可哈希。把列表赋给字典项时，保存的是对那个对象的引用，不是复制一份列表。下例的两条路径汇合到同一个列表，修改对象后，两边都能看到；重新给一个键赋值则只改那条绑定。
 
 ```python
-profile = {"name": "Ada", "nickname": None}
-sentinel = object()
-
-nickname = profile.get("nickname", sentinel)
-timezone = profile.get("timezone", sentinel)
-print(nickname is sentinel)  # False: present with None
-print(timezone is sentinel)  # True: missing
+shared = ["python"]
+choices = {"ada": shared, "grace": shared}
+choices["ada"].append("c")
+print(choices["grace"])  # ['python', 'c']
+choices["ada"] = ["rust"]
+print(choices["grace"])  # ['python', 'c']：未跟着换绑
 ```
 
-不要把`get(key, [])`后直接append当作写入：default list只是返回值，不会自动进入dictionary。要按需创建集合可先显式branch，后续也可学习`setdefault`或`defaultdict`，但它们都应建立在清楚的missing policy上。
+## 3. 缺失、None 和默认值是三回事
 
-### default不能掩盖数据损坏
-
-用户可选偏好缺失可以default，数据库主键或协议必填字段缺失应失败。若所有读取都使用空字符串或0默认，数据管道会继续运行并在更远处产生误导结果。边界层先验证required keys，核心逻辑再假定invariant，会比到处get更清晰。
-
-## Looping Through a Dictionary
-
-`for key, value in mapping.items()`同时解包pair；`for key in mapping`与`mapping.keys()`都迭代key；`mapping.values()`迭代value且保留重复项。现代Python保留insertion order，但如果展示或测试需要字母顺序，应显式`sorted(mapping)`声明规则。
-
-<Stepper>
-  <Step title="选择items、keys、values或sorted keys">
-  </Step>
-  <Step title="确认view的元素单位">
-    items产生pair，keys产生key，values产生value；循环变量数量必须匹配。
-  </Step>
-  <Step title="定义顺序与去重需求">
-    展示排序用sorted；只看独特value可用set，但set不保留展示顺序契约。
-  </Step>
-</Stepper>
-
-<Term def="items、keys、values返回的动态视图，反映dictionary当前内容并为迭代暴露不同元素单位。">dictionary view</Term>
-
-<CodeTabs>
-  <Tab label="三种 view 迭代">
+读取之前先决定 <Term def="键不存在时，是报错、返回默认值，还是显式创建绑定的规则。">缺失策略</Term>：必填的分数可用 `alien["points"]`，让 `KeyError` 暴露错误；允许省略的速度可用 `alien.get("speed", "medium")`。get 只读，缺失时返回默认值，不创建绑定；`None` 是能被正常保存的值，不等于“没有这个键”。
 
 ```python
-favorite_languages = {
-    "ada": "python",
-    "grace": "cobol",
-    "guido": "python",
-}
-
-for name, language in favorite_languages.items():
-    print(f"{name.title()} likes {language.title()}.")
-
-for name in sorted(favorite_languages):
-    print(name.title())
-
-print(set(favorite_languages.values()))
+profile = {"name": "Ada", "city": None}
+print(profile.get("timezone", "UTC"))  # UTC
+print("timezone" in profile)          # False：没写入
+print(profile.get("city", "unknown")) # None：键已存在
+print("city" in profile)              # True
+print(profile.get("missing"))        # None：省略默认值
 ```
 
-  </Tab>
-  <Tab label="迭代中修改的两种安全方式">
+因此只检查 `get(...) is None` 不能区分缺失与已存 None。初学时优先先问 `key in d`，再读取。需要一次读取区分两种情况时，可以用一个专用标记对象，通常叫“哨兵”；`is` 判断是否正是那个对象，不是比较文本内容。
 
 ```python
-# 方式一：快照迭代后再删
-mapping = {"a": 1, "b": 2, "c": 3}
-for key in list(mapping):
-    if key == "b":
-        del mapping[key]
-
-# 方式二：构建新 dictionary
-mapping = {"a": 1, "b": 2, "c": 3}
-filtered = {k: v for k, v in mapping.items() if k != "b"}
+profile = {"city": None}
+missing = object()
+for key in ("city", "timezone"):
+    value = profile.get(key, missing)
+    if value is missing:
+        print(key, "缺失")
+    else:
+        print(key, value)
+# city None
+# timezone 缺失
 ```
 
-  </Tab>
-</CodeTabs>
+实验最后四步正好展示了“无绑定 → 默认返回 → 方括号报错 → 写入 None → 返回 None”。模拟器为了让你比较结果会允许异常后继续；普通 Python 脚本若不捕获异常，会在方括号读取那行停止，不会自动运行后面的赋值。
 
-### 迭代时修改key space会破坏遍历
+## 4. 遍历：先决定一次循环需要什么
 
-在for mapping中add/remove key可能触发"dictionary changed size during iteration"。如果需要筛选删除，先对`list(mapping)`快照迭代，或构建新dictionary。只修改已有key对应value虽不改变size，也要确保循环的读写contract清晰。
-
-大dictionary的view是动态的，不等于独立snapshot。若后续逻辑需要固定输入，显式复制keys或items；若要实时反映变化，保持view但不要跨越复杂异步边界。
-
-## Nesting：让每一层container表达一种关系
-
-list of dictionaries适合有顺序的records；dictionary of lists适合一个named field包含多个值；dictionary of dictionaries适合按identity直接查record。选择shape时从访问问题出发：主要按位置遍历，还是按ID读取？字段是否多值？是否需要稳定顺序？
-
-<Stepper>
-  <Step title="切换三种nested shape">
-  </Step>
-  <Step title="逐层朗读访问路径">
-    `users['ada']['location']`先按identity取record，再按field取value；每个括号都应对应明确关系。
-  </Step>
-  <Step title="验证每一层missing与类型边界">
-    外层key缺失、内层field缺失、预期list却收到string是不同错误，不能用一个宽except吞掉。
-  </Step>
-</Stepper>
-
-<Term def="list与dictionary组合形成的多层data shape，每一层分别表达order、identity、record fields或multiplicity。">nested data shape</Term>
+`keys()`、`values()`、`items()` 返回 <Term def="随着原字典的绑定变化而反映当前内容的可遍历对象，不是独立复制。">字典视图</Term>。直接 `for key in d` 等价于遍历键；只要值用 values；同时要名字和内容用 items，每次得到一个 `(key, value)` 二元组，可以分给两个循环变量。
 
 ```python
-users = {
-    "ada": {"first": "ada", "last": "lovelace", "location": "london"},
-    "grace": {"first": "grace", "last": "hopper", "location": "new york"},
-}
-
-for username, info in users.items():
-    full_name = f"{info['first']} {info['last']}"
-    print(username, full_name.title(), info["location"].title())
+languages = {"grace": "cobol", "ada": "python", "lin": "python"}
+for name, language in languages.items():
+    print(f"{name}: {language}")
+print(list(languages.keys()))    # ['grace', 'ada', 'lin']
+print(list(languages.values()))  # ['cobol', 'python', 'python']
+print(sorted(languages))         # ['ada', 'grace', 'lin']
+print(list(languages))           # ['grace', 'ada', 'lin']：原顺序没变
+print(sorted(set(languages.values())))  # ['cobol', 'python']
 ```
 
-### 嵌套越深，schema越需要显式
+values 保留重复值。`set(...)` 去重却不保证展示顺序；需要稳定输出时再排序。`sorted(d)` 返回新列表，默认排序的是键，不是值，而且要求元素可以相互比较。本章统一使用字符串键，混合数字和字符串不能直接如此排序。对应到实验，切换视图只改变输出单位，不应修改字典本身。
 
-三层以上混合container会让访问路径和错误处理迅速复杂。先写一条示例数据和schema说明，列出required/optional fields、类型、空值与identity。第9章classes和第18章Django models会把稳定schema提升为类型边界；当前dictionary仍应保持一致shape。
+### 动态视图不等于固定快照
 
-从JSON读取的数据天然是dictionary/list组合，但外部输入不保证字段存在或类型正确。边界处验证后再传给核心逻辑，避免每一行都防御性get。错误消息应包含访问path，例如`users.ada.location`，而不是只说missing key。
+保存视图后再更新字典，读取视图能看到更新；用 `list(...)` 保存当时的条目，则不会自动新增、删除或替换条目。实验“视图与快照”的上下两部分分别表达这两种关系。
 
-## 选择dictionary还是list
+```python
+scores = {"ada": 5}
+view = scores.items()
+snapshot = list(scores.items())
+scores["ada"] = 10
+scores["grace"] = 8
+print(list(view))  # [('ada', 10), ('grace', 8)]
+print(snapshot)    # [('ada', 5)]
+```
 
-若主要问题是"第几个"和顺序遍历，list更自然；若是"给定唯一key取value"，dictionary更自然。用list反复线性查ID会隐藏lookup意图，用dictionary保存允许重复且无唯一key的records则会被迫制造脆弱key。
+这里的值是整数，所以快照输出不变；若值是列表，快照仍可能引用同一列表，不能把它当作嵌套对象的深复制。也不要边遍历动态视图边增删键：官方文档说明这可能抛 `RuntimeError`，或无法遍历全部条目。安全删除可遍历独立的键列表，见练习 2。[事实依据：Dictionary view objects](https://docs.python.org/3/library/stdtypes.html#dictionary-view-objects)。
 
-有时两者并存：list保存展示顺序，dictionary按ID索引详情。双结构提高查询效率也带来一致性成本，任何add/remove都必须同时更新；在小型学习程序中优先选择单一source of truth。
+## 5. 嵌套：每个括号只走一层
 
-<Callout type="trap" title="get(key, default) 会把default写进dictionary">
-**现象 →** 误以为 `get` 缺失时会把 default 自动写入 mapping，于是 `d.get("tags", []).append("new")` 期待下次能读到。
-**原因 →** `get` 只读取，返回的 default list 是独立对象，不会自动进入 dictionary。
-**修法 →** 要持久化先显式 `d["tags"] = d.get("tags", []) + ["new"]` 或改用 `setdefault` / `defaultdict`。
+把列表与字典互相容纳，构成 <Term def="容器里面再放容器的层次关系；访问时必须按每层的类型取值。">嵌套结构</Term>。选择依据是查找问题：按第几个展示，用列表装字典；一个名字对应多项内容，用字典装列表；按唯一名字直接找到资料，用字典装字典。
+
+```python
+people = [{"name": "Ada"}, {"name": "Grace"}]
+places = {"ada": ["London", "Paris"]}
+users = {"ada": {"city": "London"}, "grace": {"city": "NYC"}}
+print(people[0]["name"])      # Ada：位置 → 字段
+print(places["ada"][1])      # Paris：姓名 → 位置
+print(users["ada"]["city"]) # London：姓名 → 字段
+for name, cities in places.items():
+    for city in cities:
+        print(name, city)
+# ada London
+# ada Paris
+```
+
+外层一次循环取出“一人的城市列表”，内层才逐个城市打印。同理，`users["ada"]` 得到的是整份内层字典，第二次 `['city']` 才取到文字。先在实验中选形态、预测每层类型，再单步进入结构；打开错误路径会真的停止在不存在的键，或在列表上触发索引类型错误，而不是改动原有数据。
+
+按位置访问列表时可能有 `IndexError`，按键访问字典时可能有 `KeyError`，索引类型不对可能有 `TypeError`。这些不是同一种“缺失”。如果数据允许没有某个城市，应在那一层制定缺失策略，而不是用一个大范围异常捕获把全部错误藏起来。
+
+## 常见误区
+
+<Callout type="trap" title="get 返回了列表，就等于字典存了列表？">
+  **现象 →** `d.get("tags", []).append("new")` 后，d 仍无 tags。 **原因 →**
+  缺失时只返回临时列表，get 不写入。 **修法 →** 先用成员测试确认是否缺失，再显式
+  `d["tags"] = []`；之后才追加。实验的缺失读取也不会新增行。
 </Callout>
 
-<Callout type="trap" title="dictionary有插入顺序，所以所有输出都天然稳定">
-**现象 →** 依赖 insertion order 做业务排序，认为"Python 3 字典有序所以没问题"。
-**原因 →** insertion order 不等于业务需要的字母/数值顺序；数据来源和构建顺序变化会改变输出。
-**修法 →** 用户可见或 snapshot 测试需要稳定顺序时，显式 `sorted(mapping, key=...)` 并写清规则。
+<Callout type="trap" title="字典有序，所以修改或排序会自动重排？">
+  **现象 →** 改 points 后它还在原位置。 **原因 →** 插入顺序不是数值排名，sorted
+  返回新列表。 **修法 →**
+  展示时显式选择排序规则；只有删除再插入才把已有键放到末尾。
 </Callout>
 
-<Callout type="trap" title="遍历中直接删除或添加 key">
-**现象 →** 在 `for k in d:` 循环里执行 `del d[k]`，抛出 `RuntimeError: dictionary changed size during iteration`。
-**原因 →** dictionary iterator 在遍历时检测底层 size 变化，防止丢失元素或重复访问。
-**修法 →** 先对 `list(d)` 快照再删除，或构建新 dictionary：`{k: v for k, v in d.items() if keep(k)}`。
+<Callout type="trap" title="删除已处理的项，不会影响下一轮？">
+  **现象 →** `for key in d` 中删键可能报 RuntimeError。 **原因 →**
+  迭代器正在访问被改变的键集合。 **修法 →** 遍历 `list(d)`
+  的键快照再删，不依赖“这次碰巧没报错”。
+</Callout>
+
+<Callout type="trap" title="不同键的值一定互不影响？">
+  **现象 →** 给 ada 的列表追加，grace 也变化。 **原因 →**
+  两个键引用同一个列表；赋值不自动复制。 **修法 →**
+  需要独立列表时分别创建。上面的共享引用代码可复现这一差别。
 </Callout>
 
 ## 小结
 
-- dictionary 由唯一 key-value binding 组成，add 扩大、modify 更新、remove 缩小 key-space
-- 方括号 `[]` 表示 required key（缺失抛 KeyError），get 表示可选 missing-key policy 且不写入 default
-- items、keys、values 是不同 dictionary views，顺序和去重规则要显式声明
-- nested data shape 让每层 container 表达 identity、fields、order 或 multiplicity
-- 结构复杂时先声明 schema、路径和 ownership，再写访问代码
+- 新增、更新、删除改变绑定；重插改变顺序。
+- 视图跟随字典，快照与排序列表不自动更新。
+- 按层读取嵌套容器；None 不代表键缺失。
 
 <Exercises>
 
-**问题 1：如何区分key缺失与key存在但value为None？**
+**问题 1：修改实验代码，回收缺失策略**
 
-<Answer>可先用`key in mapping`判断presence，或用独特`sentinel = object()`后`value = mapping.get(key, sentinel)`并比较identity。不能仅用`get(key) is None`，因为missing和present-with-None都会返回None。</Answer>
-
-**问题 2：遍历dictionary时为何要区分items、keys和values？**
-
-<Answer>items迭代(key,value) pair，keys或直接for mapping迭代key，values迭代value且可重复。循环变量数量与后续语义不同；需要排序就显式sorted keys/items，需要独特values可用set但要接受顺序变化。</Answer>
-
-**问题 3：用户资料应选list of dicts还是dict of dicts？**
-
-<Answer>主要按顺序展示且记录可重复时用list of dicts；频繁按唯一username查找时用dict of dicts，外层key表达identity、内层fields表达record。若同时需要自定义顺序，可保留单一records mapping并另外保存ID order，但要测试一致性。</Answer>
-
-**问题 4：独立实现 `safe_get_path(data, path, default)` —— 输入嵌套字典和点分路径（如 `"users.ada.city"`），安全逐层 get 并在任一中间层缺失时返回 default（独立实现）**
+沿用实验初始样本，先取走 points，再写回 0。请在运行前预测键顺序；随后补全“读缺失 speed 不写入字典”的代码，并断言 city 存为 None 时不会采用默认值。
 
 <Answer>
 
 ```python
-from typing import Any
-
-def safe_get_path(data: dict[str, Any], path: str, default: Any = None) -> Any:
-    current: Any = data
-    for key in path.split("."):
-        if not isinstance(current, dict) or key not in current:
-            return default
-        current = current[key]
-    return current
-
-# 测试
-sample = {"users": {"ada": {"city": "london"}, "grace": {}}}
-assert safe_get_path(sample, "users.ada.city") == "london"
-assert safe_get_path(sample, "users.grace.city") is None
-assert safe_get_path(sample, "users.alan.city") is None
-assert safe_get_path(sample, "users.ada.country", "unknown") == "unknown"
+alien = {"color": "green", "points": 5}
+earned = alien.pop("points")
+alien["points"] = 0
+speed = alien.get("speed", "medium")
+alien["city"] = None
+assert earned == 5 and speed == "medium"
+assert "speed" not in alien
+assert alien.get("city", "unknown") is None
+assert list(alien) == ["color", "points", "city"]
 ```
 
-关键：逐层检查 `isinstance(current, dict)` 和 `key in current`，任一失败立即返回 default，避免 AttributeError 或 KeyError。点分路径比多重括号更易读，但边界验证不能省略。
+points 原本就在末尾，删后重插仍显示在 color 后面，但这是一次新插入。与实验中删除首项 color 对照，才能看出规则，而非把“输出碰巧没变”误判为“回到原位置”。
+
+</Answer>
+
+**问题 2：安全删除并解释视图**
+
+独立实现：从 `{"ada": 0, "grace": 8, "lin": 0}` 中删除零分者。删除前保存 items 视图和条目快照；目标是最终只剩 grace，但快照仍保留三人。请说明为何不能直接遍历 d 删除。
+
+<Answer>
+
+```python
+scores = {"ada": 0, "grace": 8, "lin": 0}
+view = scores.items()
+snapshot = list(scores.items())
+for name in list(scores):
+    if scores[name] == 0:
+        del scores[name]
+assert list(view) == [("grace", 8)]
+assert snapshot == [("ada", 0), ("grace", 8), ("lin", 0)]
+assert sorted(scores) == ["grace"]
+```
+
+循环输入是删除前复制出的键列表，不随 scores 缩小。items 视图仍跟随 scores，条目快照保留旧绑定。若只要分数而不要名字，values 可以遍历，但无法单靠分数知道该删除哪个键。
+
+</Answer>
+
+**问题 3：独立实现城市查询**
+
+目标访问图为 `users → "ada" → dict → "city" → "London"`（实验的字典装字典形态）。实现 `city_of(users, name)`：用户或 city 键缺失返回 `"unknown"`；city 存在但为 None 时保留 None。约定外层与每份用户资料都是字典，不负责修复类型错误。用正常、缺用户、缺字段、空值四种样本验收。
+
+<Answer>
+
+```python
+def city_of(users, name):
+    if name not in users:
+        return "unknown"
+    return users[name].get("city", "unknown")
+
+users = {"ada": {"city": "London"}, "grace": {}, "lin": {"city": None}}
+assert city_of(users, "ada") == "London"
+assert city_of(users, "missing") == "unknown"
+assert city_of(users, "grace") == "unknown"
+assert city_of(users, "lin") is None
+```
+
+外层先判断用户存在，内层再采用字段默认值。写成 `value or "unknown"` 会把 None、空字符串等有效保存值也覆盖，违反题目约定；“缺失策略”不能替代逐层的数据含义。
+
 </Answer>
 
 </Exercises>
 
-## 术语表
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="key-value binding" definition="唯一key到value引用的映射关系。" />
-  <GlossaryItem term="key space" definition="dictionary当前全部可查询key的集合。" />
-  <GlossaryItem term="missing-key policy" definition="key不存在时应报错、default、创建或跳过的规则。" />
-  <GlossaryItem term="dictionary view" definition="items、keys、values为迭代暴露的动态视图。" />
-  <GlossaryItem term="nested data shape" definition="多层container分别表达identity、fields、order或multiplicity的结构。" />
+  <GlossaryItem
+    term="字典"
+    definition="按唯一键关联值的可修改容器；同键再次赋值替换值，不新增同名条目。"
+  />
+  <GlossaryItem
+    term="可哈希"
+    definition="对象的哈希值终身稳定，且相等对象哈希值相同；这是用作字典键的必要契约。元组还要检查每个元素。"
+  />
+  <GlossaryItem
+    term="缺失策略"
+    definition="找不到键时该做什么的规则。KeyError 是找不到键的异常；None 是可以正常保存的值；哨兵是用于识别缺失的专用标记对象。"
+  />
+  <GlossaryItem
+    term="字典视图"
+    definition="keys、values、items 返回的动态观察窗口。list 得到的条目快照不自动跟随绑定变化，但可能共享内部对象。"
+  />
+  <GlossaryItem
+    term="嵌套结构"
+    definition="容器里面再放容器；每次方括号只取下一层。列表按位置，字典按键，不能把两者的访问方式混用。"
+  />
 </Glossary>
 
-<Attribution />
+## 资料与范围
+
+本章按《Python Crash Course》第 3 版第 6 章 Dictionaries 的范围独立重写，覆盖简单字典、增删读取、get、遍历和三种嵌套方式。哈希边界、动态视图和共享引用是帮助解释行为的补充，不宣称它们在原书中占有相同篇幅。代码、图示与练习为本站教学设计，并非原书正文或练习答案的翻译。
+
+- [出版社书目页](https://nostarch.com/python-crash-course-3rd-edition)用于标识版本；本轮直接访问返回 403，未据此声称读到原书全文。
+- [作者的第 6 章配套资料](https://ehmatthes.github.io/pcc_3e/solutions/chapter_6/)可公开访问，用其 Person、Polling、People、Favorite Places、Cities 等单元核对章级范围，不代表获得整章正文授权。
+- [Python 官方教程：字典](https://docs.python.org/3/tutorial/datastructures.html#dictionaries)与 [Mapping Types — dict](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)用于核对读取、成员测试、增删、get 与插入顺序。
+- [Dictionary view objects](https://docs.python.org/3/library/stdtypes.html#dictionary-view-objects)和 [hashable](https://docs.python.org/3/glossary.html#term-hashable)用于核对动态视图、迭代修改风险与键的条件。本文面向 Python 3.7+ 的上述语义。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceUrl="https://nostarch.com/python-crash-course-3rd-edition"
+  workTitle="Python Crash Course, 3rd Edition — Eric Matthes，第 6 章 Dictionaries"
+  sourceBasis="outline-only"
+/>

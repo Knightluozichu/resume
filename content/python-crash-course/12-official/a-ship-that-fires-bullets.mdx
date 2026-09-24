@@ -1,290 +1,546 @@
 ---
-title: "第12章：A Ship That Fires Bullets"
+title: "第12章：武装飞船——移动与发射子弹"
 type: C
-section: "Part II · Projects · Alien Invasion"
+section: "第二部分 · 项目 · 外星人入侵"
 order: 12
-description: "以Pygame建立Alien Invasion的可运行垂直切片，掌握主循环、连续移动与bullet生命周期。"
+description: "从可运行的 Pygame 窗口出发，用逐帧实验解释持续移动、浮点坐标、边界和子弹生命周期。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: pcc3-12
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccShipBulletsLab } from "@/components/mdx/python-crash-course/v2/a-ship-that-fires-bullets";
+
+{/* 需求分析先行：类型 C；范围 pcc3-12，不含外星人、碰撞、计分。 知识点与可视化决策： 1 项目规划、安装解释器、窗口与资产 → 完整单文件分段代码 + 阶段验收；Pygame 名称正文释义。 2 游戏循环、Clock.tick 帧率 → SVG 事件—标志—位移—绘制轨迹 + 循环代码；游戏循环进 Glossary。 3 事件队列、KEYDOWN/KEYUP、持续移动 → 飞船方向矢量 + 单步输入 + 忽略松键故障；事件队列、移动标志进 Glossary。 4 Settings/Ship/AlienInvasion 类组织 → 职责表 + 同一可组合项目代码 + 设置引用/构造时复制/同帧按下松开两项真实对象观测，不借用第13章。 5 float/Rect、窗口边界 → 飞船整数虚框、浮点位置线、前帧残影与钳制；矩形边界进 Glossary。 6 Sprite/Group、子弹上限、清理 → 空间弹道、三格槽位、有限推进和计数；精灵组进 Glossary。 概念异构度高；独立组件 PccShipBulletsLab，文件 pcc-ship-bullets-lab.tsx。 交互决策：不用空 Stepper 或定时动画；手动推进1/20帧，每次有确定的状态结果。 来源：出版社403，书籍范围仅 outline-only；官方仓库文档和作者公开配套核事实，独立重写。 */}
 
 <Objectives>
 
-- 能分析Pygame game loop的event、update、draw和Clock.tick顺序，并定位窗口无响应或帧率异常
-- 能实现Ship的KEYDOWN/KEYUP movement flags、连续movement与screen boundary约束
-- 能设计Bullet Sprite与Group的spawn、update、limit和cleanup生命周期，并验证对象不会无限累积
+- 能解释每帧输入、更新、清理、绘制的顺序，并定位窗口无响应的原因。
+- 能改出可左右持续移动、松键停止、边界受限的飞船，以及最多三颗的子弹。
+- 能回答：只记录整数位置会丢失什么？第四次发射何时才能成功？
 
 </Objectives>
 
-## 为什么 Planning the Project 要先定义可运行垂直切片
+## 先做一艘能动、能停的飞船
 
-Alien Invasion不是从“完整游戏”一次写成。第一个checkpoint只承诺：打开window、显示ship、允许左右连续移动、按space发射有限数量的bullets、正常退出。alien、collision、score留给后续章节。这个范围让每次改动都能从input到screen得到observable feedback。
+先把屏幕想成一张小地图：飞船从底部中央出发，只能左右移动；子弹沿直线向上飞。我们暂时不放敌人，只检验移动、停止、发射和退出。
 
-先预测两个结果再运行：只处理KEYDOWN而不处理KEYUP时ship会怎样；发射100次且从不cleanup时Group size会怎样增长。把预测写成可检查的不变量，运行中的差异才会指向具体设计缺口。
+如果一开始就铺满敌人、分数和爆炸效果，飞船不动时便很难找到原因。本章每加一种行为就观察一次画面，让问题留在最小范围内。
 
-先写行为表：QUIT应终止；KEYDOWN RIGHT开始右移；KEYUP RIGHT停止右移；SPACE在数量低于limit时spawn bullet；每帧bullet向上；离开top boundary后从collection删除。再把职责分给`AlienInvasion`、`Settings`、`Ship`和`Bullet`，避免所有state堆进一个function。
+## 五个机制：把一次按键变成可见的一帧
 
-<Term def="持续读取输入、更新游戏状态、绘制当前状态并控制帧率的循环。">game loop</Term>
+### 1. 游戏循环：每轮都交付一幅完整画面
 
-项目按可验证顺序增长：
+Pygame 是 Python 的游戏与多媒体库。它提供窗口、输入和绘图能力，却不会替你决定先移动还是先画。
 
-1. 空window能打开、刷新、退出；
-2. ship image能按`rect.midbottom`放在底部中央；
-3. 一次keypress变成可持续且可停止的movement state；
-4. bullet能创建、移动、绘制、限制数量并在越界后清理。
+<Term def="反复读取输入、更新对象并展示画面的程序循环，一轮通常对应一帧。">游戏循环</Term>
+负责这个顺序：读取事件 → 更新飞船 → 更新并清理子弹 → 清背景并绘制对象 → 展示画面
+→ 限制循环速度。
 
-每一步都先运行再继续。若同时加入窗口、图片、移动和发射，黑屏时无法判断是asset path、event loop、draw order还是object state错误。
+`pygame.display.set_mode()` 创建窗口和屏幕绘图表面（`Surface`）；`fill()` 清除上一帧，`blit()` 把飞船表面贴到屏幕，`display.flip()` 展示本帧。漏掉清背景会留下拖影，漏掉展示则可能一直看不到更新。下方实验中虚线残影是刻意的教学标记，不是运行项目的实际拖影。
 
-## Installing Pygame：安装到正在运行项目的interpreter
+`Clock.tick(60)` 每轮调用一次，用等待来限制最高帧率，**不保证每秒恰好 60 帧**，也不自动移动对象。本例速度是每帧 2.5 像素：接近 60 帧/秒时约为 150 像素/秒，只有 30 帧/秒时约为 75。按秒计速需要再用经过时间相乘，不在本章暗中混入。实验用手动帧数替代等待，因果关系相同，但不是实际帧率测量器。
 
-与pytest相同，使用`python -m pip`把Pygame安装到当前interpreter。命令成功不等于editor与terminal使用同一环境；同时打印executable、Pygame version和display driver，保存可复现证据。
+### 2. 游戏窗口与用户输入（Game Window and User Input）：消息必须持续取走
+
+<Term def="保存窗口关闭、按键按下和松开等消息，等待程序读取的有容量限制的队列。">事件队列</Term>
+是操作系统与游戏之间的收件箱。`pygame.event.get()` 取走待处理消息；`QUIT`
+代表关闭请求，`KEYDOWN` 和 `KEYUP` 分别代表按下与松开。
+
+每帧都要处理队列。Pygame 官方文档说明队列有容量上限，满时新消息会被丢弃，长期不处理也可能让系统把程序视为无响应。在事件处理函数里再写一个“按住期间一直循环”的内循环，会阻断后续松键和关闭消息。
+
+实验底部轨迹把“事件”与“位移”分开：只点“右键”时箭头点亮，飞船不动；推进一帧后位置才变。这正是在区分消息处理和画面更新。
+
+窗口接收输入，但屏幕图像不会直接接收“右移命令”。一次按键动作（keypress）先成为消息，消息中的 `type` 表示发生了什么，`key` 才表示哪一个键。比如 `KEYDOWN` 是“按下”，不是“右键”；右键由 `K_RIGHT` 指定。只有键盘事件分支才读取 `event.key`，因为关闭事件不承诺有这个属性。
+
+| 对象或阶段 | Python 中的对应 | 能改变什么，不能代替什么 |
+| --- | --- | --- |
+| 游戏窗口及屏幕绘图表面 | `display.set_mode()` 返回的 `screen` | 提供显示目标，不维护飞船方向 |
+| 事件处理循环（event loop） | `_check_events()` 内的 `for event in pygame.event.get()` | 消费消息并修改标志，不执行持续位移 |
+| 飞船更新 | `Ship.update()` | 读取标志和速度，计算下一帧坐标 |
+| 画面展示 | `_draw()` 最后的 `display.flip()` | 提交已画好的画面，不读取按键或更新坐标 |
+
+事件处理循环是游戏循环中的一个阶段，不是另一个永不退出的循环。**若同一帧更新前已经读到了右键按下和松开，最终标志为假，该帧不会移动**；这不是丢消息，而是本例按最终输入状态更新的结果。后面的“输入阶段观测”会真实投递这两个事件验证它，并检查绘制不会偷偷移动飞船。
+
+
+### 3. 移动标志：按下开始，松开停止
+
+<Term def="记录某个方向是否仍处于按住状态的布尔值，每帧更新时都读取它。">移动标志</Term>
+把一次按键消息变成持续行为。按下右键设 `right = True`，松开设回
+`False`；更新时计算 `int(right) -
+int(left)`，再乘每帧速度。两边都按住时相互抵消，这是本例明确选择的规则。
+
+若把位移写在 `KEYDOWN` 分支里，飞船可能只跳一步，或依赖系统重复按键，速度就不再由游戏控制。正确方案把“修改方向标志”留在事件阶段，把“修改位置”放进每帧更新阶段。失去窗口焦点也清空标志，避免切走窗口时漏收松键而一直滑行。实验提供相同的安全停止，以及只针对松键的故障开关。
+
+### 4. 矩形边界：精确积累，整数绘制
+
+<Term def="Pygame 的 Rect 用整数坐标描述对象的位置和尺寸，可据此摆放对象与约束屏幕边界。">矩形边界</Term>
+不是飞船的美术轮廓，而是包住它的框。坐标原点在窗口左上方，向右是 x 增大，向下是
+y 增大。`rect.midbottom` 指底边中点，用它可将飞船放在底部中央。
+
+`Rect` 只存整数。若每帧把 0.25 像素直接加回整数框，小数就无法累积。因此另存 `self.x = float(self.rect.x)`，每帧先更新浮点数，再显式 `int(self.x)` 写回矩形。以实验的 2.5 为例，位置 147 → 149.5 → 152，而画出的左边缘为 147 → 149 → 152。
+
+宽 330、飞船宽 36，所以左边缘合法范围为 0 到 294。先把浮点位置限制在此范围，再同步矩形；若只限制矩形，隐藏的浮点位置仍可能跑到屏幕外，反向时要等很久才回来。实验里的细线与虚框对应这两份位置。
+
+### 5. 精灵组：发射、更新和离场是一条链
+
+<Term def="Group 保存多个 Sprite 游戏对象，可批量更新和绘制，并在对象离场时将其移除。">精灵组</Term>
+用于管理子弹。每颗子弹是一个
+`Sprite`，保存图像、矩形及浮点纵坐标；`Group.update()` 逐个调用它们的
+`update()`，`Group.draw()` 使用它们的 `image` 和 `rect` 绘制。
+
+按空格时先检查活动数量是否小于 3，再从飞船顶部生成子弹。向上飞要减小 y。清理条件是 `rect.bottom <= 0`，不是 `rect.top <= 0`：顶端刚出界时尾部仍可见。遍历 `group.copy()` 再 `kill()` 可避免边遍历原组边修改它；`kill()` 把精灵从所属组移除，不等于强行销毁所有 Python 引用。
+
+实验的三格槽代表当前组中的对象数，不是总发射次数。同一位置连续发射的子弹可能重叠，看数量应同时看槽位。若从不清理，即使子弹看不见也会占满三格，无法再次发射。
+
+## 先预测，再在空间中逐帧验证
+
+1. **先预测**：重置后按右键，位置会立刻改变吗？推进两帧，读数应为 149.5、152。松开右键再推进，位置不变。
+2. **试一试边界**：重置后锁定右键，连续推进三次 20 帧。位置停在 294，而不是越过右边。换成左键推进一帧，应立即回到 291.5。
+3. **观察子弹变化**：重置后连发四次，只有三颗被接纳。推进两次 20 帧后全部清理，第五次发射就能成功。
+4. **制造一个真错误**：开启“忽略松键”，按右键、推进、松开、再推进，飞船仍移动。点击“释放方向”安全停止；“完整重置”还会恢复故障开关、帧数、位置、对象和计数。
+
+<PccShipBulletsLab />
+
+图形实验是浏览器中的确定性模型，并非嵌入的 Pygame。它保留本项目的尺寸、速度、边界和容量规则；按键事件到达时即可修改标志/发射，推进按钮统一执行更新、清理与绘制。实际项目由循环不断完成这些阶段。方向按钮可切换“按住”状态，适合触屏；键盘用户聚焦游戏区后可按住方向键并用回车单步，松键就是 `KEYUP`。
+
+## 最小运行项目：一个文件，不需要图片下载
+
+### 安装与分阶段验收
+
+建议使用桌面环境中的 Python 3.10–3.13。以下锁定 `pygame==2.6.1`，避免不同安装时间获得不同版本。先创建独立虚拟环境，再安装；编辑器也应选择该环境的解释器。
 
 ```bash
-python3 -m pip install pygame
-python3 -c "import sys, pygame; print(sys.executable); print(pygame.version.ver)"
-python3 alien_invasion.py
+mkdir ship-demo
+cd ship-demo
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install pygame==2.6.1
+python -c "import sys, pygame; print(sys.executable); print(pygame.version.ver)"
 ```
 
-在无desktop display的远程环境中，import可成功但window创建失败；这不是package安装问题。asset加载也应基于`Path(__file__)`构造稳定路径，而不是依赖launch时的current working directory。初期先用简单surface或确认存在的`ship.bmp`，把资源问题与loop问题分开。
+Windows 的创建命令可改为 `py -m venv .venv`，PowerShell 激活用 `.venv\Scripts\Activate.ps1`。不要为解决环境问题向系统解释器随意安装。若安装失败，先检查 Python 版本、平台是否有对应的二进制安装包和网络，再看错误，而不是忽略它继续执行。
 
-## Game Window and User Input：窗口为何会“未响应”
+**组合规则：下面标记 A–H 的八段 Python 代码，按顺序原样粘贴到同一个 `alien_invasion.py`。** 中间不要插入运行命令；保留缩进。C 段接在 B 的 `Ship` 类里，F/G 段接在 E 的 `AlienInvasion` 类里。全部粘完再运行。本项目没有 `images` 目录，也不读取 `ship.bmp`；飞船通过多边形绘制生成，所有依赖只有 Python 和 Pygame。
 
-`pygame.init()`初始化subsystems，`display.set_mode()`创建screen surface，`display.flip()`把本帧绘制结果展示出来。操作系统把关闭、键盘和鼠标事件放入queue；程序必须持续drain它。如果main thread长时间计算或完全不调用`pygame.event.get()`，window manager会判断应用未处理消息。
+验收按顺序做：①窗口能打开和关闭；②底部飞船能显示；③左右连续移动、松键停止且不能越界；④空格发射，上限三颗，离场后又能发射。后续再考虑敌人与碰撞，本章不依赖下一章的任何代码。
 
-<Term def="操作系统与Pygame之间暂存QUIT、KEYDOWN、KEYUP等输入消息的队列。">event queue</Term>
+### A. 设置类（Settings Class）：把调节项收在一起
+
+`Settings` 只保存参数，不处理输入或画图。窗口、飞船和子弹都从这里读取速度与尺寸，避免多个文件各写一份数值。这里用一个文件展示完整项目，类的职责仍然独立。
+
+设置类回答“应该多快、多大、允许几颗”，不回答“当前在哪里、正在按哪个键”。`AlienInvasion` 创建一个设置对象，并把同一对象交给飞船；所以更改 `game.settings.ship_speed` 后，下一次 `Ship.update()` 就会读到新值。位置 `x` 和方向 `right` 则属于飞船，不能塞进所有对象共用的设置里。
+
+作者配套的设置类在 `__init__()` 中给实例赋值；本例把不可变的数字和颜色元组写成类默认值来缩短代码。两者不应混淆：`game.settings.ship_speed = 0.25` 给这个实例增加同名属性，并不把 `Settings.ship_speed` 的默认值也改掉。后面的责任观测会同时检查当前设置与新建设置，验证这一区别。
+
 
 ```python
 import pygame
 
-class AlienInvasion:
-    def __init__(self) -> None:
-        pygame.init()
-        self.clock = pygame.time.Clock()
-        self.screen = pygame.display.set_mode((1200, 800))
-        pygame.display.set_caption("Alien Invasion")
-        self.running = True
 
-    def run_game(self) -> None:
-        while self.running:
-            self._check_events()
-            self._update_screen()
-            self.clock.tick(60)
-
-    def _check_events(self) -> None:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-
-    def _update_screen(self) -> None:
-        self.screen.fill((230, 230, 230))
-        pygame.display.flip()
-```
-
-退出用state transition比在深层helper直接`sys.exit()`更容易测试和清理：事件处理把`running`改为false，loop自然结束，最后执行`pygame.quit()`。两种方式都能工作，但一个project应保持一致的ownership。
-
-### KEYDOWN、KEYUP与输入状态
-
-`KEYDOWN`表示按键从up变down，`KEYUP`表示down变up；它们是edge events，不是每帧位置增量。只在`KEYDOWN`中改变`rect.x`会依赖系统key repeat，移动会先停顿再跳跃，并因平台设置不同而变化。
-
-正确模型把event转换成persistent state：RIGHT down令`moving_right=True`，RIGHT up令其false；每帧`Ship.update()`读取flags。event frequency与render/update frequency因此解耦。
-
-## Controlling the Frame Rate：一帧的职责与预算
-
-主循环的稳定顺序是process events、update world、draw world、flip、tick。若先draw后update，screen总显示上一帧state；若在update中再次读取event queue，输入ownership分散；若不tick，空场景会尽可能快地循环，CPU占用升高且基于“每帧移动多少”的速度随机器变化。
-
-<Stepper>
-  <Step title="切换FPS并逐阶段检查主循环">
-  </Step>
-  <Step title="定位frame budget超支">
-    60 FPS约有16.7 ms预算。若event、update和draw总耗时超过预算，Clock.tick不能补回时间，只能让实际FPS下降。
-  </Step>
-  <Step title="确认draw来自同一帧状态">
-    一帧只做一次world update和一次display flip；不要让Ship或Bullet各自调用flip。
-  </Step>
-</Stepper>
-
-`Clock.tick(60)`设置上限，并返回上一帧耗时milliseconds。书中项目使用固定的每帧速度配合60 FPS，便于入门；若扩展为不同帧率仍保持相同物理速度，可使用`dt_seconds = tick_ms / 1000`并把速度定义为pixels/second。两种模型不能混用，否则会重复缩放。
-
-## Settings Class：集中参数，不隐藏运行状态
-
-`Settings`保存screen width/height、background color、ship speed、bullet dimensions、bullet speed和允许bullet数量。这些是configuration；当前按键、active bullets和score是runtime state，不应塞进settings。集中配置使第14章提高难度时能有明确入口。
-
-```python
 class Settings:
-    def __init__(self) -> None:
-        self.screen_width = 1200
-        self.screen_height = 800
-        self.bg_color = (230, 230, 230)
-        self.ship_speed = 1.5
-        self.bullet_speed = 2.5
-        self.bullet_width = 3
-        self.bullet_height = 15
-        self.bullet_color = (60, 60, 60)
-        self.bullets_allowed = 3
+    width, height = 330, 360
+    fps = 60
+    background = (24, 29, 38)
+    ship_color = (104, 195, 220)
+    bullet_color = (238, 226, 178)
+    ship_speed = 2.5
+    bullet_speed = 8.0
+    bullets_allowed = 3
 ```
 
-settings object由composition传给需要参数的objects。不要让每个module各自创建Settings，否则测试修改一份时其他objects仍读取另一份。对初期项目，直接保存reference足够；后续动态difficulty还要区分static settings与可重置dynamic settings。
+### B. 飞船类（Ship Class）：自己生成资产并持有状态
 
-<Term def="由KEYDOWN和KEYUP维护、供每帧update读取以产生连续移动的布尔输入状态。">movement flag</Term>
+`Surface((36, 28), pygame.SRCALPHA)` 创建透明图像，随后在其中画出飞船，不需要任何下载资源。矩形底边中点放在距窗口底部 18 像素的位置，于是顶部为 314。`self.x` 是计算位置，`rect.x` 是显示位置。
 
-## Ship Class：位置、图像与边界必须一致
+飞船类把外观 `image`、摆放位置 `rect`、计算位置 `x` 和移动标志收在同一个对象里。传入 `game` 是为了取得现成的屏幕与设置引用，**不是再创建一个窗口**。`image.get_rect()` 返回与图像同尺寸的新矩形，初始左上角为 `(0, 0)`；接着设置 `midbottom` 才将它移到屏幕底部。这里不能误用整个屏幕的矩形，否则宽度会变成 330，飞船将没有横向移动空间。
 
-`Ship`拥有image、rect、screen rect与高精度horizontal position。Pygame `Rect`只存integer coordinates，而`ship_speed=1.5`需要float accumulator；若直接执行`rect.x += 1.5`，小数会被截断，实际速度不是配置值。update先改`self.x`，再把结果写回`rect.x`。
+持续移动（continuous movement）的职责也分两层：游戏类解释按键消息，飞船类在每次更新中执行位移。`Ship.draw()` 只读取已确定的位置。实验中方向箭头对应移动标志，细线对应 `x`，虚框对应 `rect`；观察“按下点亮箭头、推进才移动轮廓”，就是在观察这两个类的交接，而不是两处都计算一次位移。
+
 
 ```python
 class Ship:
-    def __init__(self, game) -> None:
+    def __init__(self, game):
         self.screen = game.screen
         self.settings = game.settings
-        self.image = pygame.image.load("images/ship.bmp")
+        self.image = pygame.Surface((36, 28), pygame.SRCALPHA)
+        points = [(18, 0), (34, 24), (24, 20),
+                  (18, 27), (12, 20), (2, 24)]
+        pygame.draw.polygon(self.image, self.settings.ship_color, points)
         self.rect = self.image.get_rect()
-        self.screen_rect = self.screen.get_rect()
-        self.rect.midbottom = self.screen_rect.midbottom
+        self.rect.midbottom = (self.settings.width // 2,
+                               self.settings.height - 18)
         self.x = float(self.rect.x)
-        self.moving_right = False
-        self.moving_left = False
+        self.left = False
+        self.right = False
+```
 
-    def update(self) -> None:
-        if self.moving_right and self.rect.right < self.screen_rect.right:
-            self.x += self.settings.ship_speed
-        if self.moving_left and self.rect.left > 0:
-            self.x -= self.settings.ship_speed
-        self.rect.x = self.x
+若以后替换为位图，才需要提供真实图片文件，并用 `Path(__file__).resolve().parent / "images" / "ship.bmp"` 构造路径，而不是依赖启动时所在目录。加载成功后也要重新取得图像矩形，边界上限应继续使用实际图像宽度。
 
-    def blitme(self) -> None:
+### C. 飞船更新与绘制：追加在 Ship 类中
+
+这段保留四个空格的类内缩进。先从两个方向标志得到位移，再限制浮点位置，最后同步整数框。`draw()` 只展示，不偷偷改变坐标，才方便逐帧验证。
+
+```python
+    def update(self):
+        direction = int(self.right) - int(self.left)
+        self.x += direction * self.settings.ship_speed
+        max_x = self.settings.width - self.rect.width
+        self.x = max(0.0, min(max_x, self.x))
+        self.rect.x = int(self.x)
+
+    def draw(self):
         self.screen.blit(self.image, self.rect)
 ```
 
-边界条件用`rect.right < screen_rect.right`与`rect.left > 0`，验证的是ship footprint，不是中心点。更严格的实现先计算candidate float position，再clamp到`[0, screen_width - rect.width]`，可避免较大speed一步越界。无论使用哪种写法，float position与rect必须在每次update后同步。
+### D. 子弹类：只管自己的位置
 
-<Stepper>
-  <Step title="组合KEYDOWN与KEYUP状态">
-  </Step>
-  <Step title="比较tap、hold与同时按键">
-    tap只跨少数帧；hold在每帧继续移动；左右同时为true时应明确采用净方向0或固定优先级。
-  </Step>
-  <Step title="验证screen boundary invariant">
-    每帧断言`0 <= rect.left`且`rect.right <= screen_rect.right`，并检查float position没有继续漂到screen外。
-  </Step>
-</Stepper>
-
-输入handler只更新flags与触发command，不直接承担连续movement。这样测试无需制造操作系统key repeat：设置flag、调用三次update、检查位移，再清除flag、调用一次update、确认位置保持。
-
-## Shooting Bullets：从command到Sprite Group
-
-SPACE是离散command：每次允许的KEYDOWN创建一个Bullet。Bullet继承`pygame.sprite.Sprite`，拥有narrow rectangle、float y和`update()`；`pygame.sprite.Group`集中保存active bullets，能调用所有成员的update并统一draw。
-
-<Term def="持有同类active Sprite并批量调用update或draw的Pygame容器。">sprite group</Term>
+子弹继承 `pygame.sprite.Sprite`，先初始化父类，才能参与组管理。子弹图像为 4×10 像素，底边与飞船顶边相接；`update()` 只负责向上移动。是否允许生成、何时离组，交给拥有子弹组的游戏对象。
 
 ```python
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self, game) -> None:
+    def __init__(self, game):
         super().__init__()
-        self.screen = game.screen
-        self.settings = game.settings
-        self.color = self.settings.bullet_color
-        self.rect = pygame.Rect(0, 0, self.settings.bullet_width,
-                                self.settings.bullet_height)
-        self.rect.midtop = game.ship.rect.midtop
+        self.speed = game.settings.bullet_speed
+        self.image = pygame.Surface((4, 10))
+        self.image.fill(game.settings.bullet_color)
+        self.rect = self.image.get_rect()
+        self.rect.midbottom = game.ship.rect.midtop
         self.y = float(self.rect.y)
 
-    def update(self) -> None:
-        self.y -= self.settings.bullet_speed
-        self.rect.y = self.y
-
-    def draw_bullet(self) -> None:
-        pygame.draw.rect(self.screen, self.color, self.rect)
+    def update(self):
+        self.y -= self.speed
+        self.rect.y = int(self.y)
 ```
 
-在game初始化时创建一次`self.bullets = pygame.sprite.Group()`。发射函数先检查`len(self.bullets) < bullets_allowed`，构造bullet并add；主循环每帧调用group update，然后遍历副本或安全地kill越界成员。
+### E. 游戏类：持有对象并协调循环
+
+游戏对象创建窗口、计时器、飞船和组。`run_game()` 不塞入各对象的细节，只安排阶段。收到退出请求后直接结束循环；`finally` 保证循环中出错或退出时释放 Pygame 资源。
 
 ```python
-def _fire_bullet(self) -> None:
-    if len(self.bullets) < self.settings.bullets_allowed:
-        self.bullets.add(Bullet(self))
+class AlienInvasion:
+    def __init__(self):
+        pygame.init()
+        self.settings = Settings()
+        size = (self.settings.width, self.settings.height)
+        self.screen = pygame.display.set_mode(size)
+        pygame.display.set_caption("Ship and Bullets")
+        self.clock = pygame.time.Clock()
+        self.ship = Ship(self)
+        self.bullets = pygame.sprite.Group()
+        self.running = True
 
-def _update_bullets(self) -> None:
-    self.bullets.update()
-    for bullet in self.bullets.copy():
-        if bullet.rect.bottom <= 0:
-            self.bullets.remove(bullet)
+    def run_game(self):
+        try:
+            while self.running:
+                self._check_events()
+                if not self.running:
+                    break
+                self.ship.update()
+                self._update_bullets()
+                self._draw()
+                self.clock.tick(self.settings.fps)
+        finally:
+            pygame.quit()
 ```
 
-为什么在update后cleanup？因为刚越过top的bullet本帧才满足删除条件。为什么迭代`copy()`？遍历原Group时修改collection容易跳过元素或依赖容器实现。也可调用`bullet.kill()`让Sprite从所属Groups移除，但应选择一种明确policy。
+### F. 输入处理：追加在 AlienInvasion 类中
 
-<Term def="对象从创建、参与每帧更新到越界移除的完整资源管理过程。">lifecycle cleanup</Term>
+本例不启用按键重复；空格一次按下发射一次，不实现按住连射。左右键按下和松开都会走方向分支，而发射只响应按下。窗口失焦时将两个标志清空；关闭按钮和 Esc 都能退出。
 
-<Stepper>
-  <Step title="操作spawn、update、limit与cleanup">
-  </Step>
-  <Step title="检查发射上限是active count">
-    上限只统计仍在Group中的bullets；旧bullet越界删除后应恢复发射能力。
-  </Step>
-  <Step title="验证长期运行不会累积不可见对象">
-    连续推进足够帧后Group size应回到0；只看screen不可见不能证明对象已释放。
-  </Step>
-</Stepper>
+```python
+    def _check_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.WINDOWFOCUSLOST:
+                self.ship.left = self.ship.right = False
+            elif event.type in (pygame.KEYDOWN, pygame.KEYUP):
+                down = event.type == pygame.KEYDOWN
+                if event.key == pygame.K_LEFT:
+                    self.ship.left = down
+                elif event.key == pygame.K_RIGHT:
+                    self.ship.right = down
+                elif down and event.key == pygame.K_SPACE:
+                    self._fire_bullet()
+                elif down and event.key == pygame.K_ESCAPE:
+                    self.running = False
+```
 
-绘制顺序通常为fill background、ship.blitme、逐个bullet.draw_bullet、display.flip。bullet是纯色Rect，不能直接使用Group.draw，除非每个Sprite提供`image`；理解这个contract比机械换API重要。
+### G. 子弹和画面：继续追加在 AlienInvasion 类中
 
-## 把模块连接成可诊断系统
+`_fire_bullet()` 在添加前检查容量。更新后遍历组的副本并清理；若一颗子弹本帧才离场，同一帧较早到达的发射请求仍可能被拒绝——因为事件处理发生在清理之前。下一次按下空格才能使用释放的名额。
 
-推荐文件边界为`alien_invasion.py`负责orchestration，`settings.py`负责configuration，`ship.py`与`bullet.py`负责各自state和render。对象依赖从game注入，形成一份shared screen、settings与ship reference。循环中每项职责有唯一owner：events由game处理，ship position由Ship更新，bullet lifecycle由game协调Group完成。
+```python
+    def _fire_bullet(self):
+        if len(self.bullets) < self.settings.bullets_allowed:
+            self.bullets.add(Bullet(self))
 
-诊断时从最小证据前进：window不出现先检查interpreter和`set_mode`；出现但冻结检查event drain；ship不显示检查asset path、rect与draw order；按键只跳一下检查是否只有KEYDOWN mutation；bullet不可见检查spawn location、direction与draw；运行越久越慢检查Group size与cleanup。
+    def _update_bullets(self):
+        self.bullets.update()
+        for bullet in self.bullets.copy():
+            if bullet.rect.bottom <= 0:
+                bullet.kill()
 
-项目每个checkpoint都保留可运行状态。新增feature前记录当前FPS、active object count和输入行为；修改后复测退出、边界、同时按键与bullet limit。这个习惯会在第13章fleet和collision数量增长时显著缩小故障范围。
+    def _draw(self):
+        self.screen.fill(self.settings.background)
+        self.ship.draw()
+        self.bullets.draw(self.screen)
+        pygame.display.flip()
+```
 
-<Callout type="trap" title="在KEYDOWN中直接移动ship就能实现连续控制">
-KEYDOWN是edge event，持续移动会依赖操作系统key repeat并产生停顿。事件只维护movement flag，每帧update读取flag；KEYUP必须清除对应状态。
+绘制时飞船先于子弹，保证子弹覆盖在飞船前方。本例没有碰撞判定，所以组仅用于批量更新、绘制和移除，而不是用来推断“命中”。
+
+### H. 程序入口：取消缩进，放到文件末尾
+
+只有直接运行本文件才创建游戏；导入它做测试时不会自动打开窗口。这也避免漏写入口导致“代码运行了，却什么也没出现”。
+
+```python
+if __name__ == "__main__":
+    AlienInvasion().run_game()
+```
+
+在已激活的虚拟环境和 `ship-demo` 目录中执行：
+
+```bash
+python alien_invasion.py
+```
+
+纯远程终端可能没有图形显示，安装成功不代表一定能创建可见窗口。无头测试可借助 SDL 的虚拟显示驱动验证部分逻辑，但它不能代替真实窗口、焦点和键盘验收。本文不会把浏览器模型通过当成 Pygame 窗口已经运行的证据。
+
+### 类组织回看：每种变化只找一个负责人
+
+| 需求变化                         | 负责位置        | 不应该混入的职责     |
+| -------------------------------- | --------------- | -------------------- |
+| 调整窗口、速度、发射上限         | `Settings`      | 不取事件、不更新坐标 |
+| 保持飞船位置并显示外观           | `Ship`          | 不遍历子弹组         |
+| 每颗子弹向上运动                 | `Bullet`        | 不决定全局发射名额   |
+| 处理输入、协调循环、清理离场对象 | `AlienInvasion` | 不复制飞船的位移公式 |
+
+后续想拆成文件，可将四个类分别放入 `settings.py`、`ship.py`、`bullet.py`、`alien_invasion.py`，按实际引用添加导入。**本章提供的是已经组合完整的单文件方案，不需要先完成拆分才能运行。**
+
+### 责任观测：共享设置引用，不等于所有参数都会自动生效
+
+先预测：创建子弹后再修改设置中的子弹速度，旧子弹会跟着变速吗？本例飞船每帧读取 `self.settings.ship_speed`，但子弹在构造时把速度复制到 `self.speed`，因此**新设置影响旧飞船，却只影响新建子弹**。同理，修改窗口宽度的配置值不会自动重建显示表面；动态改窗口还必须重新创建窗口、重新对齐位置与边界，不能只改一个数字。
+
+完成 A–H 后，将下段单独保存为同目录的 `probe_ownership.py`，不要追加到游戏文件。运行 `python probe_ownership.py`。它使用真实对象检查职责，输出应为 `147.25 147 2.5`、`8.0 3.0`、`(330, 360) 400`；最后一个结果说明配置值和已创建窗口不是同一个状态。
+
+```python
+import pygame
+from alien_invasion import AlienInvasion, Bullet, Settings
+
+game = AlienInvasion()
+try:
+    assert game.ship.settings is game.settings
+    assert game.ship.screen is game.screen
+    assert game.ship.rect.size == (36, 28)
+    game.settings.ship_speed = 0.25
+    game.ship.right = True
+    game.ship.update()
+    assert (game.ship.x, game.ship.rect.x) == (147.25, 147)
+    assert Settings().ship_speed == Settings.ship_speed == 2.5
+    print(game.ship.x, game.ship.rect.x, Settings().ship_speed)
+    old_bullet = Bullet(game)
+    game.settings.bullet_speed = 3.0
+    new_bullet = Bullet(game)
+    assert (old_bullet.speed, new_bullet.speed) == (8.0, 3.0)
+    print(old_bullet.speed, new_bullet.speed)
+    game.settings.width = 400
+    assert game.screen.get_size() == (330, 360)
+    print(game.screen.get_size(), game.settings.width)
+finally:
+    pygame.quit()
+```
+
+该观测故意制造“配置宽度与真实窗口不一致”后立即退出，不继续执行移动；正常项目应在创建窗口前确定尺寸。若希望已经发出的子弹也响应调速，应让子弹保留设置引用并在 `update()` 中读取速度。这是行为设计上的修改，不是 Pygame 会自动完成的工作。
+
+### 输入阶段观测：一个事件批次不一定产生一次移动
+
+将下面代码另存为 `probe_input.py`，运行 `python probe_input.py`。预期输出为 `False 147.0 147`。这里在实验开始时清空窗口启动消息，以隔离合成事件；**不要把清空队列复制进正常游戏循环**，否则可能丢掉真实的退出和松键消息。
+
+```python
+import pygame
+from alien_invasion import AlienInvasion
+
+game = AlienInvasion()
+try:
+    pygame.event.clear()
+    before = (game.ship.x, game.ship.rect.topleft)
+    down = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT)
+    up = pygame.event.Event(pygame.KEYUP, key=pygame.K_RIGHT)
+    assert down.type == pygame.KEYDOWN and down.key == pygame.K_RIGHT
+    pygame.event.post(down)
+    pygame.event.post(up)
+    game._check_events()
+    assert not game.ship.right
+    assert not pygame.event.peek([pygame.KEYDOWN, pygame.KEYUP])
+    game.ship.update()
+    assert (game.ship.x, game.ship.rect.topleft) == before
+    game._draw()
+    assert (game.ship.x, game.ship.rect.topleft) == before
+    print(game.ship.right, game.ship.x, game.ship.rect.x)
+finally:
+    pygame.quit()
+```
+
+这个例子验证了输入阶段确实消费消息，更新阶段只看到最终为假的方向标志，绘制阶段不更改位置。若想在浏览器实验中对照，重置后依次按下、松开右键，期间不推进，最后再单步：箭头先亮后灭，飞船仍在 147。若要捕捉再短的点击也移动一下，那是另一种输入设计，需要另存“本帧曾按下”的信息，不能假称当前标志方案已经支持。
+
+
+## 四种真实错误与定位方法
+
+<Callout type="trap" title="松开了，飞船仍在移动">
+
+**现象 →** 松键后继续漂移。
+
+**原因 →** `KEYUP` 没清空方向标志，或失焦时漏收事件。
+
+**修法 →** 在松键和失焦时清理标志；用实验“忽略松键”开关复现，再比较正确模式。
+
 </Callout>
 
-<Callout type="trap" title="bullet离开screen后看不见，所以无需删除">
-不可见不等于不存在。对象仍留在Group中，每帧继续update，并占用发射limit与内存；update后按boundary显式cleanup，并以Group size验证。
+<Callout type="trap" title="调慢后不动，撞墙后反向迟钝">
+
+**现象 →** 速度设 0.25 后无法积累位移，或撞墙后要等很久才返回。
+
+**原因 →** 只在整数框里累加，或只限制框而未限制浮点位置。
+
+**修法 →** 先更新并钳制浮点位置，再执行 `rect.x = int(self.x)`。
+
 </Callout>
 
-## 本章回顾：一个小切片包含完整实时系统
+<Callout type="trap" title="只开三枪，以后永远不能再发射">
 
-1. Pygame安装、asset path和display环境是三个不同failure boundary。
-2. game loop每帧处理event、更新world、绘制、flip并由Clock.tick限制FPS。
-3. Settings集中configuration，runtime state由拥有它的game objects维护。
-4. KEYDOWN/KEYUP维护movement flags，Ship每帧更新float position并约束rect边界。
-5. Bullet通过Sprite与Group形成spawn、update、draw、limit和cleanup闭环。
+**现象 →** 屏幕没有子弹，组里却仍有三颗。
+
+**原因 →** 离场后未移除；不可见不等于不存在。
+
+**修法 →** 每帧更新后遍历组副本，以 `bottom <= 0` 清理；不要用顶端出界作为完全离场条件。
+
+</Callout>
+
+<Callout type="trap" title="窗口无响应，或关闭请求无效">
+
+**现象 →** 窗口出现了，但系统提示无响应。
+
+**原因 →** 主循环未处理事件，或事件分支中的内循环阻塞了后续消息。
+
+**修法 →** 每帧取事件，把持续移动改成标志；确认代码能走到绘制和帧率限制阶段。
+
+</Callout>
+
+## 小结与练习
+
+- 输入、更新、清理、绘制每帧各司其职。
+- 持续移动靠标志，松键和失焦都应停止。
+- 浮点积累，整数绘制；子弹离场才释放名额。
 
 <Exercises>
 
-**问题 1：为什么按住RIGHT时不能只在KEYDOWN事件中修改ship位置？**
+**问题 1：** 重置实验，按右键后推进两帧，再松键并推进一帧。预测三次浮点位置与整数位置；然后开启“忽略松键”重复实验。两种结果为什么不同？
 
-<Answer>KEYDOWN只表示up到down的边缘，后续重复事件受操作系统delay和repeat rate影响。应在KEYDOWN设置moving_right，在KEYUP清除；每帧Ship.update读取flag并移动。测试tap、hold、左右同时按与release后停止。</Answer>
+<Answer>
 
-**问题 2：60 FPS下窗口偶尔卡顿，应如何区分loop order、超时和输入阻塞？**
+正确模式浮点位置依次为 149.5、152、152，整数框位置为 149、152、152。故障模式前两帧相同，第三帧仍读取为真的右移标志，得到 154.5，整数框为 154。`KEYUP` 是改变持续状态的消息，不是“绘制停止图像”的指令；恢复松键分支后下一帧自然停止。
 
-<Answer>记录event、update、draw各阶段耗时与每帧总耗时；60 FPS预算约16.7 ms。确认每帧drain event queue且只有一次flip；Clock.tick只能限制过快循环，不能修复超过预算的update。保存最慢帧的active object count定位增长。</Answer>
+</Answer>
 
-**问题 3：如何证明bullet lifecycle既遵守数量上限又不会泄漏？**
+**问题 2：** 修改运行项目中的 `ship_speed = 0.25`，并把浏览器组件的 `SHIP_WORLD.shipSpeed` 同样改为 0.25。预测从 x=147 开始连续右移四帧的结果。再把更新错误地写成 `self.rect.x = int(self.rect.x + 0.25)`，为何失败？若只给 `game.settings.ship_speed` 赋值而不修改类默认值，现有飞船和新建的 `Settings()` 分别会读到什么？
 
-<Answer>连续发射到bullets_allowed，断言额外command不spawn；推进直到旧bullets的rect.bottom小于等于0，执行cleanup后Group size回到0并恢复发射能力。长时间重复spawn/update/cleanup，最大active count不超过limit且不可见对象不残留。</Answer>
+<Answer>
+
+浮点位置应为 147.25、147.5、147.75、148，整数显示位置为 147、147、147、148。错误写法每次都从整数 147 起算，截断后仍为 147，下一帧没有保留上次的余量。修复时保留独立的 `self.x`，钳制它之后再同步矩形。设置类保存速度参数，飞船类保存并更新位置，两者不能合并成对 `Rect` 的直接累加。仅修改当前设置实例时，现有飞船因持有同一设置引用而读到 0.25，新建的 `Settings()` 仍读到类默认值 2.5；“责任观测”中的断言可以验证。浏览器读数保留一位小数，因此验证 0.25 的精确中间值应读取模型状态或临时把 `toFixed(1)` 改为 `toFixed(2)`；不要误把显示舍入当成内部丢失精度。
+
+</Answer>
+
+**问题 3：** 独立实现“同时最多两颗子弹”：修改设置，连续尝试发射三次，再推进 39 帧和第 40 帧。目标画面是“两条向上弹道，完全离场后槽位清空”。写出容量、边界清理和重新发射的三个断言；解释为什么在第 39 帧不能提前删除。
+
+<Answer>
+
+将 `bullets_allowed` 设为 2。第三次发射后断言 `len(game.bullets) == 2`。初始子弹 y=304、高度 10，39 帧后 y=-8、底边为 2，仍有两像素可见，应保留两颗；第 40 帧后底边为 -6，应断言组为空，再发射一次应为 1。使用下列测试时，文件 A–H 须已组合完成；测试导入项目类，使用虚拟显示，不会验证真实按键体验。
+
+```python
+import os
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+import pygame
+from alien_invasion import AlienInvasion
+
+game = AlienInvasion()
+try:
+    game.settings.bullets_allowed = 2
+    for _ in range(3):
+        game._fire_bullet()
+    assert len(game.bullets) == 2
+    for _ in range(39):
+        game._update_bullets()
+    assert len(game.bullets) == 2
+    assert all(b.rect.bottom == 2 for b in game.bullets)
+    game._update_bullets()
+    assert len(game.bullets) == 0
+    game._fire_bullet()
+    assert len(game.bullets) == 1
+finally:
+    pygame.quit()
+```
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="game loop" definition="持续处理输入、更新状态、绘制并控制帧率的循环。" />
-  <GlossaryItem term="event queue" definition="暂存QUIT、KEYDOWN、KEYUP等操作系统输入消息的队列。" />
-  <GlossaryItem term="movement flag" definition="由按键边缘事件维护、供每帧update读取的持续输入状态。" />
-  <GlossaryItem term="sprite group" definition="持有active Sprite并批量update或draw的Pygame容器。" />
-  <GlossaryItem term="lifecycle cleanup" definition="对象从spawn、update到越界移除的完整资源管理过程。" />
+  <GlossaryItem
+    term="游戏循环"
+    definition="程序每帧重复输入、更新和绘制的主流程；Clock.tick 可限制它的最高执行频率。"
+  />
+  <GlossaryItem
+    term="事件队列"
+    definition="暂存关闭、按下和松开等消息的有界收件箱；应每帧读取，避免积压和丢失。"
+  />
+  <GlossaryItem
+    term="移动标志"
+    definition="把按键是否仍按住记成布尔值；更新阶段据此连续移动，松键后将它清为假。"
+  />
+  <GlossaryItem
+    term="矩形边界"
+    definition="用整数 Rect 包围对象，提供位置、尺寸和边缘；浮点坐标应独立保存后再同步给它。"
+  />
+  <GlossaryItem
+    term="精灵组"
+    definition="Group 管理多个 Sprite 对象，可批量更新、绘制并移除；不在屏幕内的对象不会自动离组。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 12: A Ship That Fires Bullets" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 来源与事实核对
+
+本章对应 Eric Matthes《Python Crash Course》第三版第 12 章 “A Ship That Fires Bullets”（`pcc3-12`）。2026-09-23 核查时，[出版社页面](https://nostarch.com/python-crash-course-3rd-edition)返回 HTTP 403，不能据此声称已阅读该章全文。书籍范围按权威目录条目限定，来源层级为 **outline-only**；正文、图形和程序是 **independent-rewrite（独立重写）**，并非原书翻译或完整代码复刻。
+
+以下公开资料用于核对具体事实，不用于冒充书籍正文访问权限：
+
+- [作者第三版配套站](https://ehmatthes.github.io/pcc_3e/)与[第 12 章练习页](https://ehmatthes.github.io/pcc_3e/solutions/chapter_12/)：核对本章从窗口、角色、按键到发射的实践范围。公开练习不等于全章正文。
+- [作者第 12 章 shooting_bullets 配套代码](https://github.com/ehmatthes/pcc_3e/tree/main/chapter_12/shooting_bullets)：核对设置类、飞船类、移动标志、浮点坐标以及子弹组的职责。本例自行设计图形资源、双向抵消、失焦清理和显式钳制，不宣称与原书逐行相同。
+- [Pygame 官方仓库与安装说明](https://github.com/pygame/pygame)：核对库与安装入口。本章安装命令明确锁定版本；官方仓库主分支文档可能继续演进。
+- [官方事件文档源文件](https://github.com/pygame/pygame/blob/main/docs/reST/ref/event.rst)与[键盘文档源文件](https://github.com/pygame/pygame/blob/main/docs/reST/ref/key.rst)：核对有界事件队列、按下/松开消息和默认关闭的按键重复。
+- [官方矩形文档源文件](https://github.com/pygame/pygame/blob/main/docs/reST/ref/rect.rst)与[精灵文档源文件](https://github.com/pygame/pygame/blob/main/docs/reST/ref/sprite.rst)：核对整数坐标、组更新/绘制、复制遍历及 `kill()` 的移组语义。
+- [官方显示文档源文件](https://github.com/pygame/pygame/blob/main/docs/reST/ref/display.rst)与[计时文档源文件](https://github.com/pygame/pygame/blob/main/docs/reST/ref/time.rst)：核对窗口创建、整屏展示和 `Clock.tick()` 限速。此次 Pygame 文档站也返回 403，因此实际读取并核对的是上述官方仓库中的文档源文件，不声称文档站访问成功。
+
+本章不为原书或作者配套材料附加开放改编许可；公开可访问不等于授权复刻。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  adaptedFrom="Python Crash Course, Third Edition, Chapter 12: A Ship That Fires Bullets"
+  adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition"
+/>

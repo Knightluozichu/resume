@@ -1,241 +1,424 @@
 ---
-title: "第11章：Testing Your Code"
+title: "第11章：测试代码"
 type: C
 section: "Part I · Basics"
 order: 11
-description: "使用pytest验证函数与class，读取失败报告，并以fixture和regression test维持隔离。"
+description: "安装 pytest，编写函数与类测试，读懂失败报告，并通过 fixture 对象生命周期验证测试隔离。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+draft: true
+qualityVersion: 2
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: "pcc3-11"
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccTestingCodeLab } from "@/components/mdx/python-crash-course/v2/testing-your-code";
+
+{/* 独立需求分析（先于图形设计）：C 型。只读 manifest 的 pcc3-11 限定六组范围：pip 安装 pytest；函数测试；通过/失败与 assert；新增测试；类测试；fixture。读者应能区分未收集、执行失败与对象污染，不把绿色输出当作无缺陷证明。五组知识点→证据：1. 工具环境、测试用例→安装命令/函数最小文件/练习1；2. 测试发现与测试类规则→目录树/收集命令/故障表；3. 断言比较、异常及失败定位→实际与预期对照/失败到修复代码；4. 回归测试与边界0→旧新用例并行/练习1；5. fixture 按名注入、默认 function 作用域、可变对象隔离、测试顺序→专属引用合流与列表格 SVG/练习2、3。六个术语归入上述五组知识点，均在 Glossary 闭环。 图形决策：选择对象引用图+六阶段请求/操作/断言时间线，不用通用评分卡或纯文字 Stepper。两个测试请求在 function 下分流到 A/B，在 module 下汇合到 A；列表格数量由真实示例的回答样本控制。交换顺序可隐藏而非修复污染；全重置含样本/作用域/顺序/播放位置。固定 360 宽竖向 SVG、16px 字体、44px 控件适配窄屏；真实浏览器验证由 main 完成。固定快照模拟明确不是 Python 执行。 来源核验（2026-09-23）：出版社及 docs.pytest.org 均 HTTP 403，不声称阅读原书正文。目录范围仅依据已登记 manifest，sourceBasis=outline-only；事实读到 pytest 官方仓库 8.4.2 的 getting-started/goodpractices/assert/fixtures 文档及 Python 3.13 官方资料，全部 HTTP 200；独立重写。实际代码分别使用本机 Python 3.14.5 / pytest 9.0.2 与 main 提供的隔离 Python 3.12.12 / pytest 9.1.1 定向验证，不声称在 3.13/8.4.2 执行。 */}
 
 <Objectives>
 
-- 能区分pytest的pass、failure和collection error，并确认pytest安装到当前Python interpreter
-- 能实现function test与regression expansion，读取expected/actual diff并判断修code还是修contract
-- 能设计class tests和fresh fixture，分析shared mutable state导致的顺序依赖
+- 能安装并定位当前解释器使用的 pytest，按命名规则收集函数和类中的测试。
+- 能修改函数并保留旧行为，借助失败报告区分实际结果、预期结果与缺失参数。
+- 能实现每次创建独立对象的 fixture，并回答：为什么共享同一份列表时，交换两个测试的顺序可能让失败消失？
 
 </Objectives>
 
-## 为什么测试是可执行contract而不是“证明没有bug”
+## 为什么改完代码，还要检查旧功能
 
-test提供example input、expected behavior和可重复oracle。一个passing test只说明当前实现对已覆盖case满足断言，不证明所有输入都正确；failing test则提供具体反例。高质量测试让修改者知道哪些行为必须保留、哪些新需求尚未实现。
+给城市标签增加人口信息，看似只多拼一段文字，却可能让原来只传城市和国家的调用全部报错。如果每次修改都靠手工试几次，遗漏的旧功能往往要等用户遇到才暴露。
 
-第三版使用pytest而不是unittest。pytest以简单assert、自动discovery和fixture降低样板，但工具不能替你选择有意义的boundary。先预测：module import失败时test body是否执行；新增需求的test如果第一次就pass，是否证明test有效。
+这一章把“给什么输入、应该得到什么结果”写成可重复的检查。修改前后都执行同一批检查，既验证新要求，也保留旧承诺。
 
-<Term def="用明确input、operation和expected result描述并自动检查一条behavior contract的函数。">test case</Term>
+## 1. 先让同一个 Python 安装并运行 pytest
 
-## Installing pytest with pip
+pytest 是运行自动检查的工具，pip 是安装 Python 包的工具。一个 <Term def="用确定输入、一次操作和明确预期检查某种行为的可执行例子。">测试用例</Term> 不只是打印结果，而是能自行判定结果是否符合要求。本章针对一个函数或单个类行为的检查属于 <Term def="针对相对小的功能单元检查行为，而不是运行整套应用流程。">单元测试</Term>。我们从一个只包含两个文件的目录开始，后面再加入类和对应的测试。
 
-使用当前interpreter执行`python -m pip install pytest`，避免`pip`指向另一个Python。安装后同时记录`python -c "import sys; print(sys.executable)"`与`python -m pytest --version`；这把第1章environment evidence延伸到third-party library。
+在新建的 `testing_lab` 目录中执行以下命令。这里采用 macOS/Linux 的写法；`python3 -m venv .venv` 创建独立环境，避免把练习依赖装到系统 Python。
 
 ```bash
-python3 -m pip install --upgrade pip
-python3 -m pip install pytest
-python3 -m pytest --version
-python3 -c "import sys, pytest; print(sys.executable); print(pytest.__version__)"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install pytest
+python -m pytest --version
+python -c "import sys; print(sys.executable)"
 ```
 
-项目应记录dependency version，CI与本地使用同一lock/requirements。全局安装可完成练习，但长期项目使用virtual environment隔离。ImportError先查interpreter和environment，不要在test里修改sys.path掩盖package结构。
+Windows 可用 `py -m venv .venv` 创建环境，PowerShell 用 `.venv\Scripts\Activate.ps1` 激活；也可直接使用 `.venv\Scripts\python.exe -m pytest`，不依赖激活脚本。macOS/Linux 的对应路径是 `.venv/bin/python`。后面的 `python` 均指该环境的解释器。
 
-<Term def="pytest按文件和函数命名规则自动找到tests并在执行前import modules的过程。">test discovery</Term>
+`python -m pip` 和 `python -m pytest` 都由指定的 Python 启动，减少“装到了另一个环境”的风险。若提示 `No module named pytest`，先核对 `sys.executable`，再用同一个解释器安装，不要反复换终端碰运气。[Python 官方环境文档](https://docs.python.org/3.13/library/venv.html)说明了环境与激活的关系。
 
-## Testing a Function
+## 2. 让工具找到测试，再写第一个断言
 
-pytest通常发现`test_*.py`或`*_test.py`文件中的`test_*`functions。每个test按Arrange准备input、Act调用一次主要behavior、Assert比较结果；不是格式强制，但有助于让失败原因集中。
+### 文件和函数的命名就是入口
 
-<Stepper>
-  <Step title="切换pass、failure与collection error">
-  </Step>
-  <Step title="确认test是否真正执行">
-    collection error发生在import/discovery阶段；assertion failure说明body执行并得到unexpected result。
-  </Step>
-  <Step title="读取最小失败证据">
-    先看failed test name、exception/diff、project frame，再决定implementation还是expected contract错误。
-  </Step>
-</Stepper>
+<Term def="pytest 按路径和命名规则收集将要执行的测试。">测试发现</Term> 发生在测试执行前。默认会查找 `test_*.py` 或 `*_test.py` 文件，再按默认的 `test` 前缀收集函数（本章统一采用更清晰的 `test_` 命名）。在普通测试类中，则收集以 `Test` 开头、没有自定义 `__init__` 的类里的 `test` 前缀方法。被测试的业务类不受这个构造方法限制。
 
-<Term def="把actual与expected比较并在不满足时产生可定位failure report的检查。">test oracle</Term>
+先创建下面两份文件。测试文件不要命名为 `pytest.py`，否则可能遮蔽已安装的工具。后面类测试的文件也放在这个目录，图中的两个分支就是“被测实现 ← 测试调用”的关系。
+
+```text
+testing_lab/
+├── city_functions.py  ← test_cities.py 导入
+├── test_cities.py     → test_city_country
+├── survey.py          ← test_survey.py 导入（后续创建）
+└── test_survey.py      → TestSurvey 的两个方法（后续创建）
+```
+
+`python -m pytest --collect-only -q` 只列出将要运行的测试，不执行测试函数体。不过收集时会导入模块，模块顶层的代码仍可能执行；导入异常也可能使收集失败。不要把交互式 `input()` 放在被导入模块顶层。
+
+### 用失败确认检查真的有约束力
+
+<Term def="要求一个表达式为真；为假时抛出 AssertionError，使测试报告不满足的预期。">断言</Term> 用 `assert` 表达。pytest 会为正常收集的测试模块提供断言信息展开，帮助看到比较两边的值；它不是仅打印一个“错误”。先故意遗漏标签里的逗号，保存为 `city_functions.py`：
 
 ```python
-# city_functions.py
-def city_country(city: str, country: str) -> str:
-    return f"{city.title()}, {country.title()}"
+# city_functions.py：第一版，故意漏掉逗号。
+def city_country(city, country):
+    return f"{city.title()} {country.title()}"
+```
 
+下面保存为 `test_cities.py`。第一行导入实现，测试函数调用它，然后把实际值与独立写出的预期值比较。预期值不能再调用同一个函数生成，否则同一种错误会同时出现在两边。
+
+```python
 # test_cities.py
 from city_functions import city_country
 
-def test_city_country() -> None:
+
+def test_city_country():
     actual = city_country("santiago", "chile")
     assert actual == "Santiago, Chile"
 ```
 
-test name描述scenario与expected behavior，例如`test_city_country_includes_optional_population`。只叫`test_function`会让report无法扫描。一个test聚焦一个behavior，但可有多个相关assertions验证同一result shape。
+运行 `python -m pytest -q test_cities.py`，应有一个失败。下面只摘录关键证据，不承诺耗时、颜色和完整排版与不同版本相同：
 
-### A Passing Test与A Failing Test
+```text
+FAILED test_cities.py::test_city_country
+E       AssertionError: assert 'Santiago Chile' == 'Santiago, Chile'
+```
 
-pass说明oracle接受actual；若assert写错或根本没执行核心function，绿色没有价值。故意破坏实现，确认test转红，再恢复，这叫mutation sanity check。新增test先观察它因预期原因失败，才能证明它覆盖缺口。
-
-failure不是立即修改expected让它变绿。先判断contract是否改变：若新需求明确，更新test与code；若旧行为仍应保留，修implementation。保留failure diff是决策证据。
-
-## Adding New Tests and Regression Protection
-
-增加population parameter时，旧city/country test锁住backward compatibility，新test定义扩展格式。先写new test并看到failure，再实现optional parameter，让两者都pass。这个red-green sequence不是仪式，而是证明test对缺失behavior敏感。
-
-<Stepper>
-  <Step title="切换baseline、new requirement、implementation与regression">
-  </Step>
-  <Step title="保留旧test并添加新case">
-    修改signature不能只覆盖新call；旧caller仍是contract的一部分，除非明确breaking change。
-  </Step>
-  <Step title="制造一次regression验证保护能力">
-    删除comma或改错误format，旧test应失败；若仍pass，oracle太弱或没有执行正确path。
-  </Step>
-</Stepper>
-
-<Term def="把曾经正确或曾经失败过的behavior固定为自动test，阻止后续修改悄悄破坏。">regression protection</Term>
+先找到失败的测试名字，再看 `assert` 所在行和两边的值。这里约定是“城市逗号空格国家”，预期正确，应该修实现。用下面整段替换第一版，再运行同一命令，应得到 `1 passed`。
 
 ```python
-def city_country(city: str, country: str, population: int | None = None) -> str:
-    result = f"{city.title()}, {country.title()}"
+# city_functions.py：补回逗号。
+def city_country(city, country):
+    return f"{city.title()}, {country.title()}"
+```
+
+这次通过只说明这个输入满足约定。它既不证明所有城市名都合适，也不证明将来的可选参数不会破坏它。
+
+### 看清没有运行、运行失败和运行通过
+
+| 观察到的现象                           | 当前到哪一层                   | 下一步检查                           |
+| -------------------------------------- | ------------------------------ | ------------------------------------ |
+| `no tests ran`，默认退出码 5           | 没收集到测试                   | 路径、文件名、函数名是否符合默认规则 |
+| 收集阶段 `ImportError` / `SyntaxError` | 模块未成功导入，函数体还没运行 | 导入拼写、文件位置、语法             |
+| 测试中的 `TypeError`                   | 调用接口不匹配                 | 实参是否符合当前函数签名             |
+| 测试中的 `AssertionError`              | 操作完成，比较不成立           | 实际值、预期值和需求谁有误           |
+| `passed`                               | 当前用例的检查满足             | 是否还缺旧输入和边界输入             |
+
+还可以写 `assert value != other`、`assert "Python" in survey.responses` 或 `assert len(survey.responses) == 3`。每种写法表达不同要求：只检查长度不能发现保存了三个错误的回答。若约定是抛异常，应使用 `with pytest.raises(ValueError):` 包住预期出错的调用，练习 1 会实际使用它。
+
+## 3. 添加新测试，不能以破坏旧调用为代价
+
+<Term def="在修改后重复执行已有检查，及时发现原本正常的行为被改坏。">回归测试</Term> 用来守住旧行为。现在要求人口可选：不传时仍输出城市国家；传入 `0` 也要显示人口。把下面两个测试**追加**到 `test_cities.py`，不要删去旧测试。
+
+```python
+# 追加到 test_cities.py。
+def test_city_country_with_population():
+    actual = city_country("santiago", "chile", population=5_000_000)
+    assert actual == "Santiago, Chile - population 5000000"
+
+
+def test_city_country_with_zero_population():
+    actual = city_country("santiago", "chile", population=0)
+    assert actual == "Santiago, Chile - population 0"
+```
+
+先执行一次。旧函数没有 `population` 参数，新测试会报 `TypeError: ... unexpected keyword argument 'population'`；这不是断言比较失败，因为调用还没返回。如果只把签名改成必需的 `population`，两个新测试可能通过，但旧测试会缺参。正确的兼容实现是给新参数一个表示“没提供”的默认值。
+
+```python
+# city_functions.py：完整最终版。
+def city_country(city, country, population=None):
+    label = f"{city.title()}, {country.title()}"
     if population is not None:
-        result += f" - population {population}"
-    return result
-
-def test_city_country_population() -> None:
-    assert city_country("santiago", "chile", 5_000_000) == (
-        "Santiago, Chile - population 5000000"
-    )
+        label += f" - population {population}"
+    return label
 ```
 
-### 选择boundary而不是随机example
+运行 `python -m pytest -q test_cities.py`，三个测试应全部通过。`if population:` 会把零当成“不提供”，因此第三个测试专门防止这个错误。这里用 `is not None` 区分缺省和零。业务是否接受负数、非整数或带连字符的城市名，是另一个约定，不能从三次通过推断出来。
 
-optional population至少测None、0、正值和非法负值policy；string normalization测空白、大小写与空string。每个case对应一条决策规则。参数化能减少样板，但不要把不同failure原因塞进难读巨表。
+## 4. 测试一个类：检查行为，不只检查创建成功
 
-测试不应依赖真实网络、当前时间或全局random，否则结果不稳定。第12–20章项目会用dependency boundary、temporary path和Django test client隔离外部state。
-
-## Testing a Class
-
-class test创建instance，调用method，再断言state与return。`AnonymousSurvey.store_response`应改变responses list；Employee raise应改变salary且拒绝非法delta。既验证成功transition，也验证exception后object invariant保持。
+类测试要验证对象状态如何被方法改变。把下面完整代码保存为 `survey.py`：每次构造 `Survey` 都创建自己的回答列表，`store_response` 把一项回答追加到该列表。这里不读取键盘，也不打印菜单，让测试能直接控制输入。
 
 ```python
-class AnonymousSurvey:
-    def __init__(self, question: str) -> None:
+# survey.py
+class Survey:
+    def __init__(self, question):
         self.question = question
-        self.responses: list[str] = []
+        self.responses = []
 
-    def store_response(self, response: str) -> None:
+    def store_response(self, response):
         self.responses.append(response)
-
-def test_store_single_response() -> None:
-    survey = AnonymousSurvey("What language did you first learn?")
-    survey.store_response("English")
-    assert survey.responses == ["English"]
 ```
 
-直接assert internal list在学习阶段能展示state；成熟API更倾向通过public query验证，减少tests和内部layout耦合。若responses就是公开contract，直接assert合理；关键是团队明确边界。
-
-### test independence
-
-每个test单独运行与任意顺序运行都应得到相同结果。共享module-level instance、固定output file或未重置global random会造成order-dependent failures。失败时用`pytest --random-order`需plugin，基础做法是fresh setup和temporary resources。
-
-<Term def="每个test拥有独立initial state，不依赖其他tests先后或残留副作用的属性。">test isolation</Term>
-
-## Using Fixtures
-
-fixture把重复setup集中，并通过parameter注入test。pytest默认function scope，每个test获得fresh fixture result；scope扩大到module/session会提高速度，也会引入共享state，只有immutable或明确reset的expensive resource才考虑。
-
-<Stepper>
-  <Step title="选择survey、employee或shared-state mistake">
-  </Step>
-  <Step title="标出fixture create与test consume">
-    fixture负责合法initial state，test只表达behavior difference；不要在fixture预先执行被测operation。
-  </Step>
-  <Step title="证明fresh state与顺序无关">
-    单独运行每个test、交换顺序并重复；任何leaked response/salary都表示scope或mutable default错误。
-  </Step>
-</Stepper>
+先在 `test_survey.py` 中编写普通测试类。`self` 属于用于组织测试的 `TestSurvey` 实例；`survey` 才是业务对象。pytest 无需测试类继承某个基类，它会为每个测试方法创建新的测试类实例。但这不等于所有外部变量或类属性都自动独立。
 
 ```python
+# test_survey.py：先直接创建业务对象。
+from survey import Survey
+
+
+class TestSurvey:
+    def test_store_responses(self):
+        survey = Survey("Which language?")
+        survey.store_response("Python")
+        assert survey.responses == ["Python"]
+
+    def test_starts_empty(self):
+        survey = Survey("Which language?")
+        assert survey.responses == []
+```
+
+运行 `python -m pytest -q test_survey.py`，应有两个通过。每个方法都先构造自己的对象，所以第二个方法检查的不是第一个对象被修改后的状态。测试一项回答后，还可以保存多项并检查顺序、内容；这正是下一节样本列表的用途。
+
+## 5. fixture：抽出准备过程，但保留对象隔离
+
+### 按名字请求，不是手动调用
+
+<Term def="由 pytest 按测试参数名提供的准备过程，可返回测试所需对象，并按作用域管理复用和清理。">fixture</Term> 用 `@pytest.fixture` 标记。测试函数或方法声明同名参数时，pytest 会先执行准备过程并注入结果；不要自己调用被装饰的函数。默认作用域是 `function`，每个测试调用各准备一次。本例还要求函数内部真的构造新 `Survey`，而不是返回同一个全局对象。
+
+用下面**完整文件替换**上一版 `test_survey.py`。公共准备代码只保留一份，两个测试仍各自获得新对象。参数 `survey` 匹配 fixture 函数名；方法的 `self` 依旧是测试类自身。
+
+```python
+# test_survey.py：与交互图对应的完整最终版。
 import pytest
+from survey import Survey
+
+RESPONSES = ["Python"]
+
 
 @pytest.fixture
-def language_survey() -> AnonymousSurvey:
-    return AnonymousSurvey("What language did you first learn?")
+def survey():
+    return Survey("Which language?")
 
-def test_store_single_response(language_survey: AnonymousSurvey) -> None:
-    language_survey.store_response("English")
-    assert language_survey.responses == ["English"]
 
-def test_store_three_responses(language_survey: AnonymousSurvey) -> None:
-    for response in ["English", "Spanish", "Mandarin"]:
-        language_survey.store_response(response)
-    assert language_survey.responses == ["English", "Spanish", "Mandarin"]
+class TestSurvey:
+    def test_store_responses(self, survey):
+        for response in RESPONSES:
+            survey.store_response(response)
+        assert survey.responses == RESPONSES
+
+    def test_starts_empty(self, survey):
+        assert survey.responses == []
 ```
 
-fixture可用yield在test后cleanup，例如temporary server，但pytest已有`tmp_path`等built-ins优先使用。cleanup必须在assert失败时也执行；不要让test残留file、environment variable或database row。
+同一次测试里，多处请求同一个 fixture 通常拿到同一个缓存结果，不是每声明一个参数就深拷贝一次。作用域控制的是准备结果的复用范围，而不是“给所有可变对象施加隔离魔法”。[pytest 官方 fixture 文档](https://github.com/pytest-dev/pytest/blob/8.4.2/doc/en/how-to/fixtures.rst)给出了默认 `function`、结果缓存和跨测试共享的具体规则。
 
-## Reading the Pytest Report
+### 专属实验：两条请求线会汇合吗
 
-summary显示passed/failed/errors/skipped；failure section给test node、source context、assert diff与captured output。先修最早的root failure，后续可能是cascade。使用`-q`简化正常输出，排错可`-vv`、`-x`或针对单test node运行。
+**先预测：把 fixture 改成 `module`，先保存回答、再检查为空，第二个测试会读到什么？再把样本加到三项，列表会怎样变化？** 从第 1 步单步走到第 6 步，观察两个请求箭头指向一个对象还是两个对象，以及实际列表与预期列表的差异。
 
-不要依赖print判断pass；assert才是machine-checkable oracle。需要诊断时logging/captured output提供context，但最终条件仍应明确。测试偶发失败时保存seed、input、environment和完整report，不要只重跑到绿色。
+<PccTestingCodeLab />
 
-## 测试覆盖什么，不覆盖什么
+图中的实线边框代表当前请求持有的对象，列表格子代表真正保存的回答。`function` 模式下，第二次请求新建 B；A 的虚线框只是历史快照，不是承诺 Python 立即释放内存。`module` 模式下，两条箭头汇合到 A，第二次请求不再构造新对象。**它是状态模拟，不是真实 pytest 运行报告**；下一小节用终端复核。
 
-本章最小suite覆盖normal、boundary、invalid和state transition。coverage percentage只说明代码行被执行，不能证明assert正确或需求完整。20个无意义examples不如5个代表不同规则的边界。
+### 在 Python 中重现“单独通过，一起失败”
 
-测试也不是implementation mirror。若test逐行复制算法，两个实现可一起犯错；oracle来自独立规则、手算结果或已知example。对sorting可断言order与input preservation，对file load断言不同failure classes，对object transition断言before/after invariant。
+把装饰器暂时改为 `@pytest.fixture(scope="module")`。这表示本模块中请求该 fixture 的测试复用同一个返回对象。为了不靠默认收集顺序猜测结果，命令显式指定两个测试的先后：
 
-<Callout type="trap" title="所有tests都pass就说明程序没有bug">
-pass只覆盖已执行inputs和oracles。还需审查missing boundaries、assert质量、外部依赖与需求覆盖；先故意破坏行为验证test确实会失败。
+```bash
+python -m pytest -q \
+  test_survey.py::TestSurvey::test_store_responses \
+  test_survey.py::TestSurvey::test_starts_empty
+```
+
+现在应是 `1 passed, 1 failed`，失败信息指出 `['Python'] != []`。单独运行 `test_starts_empty` 会通过，因为那次独立启动还没有其他测试向对象添加回答。交换命令中两个测试的顺序，也会得到两个通过：先检查了空列表，再写入，但最后没有人再检查空状态。**顺序变化掩盖了共享，并没有消除共享。**
+
+修复时恢复默认 `@pytest.fixture`，或显式写 `scope="function"`，然后两种顺序都执行。每次测试获得新对象才符合本例需求。`module` 并非一律错误；用于可安全共享的昂贵准备工作可能很合适，但不能假设一个已经被修改的列表仍为空。
+
+### 准备失败与清理的边界
+
+fixture 自身报错时，依赖它的测试函数体不会执行，报告通常标为准备阶段的 `ERROR`，不要将其当成业务断言失败。fixture 若持有需要关闭的资源，可用 `yield` 把提供对象和清理分开。下面是独立示例，可另存为 `test_cleanup.py`；它不是本章五个主测试的一部分。
+
+```python
+# test_cleanup.py：单独演示文件资源清理。
+import pytest
+
+
+@pytest.fixture
+def output_file(tmp_path):
+    with (tmp_path / "answers.txt").open("w", encoding="utf-8") as handle:
+        yield handle
+
+
+def test_write(output_file):
+    assert output_file.write("Python\n") == 7
+```
+
+`tmp_path` 是 pytest 提供的每测试临时目录。测试得到 `yield` 的文件对象；测试结束后，正常通过或断言失败都会继续退出 `with` 并关闭文件。若准备代码在到达 `yield` **之前**报错，则不存在“从这个 yield 之后继续”的保证；已经进入的 `with` 仍遵循 Python 的上下文退出规则。普通列表例子只用 `return` 即可，不必为了形式添加清空动作。
+
+## 常见误区
+
+<Callout type="trap" title="把没发现测试看成全部通过">
+
+**现象 →** 输出 `no tests ran`，却认为程序没有问题。<br />
+**原因 →** 测试叫 `check_city`，或文件名不符合默认规则。<br />
+**修法 →** 先用 `--collect-only -q` 核对数量，再运行收集到的测试。
+
 </Callout>
 
-<Callout type="trap" title="module-level共享instance可以减少fixture开销">
-mutable shared state让tests顺序相关。默认function-scoped fresh fixture；只有昂贵且可隔离资源才扩大scope，并提供可靠reset/transaction boundary。
+<Callout type="trap" title="为了绿色结果修改正确的预期">
+
+**现象 →** 把 `Santiago, Chile` 改成无逗号字符串，测试通过了。<br />
+**原因 →** 将实际输出直接当成正确答案，原先的格式要求被丢掉。<br />
+**修法 →** 回到约定判断哪一侧错；本例应修实现，并保留原断言。
+
 </Callout>
 
-## 本章回顾：让失败提供信息
+<Callout type="trap" title="fixture 只是少写几行，作用域无所谓">
 
-1. pytest必须安装在当前interpreter，discovery/import error与test failure不同。
-2. test case以input、operation和oracle表达behavior contract。
-3. new behavior先看到test按预期失败，再实现并重跑regression suite。
-4. class tests验证return与state transition，fixture维持test isolation。
-5. pass不是无bug证明；边界、oracle质量和可重复report共同决定可信度。
+**现象 →** 图中单独检查为空通过，先保存后检查却失败。<br />
+**原因 →** `module` 缓存复用了已修改对象；新测试类实例不改变这个事实。<br />
+**修法 →** 回到 `function` 且在 fixture 内创建新对象，复核两种顺序。
+
+</Callout>
+
+<Callout type="trap" title="把 assert 当作业务输入校验">
+
+**现象 →** 正常运行会拒绝输入，优化执行时却不再检查。<br />
+**原因 →** 普通 Python 的 `assert` 在 `-O` 优化模式下可以被移除。<br />
+**修法 →** 业务代码用显式 `if` 和 `raise`；测试用 pytest 的断言，不依赖优化运行测试。
+
+</Callout>
+
+## 小结与练习
+
+- 用同一解释器安装和运行，先确认测试被收集。
+- 读取失败位置与两边的值，新旧用例一起验证修改。
+- fixture 每次创建新对象，才能避免本例的顺序污染。
 
 <Exercises>
 
-**问题 1：pytest显示collection error与assertion failure分别说明什么？**
+**问题 1：** 独立实现“人口不能为负”的要求。保留无人口、五百万人口和零人口的三个测试，再新增一个测试：传入 `-1` 应抛出 `ValueError`，消息包含 `non-negative`。为什么不能只在业务函数里写 `assert population >= 0`？
 
-<Answer>collection error发生在test body前，常是文件命名、syntax或import/environment问题；assertion failure说明test已执行，actual不满足expected。先修discovery/import才能评价行为，不要把两者都叫“测试失败”而采用同一修复。</Answer>
+<Answer>
 
-**问题 2：为city_country新增population时如何建立regression protection？**
+在最终版函数的开头加入显式检查。没有提供人口时应跳过比较，否则 `None < 0` 会出错。
 
-<Answer>保留旧city/country test，新增population test并先观察它因缺少格式而失败；实现optional parameter后两者都pass。再故意破坏旧comma确认旧test转红。覆盖None、0、正值和非法policy。</Answer>
+```python
+# city_functions.py：练习扩展版。
+def city_country(city, country, population=None):
+    if population is not None and population < 0:
+        raise ValueError("population must be non-negative")
+    label = f"{city.title()}, {country.title()}"
+    if population is not None:
+        label += f" - population {population}"
+    return label
+```
 
-**问题 3：fixture如何保证class tests不受顺序影响？**
+在测试文件顶部导入 pytest，再追加以下测试；运行 `python -m pytest -q test_cities.py`，四项应全部通过。`raises` 中只放预期抛异常的调用，避免无关代码提前出错而误导判断。
 
-<Answer>使用function-scoped fixture每个test创建fresh instance，不在module-level共享mutable object。单独运行、交换顺序和重复执行，断言initial state为空/默认；若扩大scope，必须显式reset并证明cleanup在failure时执行。</Answer>
+```python
+# test_cities.py：保留原三个测试，新增这部分。
+import pytest
+
+
+def test_rejects_negative_population():
+    with pytest.raises(ValueError, match="non-negative"):
+        city_country("santiago", "chile", population=-1)
+```
+
+显式 `raise` 在优化模式仍保留业务拒绝行为；普通 `assert` 不是可靠的外部输入检查机制。此扩展仍未规定字符串人口等非法类型的处理，不应声称所有输入都已覆盖。
+
+</Answer>
+
+**问题 2：** 修改交互图对应的 `test_survey.py`：把 `RESPONSES` 改成三项并设为 `module` 作用域。先预测两种执行顺序的结果，再实际运行。恢复隔离时要改哪一行？把回答列表在测试末尾手动清空是否同样可靠？
+
+<Answer>
+
+将样本改成 `RESPONSES = ["Python", "Rust", "Go"]`。先保存后检查为空时，第二项实际读到三个元素，应失败；先检查为空后保存时，两项通过但对象仍共享。可显式按相反顺序运行：
+
+```bash
+python -m pytest -q \
+  test_survey.py::TestSurvey::test_starts_empty \
+  test_survey.py::TestSurvey::test_store_responses
+```
+
+把 `@pytest.fixture(scope="module")` 恢复为 `@pytest.fixture`，让每次调用返回新的 `Survey`，再分别核对两种顺序和单独执行。只在测试末尾调用 `clear()` 不可靠：前面的断言若失败，后面的清空就不会执行；而且要求每个测试自行恢复共享状态会增加耦合。
+
+</Answer>
+
+**问题 3：** fixture 已经是默认 `function`，但有人把 `responses = []` 移到了 `Survey` 类体，并删掉 `__init__` 里的同名赋值。为什么两个新对象仍相互污染？请写一个不依赖测试顺序的检查，并指出修复位置。
+
+<Answer>
+
+两个实例都通过属性查找使用同一个类列表；新建实例不等于复制类属性。这个独立测试在一个函数里制造两次构造，不需要等待别的测试先执行：
+
+```python
+# 追加到 test_survey.py，位于测试类外。
+def test_surveys_have_independent_responses():
+    first = Survey("First?")
+    second = Survey("Second?")
+    first.store_response("Python")
+    assert first.responses == ["Python"]
+    assert second.responses == []
+    assert first.responses is not second.responses
+```
+
+修复位置在业务类：恢复 `__init__` 中的 `self.responses = []`，移除共享的类列表。前两个断言检查内容，最后一个用 `is not` 检查两者确实不是同一个列表。不能通过改名测试或调整执行顺序来修复。
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+## 来源核对与复现范围
+
+本章依据只读目录清单 `pcc3-11` 的六组单元限定范围：安装 pytest、函数测试、通过与失败、增加测试、类测试、fixture。出版社页面本轮访问返回 **HTTP 403**，因此原书来源级别为 **outline-only**，仅依据仓库登记的目录，不声称已核对原书全文。本章是独立重写，不是原书正文翻译，也不把出版社链接视作开放改编授权。
+
+pytest 文档站本轮也返回 403；以下 pytest 事实实际核对的是**项目官方仓库的 8.4.2 版本文档**，不是未访问成功的网页内容：
+
+- [pytest：入门与测试类](https://github.com/pytest-dev/pytest/blob/8.4.2/doc/en/getting-started.rst)：安装、简单断言、测试类每方法独立实例，以及类变量仍可共享的边界。
+- [pytest：测试发现规则](https://github.com/pytest-dev/pytest/blob/8.4.2/doc/en/explanation/goodpractices.rst)：文件、函数和普通测试类的默认命名约定与构造方法限制。
+- [pytest：断言与预期异常](https://github.com/pytest-dev/pytest/blob/8.4.2/doc/en/how-to/assert.rst)：失败信息展开、`pytest.raises` 和 `match`。
+- [pytest：fixture 请求、作用域与清理](https://github.com/pytest-dev/pytest/blob/8.4.2/doc/en/how-to/fixtures.rst)：按参数名请求、缓存、默认作用域、`yield` 与准备异常。
+- [Python 3.13：assert 语句](https://docs.python.org/3.13/reference/simple_stmts.html#the-assert-statement)：条件失败及优化模式语义；[虚拟环境](https://docs.python.org/3.13/library/venv.html)：创建和解释器选择。
+- [Python 3.13：类变量与实例变量](https://docs.python.org/3.13/tutorial/classes.html#class-and-instance-variables)：共享可变类属性为什么不等于每实例独立状态。
+
+复现时按各代码块的文件名创建文件，标为“替换”的版本不要同时保留。主线最终只有 `city_functions.py`、`test_cities.py`、`survey.py`、`test_survey.py` 四个文件，执行 `python -m pytest -q` 应得到 **5 passed**；练习扩展与单独的清理示例会增加数量。本轮先用 Python 3.14.5 / pytest 9.0.2 验证，再在隔离环境 Python 3.12.12 / pytest 9.1.1 重跑；两套环境的主线五项均通过，预期失败与修复、两种作用域和两种顺序也分别复核。文档依据与执行版本分别记录，不冒充已运行全部历史版本。
+
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="test case" definition="以input、operation和expected behavior自动检查一条contract的函数。" />
-  <GlossaryItem term="test discovery" definition="pytest按命名规则发现并import tests的过程。" />
-  <GlossaryItem term="test oracle" definition="比较actual与expected并产生可定位failure的检查。" />
-  <GlossaryItem term="regression protection" definition="把既有或曾失败behavior固定为自动test的保护。" />
-  <GlossaryItem term="test isolation" definition="test拥有独立initial state且不依赖执行顺序的属性。" />
+  <GlossaryItem term="测试用例">
+    用输入、操作与明确预期组成的自动检查，验证一个具体行为，而非证明程序完全正确。
+  </GlossaryItem>
+  <GlossaryItem term="单元测试">针对函数或单个类等小范围功能的检查；一个测试用例描述其中一个具体输入和预期。</GlossaryItem>
+  <GlossaryItem term="测试发现">
+    pytest 在执行前寻找并收集测试的过程；命名不对会漏收集，导入错误会阻断收集。
+  </GlossaryItem>
+  <GlossaryItem term="断言">
+    写明“这个条件应成立”的检查；不成立时报告失败，帮助定位实际值和预期值的差异。
+  </GlossaryItem>
+  <GlossaryItem term="回归测试">
+    修改后继续执行已有检查，防止为了新功能破坏原来正确的行为。
+  </GlossaryItem>
+  <GlossaryItem term="fixture">
+    由 pytest
+    管理的准备过程；按名字提供对象，作用域决定何时复用，必要时还能安排清理。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 11: Testing Your Code" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Python Crash Course, Third Edition · Chapter 11: Testing Your Code"
+  sourceUrl="https://nostarch.com/python-crash-course-3rd-edition"
+  sourceBasis="outline-only"
+/>

@@ -1,104 +1,451 @@
 ---
 title: "模板方法模式"
-type: A
+type: C
 section: "行为型模式"
 order: 22
-description: "模板方法模式：在基类中定义算法骨架，把特定步骤延迟给子类而保持顺序不变"
+description: "用内存导入流水线区分固定算法骨架、解析扩展点和可选钩子，验证提交与关闭合同"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
-draft: false
+officialUnitId: designpatterns-22
+draft: true
 ---
 
+import { TemplateMethodImportPipelineLab } from "@/components/mdx/design-patterns/template-method-import-pipeline-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+{/* 知识与图形决策：模板方法=纵向调用轨迹；基本操作=CSV/JSON真实解析后的记录形态；钩子=校验前回调及提前写入反例；好莱坞原则=run向子类回调；不变量=逐帧库存与finally资源状态。五个术语均进入Glossary；继承/组合取舍由责任表、代码与选型题回收。 */}
 
-每个格式复制完整导入流程会让校验和清理修复无法同步 因此，模板方法模式 的第一步不是画类图，而是写清 **数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+<Objectives>
+- 能解释谁控制 read → parse → validate → commit 的顺序，区分必需解析操作和可选钩子。
+- 能增加一个 TSV 解析子类，用同一套校验、提交与关闭逻辑处理真实数据。
+- 能回答：第二条金额非法时，为什么正常模板没有新提交，而坏钩子仍可能留下数据？
+</Objectives>
 
-在实验前先预测：沿 读取输入 → 调用解析钩子 → 执行校验 → 提交结果 → 统一清理 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+## 直觉：检验台不能被不同包装绕过去
 
+小工厂收到两种包装的原料：一种每行一件，另一种整箱装好。拆包装的方法不同，但都必须先检查，再入库，最后收拾工作台。
 
-## 问题合同与术语
+若每位工人自写整条流程，有人会先入库再检查，有人遇到坏包装就离开。把固定次序留给同一位调度者，只允许更换拆包装动作，才不会每加一种格式就复制一次这些错误。
 
-**意图。** 在基类中定义算法骨架，把特定步骤延迟给子类而保持顺序不变。**适用边界。** 算法顺序稳定、少数步骤需要变化，而且继承关系符合领域生命周期。本页验收不变量是：**所有格式无论解析实现如何，校验必须先于提交且清理总会执行**。
+## 先预测，再沿流水线检查
 
-、、、、、
-## 官方目录结构的逐项解释
+猜一猜：把第二条金额从 2 改成 -2，库存应是 0 条还是 1 条？先选“非法”，再对照“正常模板”和“坏钩子提前写入”。观察记录条形、调用轨迹和库存如何一起变化，而不是只看错误文字。
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+<TemplateMethodImportPipelineLab />
 
-### 模式名称与分类
+图的每一行都是执行后的快照：左侧是实际调用记录，中间从原始文本变为候选记录和金额条，右侧是那个时刻的提交库存。虚线是执行到 commit 的位置，不代表它天然安全；旁路模式会在没有 validate 的地方跨过它。点击“下一阶段”从第一帧回放，重置会恢复 CSV、合法输入、正常模板及完整轨迹。
 
-“模板方法模式”归入行为型模式，名称只用于定位 在基类中定义算法骨架，把特定步骤延迟给子类而保持顺序不变，不能替代问题证据。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+## 模式名称与分类
 
-### 意图
+本章的 <Term def="基类定义算法骨架，调用由子类实现的部分步骤而保持整体次序。">模板方法</Term>（Template Method）是行为型模式，关注控制流程如何分配，不是创建对象或包装接口。这里的模板是 `ImportTemplate.run()`，不是 TypeScript 泛型，也不是字符串插值模板。
 
-“意图”回答模式想改变什么：在基类中定义算法骨架，把特定步骤延迟给子类而保持顺序不变。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+图中两种格式共享同一条正常轨迹；换格式只改变 read 的数据形态和 parse 的实现。这才是“模板”所在，不能把任意带有 `run` 名字的函数都叫模板方法。
 
-### 别名
+## 意图
 
-“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+**固定算法骨架，开放必要步骤**
 
-### 动机
+正常入口只让调用者执行一次 `run()`。它固定 read → parse → validate → commit 的先后，parse 后可插入观察回调，退出时统一 close。子类不应该把 validate 换到 commit 后面；它只负责把一种格式转成待检记录。
 
-“动机”从具体压力出发：每个格式复制完整导入流程会让校验和清理修复无法同步。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+本例的 <Term def="子类必须提供、由模板在指定位置调用的必要步骤。">基本操作</Term>（primitive operation）是抽象的 `parse`。CSV 与 JSON 都必须实现它，基类不能凭空猜出输入格式。不是每一步都要抽象：读取内存输入、校验与提交都可以是共同实现。图里 parse 行的数据就是这一扩展点的输出。
 
-### 适用性
+## 别名
 
-“适用性”要求同时满足：算法顺序稳定、少数步骤需要变化，而且继承关系符合领域生命周期。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+**不要把 hook 当作整个模式**
 
-### 结构
+本文统一使用 Template Method / 模板方法，不另造别名。<Term def="模板预留的可选回调，基类提供默认行为，子类可按合同覆写。">钩子</Term>（hook）不是模板方法的别称；它只是一个扩展点。本例 `afterParse` 默认什么也不做，删掉子类的覆写仍能导入。删掉 `parse` 实现则不是完整的具体子类。
 
-“结构”由 ImportTemplate、ParseHook、CsvImportJob 以及它们之间的引用方向共同确定。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+钩子位于图中 parse 与 validate 之间，收到候选记录的深拷贝，可用于观察，不获得内部库存。若要修改真实记录，应明确放入 parse 的合同，不能利用观察钩子偷偷改变算法含义。
 
-### 参与者
+## 动机
 
-“参与者”逐一说明 ImportTemplate、ParseHook、CsvImportJob 谁保存状态、谁发起调用以及谁承担变化。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+**格式变化不应复制失败处理**
 
-### 协作
+假设 CSV 导入器修好了“负数不能入库”，JSON 导入器却保留旧校验；两个独立流程的正常演示都可能通过，直到异常数据才分叉。抽出一个基类不是为了省几个方法名，而是让两种格式必须经过同一校验与关闭出口。
 
-“协作”的运行协议是：Template Method 按顺序调用基本操作，ConcreteClass 实现必要步骤或钩子。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+实验中的非法输入含两条记录 A=3、B=-2。正常模板先检查整个批次再写入，所以不是“保留第一条”，而是两条都不提交。改成 JSON 后仍成立；若每解析一行就写入，批次合同已经变了。
 
-### 后果
+## 适用性
 
-“后果”必须连同收益和成本记录：骨架复用强，但继承绑定刚性，钩子过多会形成隐式调用协议。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+**哪些变化适合留下来**
 
-### 实现
+适合采用的条件是：多种实现确实共享稳定的步骤次序；变化集中于少数步骤；子类可以遵守相同的成功、失败与资源合同。可以先写一个直接函数，出现第二种真实格式再抽象解析步骤，无须一开始就建继承树。
 
-“实现”落地时遵守：把不变量步骤设为不可覆写，区分必需抽象操作与可选空钩子。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+若某个导入器需要先预提交、再异步补校验，或者必须跳过资源管理，它不符合本例合同。不要加一串 `skipValidate`、`commitEarly` 钩子来迁就。图中的两个红色反例正是在证明这些变化不是合法扩展。
 
-### 示例代码
+## 结构
 
-“示例代码”使用本页 TypeScript 最小切片验证“所有格式无论解析实现如何，校验必须先于提交且清理总会执行”，代码是独立教学示例。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+**入口向下调用，数据向前流动**
 
-### 已知应用
+这张责任表对应实验的纵向调用轨迹。数据从 read 的字符串进入 parse 的数组，再越过 validate；库存不是解析结果的别名，而是提交后才改变的独立数组。
 
-“已知应用”可在这些场景识别：框架生命周期、测试夹具、编译流程和批处理任务常固定算法骨架，但名称相似不构成采用证据。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+| 结构层 | 本例成员 | 可以改变什么 | 必须守住什么 |
+| --- | --- | --- | --- |
+| 算法入口 | `ImportTemplate.run` | 不交给格式实现调整顺序 | 校验成功才提交，退出前关闭 |
+| 共同步骤 | `MemoryInput.read`、`validate`、数组写入 | 集中修改所有格式的共同规则 | 失败前库存保持原值 |
+| 必需扩展点 | `CsvImport.parse` / `JsonImport.parse` | 文本如何变成候选记录 | 不提交，不自行关闭资源 |
+| 可选扩展点 | `afterParse` | 观察解析后的副本 | 不影响真实数据，不写外部库存 |
 
-### 相关模式
+## 参与者
 
-“相关模式”用于比较边界：策略用组合替换整个算法；工厂方法常作为模板骨架中的创建步骤。 对“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”先保存基线，再改变一个条件；若出现“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”，就拒绝 模板方法模式 方案并回到更简单结构。
+**谁持有哪一种能力**
+
+`ImportTemplate` 扮演 AbstractClass；`CsvImport`、`JsonImport` 扮演 ConcreteClass。客户端只选择具体类和输入，再调用入口，不逐个调用 protected 步骤。`MemoryInput` 模拟一个已经打开的资源；`close()` 无副作用之外的失败，便于确定地检验释放行为。
+
+基类用 ECMAScript `#source`、`#sink` 保存引用，子类不能直接访问这些字段。但本例为观察库存，把数组从调用者传进去，调用者仍有别名引用。坏钩子通过闭包捕获这个引用就能写入。因此“字段私有”不等于“系统中只有模板拥有写权限”。生产设计还需收紧提交能力，不能只靠命名承诺。
+
+## 协作
+
+**别调用我们，我们会调用你**
+
+这里的 <Term def="上层框架掌握调用时机，在合适的位置回调底层扩展实现。">好莱坞原则</Term>（Hollywood principle）体现在 `run()` 调用 `this.parse()` 和 `this.afterParse()`：客户端不用在外面排步骤，子类也不用反过来启动整个流程。它是控制权的反转，不等于必须使用依赖注入容器。
+
+正常六帧是 read、parse、hook、validate、commit、close；钩子默认空操作也保留一帧，便于对照。非法金额的轨迹变为 read、parse、hook、error、close。只有两个开头步骤成功，不能推出第三、第四步也发生过；图用缺失的 commit 行及零库存共同说明这一点。
+
+## 后果
+
+**共享保证有边界**
+
+本例的 <Term def="在允许的实现和执行路径中始终需要成立的约束。">不变量</Term> 有三条：读取/解析/钩子/校验失败时没有本次新提交；成功路径整批提交一次；所有进入模板的路径最后关闭资源。已有库存不被清空，空批次合法，提交一次零条仍是成功。
+
+这里的“失败未提交”限定为 **提交之前的失败**。内存数组写入只是逻辑提交，不模拟数据库崩溃、写到一半的网络中断或事务回滚；也不承诺多次创建任务能自动去重。`finally` 释放资源，不会撤销坏钩子已写入的数据。
+
+收益是共同修正一处校验就覆盖所有正常子类；代价是继承耦合：改钩子的时机或参数会影响每个子类。回调越多，执行协议越难读。若需要组合“解析器 × 校验规则 × 写入目标”，继承的组合数会迅速膨胀，应考虑下文的组合方案。
+
+## 实现
+
+**TypeScript 没有 final 方法关键字**
+
+[TypeScript 类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html) 支持 `abstract`、`protected` 和 `override`，但 **没有用于禁止覆写方法的 `final` 关键字**。`override` / `noImplicitOverride` 帮助发现误写，不会禁止覆写 `run()`；把基类的辅助字段设为 `#private` 也不会使公开入口不可覆写。
+
+因此本例把“不要覆写入口”作为受审查的子类合同，并用测试核查顺序。不能把继承约定宣传成语言强制保证。若要更强的边界，可把执行骨架放在不交给扩展者继承的模块函数中，只传入解析函数；同时把写入能力保留在模块内部。这就是组合式策略的合理取舍，而不是尝试拼出一个不存在的 TS 修饰符。
+
+本例所有扩展点必须同步。把异步函数塞进返回 `void` 的钩子，并不会让模板自动等待它；若业务需要异步，就要把入口与步骤合同一并改为 Promise，逐步 `await`，仍在 finally 中释放资源，而不是沿用本例的成功判断。
+
+关闭依据 [JavaScript try/finally 语义](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch)：普通异常和返回离开 try 时都会先执行 finally。本例 close 不抛错，finally 不 return，以免覆盖原错误；强制终止进程不在演示合同内。错误被记入返回轨迹而非继续抛出，调用者必须检查 error 帧，不能仅凭 `run()` 返回就当成功。
+
+## 示例代码
+
+**可顺序拼成一个 TypeScript 文件**
+
+以下五段是同一份 `pipeline.ts` 的顺序片段；后面的断言与练习答案也可追加到文件末尾。需要支持 `structuredClone` 的现代浏览器或 Node.js 18+，不读文件、不访问网络。用项目 TypeScript 编译器编译为 ES2022 后执行即可。示例 CSV **无表头、无引号转义、只接收两列**，不是通用 CSV 库。
+
+### 1. 资源与执行快照
+
+`MemoryInput` 起初打开；读取失败也必须走 close。每帧克隆工作数据和库存，防止后续写入篡改历史。快照服务于教学观察，不是模式的必要成员。
+
+```ts
+export type Format = "csv" | "json";
+export type Scenario = "valid" | "invalid" | "empty" | "read-fail" | "malformed";
+export type Mode = "template" | "early" | "bypass" | "hook-error";
+export type Frame = {
+  stage: string; data: unknown[]; stored: unknown[];
+  closed: boolean; error: string;
+};
+export class MemoryInput {
+  closed = false;
+  constructor(readonly text: string, readonly fail = false) {}
+  read(): string {
+    if (this.closed || this.fail) throw new Error("read failed");
+    return this.text;
+  }
+  close(): void { this.closed = true; }
+}
+export function snapshot(stage: string, data: unknown[],
+  sink: unknown[], source: MemoryInput, error = ""): Frame {
+  return { stage, data: structuredClone(data),
+    stored: structuredClone(sink), closed: source.closed, error };
+}
+```
+
+### 2. 解析和共同验证
+
+CSV 把金额文本转成数值；JSON 保留 JSON 中的类型。因此 JSON 中字符串 `"3"` 会被拒绝，不暗中进行类型转换。两者都输出尚未可信的 `unknown[]`，由同一个 validate 检查对象形状、非空名称和正安全整数金额。NaN、Infinity、小数、零、负数都不能提交。
+
+```ts
+export function parseCsv(text: string): unknown[] {
+  if (!text.trim()) return [];
+  return text.trim().split(/\r?\n/).map(line => {
+    const fields = line.split(",");
+    if (fields.length !== 2) throw new Error("csv columns");
+    return { name: fields[0].trim(), amount: Number(fields[1]) };
+  });
+}
+export function parseJson(text: string): unknown[] {
+  const value: unknown = JSON.parse(text);
+  if (!Array.isArray(value)) throw new Error("json array required");
+  return value;
+}
+export function validate(rows: unknown[]): void {
+  for (const row of rows) {
+    if (!row || typeof row !== "object") throw new Error("row object");
+    const r = row as Record<string, unknown>;
+    if (typeof r.name !== "string" || !r.name.trim() ||
+        typeof r.amount !== "number" ||
+        !Number.isSafeInteger(r.amount) || r.amount <= 0) {
+      throw new Error("name / positive integer amount");
+    }
+  }
+}
+```
+
+### 3. 唯一正常入口
+
+parse 是必需操作，afterParse 是可选钩子。传给 hook 的深拷贝防止它直接修改候选数据；共同校验不委托给子类。没有任何预期会抛错的 hook 被放到 commit 后面，避免把“提交成功但通知失败”误报成“没有提交”。
+
+```ts
+export abstract class ImportTemplate {
+  #source: MemoryInput;
+  #sink: unknown[];
+  constructor(source: MemoryInput, sink: unknown[]) {
+    this.#source = source; this.#sink = sink;
+  }
+  protected abstract parse(text: string): unknown[];
+  protected afterParse(_rows: readonly unknown[]): void {} // optional hook
+  run(): Frame[] {
+    const trace: Frame[] = []; let data: unknown[] = [];
+    const mark = (stage: string, error = "") => trace.push(
+      snapshot(stage, data, this.#sink, this.#source, error));
+    try {
+      const text = this.#source.read(); data = [text]; mark("read");
+      data = this.parse(text); mark("parse");
+      this.afterParse(structuredClone(data)); mark("hook");
+      validate(data); mark("validate");
+      this.#sink.push(...data); mark("commit");
+    } catch (error) {
+      mark("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      this.#source.close(); mark("close");
+    }
+    return trace;
+  }
+}
+```
+
+### 4. 两个具体子类和一条真正的错误路径
+
+具体子类只提供解析。对照下面的 bypass：它也能显示导入成功，却没有 validate 和 finally。遇到负数，它真的把负数写进 sink；遇到格式损坏，它记录错误后真的让资源保持打开。测试不会为它伪造成功条件。
+
+```ts
+export class CsvImport extends ImportTemplate {
+  protected override parse(text: string): unknown[] { return parseCsv(text); }
+}
+export class JsonImport extends ImportTemplate {
+  protected override parse(text: string): unknown[] { return parseJson(text); }
+}
+// Deliberately wrong: caller sidesteps run(), validation and finally.
+export function bypass(source: MemoryInput, sink: unknown[],
+  parse: (text: string) => unknown[]): Frame[] {
+  const trace: Frame[] = []; let data: unknown[] = [];
+  const mark = (stage: string, error = "") => trace.push(
+    snapshot(stage, data, sink, source, error));
+  try {
+    const text = source.read(); data = [text]; mark("read");
+    data = parse(text); mark("parse");
+    sink.push(...data); mark("commit");
+  } catch (error) {
+    mark("error", error instanceof Error ? error.message : String(error));
+  }
+  return trace; // no close: a real leak in our memory-resource model
+}
+```
+
+### 5. 确定输入与钩子故障
+
+`simulate` 每次创建新资源和新库存，供实验切换使用。正常模式沿父类入口运行。early 故意通过外部 sink 引用提前写入，hook-error 则在钩子里抛错；这两个分支是违反/测试合同的故障注入，不是建议的扩展方式。
+
+```ts
+export function sample(format: Format, scenario: Scenario): string {
+  if (scenario === "empty") return format === "csv" ? "" : "[]";
+  if (scenario === "malformed") return format === "csv" ? "A,3,extra" : "[";
+  const amount = scenario === "invalid" ? -2 : 2;
+  return format === "csv" ? `A,3\nB,${amount}` :
+    JSON.stringify([{ name: "A", amount: 3 }, { name: "B", amount }]);
+}
+export function simulate(format: Format, scenario: Scenario, mode: Mode): Frame[] {
+  const source = new MemoryInput(sample(format, scenario), scenario === "read-fail");
+  const sink: unknown[] = [];
+  const Job = format === "csv" ? CsvImport : JsonImport;
+  if (mode === "bypass") return bypass(source, sink,
+    format === "csv" ? parseCsv : parseJson);
+  if (mode === "template") return new Job(source, sink).run();
+  const job = new (class extends ImportTemplate {
+    protected override parse(text: string): unknown[] {
+      return (format === "csv" ? parseCsv : parseJson)(text);
+    }
+    protected override afterParse(rows: readonly unknown[]): void {
+      if (mode === "early") sink.push(...rows); // leaked write capability!
+      if (mode === "hook-error") throw new Error("hook failed");
+    }
+  })(source, sink);
+  return job.run();
+}
+```
+
+### 6. 运行断言，别只检查日志里有某个单词
+
+把这两段继续追加。第一段检查正常数据、阶段顺序和两种格式的失败/空批次边界；第二段断言反例确实造成错误结果。`ensure` 失败会抛出异常，使进程失败。
+
+```ts
+export function ensure(ok: boolean, message: string): void {
+  if (!ok) throw new Error(message);
+}
+for (const format of ["csv", "json"] as const) {
+  const good = simulate(format, "valid", "template");
+  ensure(good.map(f => f.stage).join(",") ===
+    "read,parse,hook,validate,commit,close", "order");
+  ensure(JSON.stringify(good.at(-1)!.stored) ===
+    '[{"name":"A","amount":3},{"name":"B","amount":2}]', "data");
+  for (const scenario of ["invalid", "read-fail", "malformed"] as const) {
+    const bad = simulate(format, scenario, "template");
+    ensure(bad.some(f => f.stage === "error"), "failure visible");
+    ensure(!bad.some(f => f.stage === "commit"), "no commit");
+    ensure(bad.at(-1)!.closed && !bad.at(-1)!.stored.length, "cleanup");
+  }
+  const empty = simulate(format, "empty", "template");
+  ensure(empty.some(f => f.stage === "commit"), "empty succeeds");
+  ensure(empty.at(-1)!.stored.length === 0, "empty adds nothing");
+}
+```
+
+反例最危险的不是抛错，而是抛错前已经写入。合法数据遇到 early 则会写两遍；finally 仍然关闭资源，并不能修复重复库存。
+
+```ts
+const early = simulate("csv", "invalid", "early");
+ensure(early.at(-1)!.stored.length === 2, "early leaked rows");
+ensure(!early.some(f => f.stage === "commit"), "template did not commit");
+ensure(early.at(-1)!.closed, "finally is not rollback");
+const twice = simulate("json", "valid", "early");
+ensure(twice.at(-1)!.stored.length === 4, "hook duplicates writes");
+const skipped = simulate("csv", "invalid", "bypass");
+ensure(skipped.at(-1)!.stored.length === 2, "bypass accepted negative");
+ensure(!skipped.at(-1)!.closed, "bypass leaked resource");
+const hookError = simulate("json", "valid", "hook-error");
+ensure(hookError.at(-1)!.closed, "hook throw still closes");
+ensure(hookError.at(-1)!.stored.length === 0, "hook throw before commit");
+```
+
+## 已知应用
+
+**从官方骨架实现识别协作**
+
+[Java 21 `AbstractList` 官方文档](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/AbstractList.html) 明确称其为列表接口的 skeletal implementation：只读列表可由子类提供 `get(int)` 和 `size()`，父类在这些随机访问操作之上实现 iterator 等行为。这能对照本例“上层算法调用下层基本操作”的责任分工。
+
+它不是导入器，也没有本例的提交合同；不能因为存在继承就断言所有方法都是同一种模板。本节只把已核实的骨架实现作为现实参照，不冒称这是未访问的 GoF 本章原文中的案例。
+
+## 相关模式
+
+**何时改用组合**
+
+策略不必替换“整个大算法”，也可以只替换 parse 这一项；模板方法则强调通过继承覆写步骤。本例若只有 CSV 一个实现，一个普通函数通常比二者都简单。练习三用变化维度检验这个选择。
+
+| 需求 | 更直接的结构 | 理由 |
+| --- | --- | --- |
+| 次序稳定，只按文件格式实现 parse | 模板方法 | 基类统一驱动，子类只提供必要步骤 |
+| 运行时切换解析器，或独立组合不同验证规则 | Strategy（策略）加组合 | `run(input, parser)` 调用一个传入对象/函数，不要求继承 |
+| 模板中需要由子类决定创建哪类解析结果对象 | Factory Method（工厂方法）作为其中一步 | 只改变创建责任，不重新分配整条流程的控制权 |
 
 ## 常见误区与反例
 
+<Callout type="trap" title="抽象基类会自动禁止绕过入口？">
+**现象 →** 旁路导入把 -2 写入，资源一直打开。
 
-另一个易错点是把结构相似当作语义相同。策略用组合替换整个算法；工厂方法常作为模板骨架中的创建步骤；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+**原因 →** 调用者直接拼步骤；TS 也允许子类覆写 run，abstract 不等于 final。
 
-## 术语表
+**修法 →** 统一入口并审查调用点；需要强隔离时收紧写权限并改用组合。
+</Callout>
 
+<Callout type="trap" title="钩子只是多加一点功能？">
+**现象 →** early 模式报错但库存已有两条，合法批次反而得到四条。
+
+**原因 →** 钩子拿到外部 sink 引用，提前写入或重复写入。
+
+**修法 →** 观察钩子不给写能力；真正的数据转换应在 parse 合同内进行。
+</Callout>
+
+<Callout type="trap" title="finally 等于事务回滚？">
+**现象 →** 资源已关闭，错误数据却仍存在。
+
+**原因 →** close 管理资源生命周期，不撤销写入；模板只阻止正常路径上的过早提交。
+
+**修法 →** 先完整校验再提交；真实持久化另行设计事务、提交失败语义与幂等机制。
+</Callout>
+
+## 小结
+
+- 模板掌握次序；基本操作必需，钩子可选。
+- 新格式只改解析，不能复制或绕开校验与关闭。
+- 校验前失败不新增提交；关闭不等于回滚。
 
 ## 练习与答案
 
+<Exercises>
 
-## 本章小结
+**问题 1：预测故障后的三种库存**
 
-模板方法模式 把“数据导入都要读取、解析、校验、提交和清理，只有解析步骤因格式而异”收敛为 ImportTemplate、ParseHook、CsvImportJob 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“子类必须覆写大量步骤或改变顺序时，组合式策略比继承更清楚”这一反例、重置实验，并根据 骨架复用强，但继承绑定刚性，钩子过多会形成隐式调用协议 接受或拒绝方案。
+输入 A=3、B=-2，分别运行正常模板、early、bypass。列出最终库存条数、是否关闭以及模板的 commit 帧是否出现。为什么不能只看资源已关闭就宣告合同成立？
 
-## 前后导航
+<Answer>
+正常模板是 0 条、关闭、无 commit；early 是 2 条、关闭、无 commit；bypass 是 2 条、未关闭、有 commit。early 的库存来自校验前 hook 的外部写入，不是正常模板的 commit。资源合同与提交合同相互独立，必须分别检查；上面的反例断言会实际验证这些差异。
+</Answer>
 
-- [上一页：备忘录模式](/learn/design-patterns/03-behavioral/memento)
-- [下一页：访问者模式](/learn/design-patterns/03-behavioral/visitor)
+**问题 2：改代码：增加 TSV 子类，不复制入口**
 
+在同一个文件增加制表符分隔格式，限定字段内不含逗号和引号。不能覆写 run，不能添加自己的提交逻辑。验证合法两条可提交、第二条为零时整批拒绝且资源关闭。
+
+<Answer>
+把新格式转换成两列 CSV 的受限输入，再复用 parseCsv；这只替换 primitive operation，模板其余阶段不变。下面可直接追加运行：
+
+```ts
+class TsvImport extends ImportTemplate {
+  protected override parse(text: string): unknown[] {
+    if (text.includes(",") || text.includes('"')) throw new Error("TSV subset");
+    return parseCsv(text.replace(/\t/g, ","));
+  }
+}
+const tsvGood = new TsvImport(new MemoryInput("A\t3\nB\t2"), []).run();
+ensure(tsvGood.at(-1)!.stored.length === 2, "TSV good");
+const tsvBad = new TsvImport(new MemoryInput("A\t3\nB\t0"), []).run();
+ensure(tsvBad.some(f => f.stage === "error"), "TSV rejects zero");
+ensure(tsvBad.at(-1)!.stored.length === 0, "TSV no partial write");
+ensure(tsvBad.at(-1)!.closed, "TSV closes");
+```
+
+如果需要通用 TSV/CSV 引号转义，应换成正确的解析器，而不是继续增加字符串替换规则。这个答案只承诺题目给定的小语法。
+</Answer>
+
+**问题 3：选型：三种格式乘两套校验规则**
+
+现在要求运行时任意组合三种格式和两套校验规则，且以后还可能更换提交目标。应继续添加六个子类吗？哪些合同仍应集中保存？
+
+<Answer>
+优先组合 parser、validator、writer 三个独立策略，由一个受控执行函数固定次序；不因组合数增加而建六个子类。校验先于提交、失败语义与资源释放仍属于骨架，不能散落到每个策略。若未来次序本身也不同，就应该建另一条明确的工作流，而不是给 hook 任意改序的权力。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="模板方法">把算法的先后顺序写在基类里，把其中少数动作交给子类补充。</GlossaryItem>
+  <GlossaryItem term="基本操作">模板一定需要的动作，子类必须实现；本例是把文本解析成候选记录。</GlossaryItem>
+  <GlossaryItem term="钩子">模板在约定位置发出的可选回调，不覆写也能工作；可选不表示可以违反合同。</GlossaryItem>
+  <GlossaryItem term="好莱坞原则">让上层在规定的时机调用你的扩展实现，不要由扩展代码随意调度上层流程。</GlossaryItem>
+  <GlossaryItem term="不变量">换了实现或遇到失败也必须守住的约束，例如通过校验之前不能新增提交。</GlossaryItem>
+</Glossary>
+
+## 来源与范围
+
+本页对应站内正式单元 `designpatterns-22`，按模式目录的十三项描述结构独立教学。2026-09-24 实际 GET 的 [InformIT 出版社书目页](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610) 提供书目信息、章级目录及部分其他模式的试读入口；这不代表获得 Template Method 全章正文。本页未使用也不宣称读过该章受版权保护的原文。
+
+语言事实由上文 TypeScript 官方类手册与 MDN 的 finally 文档核对；现实骨架实现由 Oracle 的 AbstractList API 核对。解释、内存样本、图和练习为本站原创，不把出版社链接或其他模式试读权限当成本章开放许可证。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Design Patterns: Elements of Reusable Object-Oriented Software（Gamma、Helm、Johnson、Vlissides；Addison-Wesley，1994）"
+  adaptedUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+/>

@@ -1,204 +1,613 @@
 ---
-title: "第6章 Priority Queues：从二叉堆到可合并队列"
+title: "第6章 优先队列：数组筛选与可合并堆"
 type: C
 section: "散列与优先队列"
 order: 5
-description: "按第3版九节完整重构优先队列模型、简单实现、二叉堆、应用、d堆、左式堆、斜堆、二项队列与标准库priority_queue。"
+description: "保留九组范围：从优先队列模型、简单实现与二叉堆，到应用、d堆、左式堆、斜堆、二项队列及标准库。用真实筛选、结构合并和 C++17 测试比较它们。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+officialUnitId: dsaa3-06
+practiceMode: code
+draft: true
+qualityVersion: 2
 ---
 
+import { DsaPriorityQueuesHeapsMergeLab } from "@/components/mdx/dsa-cpp/dsa-priority-queues-heaps-merge-lab";
 
-## 从“只维护下一个极值”开始
+{/* 范围决策：冻结 dsaa3-06 九组，不缩减为仅二叉堆。模型/简单实现→操作表与数组轨迹；二叉堆/d堆→真实数组树筛选；应用/标准库→C++17 top-k与比较器；左式/斜堆→拆接/交换子树；二项队列→按秩链接进位。练习1选型，2改代码，3结构与所有权。 */}
 
-优先队列模型（）保存一组带 priority 的 items，但只需要快速回答“下一个是谁”。Scheduler 不必每次把全部 jobs 排好，只需取最高优先级；event simulation 也只需取最早 timestamp。
+<Objectives>
 
-先预测依次插入4、3、5后，min-priority queue 的 `top` 是3，max-priority queue 的 `top` 是5。若接口只写 `priority_queue` 却不定义 comparator direction，调用方可能把最紧急事件留到最后。
+- 能区分完整树形与堆序，推导线性建堆，并为九组内容选择合适的实现与边界约定。
+- 能修改并编译 C++17 堆代码，用多重集合核对重复值、空堆、容量和比较器方向。
+- 能回答：为何左式堆合并有最坏对数保证，斜堆只有均摊保证，而二项队列合并像二进制加法？
 
-官方九节依次为 **Model、Simple Implementations、Binary Heap、Applications of Priority Queues、d-Heaps、Leftist Heaps、Skew Heaps、Binomial Queues、Priority Queues in the Standard Library**。它们围绕同一 ADT 比较三种能力：普通极值操作、cache-friendly array layout，以及高效 meld/merge。
+</Objectives>
 
+## 1. 先取最急的一件，不必排好所有事
 
-## 6.1 Model
+工厂每次只能处理一张工单。有些新工单必须插到前面，但主管只问“现在先做哪张”，并不要求每次打印全部工单的完整排序。
 
-Min-priority queue 的核心 operations 是 `insert(x)`、`findMin()`、`deleteMin()`；通常允许 duplicates。它不保证任意 key 的 search，也不保证迭代时 sorted。若业务需要删除任意 item 或 decrease-key，还要额外 handle/index map，不能假设基础 heap API 自动支持。
+每次重排所有工单会做许多暂时用不到的工作。更好的办法是维护足以选出下一张的关系；如果两条生产线合并，还要考虑怎样把两份待办接在一起。
 
-空队列上的 `findMin/deleteMin` 必须有明确 contract。第3版作者代码抛 `UnderflowException`；现代接口也可以返回 optional 或让调用者先检查 empty，但不能读未初始化 root。
+## 2. 九组知识：接口相同，代价不同
 
-## 6.2 Simple Implementations
+以下保留原书第6章的九组范围，分别讲清数组操作与结构合并。它们不是九种别名，也不能用一张二叉树图替代全部内容。
 
-优先队列简单实现（）揭示 tradeoff：
+### 6.1 优先队列模型：保存一袋元素，取一个极值
 
-- unsorted array 的 insert O(1)，但 find/delete extreme 需要 scan O(N)；
-- sorted array 的 extreme 在端点，find O(1)，但 insert 要移动 O(N)；
-- linked list 可改变移动成本，却不能同时消除 search 和 insertion position 成本。
+<Term def="支持插入、查看极值和删除极值的容器接口，不承诺整体排序。">
+  优先队列
+</Term>
+的最小版本提供
+`insert`、`findMin`、`deleteMin`。允许重复值时，删除一次只移除一个实例；同优先级记录是否先来先走，需要额外序号，堆本身不保证稳定。
 
+它处在“收到任务”与“执行下一项”之间。不提供高效任意查找，也不自动支持修改已入队的键。本章图示最多8项、整数 −99…99；超容量拒绝，空堆删除报告错误。C++ 数组例子使用可配置容量，空堆抛异常。图示删掉一个根后，状态区与剩余节点共同体现这个接口。
 
-若 workload 是批量收集后只取一次 minimum，unsorted array 可能已经足够；若 insert 与 deleteMin 交错数百万次，binary heap 才提供稳定组合。ADT 不等于固定 implementation。
+### 6.2 优先队列简单实现：把扫描成本放在哪里
 
-## 6.3 Binary Heap
+数组 `[4,1,3]` 不排序时，插入2只需追加为 `[4,1,3,2]`；删除最小值必须扫描找到1。降序数组 `[4,3,1]` 的末端就是最小值，但插入2要移动1，变成 `[4,3,2,1]`。
 
-二叉堆（）同时保持：
+| 实现                   | 插入          | 查看最小值 | 删除最小值 | 适用操作组合         |
+| ---------------------- | ------------- | ---------- | ---------- | -------------------- |
+| 无序数组               | 摊销 O(1)     | O(n)       | O(n)       | 收集很多项后只取一次 |
+| 降序数组，最小值在末端 | O(n)          | O(1)       | O(1)       | 插入少、连续取出多   |
+| 二叉最小堆             | 摊销 O(log n) | O(1)       | O(log n)   | 插入与取出交错       |
 
-1. structure property：形状是 complete binary tree，除最后一层外全满，最后一层从左填；
-2. heap-order property：min-heap 每个 parent 不大于 children。
+链表避免数组搬移，却仍要寻找最小值或插入位置；有序链表的插入仍是 O(n)。上表假设整数比较和搬移各为 O(1)。二叉堆在底层已有足够容量、无需重新分配时，插入最坏 O(log n)；使用动态 vector 时，插入摊销 O(log n)，但触发扩容的单次插入可能为 O(n)。无序动态数组同样是插入摊销 O(1)、单次扩容 O(n)。
 
-第3版使用 1-based array，index i 的亲属位置为：
+本章 `Heap` 的 `cap` 是逻辑元素数上限，不是 `vector::capacity()`；代码没有调用 `reserve(cap)`，即使未达到 `cap`，`push_back` 仍可能重新分配。达到逻辑上限则拒绝插入。图示只展示键与筛选路径，不展示内存分配耗时；题1要按真实操作比例选择，而非一律选堆。
+
+### 6.3 二叉堆：两个互不替代的不变量
+
+<Term def="按层从左到右填满的二叉树，只有最后一层可以不满。">完全二叉树</Term>
+使数组能够无空洞表示节点。
+<Term def="最小堆每个父键都不大于其孩子键的局部约束。">堆序</Term>
+则使根成为全局最小值。`[9,1,2]`
+形状完整却违反堆序；只有左侧长链的有序树满足堆序，却不是二叉堆。
+
+本章独立代码用0起始下标：父为 `floor((i-1)/2)`，孩子为 `2i+1`、`2i+2`。作者配套 `BinaryHeap.h` 用1起始下标，不能直接混用公式。图中数组下标与树上的 i 标签相同。
+
+<Term def="沿祖先链交换较小键，修复追加元素造成的局部堆序破坏。">上滤</Term>
+先在末尾追加，再沿父链比较；
+<Term def="把过大的父键与最小孩子交换，沿子孙方向修复堆序。">下滤</Term>
+用于删除根后补入的末项。只选左孩子会遗漏更小的右孩子，实验中的错误模式会保留完整形状却画出红色违规边。
+
+### 6.4 优先队列应用：先定义键，再选择队列
+
+任务调度以紧急度或截止时间为键；离散事件模拟反复取最早时间；选出第 k 大值可以维护容量 k 的最小堆，其根是当前入选门槛。代码里的 `topK` 就是后者，k=0 返回空集；k 大于输入长度则保留全部，不虚构“第 k 大”。
+
+重复删除最小值可生成升序结果，但本章返回新向量的版本不是原地堆排序；原地版本通常用最大堆把根交换到数组末端。Dijkstra 可用标准队列重复插入新距离，取出时跳过不等于当前最优距离的旧记录；需非负边权，且队列可能存多个同顶点记录。不要把它误称为原地 `decrease-key`。
+
+预测图示初始数据删除根后谁会上移，再用代码检查 top-k 在流中淘汰的究竟是最大还是最小项，回收“键代表什么”的决策。
+
+### 6.5 d 堆：更矮不等于总比较更少
+
+<Term def="每个节点最多有 d 个孩子、按层连续存储的堆。">d 堆</Term>
+把二叉堆的分叉数改为 d。0起始数组的孩子下标为 `di+1…di+d`，父下标为
+`floor((i-1)/d)`。实验切到 d=3，同一数组会产生不同边和筛选路径。
+
+插入的上滤只沿父链，高度是 O(log_d n)。对固定 d，底层已有容量时插入最坏 O(log_d n)；动态 vector 扩容下是摊销 O(log_d n)，单次扩容仍可能为 O(n)。删除不追加元素，每层最多扫描 d 个孩子，成本 O(d log_d n)。例如8项的三叉堆更浅，但根下滤要比较三个候选。频繁插入或减小键时可考虑较大的 d，比较昂贵时不可只盯高度；缓存与实际操作比例也要测量。代码允许2到16叉，题2会把固定参数改为实测比较次数。
+
+### 6.6 左式堆：只约束右路，不要求整棵树平衡
+
+<Term def="以堆序和左孩子 npl 不小于右孩子 npl 来缩短合并路径的二叉堆。">
+  左式堆
+</Term>
+为频繁合并而设计。
+<Term def="空树为 −1，非空节点为 1 加两个孩子 npl 的较小值；叶子为0。">
+  零路径长 npl
+</Term>
+记录最短缺口距离。合并时保留较小根，把另一堆与它的右子树递归合并；必要时交换左右孩子，最后更新
+npl。
+
+实验真实拆开右边再接回，并只在左 npl 较小时交换。两棵树需要互不共享节点；空树是合并单位元，`meld(H,∅)=H`。作者 `merge(rhs)` 会清空 rhs，并防止与自己合并。这里用独占指针移动所有权，调用者也不得把同一所有者移动两次当成两个输入。
+
+插入就是合并单节点；删除最小值就是移除根后合并左右子树。左链可以很长，因此不能把左式堆误称为“整体高度总是对数”的平衡树。右路为何短见下一节推导，代码同时给出左式与斜堆的可执行合并。
+
+### 6.7 斜堆：不用 npl 作决策，靠一串操作分摊成本
+
+<Term def="合并回溯时无条件交换左右孩子、不靠显式平衡元数据的堆。">斜堆</Term>
+也沿右路合并，但不比较
+npl；每个递归返回节点都交换孩子。实验使用同一组输入切换左式／斜堆，可以观察两者交换位置和最终结构，而不是比较预先画好的“快／慢”卡片。
+
+一次合并可能走过线性长的右链，最坏 O(n+m)。从空堆开始的一串插入、删除、合并操作，才有 O(log n) 的<Term def="把一串最坏操作的总成本分摊到每次，不是假设输入随机。">均摊</Term>界。证明的关键是区分轻、重右边：轻边沿途让剩余子树至少减半，只有对数条；交换会减少昂贵的重右边，把成本记入结构势能变化。这里不给出完整势能证明，精确定理见 Sleator–Tarjan 论文。
+
+若必须限制每一次停顿，不能把这个均摊结论当作左式堆的最坏保证。图示是算法轨迹，不是小样本复杂度证明。
+
+### 6.8 二项队列：树的秩就是二进制位
+
+<Term def="每个秩至多一棵二项树组成的堆序森林。">二项队列</Term>
+不维持一棵完全树。
+<Term def="二项树的阶数 k；有 2^k 个节点，根的孩子分别为 B0 至 B(k−1)。">
+  秩 rank
+</Term>
+刻画树大小：B0 是单节点，两棵 Bk 让较大根成为较小根的孩子，就得到 B(k+1)。
+
+例如 A 有3项，即 B0+B1；B 也有3项。两个 B0 链成 B1；此时三个 B1 必须保留一个、把另两个进位成 B2，最终6项是 B1+B2。实验可输入 `1,4,7 | 2,5,8` 查看每次实际链接，节点的 r 标签就是秩。中途允许同秩根共存，结束必须唯一。
+
+合并像二进制加法，最多 O(log(n+m)) 次链接；`findMin` 要扫描 O(log n) 个根，不是 O(1)。删除最小根后，把其 B0…B(k−1) 孩子作为森林合并回去。代码展示链接、进位和删除，题3要求验证节点数、秩和所有权一起守恒。
+
+### 6.9 标准库优先队列：比较器不是“谁先出队”函数
+
+<Term def="在顺序容器之上提供堆顶访问、插入和删除的标准库适配器。">std::priority_queue</Term>默认 `vector<T>` 与 `less<T>`：`top()` 是最大值。使用 `greater<int>` 才得到最小值。因为 `Compare(a,b)` 为真表示 a 在比较关系中排在 b 前面，而堆顶是这套次序的末端，不是开头。
+
+比较器必须满足<Term def="自比为假、关系传递且等价关系也传递的一致比较规则。">严格弱序</Term>；`a >= b` 会在重复值上违反自比为假。比较器或元素键也不能在队列里偷偷变化。`pop()` 返回 void，需先复制 `top()` 再删除；空队列不能调用它们，也不能保留被删除堆顶的引用。
+
+标准适配器不提供 meld、任意删键、decrease-key 或稳定性。默认动态 vector 没有本实验的8项上限，但仍受内存与分配失败限制。其 `push` 先追加元素，再执行 `push_heap`；后者的 O(log n) 比较次数不包含前者的扩容搬移。在本章整数与常数时间比较的模型下，已有容量时插入最坏 O(log n)，动态扩容下摊销 O(log n)，单次扩容可能 O(n)。自定义元素或比较器还须计入各自的操作成本。第3版 `TestPQ.cpp` 已对比 max/min；本章使用独立 C++17 写法，不把作者历史接口或当前工作草案的新接口直接当作 C++17。
+
+## 3. 两个可复核的成本推导
+
+符号：n 是元素数，h 是某节点向下最多移动的层数，r 是左式堆右路上的非空节点数，d 是分叉数。
+
+### 自底向上建堆为什么是线性的
+
+完全二叉树中，至少能向下走 h 层的节点至多 `floor(n/2^h)` 个。每个节点的移动层数，可以改为“它是否贡献第1层、第2层……”来计数。二叉下滤每层只需常数次比较，所以：
 
 $$
-\operatorname{parent}(i)=\left\lfloor\frac{i}{2}\right\rfloor,\qquad
-\operatorname{left}(i)=2i,\qquad
-\operatorname{right}(i)=2i+1
+\sum_v \operatorname{height}(v)
+=\sum_{h\ge1}\#\{v:\operatorname{height}(v)\ge h\}
+\le\sum_{h\ge1}\frac{n}{2^h}<n.
 $$
 
+这个式子说：把所有节点可能向下移动的距离相加，不足 n；再加上线性读取和常数比较因子，建堆就是 O(n)。叶子不需要筛选，从最后一个内部节点倒着处理，轮到父节点时其孩子子树已是堆。逐个插入的 O(n log n) 总成本上界不是这个算法的界；动态 vector 从空开始增长时，总扩容搬移摊销 O(n)，并不保证每一次插入都只花 O(log n)。
 
-Complete shape 使 height 为：
+### 左式性质怎样限制右路
+
+右路有 r 个非空节点的左式堆，每层的左边至少与右边具有相同 npl，因此最少节点数满足 `S(r) ≥ 1 + 2S(r-1)`，且 `S(0)=0`。逐层展开得到：
 
 $$
-h=\lfloor\log_2 N\rfloor
+S(r)\ge 2^r-1,\qquad r\le\log_2(n+1).
 $$
 
-`findMin` 直接读 `array[1]`，O(1)。Insert 先在末尾创建 hole，再比较 parent 并向上滤：
+这个式子说：右路每加一层，所需节点至少近乎翻倍。合并只沿两条右路走，成本为 O(log(n+1)+log(m+1))；它没有限制整棵树的左侧高度。斜堆没有这个逐次结构不变量。
+
+## 4. 结构实验：先预测，再看一次真实操作
+
+猜一猜：把分叉数由2调到3，树变矮以后，删除时要扫描的孩子一定更少吗？先保持默认二叉堆，逐步删除1：7补根，正确路径先交换到2。再选“错误：只选首孩子下滤”，走到最后会留下红边，尽管数组没有空洞。
+
+<DsaPriorityQueuesHeapsMergeLab />
+
+五个控件分别是结构、输入、操作、下一步和重置。编辑输入或切换操作会从头计算轨迹；空输入用于空堆实验，插入使用 `1,4,2 | 0`。建堆操作把 A、B 按顺序拼成原数组。删除先对拼接数组建堆，再删除一次；它不是在未经建堆的数据上碰运气。
+
+合并组把 A、B 分别通过插入建成合法结构，再展示合并过程；输入两份独立数组，即使值相同也不是别名。可用 `1,4,7 | 2,5,8` 比较三种合并结构，用 `|` 检查空单位元。暂时拆下的子树仍作为独立根显示，npl 更新前的帧会说明是中间态。重置恢复默认结构、全部输入、操作、第一帧和结果区；错误模式若没破坏某组数据，状态会如实报告该次通过，而非固定显示失败。
+
+## 5. 独立 C++17 实验：从正文组装、编译、运行
+
+下面**全部十个 `cpp` 代码块**依次连接，保存为 `heap-lab.cpp`；块之间不添加省略号或额外 `main`。这是本章完整实验源码，不依赖作者头文件。使用 `clang++ -std=c++17 -Wall -Wextra -Werror -pedantic heap-lab.cpp -o heap-lab && ./heap-lab`。不要加 `-DNDEBUG`，断言是检验的一部分。预期只输出 `heap checks passed`。
+
+### 片段1/10：边界与构造
+
+下标使用 int，因为逻辑容量上限明确不超过1024，不是把任意大容器的 size 强转成 int。这里的限制用于可复现实验，不代表堆 ADT 必须有这种限制。`cap` 只负责拒绝超量插入，并未预分配存储；后面的 `push_back` 仍适用 §6.2 的扩容成本说明。
 
 ```cpp
-void insert(const T& x) {
-    if (size + 1 == array.size())
-        array.resize(array.size() * 2);
-    std::size_t hole = ++size;
-    for (; hole > 1 && x < array[hole / 2]; hole /= 2)
-        array[hole] = std::move(array[hole / 2]);
-    array[hole] = x;
+#include <algorithm>
+#include <cassert>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <queue>
+#include <set>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+void checkKey(int x) {
+    if (x < -99 || x > 99) throw std::out_of_range("key");
 }
-```
-
-`deleteMin` 保存 root，把最后元素放入 root hole，每层选择更小 child 向下滤。若总选 left child，会在 right child 更小时破坏 heap order：
-
-```cpp
-void percolateDown(std::size_t hole) {
-    T value = std::move(array[hole]);
-    while (2 * hole <= size) {
-        std::size_t child = 2 * hole;
-        if (child != size && array[child + 1] < array[child])
-            ++child;
-        if (!(array[child] < value)) break;
-        array[hole] = std::move(array[child]);
-        hole = child;
+struct Heap {
+    std::vector<int> a;
+    int d, cap;
+    explicit Heap(std::vector<int> v = {}, int arity = 2,
+                  int capacity = 64) : a(std::move(v)), d(arity), cap(capacity) {
+        if (d < 2 || d > 16 || cap < 0 || cap > 1024 ||
+            a.size() > static_cast<std::size_t>(cap))
+            throw std::invalid_argument("heap bounds");
+        for (int x : a) checkKey(x);
+        for (int i = (static_cast<int>(a.size()) - 2) / d; i >= 0; --i)
+            down(i);
     }
-    array[hole] = std::move(value);
+```
+
+### 片段2/10：修复局部堆序
+
+删除必须扫描所有现存孩子再选最小的；上滤则只需比较一个父亲。末尾的 `valid` 独立检查每条边，而不重用下滤算法。
+
+```cpp
+    void down(int p) {
+        int n = static_cast<int>(a.size());
+        while (d * p + 1 < n) {
+            int c = d * p + 1;
+            for (int j = c + 1; j <= d * p + d && j < n; ++j)
+                if (a[j] < a[c]) c = j;
+            if (a[p] <= a[c]) break;
+            std::swap(a[p], a[c]);
+            p = c;
+        }
+    }
+    void push(int x) {
+        checkKey(x);
+        if (static_cast<int>(a.size()) == cap)
+            throw std::length_error("full");
+        a.push_back(x);
+        int c = static_cast<int>(a.size()) - 1;
+        while (c > 0) {
+            int p = (c - 1) / d;
+            if (a[p] <= a[c]) break;
+            std::swap(a[p], a[c]); c = p;
+        }
+    }
+    bool valid() const {
+        for (int i = 1; i < static_cast<int>(a.size()); ++i)
+            if (a[(i - 1) / d] > a[i]) return false;
+        return true;
+    }
+```
+
+### 片段3/10：空堆与 top-k
+
+`top` 返回副本，不留下可能失效的引用。top-k 只在新值严格大于门槛时替换；重复值按出现次数保留，但不保证记录稳定顺序。
+
+```cpp
+    int top() const {
+        if (a.empty()) throw std::underflow_error("empty");
+        return a[0];
+    }
+    int pop() {
+        int answer = top(), last = a.back();
+        a.pop_back();
+        if (!a.empty()) { a[0] = last; down(0); }
+        return answer;
+    }
+};
+std::vector<int> topK(const std::vector<int>& input, int k) {
+    if (k < 0 || k > 1024) throw std::invalid_argument("k");
+    for (int x : input) checkKey(x);
+    Heap h({}, 2, k);
+    if (k == 0) return {};
+    for (int x : input) {
+        if (static_cast<int>(h.a.size()) < k) h.push(x);
+        else if (x > h.top()) { h.pop(); h.push(x); }
+    }
+    std::vector<int> result;
+    while (!h.a.empty()) result.push_back(h.pop());
+    return result;
 }
 ```
 
+### 片段4/10：同一合并骨架，两种结构规则
 
-从任意 array 建 heap 不需要逐个 O(log N) insert。`buildHeap` 从最后一个 internal node `N/2` 向 root 做 percolateDown。深层 nodes 多但移动距离短，因此总成本是：
-
-$$
-\sum_{h\ge 0}\frac{N}{2^{h+1}}O(h)=O(N)
-$$
-
-
-## 6.4 Applications of Priority Queues
-
-优先队列应用（）包括：
-
-- operating system/job scheduling：priority 是 deadline、class 或动态权重；
-- discrete event simulation：每次 deleteMin 得到下一个 timestamp；
-- Dijkstra/Prim：取最小 tentative distance/edge，常需要 decrease-key 或 lazy duplicate；
-- top-k stream：维护容量 k 的 min-heap，让 root 是当前第 k 大阈值；
-- heapsort：buildHeap 后反复 delete extreme，得到 ordered output。
-
-
-应用正确性依赖 priority key 与 stale entry policy。Dijkstra 若标准容器没有 decrease-key，可 push 新 distance，并在 pop 时丢弃与当前 best 不符的 stale item；但必须分析额外 queue size 和 comparisons。
-
-## 6.5 d-Heaps
-
-d堆（）把 binary arity 2 推广为 d。0-based layout 常用 children `di+1` 到 `di+d`，parent 为 floor((i-1)/d)。高度约：
-
-$$
-h=\Theta(\log_d N)
-$$
-
-
-较大 d 减少 insert 上滤层数，并可能适合 decrease-key 密集场景；deleteMin 每层却要比较最多 d 个 children，约 O(d log_d N)。最佳 d 取决于 operation mix、cache line、comparison cost，不能只追求最低 height。
-
-## 6.6 Leftist Heaps
-
-左式堆（）为高效 meld 设计。Null-path length `npl(x)` 是从 x 到缺少两个 children 的 node 的最短路径；leftist property 要求：
-
-$$
-\operatorname{npl}(\mathrm{left})\ge \operatorname{npl}(\mathrm{right})
-$$
-
-因此 shortest path 在 right side，right spine 长度 O(log N)。Merge 比较两个 roots，较小 root 保留，把另一个 heap 与其 right subtree 递归 merge；若左右 npl 顺序不满足就 swap，并更新 npl。
+`unique_ptr` 表示节点独占所有权；`std::move` 转移它，不复制节点。skew=true 时 npl 不参与决策；此教学结构仍计算 npl 以便共用检查类型，实际斜堆可删掉该字段。
 
 ```cpp
-Node* merge(Node* a, Node* b) {
+struct Node {
+    int key, npl = 0;
+    std::unique_ptr<Node> left, right;
+    explicit Node(int x) : key(x) { checkKey(x); }
+};
+using Tree = std::unique_ptr<Node>;
+int npl(const Tree& t) { return t ? t->npl : -1; }
+Tree meld(Tree a, Tree b, bool skew = false) {
     if (!a) return b;
     if (!b) return a;
     if (b->key < a->key) std::swap(a, b);
-    a->right = merge(a->right, b);
-    if (npl(a->left) < npl(a->right))
+    a->right = meld(std::move(a->right), std::move(b), skew);
+    if (skew || npl(a->left) < npl(a->right))
         std::swap(a->left, a->right);
-    a->npl = npl(a->right) + 1;
+    a->npl = 1 + std::min(npl(a->left), npl(a->right));
     return a;
+}
+int popTree(Tree& t, bool skew) {
+    if (!t) throw std::underflow_error("empty tree");
+    auto old = std::move(t);
+    int answer = old->key;
+    t = meld(std::move(old->left), std::move(old->right), skew);
+    return answer;
 }
 ```
 
-Insert 是与 singleton merge；deleteMin 删除 root 后 merge 左右 heaps。第3版 `merge(rhs)` 会吸收 rhs 并把 rhs.root 置空，还显式避免 self-merge aliasing。
+### 片段5/10：二项树链接与进位
 
+`child.size()` 就是秩；孩子按秩从0到 k−1 保存。链接前强制检查同秩，较大根挂到较小根下。调用者必须提供合法且互不共享节点的森林，这不是接受任意指针图的修复器。
 
-## 6.7 Skew Heaps
-
-斜堆（）删除 leftist metadata，也不逐次保证短 right spine。Merge 同样选较小 root 并递归合并，但在返回时交换 children。
-
-单次 merge 可能 linear，操作序列的 amortized bound 才是 O(log N)。这与 splay tree 的思想相似：以自调整换掉显式 balance metadata。需要严格 per-operation latency 时，不能把 amortized 当 worst-case。
-
-## 6.8 Binomial Queues
-
-二项队列（）是 heap-ordered binomial trees 的 forest。Rank k 的 binomial tree Bk 有：
-
-$$
-|B_k|=2^k,\qquad \operatorname{height}(B_k)=k
-$$
-
-一个 size N 的 queue 是否含 Bk，恰由 N 的二进制第 k 位决定。Merge 两个 queues 时，同 rank 的两棵树 combine 成下一 rank 的 carry，过程与 binary addition 一致。
-
-
-Combine 只比较 roots，让较大 root 成为较小 root 的 child。FindMin 需要扫描 O(log N) 个 tree roots；merge O(log N)。DeleteMin 找到最小 root，移除其 Bk，把 children 拆成 B0 到 B(k-1) 的新 queue，再 merge 回剩余 forest。
-
-第3版 `BinomialQueue.h` 的 merge switch 同时处理 this tree、rhs tree 和 carry 的八种 presence cases。理解 binary carry 比背 switch cases 更可靠，也更容易写 exhaustive tests。
-
-## 6.9 Priority Queues in the Standard Library
-
-标准库优先队列（）默认使用 `vector` 与 `less`，所以 `top()` 是最大值。第3版 `TestPQ.cpp` 对比默认 max queue 与 `greater<int>` min queue：
+这里为了直观读取秩，用 vector 保存孩子，扩容时可能额外搬移指针。经典 O(log n) 合并时间界使用单次链接 O(1) 的孩子／兄弟指针表示；本实验验证结构和输出，不把其分配与扩容成本藏进该时间界。
 
 ```cpp
-std::priority_queue<int> maxQueue;
-std::priority_queue<int, std::vector<int>, std::greater<int>> minQueue;
+struct Bin {
+    int key;
+    std::vector<std::unique_ptr<Bin>> child;
+    explicit Bin(int x) : key(x) { checkKey(x); }
+};
+using BTree = std::unique_ptr<Bin>;
+using Forest = std::vector<BTree>;
+BTree link(BTree a, BTree b) {
+    if (!a || !b || a->child.size() != b->child.size())
+        throw std::invalid_argument("equal ranks required");
+    if (b->key < a->key) std::swap(a, b);
+    a->child.push_back(std::move(b));
+    return a;
+}
+void carryIn(Forest& f, BTree t) {
+    while (t) {
+        auto r = t->child.size();
+        if (f.size() <= r) f.resize(r + 1);
+        if (!f[r]) { f[r] = std::move(t); return; }
+        t = link(std::move(f[r]), std::move(t));
+    }
+}
+void mergeForest(Forest& a, Forest& b) {
+    if (&a == &b) return;
+    for (auto& t : b) carryIn(a, std::move(t));
+    b.clear();
+}
 ```
 
+### 片段6/10：删除二项树根
 
-Comparator 描述的是排序关系，不是“谁先出队”的自然语言函数。自定义 record 时，应把 tie-breaker 写清楚，保证 strict weak ordering。`pop()` 不返回 value，通常先读取 `top()` 再 `pop()`；此间不要让其他线程无同步地修改 queue。
+最小值必须在根集合里找。取出根后，它的孩子已经是合法的小二项树；逐个带进位地并回森林，不可以把孩子键当成无结构数组丢掉。
 
+```cpp
+int popForest(Forest& f) {
+    std::size_t best = f.size();
+    for (std::size_t i = 0; i < f.size(); ++i)
+        if (f[i] && (best == f.size() || f[i]->key < f[best]->key))
+            best = i;
+    if (best == f.size()) throw std::underflow_error("empty forest");
+    auto root = std::move(f[best]);
+    int answer = root->key;
+    for (auto& t : root->child) carryIn(f, std::move(t));
+    return answer;
+}
+int checkTree(const Tree& t, bool skew) {
+    if (!t) return -1;
+    int l = checkTree(t->left, skew), r = checkTree(t->right, skew);
+    if (t->left) assert(t->key <= t->left->key);
+    if (t->right) assert(t->key <= t->right->key);
+    if (!skew) assert(l >= r);
+    assert(t->npl == 1 + std::min(l, r));
+    return 1 + std::min(l, r);
+}
+```
 
-标准适配器没有 meld、decrease-key 或 stable ordering；需要这些 operations 时应选择专用 heap、handle-based implementation，或明确使用 lazy duplicates。
+### 片段7/10：用独立结构检查器关闭遗漏
 
-## 统一验证：先测 operation mix，再选 heap
+二项树不仅需要堆序，还需要每个孩子的秩、子树节点数都正确。`rejects` 把“边界必须被拒绝”变成可执行断言，不通过执行未定义行为来演示危险。
 
+```cpp
+std::size_t checkBin(const BTree& t) {
+    assert(t);
+    std::size_t count = 1;
+    for (std::size_t r = 0; r < t->child.size(); ++r) {
+        assert(t->child[r] && t->child[r]->child.size() == r);
+        assert(t->key <= t->child[r]->key);
+        count += checkBin(t->child[r]);
+    }
+    assert(count == (std::size_t{1} << t->child.size()));
+    return count;
+}
+void checkForest(const Forest& f) {
+    for (std::size_t r = 0; r < f.size(); ++r)
+        if (f[r]) { assert(f[r]->child.size() == r); checkBin(f[r]); }
+}
+template<class E, class F> void rejects(F action) {
+    bool caught = false;
+    try { action(); } catch (const E&) { caught = true; }
+    assert(caught);
+}
+```
 
-## 本章回顾
+### 片段8/10：数组操作与标准库方向
 
-1. Priority queue 维护下一个极值，不等于完整 sorted container。
-2. Simple implementations 把 O(N) 成本放在 insert 或 extreme removal 的不同位置。
-3. Binary heap 用 complete shape 和 heap order 在 array 上实现 O(log N) insert/deleteMin。
-4. Bottom-up buildHeap 是 O(N)，不是 N 次 insert 的 O(N log N)。
-5. Applications 先把业务状态映射为 priority，并明确 stale/tie policy。
-6. d-heap 以更宽 child scan 换更低 height。
-7. Leftist heap 用 npl 保证短 right spine；skew heap 以自调整提供 amortized merge。
-8. Binomial queue 的 forest ranks 与 size 二进制位一一对应。
-9. std::priority_queue 默认 max-heap，不提供 meld、decrease-key 或 stable order。
+多重集合 `multiset` 使用不同的数据结构作为参照：不是让两个同样的下滤实现互相证明。这里同时检验2叉、3叉、负数、重复值和满容量拒绝后的状态。
 
+```cpp
+int main() {
+    const std::vector<int> data{1,4,2,9,8,3,7,2,-99,99};
+    for (int d : {2,3}) {
+        Heap h(data, d, 11);
+        std::multiset<int> oracle(data.begin(), data.end());
+        h.push(-2); oracle.insert(-2);
+        rejects<std::length_error>([&] { h.push(0); });
+        while (!oracle.empty()) {
+            assert(h.valid() && h.top() == *oracle.begin());
+            assert(h.pop() == *oracle.begin()); oracle.erase(oracle.begin());
+        }
+        rejects<std::underflow_error>([&] { h.pop(); });
+    }
+    rejects<std::out_of_range>([] { Heap h; h.push(100); });
+    rejects<std::length_error>([] { Heap h({}, 2, 0); h.push(1); });
+    rejects<std::invalid_argument>([] { Heap h({}, 1); });
+    std::priority_queue<int> maxq;
+    std::priority_queue<int, std::vector<int>, std::greater<int>> minq;
+    for (int x : {4,3,5}) { maxq.push(x); minq.push(x); }
+    assert(maxq.top() == 5 && minq.top() == 3);
+    assert((topK(data, 3) == std::vector<int>{8,9,99}));
+    assert(topK(data, 0).empty());
+```
 
-## 名词解释
+### 片段9/10：合并后检查所有权与逐项输出
 
+A、B 用不同节点建树，即使键相同也不能复用指针。每次删除前重算结构元数据，并与 multiset 的最小元素比对。二项队列还验证 rhs 在合并后为空。
 
+```cpp
+    for (bool skew : {false, true}) {
+        Tree a, b;
+        for (int x : {4,1,4}) a = meld(std::move(a), std::make_unique<Node>(x), skew);
+        for (int x : {3,2,0}) b = meld(std::move(b), std::make_unique<Node>(x), skew);
+        a = meld(std::move(a), std::move(b), skew);
+        assert(!b);
+        std::multiset<int> oracle{4,1,4,3,2,0};
+        while (!oracle.empty()) {
+            checkTree(a, skew);
+            assert(popTree(a, skew) == *oracle.begin()); oracle.erase(oracle.begin());
+        }
+        rejects<std::underflow_error>([&] { popTree(a, skew); });
+    }
+    Forest a, b;
+    for (int x : {4,1,4}) carryIn(a, std::make_unique<Bin>(x));
+    for (int x : {3,2,0}) carryIn(b, std::make_unique<Bin>(x));
+    mergeForest(a, b); assert(b.empty());
+    std::multiset<int> oracle{4,1,4,3,2,0};
+    while (!oracle.empty()) {
+        checkForest(a);
+        assert(popForest(a) == *oracle.begin()); oracle.erase(oracle.begin());
+    }
+    rejects<std::underflow_error>([&] { popForest(a); });
+```
+
+### 片段10/10：安全构造一个错误，不执行未定义行为
+
+模拟错误删除：末项7补根后，只与左孩子4交换，再错误地提前停下。数组仍能表示完整树，但根4大于右孩子2。检查器应拒绝它；不能只断言“删除返回了1”就认为整个操作正确。
+
+```cpp
+    Heap broken({1,4,2,9,8,3,7});
+    broken.a[0] = broken.a.back(); broken.a.pop_back();
+    std::swap(broken.a[0], broken.a[1]);
+    assert(!broken.valid());
+    std::cout << "heap checks passed\n";
+}
+```
+
+上述指针例子只演示单线程、整数键、有限测试规模；递归在很长左链、斜堆最坏路径或析构时可能耗尽调用栈。它们不是异常安全、分配失败恢复或并发生产容器的完整实现。图示的8项上限不用于推断渐进复杂度。
+
+## 6. 常见误区：故障发生在哪里
+
+<Callout type="trap" title="完整树形不等于堆序">
+
+**现象 →** 根看似很小，删除后顺序仍出错。  
+**原因 →** 只比较根，或下滤只选首孩子；完整形状并不能推出堆序。  
+**修法 →** 检查所有父子边，再用重复删除与 multiset 对照；实验错误模式会画出违规边。
+
+</Callout>
+
+<Callout type="trap" title="greater 对应最小堆">
+
+**现象 →** 换成 `greater` 后最大任务反而排不到堆顶。  
+**原因 →** 把比较器读成“谁更重要”，忽略适配器返回比较次序末端。  
+**修法 →** 先用3、4、5测试方向；相等时比较器必须返回 false。
+
+</Callout>
+
+<Callout type="trap" title="均摊不等于单次最坏">
+
+**现象 →** 斜堆偶尔一次合并特别慢。  
+**原因 →** 把均摊对数错当每次最坏对数，或把左式性质误套给斜堆。  
+**修法 →** 严格延迟约束优先考虑左式结构；分别记录单次最大耗时和整个序列总成本。
+
+</Callout>
+
+<Callout type="trap" title="消费式合并要转移所有权">
+
+**现象 →** 合并后二次释放，或 rhs 还能删出同一批元素。  
+**原因 →** 两个根共享子树，或只复制根指针未转移所有权。  
+**修法 →** 明确互不共享前提和消费 rhs 语义；独占指针禁止复制，自合并包装层应显式拒绝或无操作。
+
+</Callout>
+
+## 7. 小结与练习
+
+- 九组范围围绕极值接口，不等于九种二叉堆。
+- 树形与堆序分开验证；自底建堆是线性的。
+- 多重集合、边界和坏变体共同检验代码。
+- 左式看 npl，斜堆看均摊，二项队列看秩进位。
+
+<Exercises>
+
+**问题 1：先决定操作比例，再决定结构。** 一批100万工单只需找一次最早日期；持续交错插入／取出；流式保留最大的3项；频繁合并两个队列且要求每次延迟有最坏保证。这四种情形怎么选？标准 `priority_queue` 默认堆顶是谁？
+
+<Answer>
+
+第一种无序数组线性扫描即可，排序反而多做工作；第二种可用数组二叉堆，实际插入密集时再测 d 堆；第三种容量3的最小堆，拒收不超过根的新值；第四种考虑左式堆或二项队列，而不是把斜堆均摊界当作最坏界。标准适配器默认返回最大值，换成 `greater` 才是最小值；它没有高效 meld 接口。若待办本来已按降序排好且后续几乎不插入，简单有序数组也有价值。
+
+</Answer>
+
+**问题 2：修改代码测量“更矮”的真实代价。** 给 `Heap` 增加 `comparisons`，只统计 `down` 的键比较，分别用 d=2 与 d=3，对 `[1,4,2,9,8,3,7]` 建堆后清零计数，再删除一次。禁止把循环边界判断算成键比较。然后删除“寻找最小孩子”的循环，确认至少一个测试会失败。
+
+<Answer>
+
+在成员 `int d, cap;` 后增加 `int comparisons = 0;`，并把 `down` 中两个比较处改成如下差异。构造完成后执行 `h.comparisons = 0; h.pop();`，再检查 `h.valid()`、结果多重集合及次数。
+
+```diff
+-                if (a[j] < a[c]) c = j;
+-            if (a[p] <= a[c]) break;
++                if ((++comparisons, a[j] < a[c])) c = j;
++            if ((++comparisons, a[p] <= a[c])) break;
+```
+
+对这组输入，二叉删除比较3次，三叉删除比较3次；树更矮并未使这次键比较更少。两者输出都应删除1且保留多重集合 `{2,3,4,7,8,9}`。去掉孩子扫描后，二叉堆默认删除会留下根4大于右孩子2，`valid()` 或后续出队序列会捕获它。可继续枚举短数组测操作组合，不应从这一个样本宣布某种 d 普遍最优。
+
+</Answer>
+
+**问题 3：6=3+3，为什么不只是连接两棵树？** 用 `1,4,7 | 2,5,8` 分别运行左式、斜堆和二项队列合并。说明什么时候交换孩子，二项队列最终有哪些秩；再用 `|`、`1|`、`|1` 检验单位元。能否把同一棵树作为两个会被消费的参数？
+
+<Answer>
+
+左式只在左 npl 小于右 npl 时交换，并重算 npl；斜堆对每个参与合并的返回节点无条件交换，不能据一次结构声称最坏对数。二项队列从两份 `011₂` 开始：rank0相撞进位，rank1有三棵时保留一棵并让另外两棵进位，得到 `110₂`，即 B1 与 B2，共2+4=6个节点。所有父键仍应不大于孩子，节点不能丢失或重复拥有。
+
+空空合并仍为空，单边为空时保留另一侧；值重复与节点共享不同，前者允许，后者破坏消费语义。禁止把同一独占指针 `std::move` 两次来模拟合法双输入；`mergeForest(a,a)` 包装层明确无操作，作者左式接口也有自合并保护。合法合并后 rhs 应为空，输出依次为1、2、4、5、7、8。
+
+</Answer>
+
+</Exercises>
+
+## 8. 名词解释
+
+<Glossary>
+  <GlossaryItem term="优先队列">
+    只保证能插入和取极值的一袋元素，不等于完整排好的表。
+  </GlossaryItem>
+  <GlossaryItem term="完全二叉树">
+    从上到下、从左到右填满的位置结构，允许最后一层不满。
+  </GlossaryItem>
+  <GlossaryItem term="堆序">
+    每条父子边方向一致：最小堆的父键不大于孩子。
+  </GlossaryItem>
+  <GlossaryItem term="上滤">把末端过小的新值沿父链向上移动。</GlossaryItem>
+  <GlossaryItem term="下滤">把过大的父键沿最小孩子路径向下移动。</GlossaryItem>
+  <GlossaryItem term="d 堆">
+    把每个节点的孩子上限从2改成 d 的连续数组堆。
+  </GlossaryItem>
+  <GlossaryItem term="左式堆">
+    通过短右路高效合并的堆，不要求整棵树很矮。
+  </GlossaryItem>
+  <GlossaryItem term="零路径长 npl">
+    离最近缺口有多远的递推指标；本章空树 −1，叶子0。
+  </GlossaryItem>
+  <GlossaryItem term="斜堆">
+    不靠 npl 决策、靠合并后交换孩子自调整的堆。
+  </GlossaryItem>
+  <GlossaryItem term="均摊">
+    整串操作总成本分摊后的界，不是每次的最坏界，也不是随机平均。
+  </GlossaryItem>
+  <GlossaryItem term="二项队列">
+    由不同秩的二项树组成的森林，合并像带进位加法。
+  </GlossaryItem>
+  <GlossaryItem term="秩 rank">
+    二项树的阶数，rank k 对应2的 k 次方个节点。
+  </GlossaryItem>
+  <GlossaryItem term="std::priority_queue">
+    标准库优先队列适配器，默认最大值在顶端。
+  </GlossaryItem>
+  <GlossaryItem term="严格弱序">
+    相等时不互相排在前面，且各次比较保持一致传递的规则。
+  </GlossaryItem>
+</Glossary>
+
+## 9. 来源与访问边界
+
+原书范围依据出版社第3版目录的第6章九节，不是拿目录当正文事实证据。本文没有原书全文访问或开放许可证声明；中文解释、C++17 实验与交互均为独立重写，不复制整本书或把配套代码当作本站授权。
+
+- [出版社目录与版本页](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)：只用于九组范围，复用本批主任务实际 GET 200 记录。
+- 作者第3版配套 [BinaryHeap.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/BinaryHeap.h)、[LeftistHeap.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/LeftistHeap.h)、[BinomialQueue.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/BinomialQueue.h)、[TestPQ.cpp](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/TestPQ.cpp)：核对1起始索引、下滤、npl、消费 rhs、按秩合并及 max/min 方向。公开可读不等于开放授权。
+- [C++17 草案 N4659：priority.queue](https://timsong-cpp.github.io/cppwp/n4659/priority.queue) 与 [heap operations](https://timsong-cpp.github.io/cppwp/n4659/alg.heap.operations)：核对适配器、严格弱序、push/pop 与线性 make_heap；这是标准草案的 HTML 镜像，不宣称官方发布的免费标准全文。
+- Sleator 与 Tarjan：[Self-Adjusting Heaps](https://www.cs.cmu.edu/~sleator/papers/Adjusting-Heaps.htm) 及作者站提供的 [论文 PDF](https://www.cs.cmu.edu/~sleator/papers/adjusting-heaps.pdf)：核对斜堆的交换规则、单次最坏与均摊界。
+
+以上作者资料与草案在2026-09-24的取证中实际取得响应并保存正文和哈希；另一次 cppreference 访问返回403，未作为已读事实依据。交互的移动端／桌面端实机验收仍由主任务进行，本章保持草稿。
+
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Data Structures and Algorithm Analysis in C++（第3版）"
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  sourceBasis="outline-only"
+/>

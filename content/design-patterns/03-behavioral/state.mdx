@@ -1,104 +1,434 @@
 ---
-title: "状态模式"
-type: A
+title: "状态模式：转换由谁提交"
+type: C
 section: "行为型模式"
 order: 6
-description: "状态模式：把与状态相关的行为交给状态对象，使对象在状态变化时表现随之改变"
+description: "用四状态订单合同区分行为委托与转换所有权，验证禁止边、失败不跃迁和副作用提交顺序。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
-draft: false
+officialUnitId: designpatterns-06
+draft: true
 ---
 
+import { StateTransitionOwnershipLab } from "@/components/mdx/design-patterns/state-transition-ownership-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+{/* 知识与图形决策：状态对象→行为代码；转换合同→四节点三条有向边；Context所有权→私有字段与唯一提交口；失败→禁止边叠加和执行轨迹；选型→简单条件/Strategy对照。独立组件，事件单步，无时间动画。 */}
 
-把所有状态和动作放进嵌套条件，会让新增状态触碰每条业务路径 因此，状态模式 的第一步不是画类图，而是写清 **订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+<Objectives>
+  - 能解释订单状态对象与 Context 各自拥有的责任，并逐格判断十二种状态/事件组合。
+  - 能修改实验的提交顺序，用断言暴露“扣款失败却已支付”，再恢复正确顺序。 -
+  能回答：一个“是否显示折扣”的条件，为什么不值得引入四个状态对象？
+</Objectives>
 
-在实验前先预测：沿 接收动作 → 读取状态 → 验证迁移 → 执行行为 → 替换状态 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+## 直觉：货物不能跳过收款工位
 
+在一条简化的出货线上，未收款的订单只能付款或撤销，收款后才能发货。如果工作人员只改了“已收款”标签，实际扣款却失败，下一个工位仍可能把货寄走。
 
-## 问题合同与术语
+我们需要的不只是几个名字，而是明确哪些路能走、谁检查通行条件、什么时候才换标签。每个人都能直接换标签，再多检查也容易漏掉一个入口。
 
-**意图。** 把与状态相关的行为交给状态对象，使对象在状态变化时表现随之改变。**适用边界。** 行为主要由离散状态决定，迁移规则稳定且分支已经难以局部推理。本页验收不变量是：**已取消订单不得进入已发货状态，任何拒绝都不能部分写入**。
+## 先预测，再操作有向图
 
-、、、、、
-## 官方目录结构的逐项解释
+猜一猜：在 Draft 选择 ship，当前位置会不会移动？先执行这个禁止事件；再重置，依次执行 pay、ship，观察允许边从两条变成一条，最后变成零条。**事件列表保留禁止动作，是为了检验拒绝，不是承诺它们都可执行。**
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+<StateTransitionOwnershipLab />
 
-### 模式名称与分类
+试一试故障：重置后选择“先提交状态”，勾选副作用失败，再执行 pay。你会看到 Paid 圆环与空回执冲突。关闭故障不会抹掉错误历史；重置才会建立新的沙盒订单。另一次重置后选“ship 绕过当前 State”，执行 ship，会出现图中本不存在的 Draft→Shipped 禁止线。
 
-“状态模式”归入行为型模式，名称只用于定位 把与状态相关的行为交给状态对象，使对象在状态变化时表现随之改变，不能替代问题证据。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+## 模式名称与分类
 
-### 意图
+**State 是行为型模式**
 
-“意图”回答模式想改变什么：把与状态相关的行为交给状态对象，使对象在状态变化时表现随之改变。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+本章的 <Term def="把随生命周期阶段变化的行为委托给当前状态对象的模式。">状态模式</Term>（State）将同一个请求交给不同状态对象处理。不是把字符串 `status` 改叫 State 就完成了模式：Draft 对 pay 给出扣款计划，Paid 对 pay 拒绝，行为确实随持有的对象改变。图中四个节点是运行时阶段，不是四个相互继承的类。
 
-### 别名
+## 意图
 
-“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+**把阶段规则放在一起**
 
-### 动机
+订单公开的是 `send(event)`，而不是 `setState(name)`。客户端发出业务请求，不选择“我想成为已发货”。Context 将请求委托给当前对象，因此付款规则可以在 Draft 内审阅；新增阶段时，不必在支付、取消、发货三个入口里各寻找一份状态判断。模式让行为按阶段组织，**不自动提供事务，也不自动保证规则正确**。
 
-“动机”从具体压力出发：把所有状态和动作放进嵌套条件，会让新增状态触碰每条业务路径。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+## 别名
 
-### 适用性
+**Objects for States**
 
-“适用性”要求同时满足：行为主要由离散状态决定，迁移规则稳定且分支已经难以局部推理。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+这个别名强调“用对象表达状态”。本页使用符合接口的对象字面量，而不强迫每个状态建一个类；TypeScript 的结构类型允许这么做。重要的是对象有 `decide` 行为，且 Context 真正委托它。只定义四个空类、仍在外部堆满全部判断，没有得到这种责任划分。
 
-### 结构
+## 动机
 
-“结构”由 OrderContext、OrderState、PaidState 以及它们之间的引用方向共同确定。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+**同一个事件，在不同阶段有不同意义**
 
-### 参与者
+这里的 <Term def="把当前状态和事件映射到允许的下一状态与动作；没有边就拒绝。">转换合同</Term> 是下面的表。箭头后的动作必须成功才能沿边移动；“拒绝”不会调用动作。页面的图和后面的十二格测试都以这张表为准。
 
-“参与者”逐一说明 OrderContext、OrderState、PaidState 谁保存状态、谁发起调用以及谁承担变化。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+| 当前状态  | pay                | ship                   | cancel                    |
+| --------- | ------------------ | ---------------------- | ------------------------- |
+| Draft     | Paid；capture 扣款 | 拒绝                   | Cancelled；close 关闭订单 |
+| Paid      | 拒绝，不重复扣款   | Shipped；dispatch 发货 | 拒绝，不偷偷退款          |
+| Shipped   | 拒绝               | 拒绝，不重复发货       | 拒绝                      |
+| Cancelled | 拒绝               | 拒绝，禁止复活         | 拒绝                      |
 
-### 协作
+这是一个有意缩小的订单合同：没有库存、金额、退款和退货；取消只适用于未付款订单；两个终态都没有出边。重复 pay 选择明确拒绝，而非返回上次成功。若产品要求支付后退款，应新增退款流程与其失败边界，不能只偷偷加一条 Paid→Cancelled 箭头。
 
-“协作”的运行协议是：Context 把动作委托给当前 State，状态对象决定结果和下一状态。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+## 适用性
 
-### 后果
+**阶段多不等于一定需要类**
 
-“后果”必须连同收益和成本记录：状态规则变得局部可读，但类数量增加，迁移权归属必须统一。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+当多个动作都依赖阶段，而且这些行为经常一起修改时，把它们放进状态对象能减少规则散落。相反，一个 `if (discountEnabled)` 只控制价格显示，没有生命周期、禁止边或转换副作用，直接保留条件更清楚。即便本页四状态合同，用枚举与转换表也足够；这里采用对象是为了练习委托和所有权，不宣称类数越多设计越好。
 
-### 实现
+判断成本要看“改一个阶段，要找到多少分散的业务入口”，而不是数代码里剩下几个 `if`。在实验的 `decide` 中，条件仍然存在，且有明确的局部含义。
 
-“实现”落地时遵守：显式枚举允许的迁移，把状态替换做成原子操作并记录拒绝原因。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+## 结构
 
-### 示例代码
+**Context 持有 State，不反向借出写权限**
 
-“示例代码”使用本页 TypeScript 最小切片验证“已取消订单不得进入已发货状态，任何拒绝都不能部分写入”，代码是独立教学示例。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+本页的 <Term def="保存订单的当前状态和业务数据，并接收外部业务请求的对象。">Context</Term> 是 `OrderContext`。它持有一个当前 <Term def="实现该阶段行为接口、决定请求是否可行的对象。">状态对象</Term>，并保存成功回执。图上的当前位置由这个引用决定，不由下拉框决定。
 
-### 已知应用
+引用关系是：客户端 → Context → 当前 State；State 的 `decide(event)` → 转换计划 → Context。计划只有目标与动作名，不是一个可随便写订单的回调。State 不持有 Context 引用，所以不能跳过统一提交口；Context 也不向客户端暴露替换当前对象的方法。这是本页选择的所有权协议，不是 State 模式唯一允许的实现。
 
-“已知应用”可在这些场景识别：订单、连接、播放器、工作流和协议解析器经常具有明确状态机，但名称相似不构成采用证据。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+## 参与者
 
-### 相关模式
+**四种状态行为和一个提交者**
 
-“相关模式”用于比较边界：策略由外部选择算法；状态通常依据内部迁移自动切换行为。 对“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”先保存基线，再改变一个条件；若出现“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”，就拒绝 状态模式 方案并回到更简单结构。
+这些状态对象没有订单专属的可变字段，可以被多个 Context 共享；订单回执不能放到共享 Paid 对象上，否则甲订单的付款会污染乙订单。`snapshot()` 返回回执副本，观察者改数组也不会改订单。后面的断言会同时检验隔离与副本边界。
 
-## 常见误区与反例
+| 参与者                   | 拥有什么                       | 不拥有什么                 |
+| ------------------------ | ------------------------------ | -------------------------- |
+| 客户端 / 实验控件        | 事件的发起权                   | 直接指定正常下一状态的权力 |
+| OrderState 接口          | `name` 和 `decide(event)` 合同 | 扣款、发货的外部能力       |
+| Draft / Paid 对象        | 本阶段允许的动作与目标         | 某张订单的金额或回执       |
+| Shipped / Cancelled 对象 | 终态拒绝行为                   | 返回草稿的暗门             |
+| OrderContext             | 当前引用、回执、执行和提交次序 | 自动解决跨服务一致性的能力 |
 
+## 协作
 
-另一个易错点是把结构相似当作语义相同。策略由外部选择算法；状态通常依据内部迁移自动切换行为；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+**决定目标与发布目标不是同一件事**
 
-## 术语表
+沿图上 Draft→Paid 的 pay 边，正确次序是：接收事件 → 当前 State 选择计划 → 执行动作 → 获得成功回执 → Context 替换状态引用。我们把扣款、发货等会改变业务世界的操作称为 <Term def="除返回值外，对订单记录或外部系统产生的可观察改变。">副作用</Term>。
 
+实验把副作用缩成同步的内存回执：capture、dispatch、close。勾选失败表示**在写入前已确定失败**，不是“请求已到达支付商但响应丢了”。安全模式下，没有计划就直接拒绝；动作失败就保留原状态和原回执。诊断轨迹可以增加，但业务数据不能部分写入。请对照实验输出中 `receipt` 与 `commit` 的先后，而不只看最后一个状态名。
+
+## 后果
+
+**局部行为更清楚，整体图仍要维护**
+
+收益是阶段相关规则集中，Context 的提交顺序统一，可复用无订单数据的状态对象。代价是多了接口、对象和跳转阅读；某个 State 提议目标时仍然耦合到其他状态名，所以状态对象不是互不相干的策略包。增加一个状态必须同时审阅转换表、数据不变量和失败处理。
+
+状态模式还不能让远程扣款与数据库写入自然成为一个原子操作。若扣款成功后进程崩溃，内存中的“先动作再提交”仍会丢失状态；生产系统需要持久化操作记录、请求去重、结果查询与恢复协议。Stripe 的幂等请求文档说明相同 key 的重试如何返回已记录的结果，包括某些失败结果；它并不替你的订单数据库提交事务。本页不模拟这一分布式边界。
+
+## 实现
+
+**保留一个入口，给反例留清晰标记**
+
+`#state` 与 `#receipts` 是 JavaScript 私有字段，外部不能通过普通属性赋值替换它们；TypeScript 的接口只检查形状，不代表运行时授权。`send` 中的 `fault` 参数**只为教学注入**：默认 safe 才是合同实现，生产接口应该删除两条故障分支，而不是把开关暴露给调用者。
+
+下面所有 TypeScript 代码块按出现顺序拼成一个 `state-example.ts`，包括练习答案；同一个类的续段要直接拼接，不要分别执行。用已有 TypeScript 编译器以 ES2022 / CommonJS 编译后运行，无网络、无第三方包。图组件使用相同的状态对象和提交实现。
+
+## 示例代码
+
+**可执行合同而不是状态标签**
+
+片段 1/6：固定事件与计划接口。状态对象返回 `null` 表示拒绝；没有“返回自身等于成功”的隐含约定。
+
+```ts
+export type StateName = "Draft" | "Paid" | "Shipped" | "Cancelled";
+export type OrderEvent = "pay" | "ship" | "cancel";
+export type Effect = "capture" | "dispatch" | "close";
+export type Fault = "safe" | "commit-first" | "bypass";
+export type Plan = Readonly<{ next: StateName; effect: Effect }>;
+export type OrderState = Readonly<{
+  name: StateName;
+  decide: (event: OrderEvent) => Plan | null;
+}>;
+```
+
+片段 2/6：所有合法边都来自这些行为对象。终态收到任何事件都拒绝，不会再产生回执。
+
+```ts
+export const orderStates: Record<StateName, OrderState> = {
+  Draft: {
+    name: "Draft",
+    decide: (event) =>
+      event === "pay"
+        ? { next: "Paid", effect: "capture" }
+        : event === "cancel"
+          ? { next: "Cancelled", effect: "close" }
+          : null,
+  },
+  Paid: {
+    name: "Paid",
+    decide: (event) =>
+      event === "ship" ? { next: "Shipped", effect: "dispatch" } : null,
+  },
+  Shipped: { name: "Shipped", decide: () => null },
+  Cancelled: { name: "Cancelled", decide: () => null },
+};
+```
+
+片段 3/6：Context 保存私有字段，快照隔离数组。**这里类尚未结束，接着拼片段 4。**
+
+```ts
+export type Snapshot = { state: StateName; receipts: Effect[] };
+export type Attempt = {
+  from: StateName;
+  to: StateName;
+  event: OrderEvent;
+  status: "committed" | "rejected" | "failed";
+  trace: string[];
+};
+
+export class OrderContext {
+  #state: OrderState = orderStates.Draft;
+  #receipts: Effect[] = [];
+  snapshot(): Snapshot {
+    return { state: this.#state.name, receipts: [...this.#receipts] };
+  }
+```
+
+片段 4/6：接续类中的 `send`；先委托，再拒绝。`bypass` 是坏例：直接猜一个 Shipped 目标，跳过当前对象的授权。**方法的提交部分在下一段。**
+
+```ts
+  send(event: OrderEvent, fail = false, fault: Fault = "safe"): Attempt {
+    const from = this.#state.name;
+    const trace = [`guard:${from}/${event}`];
+    const plan =
+      fault === "bypass" && event === "ship"
+        ? { next: "Shipped" as const, effect: "dispatch" as const }
+        : this.#state.decide(event);
+    const finish = (status: Attempt["status"]): Attempt => ({
+      from,
+      to: this.#state.name,
+      event,
+      status,
+      trace,
+    });
+    if (!plan) {
+      trace.push("reject:no-edge");
+      return finish("rejected");
+    }
+```
+
+片段 5/6：接续同一方法并结束类。正常路径只在回执写入后提交；坏例把 `commit()` 提前。`fail` 明确发生在任何回执写入前。
+
+```ts
+    const commit = () => {
+      this.#state = orderStates[plan.next];
+      trace.push(`commit:${plan.next}`);
+    };
+    if (fault === "commit-first") commit();
+    trace.push(`effect:${plan.effect}`);
+    if (fail) {
+      trace.push("fail:before-write");
+      return finish("failed");
+    }
+    this.#receipts.push(plan.effect);
+    trace.push(`receipt:${plan.effect}`);
+    if (fault !== "commit-first") commit();
+    return finish("committed");
+  }
+}
+```
+
+片段 6/6：不变量不只检查标签。Shipped 必须恰有 capture、dispatch 两个有序回执；Paid 无 capture 即为伪状态。
+
+```ts
+export function orderConsistent({ state, receipts }: Snapshot): boolean {
+  const expected: Record<StateName, Effect[]> = {
+    Draft: [],
+    Paid: ["capture"],
+    Shipped: ["capture", "dispatch"],
+    Cancelled: ["close"],
+  };
+  return JSON.stringify(receipts) === JSON.stringify(expected[state]);
+}
+```
+
+先执行正确流程和确定失败后的重试。断言检查状态、回执与提交顺序，而不是只打印“成功”。
+
+```ts
+function check(ok: boolean, message: string): void {
+  if (!ok) throw new Error(message);
+}
+const good = new OrderContext();
+const failedPay = good.send("pay", true);
+check(failedPay.status === "failed", "支付应明确失败");
+check(good.snapshot().state === "Draft", "失败不跃迁");
+check(good.snapshot().receipts.length === 0, "失败无回执");
+const paid = good.send("pay");
+check(
+  paid.trace.join("|") ===
+    "guard:Draft/pay|effect:capture|receipt:capture|commit:Paid",
+  "先副作用，再提交",
+);
+check(good.send("pay").status === "rejected", "拒绝重复支付");
+check(good.send("ship").status === "committed", "已支付可发货");
+check(orderConsistent(good.snapshot()), "发货回执正确");
+```
+
+再覆盖终态与两种独立的故障。此处断言预期坏例**不满足**不变量，因此运行通过不是认可坏实现。
+
+```ts
+const cancelled = new OrderContext();
+cancelled.send("cancel");
+const before = JSON.stringify(cancelled.snapshot());
+check(cancelled.send("ship").status === "rejected", "取消不能复活");
+check(JSON.stringify(cancelled.snapshot()) === before, "拒绝无业务写入");
+const wrongOrder = new OrderContext();
+wrongOrder.send("pay", true, "commit-first");
+check(wrongOrder.snapshot().state === "Paid", "坏例先改了状态");
+check(!orderConsistent(wrongOrder.snapshot()), "空回执揭穿假 Paid");
+const wrongEdge = new OrderContext();
+wrongEdge.send("ship", false, "bypass");
+check(!orderConsistent(wrongEdge.snapshot()), "未付款不能发货");
+const isolated = new OrderContext();
+isolated.snapshot().receipts.push("capture");
+check(isolated.snapshot().receipts.length === 0, "快照是副本");
+check(isolated.snapshot().state === "Draft", "订单实例隔离");
+```
+
+## 已知应用
+
+**先确认状态机，再确认对象实现**
+
+[W3C SCXML](https://www.w3.org/TR/scxml/) 的 Core Constructs 与 Selecting and Executing Transitions 给出真实的事件驱动状态机语义：从活动状态寻找匹配转换，进入目标状态，并规定退出、转换动作、进入动作的顺序。它说明“活动位置、事件、边、动作次序”是可检验的合同，不是任意画箭头。
+
+SCXML 是状态机表示与执行标准，**不能据此断言某个 SCXML 引擎内部采用 GoF State 类结构**。本章订单是原创教学应用，也不是原书已知应用的移植；本页的“失败不跃迁”是订单合同，不能冒称为 SCXML 所有错误处理的通用规则。实际评审播放器或连接管理器时，也应先找到各阶段的行为委托，才能称其采用了状态模式。
+
+## 相关模式
+
+**State 与 Strategy 的分界**
+
+两者都可以是“Context 持有接口对象”，所以不能只看类图来分类。策略也可以由程序动态切换；真正的区别不是有没有 setter，而是改变对象表达的是**算法选择**还是**生命周期及其行为限制**。本页仍有条件分支，模式价值是责任集中与可验证的转换，不是删除所有 `if`。
+
+| 问题               | 本页 State                           | 运费 Strategy                        |
+| ------------------ | ------------------------------------ | ------------------------------------ |
+| 谁选择当前对象     | Context 根据业务事件与转换合同提交   | 调用者或配置选择计价算法             |
+| 对象变化意味着什么 | 订单进入新阶段，未来可接受事件改变   | 计算方式换了，订单仍处于同一阶段     |
+| 是否必须定义禁止边 | 本合同必须，例如 Cancelled 禁止 ship | 算法互换通常不带生命周期图           |
+| 组合是否合理       | Paid 阶段可调用一个运费策略          | 策略本身不应该偷偷把订单改成 Shipped |
+
+## 常见误区：观察、解释、修正
+
+<Callout type="trap" title="标签先行，业务失败">
+  **现象 →** 实验先提交 pay 后失败，图停在 Paid，回执却为空。 **原因 →**
+  把状态发布放在副作用成功之前。 **修法 →** 让 State 只返回计划，Context
+  在收到成功回执后提交；重置后以 safe 重跑。
+</Callout>
+
+<Callout type="trap" title="能发事件就能跳状态">
+  **现象 →** Draft 直接 ship，绕过模式画出禁止对角线。 **原因 →**
+  调用者猜目标，没询问当前状态对象。 **修法 →** 禁止公开 setState；以当前 State
+  决定允许边，拒绝请求不得执行副作用。
+</Callout>
+
+<Callout type="trap" title="把简单条件升级成对象家族">
+  **现象 →** 开关只决定显示折扣，却增加状态类、工厂与转换服务。 **原因 →**
+  把消灭 if 当目标，没有生命周期变化压力。 **修法 →**
+  保留布尔条件；出现成组的阶段行为与禁止转换时再评估。
+</Callout>
+
+## 小结
+
+- 状态对象决定允许计划，Context 统一执行与提交。
+- 合法边与成功回执一起约束状态，失败不得抢跑。
+- 没有生命周期变化压力，简单条件通常更合适。
 
 ## 练习与答案
 
+<Exercises>
 
-## 本章小结
+1. **改代码题：修复提前提交。** 在片段 5 的实验副本中把 `commit-first` 那次 `commit()` 移到成功回执之后，只保留一次提交。目标是失败后仍为 Draft，取消后也不能发货。不要靠捕获异常后强制改回 Draft 来掩盖部分成功。
 
-状态模式 把“订单在待支付、已支付、已发货和已取消之间转换，非法动作必须被拒绝”收敛为 OrderContext、OrderState、PaidState 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“只有布尔开关或极少分支时，状态类会掩盖简单逻辑”这一反例、重置实验，并根据 状态规则变得局部可读，但类数量增加，迁移权归属必须统一 接受或拒绝方案。
+<Answer>
 
-## 前后导航
+删去提前 `commit()`，把末尾条件提交改为无条件 `commit()`；同时在生产入口移除 `fault` 分支，始终使用 `this.#state.decide(event)`。在本页可运行版本中，默认 safe 就是修复路径。以下追加断言给出修复验收；若对该路径故意提前提交，第一条状态断言就失败。
 
-- [上一页：命令模式](/learn/design-patterns/03-behavioral/command)
-- [下一页：单例模式](/learn/design-patterns/01-creational/singleton)
+```ts
+const repaired = new OrderContext();
+repaired.send("pay", true);
+check(repaired.snapshot().state === "Draft", "修复：失败不发布 Paid");
+check(orderConsistent(repaired.snapshot()), "修复：保留一致回执");
+repaired.send("cancel");
+check(repaired.send("ship").status === "rejected", "修复：禁止复活");
+check(orderConsistent(repaired.snapshot()), "修复：终态保持一致");
+```
 
+</Answer>
+
+2. **边界题：穷举十二格。** 对四种可达状态各发送 pay、ship、cancel；多少种应该成功？再对允许边注入写前失败，解释状态和回执该保留什么。用真实的前置事件到达状态，不要暴露 setter 造测试数据。
+
+<Answer>
+
+十二格中只有三种成功。下面每格新建订单，再用合法前缀到达目标状态；没有共享上一次试验的副作用。对于三条允许边，开启写前失败后的快照必须等于调用前快照；关闭失败可安全重试。终态六格全部拒绝。可执行的十二格验收如下。
+
+```ts
+const prefixes: Record<StateName, OrderEvent[]> = {
+  Draft: [],
+  Paid: ["pay"],
+  Shipped: ["pay", "ship"],
+  Cancelled: ["cancel"],
+};
+const expectedEdges = new Set(["Draft/pay", "Draft/cancel", "Paid/ship"]);
+for (const state of Object.keys(prefixes) as StateName[]) {
+  for (const event of ["pay", "ship", "cancel"] as OrderEvent[]) {
+    const order = new OrderContext();
+    prefixes[state].forEach((e) => order.send(e));
+    const saved = JSON.stringify(order.snapshot());
+    const result = order.send(event);
+    const allowed = expectedEdges.has(`${state}/${event}`);
+    check((result.status === "committed") === allowed, `${state}/${event}`);
+    check(orderConsistent(order.snapshot()), "每格保持数据不变量");
+    if (!allowed)
+      check(JSON.stringify(order.snapshot()) === saved, "拒绝不写入");
+  }
+}
+```
+
+</Answer>
+
+3. **选型题：购物车想切换“按重量”与“按距离”运费算法，且多了一个折扣显示开关。** 是否都应该成为新的订单状态？说明选择方、需要的边，以及将它们混进四节点图的代价。
+
+<Answer>
+
+两个运费算法是可替换策略，由配送配置或调用者选择；它们不意味着订单从 Draft 进入 Paid，不该制造新的生命周期边。折扣显示用简单条件即可。把两者乘进订单阶段会产生许多只有标签不同的组合节点，让真正的禁止边更难检查。只有出现如“等待人工审核时禁止扣款”的新业务阶段，才需要讨论扩展订单状态图。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="状态模式">
+    让订单把当前阶段的请求交给对应行为对象，而非让每个入口重新解释全部阶段。
+  </GlossaryItem>
+  <GlossaryItem term="转换合同">
+    明确列出从哪儿、收到什么事件、做什么动作后能去哪儿；没列出的边一律拒绝。
+  </GlossaryItem>
+  <GlossaryItem term="Context">
+    替具体订单保管状态引用和数据的主体，也是本页唯一有权提交新状态的位置。
+  </GlossaryItem>
+  <GlossaryItem term="状态对象">
+    负责一个阶段的行为；本页仅提出计划，不代替 Context 写订单或扣款。
+  </GlossaryItem>
+  <GlossaryItem term="副作用">
+    会改变业务世界的动作；本页用成功回执模拟扣款、发货和关闭，不接真实支付。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与范围
+
+- [GoF 出版社书目与公开目录](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)：核对书名、作者、1994 年出版信息及行为型章节范围。此次可见公开样章列出 Abstract Factory、Adapter、Chain of Responsibility，**未取得 State 全文**；正式单元与十三项描述结构按本库 manifest 的 designpatterns-06 对齐，不声称十三项来自此次书目页全文。
+- [TypeScript 官方类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)：核对接口形状检查、实例字段与 JavaScript 私有字段；不能由类型检查推出事务保证。
+- [W3C SCXML Recommendation](https://www.w3.org/TR/scxml/)：核对活动状态、事件匹配、目标与动作执行次序的状态机概念，不当成 GoF 正文或本订单事务合同的出处。
+- [Stripe 幂等请求](https://docs.stripe.com/api/idempotent_requests)：核对相同 key 的结果重放与边界，用来说明远程副作用为何超出本页同步示例。
+
+本文为独立中文解释、原创订单代码和图。GoF 原书受版权保护；其他模式的公开样章不构成本章全文授权。十三项描述是讲解组织方式，不是对未访问原文的翻译或复现。
+
+<Attribution
+  sourceUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+  workTitle="Design Patterns: Elements of Reusable Object-Oriented Software — Gamma、Helm、Johnson、Vlissides"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

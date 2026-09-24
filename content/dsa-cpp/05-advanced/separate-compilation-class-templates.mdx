@@ -3,202 +3,433 @@ title: "附录A 类模板的分离编译：定义可见性与实例化归属"
 type: C
 section: "高级数据结构与附录"
 order: 12
-description: "依据第3版官方MemoryCell三文件示例，重建类模板跨翻译单元时的定义可见性、隐式与显式实例化、链接诊断及发布边界。"
+description: "用三个真实 C++17 翻译单元复现模板链接缺口，对比包含 .tpp 与有限类型显式实例化，并追踪具体成员由谁提供。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: dsaa3-a
+draft: true
+qualityVersion: 2
 ---
 
+import { DsaSeparateCompilationClassTemplatesLinkLab } from "@/components/mdx/dsa-cpp/dsa-separate-compilation-class-templates-link-lab";
 
-## 从“两个源文件都编译成功，为何最后仍失败”开始
+{/* 知识与图示决策：翻译单元/分离编译→图①分区与逐文件编译；声明/定义可见性→定义菱形与 Cell.h/Cell.tpp；隐式实例化/包含模型→类型请求到成员端点；显式实例化/extern template→实现单元生成与有限类型清单；链接符号/ODR/ABI边界→图②调用解析及真实负例。术语均闭合到 Glossary。本附录按以上五组组织，不声称只有五个术语；不展开模块、特化及二进制发布教程。 */}
 
-类模板的分离编译（，separate compilation of class templates）最容易制造一种错觉：`MemoryCell.cpp` 能编译，`TestMemoryCell.cpp` 也能编译，因此程序应该完整。实际上两次编译只证明各自translation unit内部成立；链接器还要找到 `MemoryCell<int>` 和 `MemoryCell<std::string>` 的具体成员定义。
+## 学习目标
 
-先预测：头文件声明 `read`，实现文件定义 `read`，测试文件调用 `MemoryCell<int>::read`，三者都在同一项目目录中，编译器会不会自动跨文件寻找模板定义？不会。每个源文件先独立预处理，编译器只看该translation unit包含进来的tokens；项目结构与文件名不会建立语义上的“自动查找实现”关系。
+<Objectives>
 
-第3版附录 A 的标题是 **Separate Compilation Of Class Templates**。作者公开的官方示例正好由 `MemoryCell.h`、`MemoryCell.cpp`、`TestMemoryCell.cpp` 三个文件构成：头文件只有class template声明，实现文件只有generic member definitions，测试文件使用 `int` 和 `string`。这组最小反例把问题定位在definition visibility与instantiation ownership，而不是数据结构算法本身。
+- 能解释为何三个源文件各自编译成功，程序仍缺少具体类型的成员定义。
+- 能修改真实 C++17 多文件程序，在包含定义与显式实例化两种方案之间切换，并执行验证。
+- 能回答：库只显式生成 `Cell<int>` 时，改用 `Cell<double>` 会在哪一步失败，怎样修复？
 
+</Objectives>
 
-## A.1 普通类直觉在哪一步失效
+## 直觉：图纸不等于成品
 
-普通非模板类可以把member declaration放在头文件，把唯一member definition放入 `.cpp`。Consumer编译时知道函数signature，implementation translation unit则无条件生成那一个确定函数的machine code，链接器最后把调用与定义连接。
+工厂把通用图纸放进仓库，不会自动造出所有尺寸的零件。生产还需要一张写明尺寸的订单；而装配车间即使收到订单，拿不到图纸也不能自己制造。
 
-Class template不同。`MemoryCell<Object>::read` 不是一个函数，而是一族潜在函数；在 `Object` 未确定前，compiler既不知道完整symbol，也不能检查所有依赖 `Object` 的operations。模板定义本质上是生成具体实体的recipe。模板声明与定义可见性（，template declaration and definition visibility）决定哪个translation unit有能力执行这份recipe。
+把程序拆成文件也有同样的问题：有的文件拿到做法却没有具体要求，有的文件知道要什么却拿不到做法。最后装配时才发现没有零件。本章要让“谁能造、谁负责造、谁收到成品”都有据可查。
 
-官方 `MemoryCell.h` 提供data member与三个member declarations：
+## 1. 分离编译：边界不是文件夹，而是输入
+
+<Term def="一个源文件连同它包含的头文件，经预处理后组成的一份编译输入。">
+  翻译单元
+</Term>
+（translation unit，简称 TU）是编译器处理的边界。`main.cpp` 包含
+`Cell.h`，不意味着编译器会搜索旁边的 `Cell.cpp`。`#include`
+会把指定文件的内容带入当前输入；文件夹里“存在”某份定义则不会。
+
+<Term def="先分别编译各个翻译单元，再把生成的目标文件链接成程序。">
+  分离编译
+</Term>
+让修改与编译可以按文件组织。`clang++ -c` 生成的
+<Term def="保存机器代码、数据以及待解析引用的编译产物，例如 main.o。">
+  目标文件
+</Term>
+还不是完整程序。链接阶段才把调用引用与可用定义匹配。看下方实验图①：三个分区可以独立完成编译，但图②的依赖仍可能全部断开。
+
+## 2. 有类的定义，不等于有成员函数的定义
+
+<Term def="让编译器知道一个实体的名字、类型或接口，但不一定给出其实现。">声明</Term>例如 `T read() const;`，足以检查调用形式。<Term def="给出实体的完整内容，例如类的成员布局或函数体。">定义</Term>则要分清对象：本章的 `Cell.h` **已经定义了类模板的布局**，却只声明构造、读取、写入三个成员。所谓“声明头文件”，只是说这些成员没有函数体，不是只有 `template<class T> class Cell;` 这一条不完整类声明。
+
+分析模板声明与定义可见性时，要分别检查类布局和成员函数体：调用方可以创建布局已知的 `Cell<int>`，并留下对构造函数的调用；这不证明构造函数已经有可链接的实现。把 `Cell.tpp` 包含进去才会令成员定义可见。实验图①菱形专门表示**成员函数体**是否可见，不表示类型名字是否已声明。
+
+## 3. 隐式实例化：定义和具体请求要相遇
+
+<Term def="编译器因某个实际使用需要，从模板产生具体类型或成员的过程。">隐式实例化</Term>不是“把模板转换成所有类型”。请求 `Cell<int>::read()` 与请求 `Cell<double>::read()` 是不同需求。类模板被使用时，并不必然生成其所有成员函数；本实验有意调用三个成员，使它们都成为需要解释的对象。
+
+<Term def="把模板成员定义放入头文件，或由头文件包含实现文件，让使用者看到定义。">
+  包含模型
+</Term>
+让定义与请求在调用方相遇。`.tpp`
+只是约定的文件扩展名，没有自动编译或自动查找功能；把它的内容直接放在头文件末尾，在本例中也是同一种方案。实验切换“头文件包含
+.tpp”，会给 `main.cpp`、`peer.cpp` 都补上生成边，而不是只改一句结果文字。
+
+## 4. 显式实例化：生成清单是一份有限承诺
+
+<Term def="用 template class Cell<int>; 这类语句，要求生成指定具体类型的模板实体。">显式实例化定义</Term>可以集中放在实现文件。对本例，在成员定义之后写 `template class Cell<int>;`，便让该 TU 负责生成这个具体类型的相关成员。类的显式实例化定义只覆盖在该点已定义、符合规则的成员；不能把它提到所有成员函数体之前，再假设后面的成员自动补齐。
+
+<Term def="用 extern template 声明某个实例由程序中别处提供，抑制相应的隐式实例化。">显式实例化声明</Term>例如 `extern template class Cell<int>;`，不是另一个生成命令。本例没有内联成员，调用方看到它后把 `int` 的生成责任交出去；它既不会导入隐藏的函数体，也不会让类的布局信息凭空消失。这里即使删掉这条声明，调用方依然看不到成员定义，所以不能靠删 `extern` 修好缺失的实现。
+
+显式清单只有 `int` 时，`double` 不在承诺内。实验图②按“类型 + 成员”精确匹配：有 `int` 的定义，不会替 `double` 解围。具体类型清单不是“生成所有未来类型”的捷径。
+
+## 5. 先预测，再看符号依赖
+
+<Term def="链接时用来匹配实体定义与引用的名称；本例还必须区分模板实参类型。">
+  链接符号
+</Term>
+在真实工具中可能有平台特定的编码。图中只用 C、R、W 表示构造、`read`、`write`
+三个成员，保留“类型不能串用”的关键约束，不模拟真实符号拼写。
+
+猜一猜：先选“显式实例化”、请求 `int`，再把类型改成 `double`，哪条提供关系会消失？把显式清单增加 `double` 能否恢复？保持这个清单，再打开“漏链 Cell.o”，有生成记录是否仍足够？
+
+<DsaSeparateCompilationClassTemplatesLinkLab />
+
+图①：菱形是成员定义可见性，弧线是定义与类型请求相遇后产生的成员，三个圆是具体成员组。图②：两份调用方各需要三个成员，实线表示存在同类型提供方，虚线断口表示缺失。漏链故障不会抹掉图①已经生成的成员，却会将它们移出图②候选集。
+
+这是只有 `int`、`double` 和三个成员的**教学模型，不是真实编译器**。包含模式的多个合法模板定义在图中可有多个提供方，图②只选择一个显示；这不是在承诺真实链接器选择哪份代码。下节使用真正的 `clang++`，单独核验编译、链接和运行，不把 UI 输出当编译证据。
+
+## 6. 实验：保存六个文件，再逐个编译
+
+下面是独立编写的完整 C++17 小实验，不是原书源码摘录。新建空目录，将每个文件块按首行注释中的文件名保存；不要把几个 `.cpp` 拼成一个大文件。宏 `LAB_MODE` 取 `0`（隐藏定义）、`1`（包含定义）、`2`（显式生成）；每个 TU 必须使用相同的值。
+
+### 6.1 类布局与成员声明：Cell.h
+
+头文件保护防止**同一 TU 内**重复包含。模式 1 把 `.tpp` 带给每个调用方，模式 2 则声明 `int` 的生成归属。
 
 ```cpp
-#ifndef MEMORY_CELL_H
-#define MEMORY_CELL_H
-
-template <typename Object>
-class MemoryCell {
+// file: Cell.h
+#ifndef LAB_CELL_H
+#define LAB_CELL_H
+#ifndef LAB_MODE
+#define LAB_MODE 0
+#endif
+template <class T>
+class Cell {
 public:
-    explicit MemoryCell(const Object& initialValue = Object());
-    const Object& read() const;
-    void write(const Object& x);
-
+    explicit Cell(T value);
+    T read() const;
+    void write(T value);
 private:
-    Object storedValue;
+    T value_;
 };
-
+#if LAB_MODE == 1
+#include "Cell.tpp"
+#elif LAB_MODE == 2
+extern template class Cell<int>;
+#endif
 #endif
 ```
 
-这足以让consumer知道 `MemoryCell<int>` 的object layout、constructor signature和member calls是否合法，却不包含constructor、`read`、`write` 的body。实例化点（，point of instantiation）能看见多少信息，取决于预处理后的单个translation unit，而不是仓库里有哪些文件。
+### 6.2 成员定义：Cell.tpp
 
-## A.2 官方三文件示例如何走到链接错误
-
-官方 `MemoryCell.cpp` 包含头文件并给出generic definitions：
+这里的 `T` 尚不是具体机器类型。文件只通过 `Cell.h` 或 `Cell.cpp` 包含，**不要单独编译 `.tpp`**。
 
 ```cpp
-#include "MemoryCell.h"
+// file: Cell.tpp
+template <class T>
+Cell<T>::Cell(T value) : value_(value) {}
+template <class T>
+T Cell<T>::read() const { return value_; }
+template <class T>
+void Cell<T>::write(T value) { value_ = value; }
+```
 
-template <typename Object>
-MemoryCell<Object>::MemoryCell(const Object& initialValue)
-    : storedValue(initialValue) {}
+### 6.3 生产方：Cell.cpp
 
-template <typename Object>
-const Object& MemoryCell<Object>::read() const {
-    return storedValue;
-}
+模式 0 只有定义、没有具体类型请求；模式 1 已从头文件获得定义，不重复包含；模式 2 在定义可见之后要求生成 `int`。
 
-template <typename Object>
-void MemoryCell<Object>::write(const Object& x) {
-    storedValue = x;
+```cpp
+// file: Cell.cpp
+#include "Cell.h"
+#if LAB_MODE != 1
+#include "Cell.tpp"
+#endif
+#if LAB_MODE == 2
+template class Cell<int>;
+#endif
+```
+
+### 6.4 两个调用方共享同一个类型开关：Request.h
+
+`REQUEST_DOUBLE` 只决定本次调用类型。`peer_value` 是一个普通函数，其签名在两个调用方中保持一致，避免把不相关的类型冲突混进模板实验。
+
+```cpp
+// file: Request.h
+#ifndef LAB_REQUEST_H
+#define LAB_REQUEST_H
+#ifndef REQUEST_DOUBLE
+#define REQUEST_DOUBLE 0
+#endif
+#if REQUEST_DOUBLE
+using Request = double;
+#else
+using Request = int;
+#endif
+Request peer_value();
+#endif
+```
+
+第一个调用方也使用全部三个成员，返回 `7` 或 `7.5`。整数转换是有意的、范围内的值转换。
+
+```cpp
+// file: peer.cpp
+#include "Cell.h"
+#include "Request.h"
+Request peer_value() {
+    Cell<Request> cell(0);
+    cell.write(static_cast<Request>(7.5));
+    return cell.read();
 }
 ```
 
-单独编译此文件时，compiler看到了recipe，却没有任何具体 `Object` 请求。它可以完整解析non-dependent syntax，但没有理由替未来无限多种types生成members。于是 `MemoryCell.o` 可能不含测试程序需要的具体symbols。
-
-测试文件则只包含头文件：
+主调用方先验证构造值，再验证写入值；运行成功不只是“打印一行”。没有禁用断言，也没有执行未定义行为。
 
 ```cpp
+// file: main.cpp
+#include "Cell.h"
+#include "Request.h"
+#include <cassert>
 #include <iostream>
-#include <string>
-#include "MemoryCell.h"
-
 int main() {
-    MemoryCell<int> m1;
-    MemoryCell<std::string> m2("hello");
-    m1.write(37);
-    m2.write(m2.read() + " world");
-    std::cout << m1.read() << '\n' << m2.read() << '\n';
+    Cell<Request> cell(1);
+    assert(cell.read() == Request{1});
+    cell.write(peer_value());
+    assert(cell.read() == static_cast<Request>(7.5));
+    std::cout << cell.read() << '\n';
 }
 ```
 
-这里 `int` 和 `std::string` 已确定，consumer可以形成class layout并生成对concrete members的调用；但member bodies不可见，所以它不能隐式生成这些bodies。两个object files都能产生，最后才暴露符号缺口：
+### 6.5 先单独编译，后单独链接
+
+再保存 `build.sh`，用 Bash 执行。参数依次为模式、是否请求 double、是否漏链生产方、生产方源文件。每次清理的只有实验目录中的三个 `.o` 与 `app`，请勿在已有项目目录中运行。脚本在任一编译步骤失败时立即停止；正常情况下最后一条命令的状态就是链接状态。
 
 ```bash
-c++ -std=c++17 -c MemoryCell.cpp
-c++ -std=c++17 -c TestMemoryCell.cpp
-c++ MemoryCell.o TestMemoryCell.o -o test-memory-cell
-# undefined reference to MemoryCell<int>::MemoryCell(...)
-# undefined reference to MemoryCell<std::string>::read() const
+# file: build.sh
+#!/usr/bin/env bash
+set -eu
+mode=${1:-0}
+double=${2:-0}
+omit=${3:-0}
+producer=${4:-Cell.cpp}
+flags=(-std=c++17 -O0 -Wall -Wextra -pedantic-errors)
+flags+=(-DLAB_MODE="$mode" -DREQUEST_DOUBLE="$double")
+rm -f main.o peer.o Cell.o app
+clang++ "${flags[@]}" -c main.cpp -o main.o
+clang++ "${flags[@]}" -c peer.cpp -o peer.o
+clang++ "${flags[@]}" -c "$producer" -o Cell.o
+objects=(main.o peer.o)
+if [ "$omit" = 0 ]; then objects+=(Cell.o); fi
+clang++ "${objects[@]}" -o app
 ```
 
-链接期未定义引用（）说明declaration足够、调用已形成，却没有translation unit负责发出所需concrete definition。它与“compiler不认识类型或语法”不是同一类失败。
-
-
-## A.3 方案一：包含模型让consumer完成隐式实例化
-
-隐式实例化（）最常见的组织方式是让完整模板定义随头文件可见。可以直接把短members写在class definition内，也可以将definitions放入 `.tpp` 或 `.ipp`，然后在头文件末尾包含它：
-
-```cpp
-// MemoryCell.h
-template <typename Object>
-class MemoryCell {
-public:
-    explicit MemoryCell(const Object& initialValue = Object());
-    const Object& read() const;
-    void write(const Object& x);
-private:
-    Object storedValue;
-};
-
-#include "MemoryCell.tpp"
-```
-
-```cpp
-// MemoryCell.tpp
-template <typename Object>
-MemoryCell<Object>::MemoryCell(const Object& value)
-    : storedValue(value) {}
-
-template <typename Object>
-const Object& MemoryCell<Object>::read() const {
-    return storedValue;
-}
-
-template <typename Object>
-void MemoryCell<Object>::write(const Object& value) {
-    storedValue = value;
-}
-```
-
-包含模型（）保持type set开放：只要 `Object` 满足被实例化member实际要求，consumer可使用新type而无需修改library source。多个translation units可能都生成同一specialization，toolchain通常以template linkage与COMDAT-style folding合并；标准层面的前提仍是各处definition token一致、name lookup一致，不能依赖不同宏让同一template拥有不同bodies。
-
-它的成本是header依赖和编译时间增加，implementation changes会触发更多consumer重编译；收益是optimizer可见bodies，新增type无需library owner预先登记。`.tpp` 只是组织文件，不是独立编译单元：若它只单独参与build却没有被header包含，问题仍未解决。
-
-
-## A.4 方案二：显式实例化让library拥有代码生成
-
-显式实例化（，explicit instantiation）适合library只承诺有限types，或希望把code generation集中在一个translation unit。把下列definitions写在官方 `MemoryCell.cpp` 的generic member definitions之后：
-
-```cpp
-#include <string>
-
-template class MemoryCell<int>;
-template class MemoryCell<std::string>;
-```
-
-`template class MemoryCell<int>;` 是explicit instantiation definition：当前translation unit同时看见generic definitions和concrete argument，因此负责发出可链接成员。Consumer仍只需declarations，但支持范围变成closed set。若测试程序新增 `MemoryCell<double>` 而library未增加对应line并重编译，就会再次出现undefined reference。
-
-显式实例化可以细到单个member，例如只生成 `template const int& MemoryCell<int>::read() const;`。这在某些members对 `Object` 有额外operations要求时很重要：实例化整个class可能迫使更多member bodies接受semantic checks，member-level清单则把binary surface收窄。反过来，`extern template class MemoryCell<int>;` 只是explicit instantiation declaration，用来抑制当前位置的implicit generation；它不生成definition，必须另有恰好一个owner提供explicit instantiation definition。
-
-
-## A.5 选择方案就是选择发布契约
-
-两种正确方案不是纯粹的format偏好。包含模型把template recipe发布给consumer，supported types近似开放，ABI还会受consumer compiler flags、macros与toolchain影响。显式实例化模型只发布声明和有限concrete symbols，codegen集中、增量编译边界清楚，但新增type属于library feature request。
-
-不要同时无计划地混用。若header已经包含definitions，每个consumer可隐式实例化；library又显式生成同一types通常可借助linkage规则工作，但会增加重复工作，并让“谁拥有codegen”难以审计。更清晰的做法是明确一条policy：开放模板在header公开definition；封闭模板在实现文件维护explicit list，并让tests核对每个承诺type。
-
-
-`MemoryCell` 还展示了实例化是按需发生的。Default argument `Object()` 要求 `Object` 可被相应表达式构造，但只有调用无实参constructor时这个路径才真正相关；`write` 需要assignment，`read` 返回const reference并要求cell仍存活。模板“能声明”不表示每个member对每个type都可用，验收应针对实际instantiated members与operation requirements。
-
-## A.6 从错误阶段反推可见性与所有权
-
-诊断时先保留分阶段build，不要只运行一条长命令。Compile error通常说明当前translation unit看见definition后，某个dependent operation对具体type无效；undefined reference通常说明调用形成但concrete code未发出；duplicate definition则需要检查full specializations、non-inline helpers、宏导致的ODR差异或多个strong owners。
-
-
-一个可复核流程是：
+先在该空目录运行以下检查。三个负例都应**先得到三个 `.o`**，再报 `Undefined symbols`（Apple）或 `undefined reference`（其他链接器）。不能把任何非零返回码都算成功反例：还应阅读诊断，确认缺的是 `Cell` 的对应类型成员，而非语法错误、重复定义或 `peer_value`。
 
 ```bash
-c++ -std=c++17 -c MemoryCell.cpp -o MemoryCell.o
-c++ -std=c++17 -c TestMemoryCell.cpp -o TestMemoryCell.o
-nm -C MemoryCell.o | grep 'MemoryCell<'
-nm -C TestMemoryCell.o | grep 'MemoryCell<'
-c++ MemoryCell.o TestMemoryCell.o -o test-memory-cell
-./test-memory-cell
+# file: verify.sh
+#!/usr/bin/env bash
+set -eu
+for args in "1 0" "1 1" "2 0"; do
+    read -r mode double <<< "$args"
+    bash build.sh "$mode" "$double"
+    ./app
+ done
+for args in "0 0 0" "0 1 0" "2 1 0"; do
+    read -r mode double omit <<< "$args"
+    if bash build.sh "$mode" "$double" "$omit" >link.log 2>&1; then
+        echo "错误：负例意外链接成功"; exit 1
+    fi
+    test -s main.o && test -s peer.o && test -s Cell.o
+    grep -E 'Undefined symbols|undefined reference' link.log
+    grep -E 'Cell.*(int|double)' link.log
+ done
 ```
 
-预期成功输出是 `37` 与 `hello world`。`nm -C` 不是语言标准的一部分，但能把object-level证据显示出来：definition object是否包含 `MemoryCell<int>` 与 `MemoryCell<std::string>`，consumer object是否只有未解析引用。还要在clean build中验证，避免旧object file掩盖实例化清单缺失。
+保存全部文件后执行 `bash verify.sh`。前三次运行应依次输出 `7`、`7.5`、`7`；后面三次没有可运行程序，显示的是预期诊断，不是程序输出。审查表如下：
 
-## 统一验收：从实例化点追到最终符号
+| 模式            | 调用类型      | 定义与请求在哪相遇                 | 链接 / 运行        |
+| --------------- | ------------- | ---------------------------------- | ------------------ |
+| 0 声明头 + 实现 | int 或 double | 实现有定义但无具体请求；调用方相反 | 缺成员定义         |
+| 1 头含 .tpp     | int           | 两个调用方                         | 成功，输出 7       |
+| 1 头含 .tpp     | double        | 两个调用方                         | 成功，输出 7.5     |
+| 2 显式 int      | int           | Cell.cpp                           | 成功，输出 7       |
+| 2 显式 int      | double        | 没有任何 TU 生成 double 成员       | 缺 double 成员定义 |
 
+可用 `nm -C main.o` 与 `nm -C Cell.o` 辅助检查符号；平台输出格式与标志字母可能不同。重点看具体类型和“引用还是定义”，不要把 UI 的 C/R/W 缩写当作 `nm` 的真实输出。
 
-## 本章回顾
+## 7. 方案选择与边界
 
-1. Separate compilation of class templates的核心不是文件后缀，而是实例化点的definition visibility。
-2. 官方 `MemoryCell.cpp` 只有generic definitions，没有concrete request时不会自动替测试程序生成所有specializations。
-3. Inclusion model把definitions带到consumers，由各自完成implicit instantiation并保持type set开放。
-4. Explicit instantiation在definition可见的owner translation unit集中生成有限types。
-5. Compile success只证明单个translation unit成立；undefined reference说明最终缺少可匹配concrete symbol。
-6. `extern template` 不生成code，explicit specialization也不是explicit instantiation的替代品。
-7. 可靠验收必须分阶段构建、核对demangled symbols、clean rebuild并运行具体type tests。
+若调用者可以使用未来的新类型，通常选择包含模型。每个调用方能看到成员定义，并按需要生成；实现改动可能让更多 TU 重新编译。若库只支持有限的类型集合，显式实例化能集中生成责任，但增加类型就要修改生成清单、重编生产方并正确链接。
 
+<Term def="约束实体定义数量与一致性的语言规则；模板可在满足条件时出现在多个翻译单元。">
+  单一定义规则
+</Term>
+（ODR）并不等于“任何头文件只能在整个程序出现一次”。本例的模板定义可以在多个 TU
+中一致地出现；不能据此把普通非内联函数的重复定义也当成合法。宏值若令各 TU
+看到不一致的类定义，也不是本实验要演示的缺符号故障。
+
+<Term def="已编译代码之间约定的调用、布局、符号等二进制接口。">二进制接口</Term>
+（ABI）仍约束显式实例化产物。把模板生成集中到 `.o`
+或库中，不保证跨编译器、标准库、平台或编译选项兼容。本章验证的是同一工具链的一次
+C++17 编译与链接，不是通用二进制发布方案。
+
+## 常见误区
+
+<Callout type="trap" title="文件在目录中，编译器就会找到">
+**现象 →** 模式 0 三份 `.o` 都存在，链接却缺 `Cell<int>` 成员。<br />
+**原因 →** 实现 TU 没有具体类型请求；调用方没有成员定义。<br />
+**修法 →** 让头文件包含 `.tpp`，或在实现内增加所需类型的显式实例化。
+</Callout>
+
+<Callout type="trap" title="extern template 是生成命令">
+  **现象 →** 模式 2 漏链 `Cell.o` 后，`int` 也失败。
+  <br />
+  **原因 →** 声明把生成责任交给别处，却不提供代码。图中有生成圆点不等于可用。
+  <br />
+  **修法 →** 保留对应显式实例化定义，并把它的目标文件纳入链接。
+</Callout>
+
+<Callout type="trap" title="生成整个类就覆盖所有类型">
+  **现象 →** 显式 `int` 能用，改成 `double` 就缺成员。
+  <br />
+  **原因 →** 不同实参形成不同实体；链接不会做模板类型转换。
+  <br />
+  **修法 →** 增加 `double` 的显式实例化定义，或改用包含模型。
+</Callout>
+
+## 小结
+
+- 编译成功只证明各自输入可处理，不证明成员定义齐全。
+- 包含定义支持调用方按需生成；显式生成维护有限清单。
+- 缺 double 或漏链生产方，都要追踪精确的成员提供关系。
+
+## 练习：用编译结果回收预测
+
+<Exercises>
+
+**问题 1：真正扩展生产清单**
+
+保持模式 2，不改两个调用方、不把 `.tpp` 暴露给它们，让 `double` 通过。修改实现代码并验证 `int` 仍然可用。对应图中哪个控制项？
+
+<Answer>
+
+复制 `Cell.cpp` 为 `Cell-both.cpp`，把显式实例化段改成下面的完整文件。它**替换**原生产方参与编译，不与原 `Cell.cpp` 同时链接，避免重复显式实例化。
+
+```cpp
+// file: Cell-both.cpp
+#include "Cell.h"
+#if LAB_MODE != 1
+#include "Cell.tpp"
+#endif
+#if LAB_MODE == 2
+template class Cell<int>;
+template class Cell<double>;
+#endif
+```
+
+新语句位于成员定义之后；`Cell.h` 仍只有 `int` 的 `extern` 声明也可工作，因为 double 调用方本来就没有成员函数体可用。可以另外声明 `extern template class Cell<double>;` 表达集中生成策略，但它不能替代这里的定义。执行下面的答案脚本，分别断言输出：
+
+```bash
+# file: answer1.sh
+#!/usr/bin/env bash
+set -eu
+bash build.sh 2 1 0 Cell-both.cpp
+test "$(./app)" = "7.5"
+bash build.sh 2 0 0 Cell-both.cpp
+test "$(./app)" = "7"
+echo "int 与 double 均通过"
+```
+
+图中选择“生成 int 与 double”。double 的三个生成成员进入候选集，六条依赖恢复。支持一个类型不意味着支持所有类型；再换成其他类型仍要重新分析。
+
+</Answer>
+
+**问题 2：同一个漏链操作，为什么后果不同？**
+
+先预测：模式 2 的 `int` 漏链 `Cell.o` 会失败，模式 1 的 `double` 漏链它却能成功，为什么？保留源代码不变，用链接输入验证，而不是删除函数或制造语法错误。
+
+<Answer>
+
+模式 2 只有生产方提供 int 成员，漏链就没有精确匹配。模式 1 两个调用方已各自获得定义并使用它们，`Cell.cpp` 本身没有具体请求，漏链它不会留下本例需要的成员缺口。执行：
+
+```bash
+# file: answer2.sh
+#!/usr/bin/env bash
+set -eu
+if bash build.sh 2 0 1 >missing-object.log 2>&1; then
+    echo "错误：漏链负例意外成功"; exit 1
+fi
+test -s main.o && test -s peer.o && test -s Cell.o
+grep -E 'Undefined symbols|undefined reference' missing-object.log
+grep 'Cell<int>' missing-object.log
+bash build.sh 1 1 1
+test "$(./app)" = "7.5"
+echo "包含模式不需要本例的 Cell.o"
+```
+
+这不是说所有实现文件都能删除；若它还定义了非模板函数、静态对象等，被删掉的其他实体可能形成新缺口。本题只针对上面完整给出的六个文件。
+
+</Answer>
+
+</Exercises>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="翻译单元">
+    源文件加上它实际包含的内容，是一次编译看到的完整输入。
+  </GlossaryItem>
+  <GlossaryItem term="分离编译">
+    各份输入先分别编译成目标文件，再交给链接器组合。
+  </GlossaryItem>
+  <GlossaryItem term="目标文件">
+    尚未成为完整程序的编译产物；可以带着对其他定义的引用。
+  </GlossaryItem>
+  <GlossaryItem term="声明">
+    告诉编译器“有什么、怎么调用”，不一定告诉它“怎么做”。
+  </GlossaryItem>
+  <GlossaryItem term="定义">
+    给出完整内容；类的布局定义与成员函数体是两个层次。
+  </GlossaryItem>
+  <GlossaryItem term="隐式实例化">
+    因具体使用需要而从模板形成实体；不等于一次生成所有成员或所有类型。
+  </GlossaryItem>
+  <GlossaryItem term="包含模型">
+    把模板定义带到使用者所在的输入中，让定义与请求相遇。
+  </GlossaryItem>
+  <GlossaryItem term="显式实例化定义">
+    明确要求为指定实参生成实体的语句；类型清单必须逐项维护。
+  </GlossaryItem>
+  <GlossaryItem term="显式实例化声明">
+    extern template 把对应生成责任留给别处，不自己提供成员代码。
+  </GlossaryItem>
+  <GlossaryItem term="链接符号">
+    链接器匹配定义与引用所用的名称；不同模板实参对应不同实体。
+  </GlossaryItem>
+  <GlossaryItem term="单一定义规则">
+    有关定义数量和一致性的规则；合法重复的模板定义也须满足条件。
+  </GlossaryItem>
+  <GlossaryItem term="二进制接口">
+    已编译代码之间的配合约定，不能只靠相同的 C++ 源码接口保证兼容。
+  </GlossaryItem>
+</Glossary>
 
+## 出处与核验范围
+
+- **范围依据**：[InformIT 第三版目录](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)列出 Appendix A — Separate Compilation Of Class Templates，对应冻结单元 `dsaa3-a`。这里只把目录用于界定附录范围，不据此声称读取、翻译或逐段核验了原书正文。
+- **可见性事实**：[Standard C++ Foundation 的 Templates FAQ](https://isocpp.org/wiki/faq/templates)解释为什么单独 `.cpp` 中的模板定义会造成链接缺口，以及两类修复办法。该页含历史内容；本章不使用旧 `export` 模板方案。
+- **实例化与 extern**：[GCC 官方 Template Instantiation](https://gcc.gnu.org/onlinedocs/gcc/Template-Instantiation.html)说明包含与显式生成安排；[标准工作草案 temp.explicit](https://eel.is/c++draft/temp.explicit)用于核对显式实例化声明、定义及成员覆盖条件。后者是持续更新的工作草案，不冒充已购买的 ISO C++17 正文；本章代码限定为 C++17，且不用 GCC 的非标准扩展。
+- **实验工具**：[Clang 官方用户手册](https://clang.llvm.org/docs/UsersManual.html)作为命令与诊断选项资料。本次实际验证使用 Apple clang 21.0.0、arm64 macOS、`-std=c++17 -O0`；诊断的文字和符号格式不保证跨平台一致。
+
+以上页面于 **2026-09-24（Asia/Shanghai）** 实际 GET 返回 HTTP 200，并保存访问 URL、正文与 SHA-256。本文中文解释、`Cell` 实验及 SVG 为独立重写，不复现原书代码；网页可访问不等于图书开放许可。编译检查不替代页面的浏览器、无障碍或发布验收。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Mark Allen Weiss · Data Structures and Algorithm Analysis in C++, Third Edition，ISBN 9780321441461，附录 A"
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+/>

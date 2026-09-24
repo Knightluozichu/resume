@@ -1,72 +1,612 @@
 ---
-title: "复合模式"
-type: A
+title: "复合模式：订单与通知综合练习"
+type: C
 section: "复合与总复习"
 order: 25
-description: "复合模式：根据彼此独立的变化轴组合多个模式，并验证每个模式仍承担清晰职责"
+description: "独立组合金额策略、事件观察者与保护代理，用可执行断言检验隔离、失败边界及删层后的简单方案"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
-sourceMode: independent-rewrite
-draft: false
+sourceMode: original
+draft: true
 ---
 
+import { CompoundOrderNotificationLab } from "@/components/mdx/design-patterns/compound-patterns-order-notification-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+<Objectives>
+  - 能从金额、接收者与访问权限三种需求，指出组合中各自负责的边界。 -
+  能修改折扣函数，并用断言证明接收者、访问限制与失败隔离没有被顺带改变。 -
+  能回答：邮件失败后订单是否还在？当价格和接收者都固定时，哪些模式层可以删除？
+</Objectives>
 
-单个模式能解决局部问题，但模式汤会让参与者和失败责任互相覆盖 因此，复合模式 的第一步不是画类图，而是写清 **通知平台同时需要切换算法、广播状态和控制远端访问，团队准备一次套入多个模式** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+## 直觉：打折不该顺手取消通知
 
-在实验前先预测：沿 拆开变化 → 各选模式 → 连接边界 → 注入故障 → 删除多余层 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+一笔订单里有两件 12.50 元的商品和一件 5 元的商品。活动开始后，价格从 30 元变成 27 元，但邮件和记账程序仍要收到下单消息。
 
+如果改价、发送消息和检查访问资格挤在一个分支里，改一个条件就可能碰坏另外两个。可是把每一步都包装成对象，也会让本来十几行的程序变得难以追踪。
 
-## 问题合同与术语
+本页要解决的是：该分开的地方能否单独改，该合并的地方能否删回去；尤其不能因为发信失败，就告诉用户订单从未发生。
 
-**意图。** 根据彼此独立的变化轴组合多个模式，并验证每个模式仍承担清晰职责。**适用边界。** 存在至少两个可独立描述和验证的变化轴，且组合后的边界仍可追踪。本页验收不变量是：**删除任一模式时只能损失它声明的能力，不能让无关变化轴一起崩溃**。
+## 模式名称与分类
 
-、、、、、
-## 官方目录结构的逐项解释
+本页是本站的**独立综合练习**，不是 GoF 第 24 个模式，也不是树形的“组合模式（Composite）”。GoF 出版社说明原书包含 23 个模式；本站正式单元另加导论，本页不填写 `officialUnitId`。下文借用 13 个描述字段来审查一个设计，不声称它们是原书“复合模式章”的目录。
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+<Term def="能在保持其他能力不变时独立修改的一类需求。">变化轴</Term>
+在本例中有三条：如何算钱、谁接收消息、谁可下单。图上分别对应金额条、一对多连线和门闩，而不是三张模式名卡片。
 
-### 变化轴
+先预测：只改为九折，哪些数字和连线会变？再打开邮件故障，订单记录次数会不会变回零？最后换成 guest，图中还应该出现 27 元吗？
 
-“复合模式”归入复合与总复习，名称只用于定位 根据彼此独立的变化轴组合多个模式，并验证每个模式仍承担清晰职责，不能替代问题证据。 对“通知平台同时需要切换算法、广播状态和控制远端访问，团队准备一次套入多个模式”先保存基线，再改变一个条件；若出现“只因多个模式常被一起提及就全部使用，会产生没有证据的模式拼盘”，就拒绝 复合模式 方案并回到更简单结构。
+<CompoundOrderNotificationLab />
 
-### 职责边界
+先按原价读出 3000 分；切换九折，实付条缩为 2700 分、减免段增为 300 分，接收者连线不变。再选“无订阅者”，分发边消失但订单仍记录一次。最后以 guest 进入：轨迹止于门禁，金额不再显示，读取和提交都为零。**未读取不等于金额为零**。
 
-“职责边界”回答模式想改变什么：根据彼此独立的变化轴组合多个模式，并验证每个模式仍承担清晰职责。 对“通知平台同时需要切换算法、广播状态和控制远端访问，团队准备一次套入多个模式”先保存基线，再改变一个条件；若出现“只因多个模式常被一起提及就全部使用，会产生没有证据的模式拼盘”，就拒绝 复合模式 方案并回到更简单结构。
+## 意图
 
-### 组合顺序
+组合的目的不是凑齐三个模式，而是让改价不需要触碰通知名单，增减通知不需要修改下单核心，拒绝访问不需要读取订单后再遮住结果。金额载荷当然会随算法变化；所谓独立，指其他能力和契约不变，而非整个输出逐字相同。
 
-“组合顺序”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“通知平台同时需要切换算法、广播状态和控制远端访问，团队准备一次套入多个模式”先保存基线，再改变一个条件；若出现“只因多个模式常被一起提及就全部使用，会产生没有证据的模式拼盘”，就拒绝 复合模式 方案并回到更简单结构。
+<Term def="按同一输入输出契约可替换的计算方法。">策略</Term>在这里就是一个
+`Price`
+函数：输入整数分小计，返回不超过小计的整数分金额。它不接触身份或通知列表。函数已经足够表达可替换算法，不需要额外造策略基类。
 
-### 集成故障
+## 别名
 
-“集成故障”从具体压力出发：单个模式能解决局部问题，但模式汤会让参与者和失败责任互相覆盖。 对“通知平台同时需要切换算法、广播状态和控制远端访问，团队准备一次套入多个模式”先保存基线，再改变一个条件；若出现“只因多个模式常被一起提及就全部使用，会产生没有证据的模式拼盘”，就拒绝 复合模式 方案并回到更简单结构。
+“模式组合”“综合实践”是本页任务的描述，不是新增的 GoF 正式别名。这里的“复合”也不意味着必须同时使用所有模式：如果需求只剩一个固定价格和一个固定收件人，直接调用往往更合适。练习 3 会让复杂版和简单版在同一输入上交出相同结果。
 
-### 删除测试
+## 动机
 
-“删除测试”要求同时满足：存在至少两个可独立描述和验证的变化轴，且组合后的边界仍可追踪。 对“通知平台同时需要切换算法、广播状态和控制远端访问，团队准备一次套入多个模式”先保存基线，再改变一个条件；若出现“只因多个模式常被一起提及就全部使用，会产生没有证据的模式拼盘”，就拒绝 复合模式 方案并回到更简单结构。
+最初订单只按原价计算并发邮件。后来活动价格常变，审计也要接收消息，还出现了无下单资格的调用者。三个需求的变化频率和失败方式并不一样：价格规则要精确计算，邮件可能不可用，未授权请求则不应进入内部订单处理。
 
-## 常见误区与反例
+<Term def="登记接收入口，并在事件发生时被统一调用的对象或函数。">观察者</Term>
+承担“谁收到消息”。实验的事件中心只认识回调，不知道怎样发邮件或写审计；图中删掉审计节点，对应的是不注册该回调，而不是算法里的一个隐藏分支。
 
+## 适用性
 
-另一个易错点是把结构相似当作语义相同。装饰器叠加同一接口职责；中介者可替代一部分网状协调；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+只有当算法替换、订阅增减、入口权限确实分别变化时，三层分离才有收益。一个只有固定原价、固定本地日志的小脚本，无须引入订阅表。反过来，只要入口不可信，无论是否保留模式包装，授权检查都不能删掉。
 
-## 术语表
+<Term def="与真实服务保持同一调用接口，在委托之前检查访问资格的包装。">
+  保护代理
+</Term>
+在本例中与真实服务同为 `Place`。图中门闩对应
+`protect`，它必须包在读取与计算之外。客户端下拉框只是教学输入；真实系统必须从服务端可信认证上下文取得身份，不能接受用户自报
+buyer。本例仅模拟角色门禁，不实现订单归属检查、支付授权或防重放。
 
+## 结构
+
+对象关系是一个带支线的调用结构：`protect → checkout`；`checkout` 持有 `Price` 和 `OrderEvents`；事件中心再持有零到多个回调引用。策略和观察者互不持有对方，代理也不读通知名单。上方金额图表达纯计算，下方分发图表达引用拓扑，中间轨迹表达访问边界。
+
+<Term def="业务记录已经生效、后续通知失败不能自动抹掉它的位置。">提交边界</Term>
+在代码的 `save(total)`
+成功返回处。随后才创建并投递事件。因此读取或计算失败不会保存，保存前失败不会通知，而接收者失败不会把已记录的订单变回不存在。这里的保存只是内存计数，不等同数据库事务。
+
+## 参与者
+
+| 实际参与者                     | 独占职责                     | 不应该做的事               |
+| ------------------------------ | ---------------------------- | -------------------------- |
+| `Price` / `regular` / `member` | 计算合法整数分金额           | 读身份、改订阅表、发送通知 |
+| `checkout`                     | 读取、验证、计算、保存、发布 | 点名邮件或审计实现         |
+| `OrderEvents`                  | 保存回调、逐个投递并报告结果 | 回滚订单、自动重试         |
+| 邮件 / 审计回调                | 应用本轮只读事件             | 更改另一接收者的载荷       |
+| `protect`                      | 在委托前拒绝无资格身份       | 先读订单再删掉响应中的价格 |
+
+这些职责都能从实验输出检查：金额看条长，接收集合看边，授权看门禁后的读取次数。只有职责表没有可执行结果，仍不足以证明组合正确。
+
+## 协作
+
+一次允许请求先通过门禁，再读取 `O-7`，计算小计、校验折扣结果，保存一次。保存成功后创建 `OrderPlaced` 的浅冻结快照，按注册顺序同步投递邮件、审计。本例事件只有字符串和数字，浅冻结已足够；若新增嵌套对象，不能假定其内部也被冻结。
+
+接收者抛错时，事件中心记录 `failed` 并继续投递其余接收者。它不会把邮件服务的错误正文带回响应，也不撤销保存。通知中增删订阅只影响下一轮，因为本轮已复制接收者列表。演示每次重建一次隔离实验，并不是连续创建真实订单。
+
+## 后果
+
+隔离的收益是可分别测试和替换，代价是多了函数边界、订阅生命周期和失败报告。总金额并非“系统成功”的唯一指标：2700 分的订单可以已记录，但邮件尚未送达。监控必须区分业务记录与投递结果，否则重试整次下单可能重复扣款。
+
+本例没有网络、持久化、异步队列或事务；同步 `try/catch` 不等待返回的 Promise。生产系统若需要提交与事件可靠关联，应单独设计持久化待投递记录、幂等消费和重试策略。本页不声称一次调用可提供跨服务原子性或恰好一次投递。
+
+## 实现
+
+钱使用整数“分”，不以浮点元累计。空购物项小计为 0；单价须为非负安全整数，数量须为正安全整数，累计溢出则抛错。折扣返回也须在 0 到小计之间。本例把输入当成内部类型正确的订单；若数据来自 JSON，还须在入口校验对象形状。
+
+以下所有 `ts` 代码块（含答案）按出现顺序拼成一个 `compound.ts`，没有省略号或隐含依赖。使用项目已有 TypeScript 编译为 CommonJS 后运行生成的 JavaScript；测试不需网页或第三方测试库。组件导出的领域模型采用相同契约，完整 UI 源码位于仓库 `src/components/mdx/design-patterns/compound-patterns-order-notification-lab.tsx`。
+
+**片段 1：订单与金额策略。** 九折用 `n - ceil(n/10)` 等价实现向下取整，避免先乘 9 造成安全整数溢出。
+
+```ts
+export type Order = Readonly<{
+  id: string;
+  items: readonly Readonly<{ unit: number; qty: number }>[];
+}>;
+export type Price = (subtotal: number) => number;
+export const regular: Price = (n) => n;
+export const member: Price = (n) => n - Math.ceil(n / 10);
+export function subtotal(order: Order): number {
+  let sum = 0;
+  for (const { unit, qty } of order.items) {
+    if (
+      !Number.isSafeInteger(unit) ||
+      unit < 0 ||
+      !Number.isSafeInteger(qty) ||
+      qty < 1
+    )
+      throw Error("invalid line");
+    sum += unit * qty;
+    if (!Number.isSafeInteger(sum)) throw Error("overflow");
+  }
+  return sum;
+}
+```
+
+**片段 2：通知注册表。** 重复名字拒绝注册；退订函数可重复调用。本轮接收者快照和事件快照分别隔离拓扑变化、载荷修改。捕获的是每个回调的异常，不是整个订单的异常。
+
+```ts
+export type Placed = Readonly<{
+  type: "OrderPlaced";
+  id: string;
+  total: number;
+}>;
+export type Delivery = { to: string; status: "ok" | "failed" };
+export type Listener = (event: Placed) => void;
+export class OrderEvents {
+  private listeners = new Map<string, Listener>();
+  subscribe(id: string, listener: Listener) {
+    if (this.listeners.has(id)) throw Error("duplicate subscriber");
+    this.listeners.set(id, listener);
+    let active = true;
+    return () => {
+      if (active) this.listeners.delete(id);
+      active = false;
+    };
+  }
+  publish(event: Placed): Delivery[] {
+    const frozen = Object.freeze({ ...event });
+    return [...this.listeners].map(([to, listener]) => {
+      try {
+        listener(frozen);
+        return { to, status: "ok" };
+      } catch {
+        return { to, status: "failed" };
+      }
+    });
+  }
+}
+```
+
+**片段 3：服务契约。** 拒绝结果只有状态，不能携带订单号、金额或事件。依赖被显式传入，使测试可以用计数器检查是否越过边界。
+
+```ts
+export type Outcome =
+  | { status: "denied" }
+  | {
+      status: "placed";
+      total: number;
+      event: Placed;
+      deliveries: Delivery[];
+    };
+export type Place = (actor: "buyer" | "guest") => Outcome;
+export type Dependencies = {
+  load: () => Order;
+  save: (total: number) => void;
+  price: Price;
+  events: OrderEvents;
+  trace: string[];
+};
+```
+
+**片段 4：真实下单服务。** `save` 在发布之前；只有成功返回才记下 `commit`。本服务不自行鉴权，必须通过下一片段的保护入口暴露。
+
+```ts
+export function checkout(d: Dependencies): Place {
+  return () => {
+    d.trace.push("load");
+    const order = d.load(),
+      base = subtotal(order);
+    d.trace.push("price");
+    const total = d.price(base);
+    if (!Number.isSafeInteger(total) || total < 0 || total > base)
+      throw Error("invalid price");
+    d.save(total);
+    d.trace.push("commit");
+    const event: Placed = Object.freeze({
+      type: "OrderPlaced",
+      id: order.id,
+      total,
+    });
+    const deliveries = d.events.publish(event);
+    d.trace.push(...deliveries.map((x) => `${x.to}:${x.status}`));
+    return { status: "placed", total, event, deliveries };
+  };
+}
+```
+
+**片段 5：保护入口。** 先判断再委托；拒绝路径不能执行任何真实服务工作。这个顺序比给类取什么名字更重要。
+
+```ts
+export function protect(real: Place, trace: string[]): Place {
+  return (actor) => {
+    if (actor !== "buyer") {
+      trace.push("deny");
+      return { status: "denied" };
+    }
+    trace.push("allow");
+    return real(actor);
+  };
+}
+```
+
+**片段 6：实验配置。** 三条变化轴各有自己的字段，邮件故障只影响邮件回调。
+
+```ts
+export type Options = {
+  strategy: "regular" | "member";
+  actor: "buyer" | "guest";
+  audience: "none" | "mail" | "both";
+  mailFails: boolean;
+};
+export const initial: Options = {
+  strategy: "regular",
+  actor: "buyer",
+  audience: "both",
+  mailFails: false,
+};
+```
+
+## 示例代码
+
+**片段 7：实验的真实装配。** 不是按选项编造状态文字：`load`、`save` 和每个回调都真正被调用，计数和结果来自这些调用。
+
+```ts
+export function runOrder(options: Options) {
+  const trace: string[] = [],
+    received: { to: string; event: Placed }[] = [];
+  const events = new OrderEvents();
+  if (options.audience !== "none")
+    events.subscribe("mail", (event) => {
+      if (options.mailFails) throw Error("mail unavailable");
+      received.push({ to: "mail", event });
+    });
+  if (options.audience === "both")
+    events.subscribe("audit", (event) => {
+      received.push({ to: "audit", event });
+    });
+```
+
+继续同一个 `runOrder` 函数：接好读取、保存和保护入口，再返回真实运行结果。
+
+```ts
+  let reads = 0,
+    commits = 0;
+  const place = protect(
+    checkout({
+      trace,
+      events,
+      price: options.strategy === "regular" ? regular : member,
+      load: () => {
+        reads++;
+        return {
+          id: "O-7",
+          items: [
+            { unit: 1250, qty: 2 },
+            { unit: 500, qty: 1 },
+          ],
+        };
+      },
+      save: () => {
+        commits++;
+      },
+    }),
+    trace,
+  );
+  const outcome = place(options.actor);
+  return { outcome, trace, reads, commits, received };
+}
+```
+
+下面保存最小验收和一个故意错误的对照。断言失败会抛异常并令程序退出，不能以“页面显示成功”代替这些检查。
+
+```ts
+export function check(ok: boolean, message: string): asserts ok {
+  if (!ok) throw Error(message);
+}
+export const same = (a: unknown, b: unknown) =>
+  JSON.stringify(a) === JSON.stringify(b);
+const normal = runOrder(initial);
+const discounted = runOrder({ ...initial, strategy: "member" });
+check(
+  normal.outcome.status === "placed" && normal.outcome.total === 3000,
+  "原价",
+);
+check(
+  discounted.outcome.status === "placed" && discounted.outcome.total === 2700,
+  "九折",
+);
+check(same(normal.trace, discounted.trace), "算法不能改协作顺序");
+check(
+  same(
+    normal.received.map((x) => x.to),
+    discounted.received.map((x) => x.to),
+  ),
+  "接收者不变",
+);
+```
+
+继续验收权限与通知失败；这两种失败位于不同边界。
+
+```ts
+const denied = runOrder({ ...initial, actor: "guest", mailFails: true });
+check(same(denied.outcome, { status: "denied" }), "拒绝结果无载荷");
+check(denied.reads === 0 && denied.commits === 0, "不得先读后拒绝");
+check(denied.received.length === 0 && same(denied.trace, ["deny"]), "不得分发");
+const failed = runOrder({ ...initial, mailFails: true });
+check(
+  failed.commits === 1 && failed.outcome.status === "placed",
+  "通知失败不回滚",
+);
+check(
+  same(
+    failed.received.map((x) => x.to),
+    ["audit"],
+  ),
+  "失败不阻断其他接收者",
+);
+```
+
+坏版本先调用再判断，虽然最后响应写着 denied，仍越权执行了内部工作。下面用同一个 `checkout` 演示这个错误，并断言反例确实触发，而不是只检查源码关键词。
+
+```ts
+export function badProtect(real: Place): Place {
+  return (actor) => {
+    const result = real(actor);
+    return actor === "buyer" ? result : { status: "denied" };
+  };
+}
+let badReads = 0,
+  badCommits = 0,
+  badNotices = 0;
+const badEvents = new OrderEvents();
+badEvents.subscribe("leak", () => {
+  badNotices++;
+});
+const bad = badProtect(
+  checkout({
+    trace: [],
+    events: badEvents,
+    price: regular,
+    load: () => {
+      badReads++;
+      return { id: "secret", items: [] };
+    },
+    save: () => {
+      badCommits++;
+    },
+  }),
+);
+```
+
+执行坏入口，确认它虽然返回拒绝，却已触发读取、提交和通知。
+
+```ts
+check(bad("guest").status === "denied", "坏版本也返回拒绝");
+check(
+  badReads === 1 && badCommits === 1 && badNotices === 1,
+  "反例：工作已越权执行",
+);
+```
+
+## 已知应用
+
+这里不把原创订单模型冒充原书案例。[Node.js 官方事件文档](https://nodejs.org/api/events.html#asynchronous-vs-synchronous)说明 EventEmitter 按注册顺序同步调用监听者，可用来对照本页的同步分发；**逐接收者捕错并继续**则是我们显式选择的策略，不能宣称 Node.js 默认提供同样保证。
+
+[TypeScript 函数文档](https://www.typescriptlang.org/docs/handbook/2/functions.html#function-type-expressions)支持把可调用契约作为类型表达式；这解释了为什么本例的策略无需继承树。[OWASP 授权指南](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html#validate-the-permissions-on-every-request)强调每次请求检查权限和默认拒绝，支持门禁必须在受保护操作之前的边界选择，但它不把本例角色字符串变成真实认证。
+
+## 相关模式
+
+可回看本站[策略](/learn/design-patterns/03-behavioral/strategy)、[观察者](/learn/design-patterns/03-behavioral/observer)与[代理](/learn/design-patterns/02-structural/proxy)各自解决的问题。三者同时出现不产生额外的原子性保证。Composite 面向树状整体/部分，本页没有那种递归结构；装饰器强调叠加职责，不能以“都用了包装函数”为由取代保护代理的访问控制意图。
+
+**删除测试**应先写“允许损失什么”：固定 `Price` 后失去运行时换价能力，但通知与拒绝路径仍应成立；直接调用固定接收者后失去动态订阅，但金额与保存顺序仍应成立；删掉代理包装，只能把同样的授权检查并入唯一可信入口，不能删权限规则。题 3 给出实作，不以“模式越少越好”代替边界证明。
+
+## 常见误区
+
+<Callout type="trap" title="拒绝响应不等于未泄漏">
+  **现象 →** 返回 denied，却发送了带订单信息的通知。**原因 →** 像 `badProtect`
+  一样先调用真实服务。**修法 →**
+  门禁先于读取；用拒绝时读取、保存、通知均为零的断言验收。
+</Callout>
+
+<Callout type="trap" title="发信失败不是订单回滚">
+  **现象 →** 邮件失败就提示订单不存在。**原因 →**
+  把通知异常误当成提交前失败。**修法 →** 打开实验故障，检查提交仍为
+  1、审计仍成功；分别记录下单与投递状态，再设计重试。
+</Callout>
+
+<Callout type="trap" title="策略替换夹带其他行为">
+  **现象 →** 九折用户突然收不到审计事件。**原因 →**
+  策略偷偷维护了接收名单。**修法 →**
+  策略只收整数分；替换前后对比接收者与门禁轨迹，仅允许金额载荷改变。
+</Callout>
+
+## 小结
+
+- 算法、订阅与授权要能分别替换和验证。
+- 改折扣只改金额，不改权限与接收集合。
+- 通知失败不撤销订单；删层也不能删边界。
 
 ## 练习与答案
 
+<Exercises>
 
-## 本章小结
+**问题 1：先预测，再检查失败边界。** 选择九折、两个接收者、邮件故障；预期金额、提交次数和成功接收者是什么？再改成 guest，哪些信息必须消失？
 
-复合模式 把“通知平台同时需要切换算法、广播状态和控制远端访问，团队准备一次套入多个模式”收敛为 变化轴清单、模式组合、集成验证 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“只因多个模式常被一起提及就全部使用，会产生没有证据的模式拼盘”这一反例、重置实验，并根据 组合可隔离多种变化，但对象数量、调用深度和诊断成本同时上升 接受或拒绝方案。
+<Answer>
+允许时金额 2700 分，提交一次，仅审计成功，邮件报告失败。拒绝时不能返回金额或事件，也不能读订单、计算价格、保存或通知。即使故障开关开着，也不应调用邮件。把下面代码继续接到同一文件验证。
 
-## 前后导航
+```ts
+const fault2700 = runOrder({ ...initial, strategy: "member", mailFails: true });
+check(
+  fault2700.outcome.status === "placed" && fault2700.outcome.total === 2700,
+  "金额独立",
+);
+check(
+  fault2700.commits === 1 &&
+    same(
+      fault2700.received.map((x) => x.to),
+      ["audit"],
+    ),
+  "部分投递失败",
+);
+for (const strategy of ["regular", "member"] as const) {
+  for (const audience of ["none", "mail", "both"] as const) {
+    const no = runOrder({ ...initial, strategy, audience, actor: "guest" });
+    check(
+      same(no, {
+        outcome: { status: "denied" },
+        trace: ["deny"],
+        reads: 0,
+        commits: 0,
+        received: [],
+      }),
+      "组合配置也不能越权",
+    );
+  }
+}
+```
 
-- [上一页：解释器模式](/learn/design-patterns/03-behavioral/interpreter)
-- [下一页：设计模式总复习](/learn/design-patterns/04-compound/final-review)
+</Answer>
 
+**问题 2：改代码，实现满 3000 分减 500 分。** 不改 `checkout`、事件中心或门禁；先替换策略函数，验收 2999、3000、0 三个边界，再证明新的算法仍通知原有两个接收者，guest 仍不计算金额。
+
+<Answer>
+只新增一个 `Price`。条件写成严格大于会漏掉恰好 3000；不设门槛地减 500 会产生负数。下面的实现与断言可直接接续执行。UI 仍保留原价/九折两个基准；本题是在代码里注入新算法，不靠改图中文字作答。
+
+```ts
+export const thresholdDiscount: Price = (n) => (n >= 3000 ? n - 500 : n);
+check(thresholdDiscount(2999) === 2999, "门槛下方");
+check(thresholdDiscount(3000) === 2500, "恰好门槛");
+check(thresholdDiscount(0) === 0, "空订单");
+const exEvents = new OrderEvents(),
+  exReceived: string[] = [],
+  exTrace: string[] = [];
+for (const id of ["mail", "audit"])
+  exEvents.subscribe(id, () => {
+    exReceived.push(id);
+  });
+let exComputes = 0,
+  exSaves = 0;
+const exPlace = protect(
+  checkout({
+    trace: exTrace,
+    events: exEvents,
+    load: () => ({ id: "exercise", items: [{ unit: 1500, qty: 2 }] }),
+    price: (n) => {
+      exComputes++;
+      return thresholdDiscount(n);
+    },
+    save: () => {
+      exSaves++;
+    },
+  }),
+  exTrace,
+);
+```
+
+继续运行新策略：先验收允许请求，再验收拒绝请求不增加计算和副作用。
+
+```ts
+const exResult = exPlace("buyer");
+check(exResult.status === "placed" && exResult.total === 2500, "替换成功");
+check(same(exReceived, ["mail", "audit"]) && exSaves === 1, "其他能力保留");
+const beforeDeny = exComputes;
+check(
+  exPlace("guest").status === "denied" && exComputes === beforeDeny,
+  "策略不能越过门禁",
+);
+check(exSaves === 1 && exReceived.length === 2, "拒绝不重复保存或通知");
+```
+
+</Answer>
+
+**问题 3：删掉多余模式。** 新需求确定为原价、固定邮件与审计两个接收者。实现一个直接函数，去掉可换策略、订阅表与独立代理层。哪些能力被有意删掉，哪些失败与安全规则必须保留？
+
+<Answer>
+删除的是变化接口，而不是授权检查、提交顺序和错误隔离。下面直接入口内检查权限，固定原价和两个接收者；本地记录仍先于通知。它不能临时换算法或动态退订，但若业务确实不需要这些能力，就比组合版更易读。
+
+```ts
+export function simpleOrder(
+  actor: "buyer" | "guest",
+  mailFails: boolean,
+): Outcome {
+  if (actor !== "buyer") return { status: "denied" };
+  const total = 1250 * 2 + 500;
+  const saved = { id: "O-7", total }; // 本地记录已创建，不是数据库提交
+  const event: Placed = Object.freeze({ type: "OrderPlaced", ...saved });
+  const deliveries: Delivery[] = [];
+  const sendMail = () => {
+    if (mailFails) throw Error("mail unavailable");
+  };
+  try {
+    sendMail();
+    deliveries.push({ to: "mail", status: "ok" });
+  } catch {
+    deliveries.push({ to: "mail", status: "failed" });
+  }
+  const auditLog: Placed[] = [];
+  auditLog.push(event);
+  deliveries.push({ to: "audit", status: "ok" });
+  return { status: "placed", total, event, deliveries };
+}
+```
+
+逐一比较固定需求的允许/拒绝与邮件成功/失败四种组合。
+
+```ts
+for (const actor of ["buyer", "guest"] as const) {
+  for (const mailFails of [false, true]) {
+    check(
+      same(
+        simpleOrder(actor, mailFails),
+        runOrder({ ...initial, actor, mailFails }).outcome,
+      ),
+      "固定需求下可删层",
+    );
+  }
+}
+console.log("compound chapter assertions passed");
+```
+
+只有固定需求下的四种组合被证明等价，不能据此宣称简单版支持运行时换价或订阅生命周期。真实入口若多处可调用，应重新审视集中授权包装，避免漏检。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="变化轴">
+    可以单独改变的需求类别；本例分别是价格计算、接收名单与下单资格。
+  </GlossaryItem>
+  <GlossaryItem term="策略">
+    同一计算入口下可互换的办法；只计算钱，不附带发送通知。
+  </GlossaryItem>
+  <GlossaryItem term="观察者">
+    通过登记的回调接收事件；本例中邮件和审计分别接收同一订单快照。
+  </GlossaryItem>
+  <GlossaryItem term="保护代理">
+    先检查权限再调用真实服务的同接口包装；拒绝时不能先做内部工作。
+  </GlossaryItem>
+  <GlossaryItem term="提交边界">
+    业务记录开始生效的位置；跨过后通知失败不能自动把它抹掉。
+  </GlossaryItem>
+</Glossary>
+
+## 出处与练习范围
+
+本页是原创订单模型的独立中文综合练习，不是原书正文翻译、原书新增章节，也不声称覆盖 GoF 的全部组合经验。[InformIT 官方书目与目录](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)仅用于核定参考书身份与“23 个模式”的范围；实际 GET 可读的目录为大项，不能据此声称读过所有模式正文。
+
+技术事实分别依据上文链接的 TypeScript 函数类型、Node.js 同步事件调用与 OWASP 请求授权文档。书目页列出的其他模式试读不授予本页任何全文改编权。原书《Design Patterns: Elements of Reusable Object-Oriented Software》版权归 Erich Gamma、Richard Helm、Ralph Johnson、John Vlissides 及出版社；本页代码、图形和教学结构为本站原创，不把原书或上述网站统一标成 CC BY-NC 授权。
+
+<Attribution
+  mode="original"
+  sourceUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+  sourceBasis="outline-only"
+/>

@@ -493,9 +493,23 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
         const beforeState = await stateSignature(containerElement);
         const before = await containerElement.screenshot();
         const tagName = await handle.evaluate((element) => element.tagName);
-        if (tagName === "BUTTON")
+        if (tagName === "BUTTON") {
           await handle.evaluate((element) => element.click());
-        else await handle.click();
+        } else if (tagName === "SELECT") {
+          // 打开原生下拉框不是改变值；显式选取另一个可用选项，才能验证
+          // React onChange、可见反馈和重置。不能把 select 的合法交互误判为无响应。
+          const nextValue = await handle.evaluate(
+            (element) =>
+              [...element.options].find(
+                (option) =>
+                  !option.disabled &&
+                  option.value !== element.value &&
+                  option.value !== "",
+              )?.value,
+          );
+          if (nextValue === undefined) continue;
+          await handle.select(nextValue);
+        } else await handle.click();
         await new Promise((resolve) => setTimeout(resolve, 250));
         const afterContainer = await currentContainer();
         if (!afterContainer) continue;

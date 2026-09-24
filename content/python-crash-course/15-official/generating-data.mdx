@@ -1,274 +1,373 @@
 ---
-title: "第15章：Generating Data"
+title: "第15章：生成数据与绘图"
 type: C
 section: "Part II · Projects · Data Visualization"
 order: 15
-description: "用Matplotlib生成line/scatter与RandomWalk图，再用Plotly分析骰子结果和导出可复现图表。"
+description: "从平方数、可重复随机游走与双骰实验出发，用 Matplotlib 和 Plotly 检查数据、绘图并导出 PNG 与 HTML。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+draft: true
+qualityVersion: 2
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: pcc3-15
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccGeneratingDataLab } from "@/components/mdx/python-crash-course/v2/generating-data";
+
+{/* 知识点清单（先行）：1. Matplotlib line/scatter、显式横坐标→平方数坐标图+square.py；术语：线图、散点图。2. labels/ticks/colormap→平方数图深浅编码、标签、刻度+square.py；术语：颜色映射。3. RandomWalk、seed、拒绝原地步、多轨迹→可复现路径实验+random_walk.py/walks.py；术语：随机游走、随机种子。4. 起终点/等比例轴/隐藏轴→实验圆形与方形、共享坐标轴+walks.py；术语并入随机游走。5. Die、Plotly Express、frequency/theory/bar→双骰实际柱与理论线、错误均匀线+ dice.py；术语：频数、理论分布。6. savefig/write_html→PNG及独立HTML实导出/文件核查；术语并入对应工具说明。每个 Term 在 Glossary 有同名中英映射。 */}
 
 <Objectives>
 
-- 能比较Matplotlib line graph与scatter的encoding，设计labels、ticks、colormap和savefig输出
-- 能实现RandomWalk的step生成、起终点强调与multiple walks，并分析seed和sample size对图形的影响
-- 能计算两颗Die的sum distribution，使用Plotly Express绘制bar chart并验证frequency总数与support
+- 能用同一组数画出线图和散点，设置标签、刻度、颜色，并保存可检查的 PNG。
+- 能修改随机种子、点数与步长，生成两条游走，标出起终点并比较它们的坐标范围。
+- 能回答：两颗六面骰之和为什么不是均匀分布？怎样用频数总和、理论期望和导出的 HTML 验证程序？
 
 </Objectives>
 
-## 为什么先生成可控数据再学习可视化
+## 直觉：先画一张路线明确的地图
 
-真实数据常同时包含missing values、format drift和sampling bias。先用平方数、RandomWalk与骰子生成器，data-generating process完全已知，图不对时可区分是数据逻辑、visual encoding还是library API问题。可视化不是“把数组交给函数”，而是把variable映射到position、color、size和label，并检查映射是否忠实。
+想检查一张地图是否画对，最好先走一条自己知道的路线。只看陌生数据生成的漂亮图片，很难判断问题出在数据还是画法。
 
-先预测：平方数用line与scatter分别暗示什么；RandomWalk point count翻倍后range一定翻倍吗；D6+D6为何sum 7比sum 2常见。预测给出可证伪解释，运行图后再用data和概率核对。
+本章先自己造数：算平方、逐步移动、反复掷骰。每张图都有可核对的规则。这样不仅能画出来，还能解释图上的位置、形状和偏差从哪里来。
 
-<Term def="把数据变量映射到position、line、marker、color、size或label的规则。">visual encoding</Term>
+## 五个概念，把生成和绘制分开
 
-本章有两条链路：Matplotlib适合静态、精确控制和image export；Plotly Express快速创建interactive HTML。两者都需要先明确data shape与chart question，不能用默认样式替代分析。
+### 1. 同一批点，连起来和不连起来回答不同问题
 
-## Installing Matplotlib and Plotly
+<Term def="按输入顺序连接数据点，强调相邻样本变化的图。">线图</Term>（line graph）适合展示有顺序的变化。Matplotlib 的 `ax.plot(x, y)` 不会替你按 x 排序；如果顺序乱了，线就来回折返。
 
-依旧用当前interpreter安装并验证import。Jupyter、VS Code和terminal若使用不同environment，会出现terminal能import、editor运行失败。保存Python executable与package versions作为运行证据。
+<Term def="用点的位置表示每个观测的两个数值，不默认连接相邻观测的图。">散点图</Term>（scatter plot）把关注点放在每个位置上，使用 `ax.scatter(x, y)`。实验①把线与圆点叠加：圆点是实际计算出的值，线段只是连接，不是新增测量。
 
-```bash
-python3 -m pip install matplotlib plotly
-python3 -c "import sys, matplotlib, plotly; print(sys.executable); print(matplotlib.__version__, plotly.__version__)"
-```
+显式传入 `x=[1,2,3,4,5]` 很重要。只给平方值 `[1,4,9,16,25]` 时，默认横坐标是 `0..4`，于是第一点被错放到 x=0。下面 `square.py` 用相同 x/y 同时绘制两种图，让错位很容易被发现。
 
-在无GUI环境中`plt.show()`可能无法打开window，但`fig.savefig()`仍可通过非交互backend产出文件。把数据生成、figure creation与show/save分成functions，测试无需真正弹窗。
+### 2. 样式是图的说明书，不是装饰
 
-## Plotting a Simple Line Graph
+标题回答“画的是什么”，轴标签回答“两个方向各量什么”，刻度让读者估计数值。`plt.subplots()` 返回整张画布 `fig` 和具体绘图区 `ax`；标题、刻度、点线一般设置在 `ax` 上，保存整张图使用 `fig`。
 
-Matplotlib面向`Figure`与`Axes`：`fig, ax = plt.subplots()`创建container，`ax.plot(input_values, squares)`在axes上编码x/y。显式提供input values可避免默认index掩盖domain起点；若平方数据从1开始而默认x从0开始，图的语义就错位。
+<Term def="把一组数值按同一规则映射为颜色，例如值越大颜色越深。">颜色映射</Term>（colormap）可由 `scatter(c=y, cmap="Blues")` 指定，旁边的颜色条解释深浅。单一颜色则用 `color="royalblue"`。不要同时设置互相冲突的 `c` 与 `color`，也不要用颜色暗示数据里不存在的类别。
+
+实验①的圆点越高越深；Python 图还带颜色条。`set_xticks()` 选择哪些值出现，`tick_params(labelsize=...)` 控制刻度字号。刻度文字、标签与颜色应在导出后再看一遍，不能只确认文件存在。
+
+### 3. 随机游走是累加位移，不是独立撒点
+
+<Term def="从起点出发，每次随机选一个位移，并把它累加到当前位置得到下一点的过程。">随机游走</Term>（random walk）先有 `(0,0)`，随后分别选 x、y 的方向和距离。下一点是“上一点加本次位移”。如果每次直接随机生成绝对坐标，那是在撒点，不是游走。
+
+本章每轴距离取 `0..最大步长` 的整数，方向取正或负。两个位移都是零时不记录新点；一轴为零、另一轴不为零则是合法移动。点数含原点，所以 N 个点只有 N−1 次被接受的移动。把最大步长设为零却又拒绝原地步，会导致循环无法完成；示例和实验都在入口拒绝该值。
+
+<Term def="初始化伪随机生成器状态的值；同一实现中配合相同调用顺序，可重复生成序列。">随机种子</Term>（random seed）用于复现一次实验。`Random(seed)` 建立局部生成器，不扰动其他代码的随机状态。实验②用 seed 和 seed+1 生成两条路径；同参数再生成，坐标不变。
+
+### 4. 路径的起终点与坐标轴会改变读图方式
+
+实验②用空心圆标原点、方形标终点，以实线和虚线区别两条路径，不只依赖颜色。A 的点从浅到深表示时间先后。两条路径必须共享相同范围，横纵一单位也应占相同长度，否则同样的位移会看起来偏长或偏短。
+
+Python 中用 `set_aspect("equal", adjustable="box")` 保持等比例；两轴使用共同的对称上下限。隐藏轴适合突出路径形状，但会丢失距离信息。实验的“坐标轴”按钮只改变显示，图下仍保留数值范围和终点，数据没有消失。把点数增加五倍，路径范围不一定增加五倍，因为前后移动可能抵消。
+
+### 5. 骰子的柱高来自计数，理论来自组合
+
+<Term def="某个结果在全部试验中出现的次数；除以试验总数才是频率。">频数</Term>（frequency count）是柱子的高度。对离散骰子结果，先计数再画柱状图很直观；不是把已经汇总的次数误当成原始投掷数据再重复分箱。
+
+<Term def="根据模型计算的各结果概率，而不是从有限样本中数出来的比例。">理论分布</Term>（theoretical distribution）为实际柱形提供参照。两颗公平且独立的六面骰有 6×6=36 个等可能的有序组合。和为 2 只有 `(1,1)`；和为 7 有 `(1,6)` 到 `(6,1)` 六种。和从 2 到 12 的组合数依次为 `1,2,3,4,5,6,5,4,3,2,1`，分别除以 36 才是概率。
+
+投 N 次时，某根柱的理论期望次数为 `N × 对应组合数 / 36`，可以不是整数。用 Plotly Express 的 `px.bar()` 画实际频数，再叠加期望折线。实验③展示两者差异；“错误理论”会把期望错画为 `N/11`，暴露“每个和都等可能”的误解。
+
+## 交互实验：先预测，再改一个量
+
+猜一猜：把数量从 120 调到 600，和为 7 的柱一定最高吗？保持种子不变，只把步长从 4 调到 6，骰子图应不应该变化？
+
+<PccGeneratingDataLab />
+
+1. 记录默认的 A 前四点、终点和双骰频数，再按一次“生成样本”。三个结果都应相同。
+2. 只改 N 为 600，检查旧路径是否是新路径的前段。比较的是**频率**与概率，不是两张图的绝对柱高；图会自动重算坐标范围。
+3. 保持 N 与 seed，只改步长。游走变化，骰子不变，因为掷骰程序不使用步长。
+4. 开启“错误理论”，找出水平线为何不适合双骰。关闭后恢复三角形期望，再隐藏/恢复坐标轴，判断哪些信息丢失了。
+5. 输入 N=1、空 seed 或步长=0，再生成：应出现边界提示并保留旧图。按“完整重置”，输入值、样本、坐标轴和错误开关均回到默认。
+
+<Callout type="info" title="复现的边界：不要跨语言硬对序列">
+
+网页使用 JavaScript 的 32 位线性同余伪随机生成器，Python 使用 `random.Random`。两者算法不同；相同 seed **不保证生成相同的骰子或坐标**。复现应记录语言、版本、算法、参数以及随机函数调用顺序。网页图服务于机制演示，不是 Python 输出的截图。
+
+</Callout>
+
+## 代码实践：四个文件，无需下载外部数据
+
+下面是本站独立编写的完整小程序，不是原书代码复刻。把四段分别保存为标明的文件名，放在同一目录。运行前三个入口脚本前，需要当前解释器环境已安装 `matplotlib`、`plotly` 和 `pandas`；后者支持 Plotly Express 的数据处理。`random_walk.py` 是本章同时提供的本地模块，不是额外依赖。
+
+### square.py：线、散点、样式与 PNG
+
+先选 `Agg` 无界面绘图后端，再导入 `pyplot`，这样没有桌面的机器也能导出。显式 x 防止错位；`c=y` 把颜色与平方值关联，`set_xticks` 保留所有五个采样位置。保存后关闭画布，重复运行不会积累未关闭的图。
 
 ```python
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-input_values = [1, 2, 3, 4, 5]
-squares = [1, 4, 9, 16, 25]
-
-fig, ax = plt.subplots()
-ax.plot(input_values, squares, linewidth=3)
-ax.set_title("Square Numbers", fontsize=24)
-ax.set_xlabel("Value", fontsize=14)
-ax.set_ylabel("Square of Value", fontsize=14)
-ax.tick_params(labelsize=14)
-plt.show()
+x = [1, 2, 3, 4, 5]
+y = [value ** 2 for value in x]
+fig, ax = plt.subplots(figsize=(6, 4), layout="constrained")
+ax.plot(x, y, linewidth=2, color="gray", label="Connecting samples")
+points = ax.scatter(x, y, c=y, cmap="Blues", s=80, edgecolors="black")
+ax.set_title("Square numbers", fontsize=16)
+ax.set_xlabel("Input value", fontsize=12)
+ax.set_ylabel("Squared value", fontsize=12)
+ax.set_xticks(x)
+ax.tick_params(axis="both", labelsize=11)
+ax.grid(alpha=0.25)
+ax.legend(fontsize=10)
+fig.colorbar(points, ax=ax, label="Squared value")
+fig.savefig("square.png", dpi=160, bbox_inches="tight")
+plt.close(fig)
+assert y == [1, 4, 9, 16, 25]
+print("square.png", list(zip(x, y)))
 ```
 
-title说明question，axis labels说明变量与单位，ticks控制阅读精度。linewidth和fontsize服务于层级，不改变data。若数据代表离散类别却连线，line会暗示类别之间连续可插值；chart choice本身就是claim。
+`fig.savefig()` 是真实图片导出；扩展名 `.png` 决定格式，`dpi` 控制像素密度，`bbox_inches="tight"` 使外侧标签也纳入边界。它不会保留 Plotly 那样的交互操作。这里使用英文图内标签，避免机器缺少中文字体时出现方块，中文解释留在正文。
 
-## Plotting and Styling Individual Points
+### random_walk.py：只负责生成坐标
 
-`ax.scatter(x_values, y_values, s=10)`显示samples，不强制相邻点存在路径关系。可传单一color，或让`c=y_values, cmap=plt.cm.Blues`用colormap编码magnitude。color同时承担装饰和信息时，应在caption或colorbar说明含义，且避免与背景对比不足。
-
-```python
-x_values = range(1, 1001)
-y_values = [x**2 for x in x_values]
-
-fig, ax = plt.subplots()
-ax.scatter(x_values, y_values, c=y_values, cmap=plt.cm.Blues, s=10)
-ax.axis([0, 1100, 0, 1_100_000])
-ax.ticklabel_format(style="plain")
-```
-
-axis limits决定visible window，设错会截断outlier或制造空白；`ticklabel_format(style="plain")`避免scientific notation，但大数过长时也可能拥挤。视觉设置必须针对读者任务，而不是把书中参数机械复制到所有dataset。
-
-<Stepper>
-  <Step title="切换line、scatter与colormap">
-  </Step>
-  <Step title="说明每个channel表达什么">
-    x是input，y是square；line表达有序趋势，marker表达sample，color若重复编码y就帮助扫描大小但不增加新变量。
-  </Step>
-  <Step title="验证数据而非只看形状">
-    检查首尾point、point count、x/y配对和axis范围，确保图形没有通过错误scale产生看似合理的曲线。
-  </Step>
-</Stepper>
-
-## Random Walks：把随机过程封装成数据生成器
-
-RandomWalk从`(0, 0)`开始，每一步随机选择x/y方向与距离，拒绝原地踏步，再append新position。class拥有`x_values`、`y_values`和`num_points`；`fill_walk()`只生成data，不知道Matplotlib。分离后可以测试length、start和step constraints。
-
-<Term def="当前位置由一系列随机方向与距离增量逐步累积形成的路径。">random walk</Term>
+构造器先验证参数，避免零步长导致永远在拒绝原地步。每次 `generate()` 都从给定 seed 和原点重新开始，所以对同一实例重复调用也可复现。方向和距离分别随机选取，与一次性从 `-step..step` 均匀抽整数的概率规则并不相同；改生成规则就不是同一个实验了。
 
 ```python
-from random import choice
+from random import Random
 
 class RandomWalk:
-    def __init__(self, num_points=5000) -> None:
-        self.num_points = num_points
-        self.x_values = [0]
-        self.y_values = [0]
+    def __init__(self, num_points=120, max_step=4, seed=42):
+        if any(type(v) is not int for v in (num_points, max_step, seed)):
+            raise ValueError("parameters must be integers")
+        if not 2 <= num_points <= 1200 or not 1 <= max_step <= 6:
+            raise ValueError("points: 2..1200; step: 1..6")
+        if not 0 <= seed <= 4294967295:
+            raise ValueError("seed: 0..4294967295")
+        self.num_points, self.max_step, self.seed = num_points, max_step, seed
 
-    def fill_walk(self) -> None:
-        while len(self.x_values) < self.num_points:
-            x_step = choice([1, -1]) * choice([0, 1, 2, 3, 4])
-            y_step = choice([1, -1]) * choice([0, 1, 2, 3, 4])
-            if x_step == 0 and y_step == 0:
+    def generate(self):
+        rng = Random(self.seed)
+        xs, ys = [0], [0]
+        while len(xs) < self.num_points:
+            dx = rng.choice((-1, 1)) * rng.randint(0, self.max_step)
+            dy = rng.choice((-1, 1)) * rng.randint(0, self.max_step)
+            if dx == 0 and dy == 0:
                 continue
-            self.x_values.append(self.x_values[-1] + x_step)
-            self.y_values.append(self.y_values[-1] + y_step)
+            xs.append(xs[-1] + dx)
+            ys.append(ys[-1] + dy)
+        return xs, ys
 ```
 
-`continue`拒绝zero-step，保证每个新增point都发生movement。while的termination依赖每次最终有nonzero step的正概率；测试时注入可控random source会比patch全局`choice`更可靠。point count是sample length，不直接等于路径几何长度，因为每步distance不同。
+这里 x、y 数组始终等长；只在接受一步之后才同时追加。模型不关心点的颜色、轴是否可见或文件名，这使生成逻辑可以单独测试。
 
-### Plotting a Random Walk
+### walks.py：两条路径、共同起点、各自终点与轴
 
-用point index作为color值，colormap从早到晚显示time order；start point用green、end point用red覆盖绘制。隐藏axes可突出path shape，但若任务需要读coordinate或比较scale，应保留axes。presentation选择不能删除分析所需信息。
-
-```python
-point_numbers = range(rw.num_points)
-ax.scatter(rw.x_values, rw.y_values, c=point_numbers,
-           cmap=plt.cm.Blues, edgecolors="none", s=1)
-ax.scatter(0, 0, c="green", edgecolors="none", s=100)
-ax.scatter(rw.x_values[-1], rw.y_values[-1],
-           c="red", edgecolors="none", s=100)
-ax.get_xaxis().set_visible(False)
-ax.get_yaxis().set_visible(False)
-```
-
-<Term def="初始化伪随机数生成器、使同一算法产生可重复序列的输入值。">random seed</Term>
-
-<Stepper>
-  <Step title="改变seed、point count与axes">
-  </Step>
-  <Step title="比较sample size而不承诺单调extent">
-    更多steps通常扩大探索范围，但某一次path可能折返；比较多个seeds和分布，而不是用单条walk下结论。
-  </Step>
-  <Step title="检查生成器不变量">
-    length等于num_points、首点为原点、相邻点不相同、每步距离在允许集合内，x/y list长度始终一致。
-  </Step>
-</Stepper>
-
-### Multiple Random Walks and stopping policy
-
-书中用outer while不断创建walk，显示后询问是否再生成。输入必须normalize，并只接受明确yes/no；绘图window关闭与terminal prompt是两个不同event boundary。自动批处理则用固定count或seed list，避免interactive loop无法结束。
-
-比较multiple walks时保持axis aspect、point count和style一致，否则无法判断差异来自randomness还是chart configuration。若要展示“典型范围”，应汇总许多walk的endpoint或extent distribution，而不是挑一条好看的path。
-
-## Saving Figures as Artifacts
-
-`plt.savefig("squares_plot.png", bbox_inches="tight")`在show前保存，显式指定path、format和DPI。保存后检查file存在、bytes大于0，并记录生成data参数；只有image没有seed与code，结果不可复现。循环生成多图时每次`plt.close(fig)`释放资源。
-
-<Term def="带有明确格式、路径和生成参数，可被检查和共享的图像或HTML输出。">export artifact</Term>
+先拿到两组坐标，再统一计算范围。散点颜色从第 0 点到末点渐变，B 另加虚线；空心圆和方形还提供不依赖颜色的辨识方式。`ax.set_axis_off()` 可隐藏轴；比较距离时应保留现在的轴，不要对两条路径分别自动缩放后比较大小。
 
 ```python
-output_path = "artifacts/random_walk_seed_42.png"
-fig.savefig(output_path, dpi=160, bbox_inches="tight")
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from random_walk import RandomWalk
+
+walks = [RandomWalk(seed=seed).generate() for seed in (42, 43)]
+fig, ax = plt.subplots(figsize=(6, 6), layout="constrained")
+for i, (xs, ys) in enumerate(walks):
+    ax.plot(xs, ys, linestyle="-" if i == 0 else "--", alpha=0.6)
+    ax.scatter(xs, ys, c=range(len(xs)), cmap="Blues" if i == 0 else "Oranges", s=12)
+    ax.scatter(xs[-1], ys[-1], marker="s", s=90, label=f"End {i + 1}")
+    print(f"walk {i + 1}: first4={list(zip(xs, ys))[:4]}, end={xs[-1], ys[-1]}")
+ax.scatter(0, 0, marker="o", s=130, facecolors="none", edgecolors="black", label="Start")
+bound = max(1, max(abs(v) for walk in walks for axis in walk for v in axis)) + 2
+ax.set(xlim=(-bound, bound), ylim=(-bound, bound), xlabel="x", ylabel="y")
+ax.set_aspect("equal", adjustable="box")
+ax.set_title("Two random walks: 120 points each")
+ax.tick_params(labelsize=11)
+ax.legend()
+fig.savefig("random_walks.png", dpi=160, bbox_inches="tight")
 plt.close(fig)
 ```
 
-不要把临时结果覆盖同一文件却不记录版本。filename可包含dataset、seed或timestamp；项目元数据记录Python与library version。artifact验证至少包含dimensions、预期labels和数据范围，而不只是“命令退出0”。
+把两处种子改成相同值时，两条路径应该重合；重合是可重复性的证据，不是“第二条没生成”。只增加点数通常会扩展范围，但不会保证终点离原点更远。
 
-## Rolling Dice with Plotly
+### dice.py：汇总双骰结果，并导出独立 HTML
 
-`Die`封装`sides`并用`randint(1, num_sides)`返回一次结果。生成两颗骰子时，每轮调用两次并求和；frequency不是从1开始，而从`2`到`max_result = die_1.num_sides + die_2.num_sides`。若把possible_results写成1..12，会产生不可能的sum 1并漏掉12或最高值。
-
-```python
-from random import randint
-
-class Die:
-    def __init__(self, num_sides=6) -> None:
-        self.num_sides = num_sides
-
-    def roll(self) -> int:
-        return randint(1, self.num_sides)
-
-die_1, die_2 = Die(), Die()
-results = [die_1.roll() + die_2.roll() for _ in range(1000)]
-max_result = die_1.num_sides + die_2.num_sides
-poss_results = range(2, max_result + 1)
-frequencies = [results.count(value) for value in poss_results]
-```
-
-<Term def="每个可能结果及其probability或frequency构成的完整结果分布。">probability distribution</Term>
-
-基本验证是`sum(frequencies) == len(results)`，support从2到最大和，所有frequency非负。D6+D6的理论count为1,2,3,4,5,6,5,4,3,2,1，因为sum 7有六种ordered pairs，sum 2只有一种。有限实验会波动，rolls增加时relative frequency通常接近理论值。
-
-<Stepper>
-  <Step title="改变第二颗Die与roll count">
-  </Step>
-  <Step title="从ordered pairs计算理论shape">
-    枚举`(a, b)`并按sum计数，先得到exact distribution，再比较simulation frequency而不是凭柱高猜测。
-  </Step>
-  <Step title="验证support与总数守恒">
-    最小sum为2，最大为两颗sides之和；frequency总数等于rolls，任何out-of-range result都表示生成或统计错误。
-  </Step>
-</Stepper>
-
-## Plotly Express Bar Chart and HTML Export
-
-Plotly Express用tidy arrays创建chart：x是possible results，y是frequencies，labels提供可读axis names，title说明实验。`fig.update_layout(xaxis_dtick=1)`让每个integer sum都有tick。hover自动显示值，但仍需保证label与单位清楚。
+`Die` 只负责生成一颗骰子的点数。两颗骰子共用同一个局部生成器，轮流取下一次随机数；不要每掷一次就重新用同一 seed 创建生成器，否则会反复得到同样的结果。列表 `values` 明确枚举 2–12，`Counter` 对缺失的结果返回 0，因此少量投掷也不会丢失类别。
 
 ```python
+from random import Random
+from collections import Counter
 import plotly.express as px
 
-title = "Results of Rolling Two D6 Dice 1,000 Times"
-labels = {"x": "Result", "y": "Frequency of Result"}
-fig = px.bar(x=list(poss_results), y=frequencies,
-             title=title, labels=labels)
-fig.update_layout(xaxis_dtick=1)
-fig.write_html("dice_visual_d6_d6.html")
+class Die:
+    def __init__(self, rng, sides=6):
+        if type(sides) is not int or sides < 2:
+            raise ValueError("sides must be an integer >= 2")
+        self.rng, self.sides = rng, sides
+
+    def roll(self):
+        return self.rng.randint(1, self.sides)
+
+rng = Random(42)
+die_1, die_2 = Die(rng), Die(rng)
+n = 1200
+counts = Counter(die_1.roll() + die_2.roll() for _ in range(n))
+values = list(range(2, 13))
+frequencies = [counts[value] for value in values]
+expected = [n * (6 - abs(value - 7)) / 36 for value in values]
+assert sum(frequencies) == n and set(counts) <= set(values)
+fig = px.bar(x=values, y=frequencies, labels={"x": "Sum", "y": "Frequency"}, title="Two fair D6")
+fig.add_scatter(x=values, y=expected, mode="lines+markers", name="Expected count")
+fig.update_xaxes(dtick=1)
+fig.write_html("dice.html", include_plotlyjs=True, full_html=True, auto_open=False)
+print("dice.html", dict(zip(values, frequencies)))
 ```
 
-`write_html`产生可离线打开的interactive artifact，file可能较大，因为可内嵌Plotly JavaScript。若部署网站，可选择CDN模式但会引入network dependency。PNG与HTML解决不同交付需求，应在artifact contract中写明。
+`write_html()` 才是网页导出，不能把 `savefig` 当成 Plotly 方法。`include_plotlyjs=True` 把所需脚本写入文件，文件较大但不依赖 CDN；`auto_open=False` 不会擅自启动浏览器。这里的“独立”表示绘图代码和数据已嵌入，不代表网页截图已经验收。若改成外链脚本模式，离线打开可能只看到空白。
 
-## 从图形回到数据验证
+### 运行和核查：不仅是成功退出
 
-一张平滑曲线可能来自错误排序，一张对称柱状图也可能frequency总数不对。每次绘图前打印或assert最小值、最大值、length、sum和首尾records；绘图后检查labels、axis limits、color semantics与输出文件。visual inspection用于发现pattern，不替代结构验证。
+在上述文件所在目录执行。以下环境变量只作用于运行环境：`MPLCONFIGDIR` 指向可写的临时目录，避免污染用户的 Matplotlib 缓存。
 
-随机实验还要记录seed。没有seed时不能逐样本复现，但仍可通过distribution properties验证；有seed时同版本PRNG应重现序列。测试不要断言“每次sum 7一定最多”，而应测试support、count conservation与大量样本下合理tolerance。
+```bash
+mkdir -p /tmp/pcc-generating-mpl
+export MPLCONFIGDIR=/tmp/pcc-generating-mpl
+python square.py
+python walks.py
+python dice.py
+```
 
-<Callout type="trap" title="图看起来合理就证明数据生成正确">
-错误的x/y pairing、漏掉support或频数不守恒也可能形成漂亮图形。绘图前验证shape、range、length与sum，图只提供另一层证据。
+预期得到 `square.png`、`random_walks.png`、`dice.html`。前者检查五个横坐标、标题、颜色条和曲线；中者检查 120 个点、共同原点、两个方形终点和等比例轴；后者检查 11 个类别、总频数 1200 与期望峰值 200。可直接把 PNG 交给图像查看器；HTML 需要浏览器才能完成悬停、缩放和离线渲染验收，检查文件结构不能替代这一步。
+
+本章实际示例在 Python 3.12.12、Matplotlib 3.11.2、Plotly 7.1.0、pandas 3.0.6 下验证。本次抓取的 Matplotlib 文档标注 3.11.2，Plotly 文档标注 Python v7.1.0，均与实跑一致；导出文件内的 Plotly.js v4.1.1 是浏览器脚本版本，不是 Python 包版本。Python `/3/` 文档当时标注 3.14.7，较运行环境新，本章仅使用已在 3.12 实跑的随机接口。官网文档会滚动更新，因此 `px.bar()`、`add_scatter()` 和 `write_html()` 参数仍以实际运行交叉核对。项目页面与 HTML 的浏览器视觉验收另行进行，不把静态导出检查写成浏览器通过。
+
+## 常见误区与修法
+
+<Callout type="trap" title="第一点为何落到 x=0？">
+
+**现象 →** 平方值 1 被画在 x=0，而不是 x=1。<br />
+**原因 →** 只传 y，绘图库使用从零开始的下标作 x。<br />
+**修法 →** 同时传入相同长度的 x 和 y；对照实验①检查五个圆点的坐标。
+
 </Callout>
 
-<Callout type="trap" title="隐藏axes总能让RandomWalk更清晰">
-隐藏axes适合欣赏path shape，但会删除coordinate与scale证据。根据问题选择；比较不同walk extent时保持axes和aspect一致，不能只追求视觉效果。
+<Callout type="trap" title="为什么增加样本后，柱子仍不完全贴理论？">
+
+**现象 →** N 增大，实际次数与理论期望仍有差距。<br />
+**原因 →** 有限样本存在随机波动，期望不是必须实现的配额；绝对次数差还可能增大。<br />
+**修法 →** 比较频率差；先关闭实验中的“错误理论”，再检查独立、公平的生成规则。
+
 </Callout>
 
-## 本章回顾：生成、编码、验证、导出
+<Callout type="trap" title="游走程序卡住，或形状被拉长">
 
-1. Matplotlib Figure/Axes把data映射到line、marker、color、label与ticks。
-2. RandomWalk生成器与plot分离，seed、point count和step constraints决定可复现性。
-3. start/end、axes和colormap应服务于明确阅读任务。
-4. 两颗Die的sum frequency必须覆盖正确support且总数等于rolls。
-5. savefig与write_html产生export artifact，还需记录参数并验证文件内容。
+**现象 →** 步长为零时没有输出；或对角方向看起来被拉伸。<br />
+**原因 →** 拒绝原地步后循环无法前进，或横纵轴单位比例不同。<br />
+**修法 →** 入口拒绝零步长，并使用等比例轴；网页非法输入应报错而不是冻结。
 
+</Callout>
+
+<Callout type="trap" title="图文件存在，就算完成了吗？">
+
+**现象 →** 图片标签被截断，或离线 HTML 无图。<br />
+**原因 →** 只查文件名，不查内容；也可能把绘图脚本放在外部 CDN。<br />
+**修法 →** 查看实际 PNG 的边界；用内嵌脚本导出 HTML，再单独完成浏览器打开与交互检查。
+
+</Callout>
+
+## 小结与练习
+
+- 同一坐标可画线或点；标签和颜色须解释数据。
+- 生成与绘制分离，种子、步长与等比例轴各司其职。
+- 双骰概率来自组合；计数总和与导出结果都要核查。
+
+<div className="[&_button]:min-h-11 [&_button]:min-w-11">
 <Exercises>
 
-**问题 1：如何判断一组平方数应使用line还是scatter？**
+**问题 1：** 修改 `square.py`，让 x 取 1–8、y 取立方数。独立生成一张带颜色条的 PNG；目标是八个圆点、递增折线、横轴 1–8，最后一点 `(8,512)`。应改哪些地方，怎样证明没有默认下标错位？
 
-<Answer>若强调有序输入上的连续趋势，可用line；若强调每个离散sample和密度，用scatter。无论选择哪种，都显式验证x/y配对、首尾值、axis范围和labels；colormap若编码顺序或magnitude，要说明语义而非仅装饰。</Answer>
+<Answer>
 
-**问题 2：怎样测试RandomWalk而不依赖某一条“好看”的路径？**
+把 x 改为 `list(range(1, 9))`，y 中的指数改为 3。相应更新标题、纵轴标签、颜色条标签与文件名，如 `cubes.png`，把平方断言换成 `len(y) == 8 and y[-1] == 512`。显式 x 仍传给 plot 和 scatter，`set_xticks(x)` 自动覆盖八个位置。检查输出首点为 `(1,1)`、末点为 `(8,512)`，而不是 x=0 到 7；实际打开图片确认全部标签可见。
 
-<Answer>注入seed或random source，断言x/y长度等于num_points、首点为(0,0)、相邻点非重复、step方向与距离在允许集合。对统计性质运行多个seeds比较endpoint/extent distribution，不断言单条walk必须向外扩张。</Answer>
+</Answer>
 
-**问题 3：D6与D8各roll 5000次，频数表应满足哪些不变量？**
+**问题 2：** 在实验中固定 seed=42，令 N 从 120 改为 600，再只改最大步长。哪些结果应保持不变？若允许步长=0，需要怎样改程序才不会卡住？
 
-<Answer>support从2到14，所有frequency非负且总和为5000；每个result都来自一个D6与D8的合法值。理论count可枚举48个ordered pairs，simulation relative frequencies应在合理tolerance内接近理论，而不是要求完全相等。</Answer>
+**小分问：读图诊断。** 固定同一份点数据，在非正方形绘图区把等比例改成不等比例，再隐藏坐标轴：真实起终点位移、路径的视觉形状和数值可读性分别是否改变？不要重新生成随机点。标出起点和终点，并用断言确认坐标没有被这些显示设置改写。比较实际距离与展示路径轮廓时，你会分别如何选择坐标轴？
+
+<Answer>
+
+只增加 N，先前的坐标序列与骰子结果序列仍是新序列的前缀，但终点、范围和汇总频数可能变化。只改步长则骰子计数保持不变，路径不保证按比例放大，因为可选距离及原地步的拒绝次数都会变化。步长为零且拒绝原地步时无法补足点数。本章选择入口报错；若另一种模型要允许零步长，就必须允许把重复位置记录为一步，并明确 N 记录的是时间点，不能直接保留当前拒绝规则。
+
+小分问中，真实位移始终是 `(xs[-1] - xs[0], ys[-1] - ys[0])`。同样的坐标范围放进宽长方形绘图区，使用 [`set_aspect("auto")`](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.set_aspect.html) 会让横纵单位的屏幕长度不同，路径看起来被拉伸，但点数据和真实位移没变。`"equal"` 才保证横纵一个数据单位等长；正方形绘图区恰好可能掩盖错误，不能只看外观猜设置。
+
+隐藏轴不会删点，也不会自动修复比例；刻度与轴标签消失，读者更难判断坐标和距离。比较实际距离时保留刻度、标签及等比例；只展示轮廓可隐藏轴，但仍保留等比例、起终点标记与图例，不能要求读者从无刻度图中读出精确位移。以下代码与正文 `random_walk.py` 放在同一目录，故意导出不等比例、无轴的诊断图：
+
+```python
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from random_walk import RandomWalk
+
+xs, ys = RandomWalk(seed=42).generate()
+before = (tuple(xs), tuple(ys))
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(xs, ys)
+start = ax.scatter(xs[0], ys[0], marker="o", label="Start")
+end = ax.scatter(xs[-1], ys[-1], marker="s", label="End")
+bound = max(1, *(abs(v) for v in xs + ys)) + 2
+ax.set(xlim=(-bound, bound), ylim=(-bound, bound), xlabel="x", ylabel="y")
+ax.set_aspect("equal", adjustable="box")
+assert ax.get_aspect() == 1.0 and ax.axison
+ax.set_aspect("auto")
+ax.set_axis_off()
+assert ax.get_aspect() == "auto" and not ax.axison
+assert (tuple(xs), tuple(ys)) == before
+assert tuple(start.get_offsets()[0]) == (xs[0], ys[0])
+assert tuple(end.get_offsets()[0]) == (xs[-1], ys[-1])
+ax.legend()
+fig.savefig("walk_axis_diagnosis.png", dpi=160)
+plt.close(fig)
+```
+
+恢复为 `ax.set_aspect("equal", adjustable="box")` 和 `ax.set_axis_on()` 后另存一张对照图；起终点仍相同。数据断言只证明没有改坐标，比例和轴状态断言才检查显示选择，不能用前者替代后者。
+
+</Answer>
+
+**问题 3：** 改 `dice.py` 为一颗六面骰加一颗八面骰，投掷 4800 次。应该有多少根柱？和为 7、8、9 的期望频数各是多少？怎样检查导出？
+
+<Answer>
+
+把第二颗骰子改为 `Die(rng, sides=8)`，和的范围改为 `list(range(2, 15))`，共 13 根柱。原来六面骰的三角形公式不再适用：枚举 `a=1..6`、`b=1..8` 共 48 个组合，并对 `a+b` 计数，再将每种组合数除以 48、乘 4800。和为 7、8、9 都有 6 个组合，所以期望均为 600，形成平顶而非单峰。核对实际频数总和为 4800、类别覆盖 2–14（保留零频数）、理论概率和为 1。保存新 HTML，核查文件内数据与脚本，再在浏览器中检查 13 根柱和悬停数值；PNG 文件不能替代交互网页。
+
+</Answer>
 
 </Exercises>
+</div>
 
-## 术语表
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="visual encoding" definition="把变量映射到position、line、marker、color、size或label的规则。" />
-  <GlossaryItem term="random walk" definition="由随机方向与距离增量逐步累积当前位置的路径。" />
-  <GlossaryItem term="random seed" definition="初始化伪随机生成器并使序列可重复的输入值。" />
-  <GlossaryItem term="export artifact" definition="带明确格式、路径和参数、可检查与共享的图像或HTML输出。" />
-  <GlossaryItem term="probability distribution" definition="每个可能结果及其probability或frequency构成的完整分布。" />
+  <GlossaryItem term="线图">Line graph：依输入顺序连接相邻数据点，适合观察有顺序的变化，不会自动排序。</GlossaryItem>
+  <GlossaryItem term="散点图">Scatter plot：每个点用横纵位置表示一对数值，不默认把观测连成线。</GlossaryItem>
+  <GlossaryItem term="颜色映射">Colormap：数值到颜色的对应规则；颜色条帮助读者把颜色还原成数值。</GlossaryItem>
+  <GlossaryItem term="随机游走">Random walk：逐次累加随机位移得到路径；不是每次独立随机挑一个绝对位置。</GlossaryItem>
+  <GlossaryItem term="随机种子">Random seed：初始化伪随机生成器的值；复现还依赖实现与调用顺序，并非跨语言通用的序列编号。</GlossaryItem>
+  <GlossaryItem term="频数">Frequency count：结果出现的次数；相对频率 relative frequency 则是次数除以总数，两者不要混用。</GlossaryItem>
+  <GlossaryItem term="理论分布">Theoretical distribution：由模型推导出的概率安排；乘试验次数得到期望次数，不保证样本恰好等于期望。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 15: Generating Data" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 来源与写作范围
+
+范围对应《Python Crash Course》第三版第 15 章 Generating Data（`pcc3-15`）。2026-09-23 实际请求出版社页面返回 **HTTP 403**，本章对原书的访问级别保留为 **outline-only**，不声称读到了原书正文。以下作者仓库和官网资料可访问，用于独立核对技术事实，不把它们的可访问性等同于整章正文授权。
+
+- [作者第三版 RandomWalk 示例](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_15/random_walks/random_walk.py)：方向、距离、累加坐标与拒绝原地步；[绘制示例](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_15/random_walks/rw_visual.py)核对颜色、起终点与轴。
+- [作者 Die 示例](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_15/rolling_dice/die.py)与[双骰绘图示例](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_15/rolling_dice/dice_visual.py)：公平整数点数、频数及 Plotly Express 柱图。
+- [Matplotlib plot](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.plot.html)、[scatter](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.scatter.html)、[savefig](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.savefig.html)：显式坐标、颜色参数和图片输出。
+- [Plotly 柱状图](https://plotly.com/python/bar-charts/)与[交互 HTML 导出](https://plotly.com/python/interactive-html-export/)：频数数据到柱图、内嵌脚本与独立 HTML。
+- [Python random 官方文档](https://docs.python.org/3/library/random.html)：局部生成器、整数范围及可重复性边界。
+
+<Attribution mode="independent-rewrite" sourceBasis="outline-only" workTitle="Python Crash Course, 3rd Edition · Chapter 15" sourceUrl="https://nostarch.com/python-crash-course-3rd-edition" />

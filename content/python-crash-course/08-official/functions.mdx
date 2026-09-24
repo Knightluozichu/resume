@@ -3,231 +3,536 @@ title: "第8章：Functions"
 type: C
 section: "Part I · Basics"
 order: 8
-description: "用signature、argument binding、return与ownership建立可组合函数，并以module形成命名边界。"
+description: "追踪实参绑定、返回通道与列表身份，修复共享默认值，并把可复用函数组织进模块。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: "pcc3-08"
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccFunctionsLab } from "@/components/mdx/python-crash-course/v2/functions";
+
+{/* 知识点清单（pcc3-08）：定义/形参与实参/文档字符串→greet_user 代码；位置/关键字/默认值/绑定错误→实验 A；return/None/可选参数/字典/循环调用→实验 A 与 build_person 代码；列表修改/重绑定/浅拷贝/共享默认值→实验 B 与 render_models 代码；*args/**kwargs/解包→make_pizza 代码；模块/import/函数别名/模块别名/星号导入/入口→双文件代码；风格→带注解默认值对照。五组概念为调用接口、返回通道、对象身份、可变参数、模块边界；陌生术语统一收录章末。 */}
 
 <Objectives>
 
-- 能解释function definition、parameter与argument binding，判断positional、keyword和default调用结果
-- 能设计return value与list ownership，比较原地mutation、slice copy和返回新list的契约
-- 能实现`*args`、`**kwargs`与module import，分析variadic shape和namespace来源
+- 能逐步标出实参到形参的绑定，预测默认值、重复绑定、缺参和返回结果。
+- 能修改实验中的列表函数，用连续调用和身份断言证明默认值不泄漏，区分浅拷贝与内部对象隔离。
+- 能把函数移入模块并用别名调用；能回答：为什么屏幕打印了字符串，调用方却得到 `None`？
 
 </Objectives>
 
-## 为什么函数是行为边界，而不只是减少重复
+## 先把一段加工步骤封装起来
 
-function把一段行为命名，并通过signature声明输入，通过return和side effects交付输出。减少重复只是结果之一；更重要的是调用者不必知道内部步骤，但必须知道parameter如何绑定、输入是否会mutation、失败如何表达、返回值是什么。
+一条生产线反复处理不同批次时，不该每换一批就重写整段操作。我们希望给这段操作起一个名字，让后来的人交入材料、取走结果，而不用逐行追踪内部步骤。
 
-先预测：同一个parameter同时收到positional和keyword argument会怎样；把list传入函数后append是否影响调用方；没有显式return的函数返回什么。若这些问题没有contract，调用点越多，隐式假设越难修。
+不过，“交进去”和“拿回来”必须说清楚：次序错了会不会加工错？原材料会不会被改掉？屏幕显示“完成”，是否真的交出了成品？没有这些约定，减少重复反而会隐藏错误。
 
-<Term def="由函数名、parameters、default values以及调用约束构成的输入接口。">function signature</Term>
+## 1. 调用接口：Defining a Function 与 Passing Arguments
 
-## Defining a Function
+### 定义不是调用
 
-`def`创建function object并把名字绑定到它；缩进body只在调用时执行。docstring紧随definition，用来说明purpose、parameters、return、side effects和raises，而不是逐行复述实现。
+用 `def` 定义一个<Term def="把一段可重复执行的操作命名、接收输入并可返回结果的对象。">函数（function）</Term>。执行定义会创建函数对象并绑定名字，但不会执行函数体。第一次真正调用时，缩进内的代码才运行。函数体首行的<Term def="写在函数体开头的字符串，用来说明用途和调用约定，可通过 help 查看。">文档字符串（docstring）</Term>应说明目的，而不是复述每行代码。
 
 ```python
-def greet_user(username: str) -> str:
-    """Return a greeting without printing it."""
+def greet_user(username):
+    """Return a greeting; reject an empty name."""
     normalized = username.strip()
     if not normalized:
         raise ValueError("username must not be empty")
     return f"Hello, {normalized.title()}!"
 
-print(greet_user("  ada  "))
+
+message = greet_user("  ada  ")
+assert message == "Hello, Ada!"
+print(message)
 ```
 
-parameter是definition中的输入名字，argument是call时提供的实际对象。type hint帮助editor、reader和static checker，不会自动在runtime拒绝错误type；边界仍需按业务做validation。
+定义中的 `username` 是<Term def="函数定义里接收输入的名字；实参则是调用时传入的实际值或对象。">形参与实参（parameter / argument）</Term>中的形参；调用中的 `"  ada  "` 是实参。上例的 `normalized` 是函数内部的局部名字，不会自动变成调用方的变量。实验 A 会把这些局部绑定画在调用帧里。
 
-<Term def="调用时把每个argument按位置、keyword和default规则映射到signature parameter的过程。">argument binding</Term>
+### 先绑定，再执行函数体
 
-## Passing Arguments
-
-<Stepper>
-  <Step title="切换positional、keyword、default与重复绑定">
-  </Step>
-  <Step title="在body执行前完成parameter map">
-    缺少required argument、未知keyword或重复绑定都会TypeError，function body不会得到部分输入。
-  </Step>
-  <Step title="用清晰调用减少顺序风险">
-    少量显然参数可positional；bool、同类型多参数或含义易混时优先keyword。
-  </Step>
-</Stepper>
+函数的<Term def="参数顺序、名字、默认值及调用限制共同形成的输入约定。">签名（signature）</Term>决定输入如何匹配。<Term def="按位置、关键字名称和默认值，把调用输入匹配到形参的过程。">参数绑定（argument binding）</Term>不是类型转换，也不会自动复制列表。
 
 ```python
-def describe_pet(pet_name: str, animal_type: str = "dog") -> str:
+def describe_pet(pet_name, animal_type="dog"):
+    """Return one sentence describing a pet."""
     return f"{pet_name.title()} is a {animal_type}."
 
-print(describe_pet("willie"))
-print(describe_pet("harry", "hamster"))
-print(describe_pet(animal_type="cat", pet_name="milo"))
+
+assert describe_pet("milo") == "Milo is a dog."
+assert describe_pet("milo", "cat") == "Milo is a cat."
+assert describe_pet(animal_type="cat", pet_name="milo") == "Milo is a cat."
 ```
 
-default value在definition时求值一次。immutable default如string、number、None通常安全；mutable default list/dict会在多次调用间共享。需要每次新list时使用`None`sentinel并在body创建。
+位置实参按顺序匹配，关键字实参按名字匹配；因此倒序写两个关键字不影响结果。普通调用先写位置实参，再写关键字实参。普通位置参数中，有默认值的参数应排在必填参数后面。默认值只在对应输入**省略**时使用：显式传 `None` 不会自动改用 `"dog"`。
 
-### equivalent calls不等于同样可读
+| 调用（沿用上面定义）                    | 函数体之前发生什么                   |
+| --------------------------------------- | ------------------------------------ |
+| `describe_pet("milo", pet_name="luna")` | 同一参数收到两次值，抛 `TypeError`   |
+| `describe_pet(animal_type="cat")`       | 缺少必填 `pet_name`，抛 `TypeError`  |
+| `describe_pet("milo", species="cat")`   | 未声明 `species`，抛 `TypeError`     |
+| `describe_pet("milo", None)`            | 正常绑定，结果为 `"Milo is a None."` |
 
-`describe_pet("harry", "hamster")`与keyword call结果相同，但后者直接显示角色。API设计不只追求能绑定，还要让错误调用难写。参数过多时考虑把相关配置组合为dictionary、class或dataclass，而不是增长十几个positionals。
+绑定失败时函数体不执行，但调用表达式中的实参表达式已经可能被求值；不要误读为“整个调用过程绝无副作用”。错误消息的具体措辞随 Python 版本而异，这里依赖的是异常种类与失败原因。
 
-## Return Values与optional result
+### 专属实验：预测 → 操作 → 解释 → 重置
 
-return立即结束当前function并把object交给caller；没有显式return则返回None。一个function可在不同branch返回不同值，但稳定API应尽量保持同一shape。not found若用None表示，caller必须显式处理；错误若应携带原因，后续第10章用exception表达。
+先在实验 A 选择预测，再按“下一步”：观察关键字倒序时交叉的绑定线、函数体执行次数以及 `result` 和屏幕输出的分流。试完正常返回后，换成重复绑定与 `print`。实验 B 连续调用两次，观察 `r1` 是否会随着第二次调用一起变化，再改成 `None` 或浅拷贝。
 
-<Term def="function完成后交给caller的对象；它与print到stdout不同，caller可继续组合、验证或保存。">return value</Term>
+<PccFunctionsLab />
+
+## 2. 返回通道：Return Values 与可选输入
+
+### `return` 交付对象，`print` 只显示文字
+
+函数的<Term def="函数结束后交给调用方、可赋值或继续计算的对象。">返回值（return value）</Term>由 `return` 给出，执行到它就立即离开当前函数；写 `return` 而不带表达式，或者走到函数末尾，都返回 `None`。`print` 写入屏幕输出通道，它本身也返回 `None`。因此“显示了结果”不等于“调用方收到了那个字符串”，正如实验 A 的两条通道。
 
 ```python
-def build_person(first: str, last: str, age: int | None = None) -> dict:
+def show_name(name):
+    print(name.title())
+
+
+def format_name(name):
+    return name.title()
+
+
+shown = show_name("ada")  # 屏幕显示 Ada
+saved = format_name("ada")
+assert shown is None
+assert saved == "Ada"
+```
+
+### 可选参数与返回字典
+
+可选参数允许调用时省略，不表示返回值一定可有可无。下面用 `None` 表示“不提供年龄”，而 `0` 是有效年龄；不能用 `if age:` 混淆两者。返回字典让调用方继续取字段，而不是解析打印出来的文字。
+
+```python
+def build_person(first, last, age=None):
+    """Return names and an age only when one is supplied."""
     person = {"first": first.title(), "last": last.title()}
     if age is not None:
         person["age"] = age
     return person
 
-musician = build_person("jimi", "hendrix", age=27)
-print(musician)
+
+assert build_person("jimi", "hendrix")["first"] == "Jimi"
+assert "age" not in build_person("jimi", "hendrix")
+assert build_person("baby", "lee", age=0)["age"] == 0
 ```
 
-不要用truthiness判断optional numeric：`if age:`会把合法0与None混在一起；使用`is not None`表达presence。返回dictionary时说明required keys，避免不同branch产生无法预测的shape。
+这个接口约定 `first`、`last` 必有，`age` 可能缺省；不是要求所有返回字典键完全相同，而是要求变化有明确约定。若添加 `age: int | None = None` 这样的类型标注，它帮助阅读和静态检查，不会自动执行运行时类型校验。
 
-### print不是return
+### 在 `while` 中调用，不把交互塞进加工函数
 
-教学示例常在function里print，但print只产生side effect，call expression得到None。可组合逻辑通常return domain value，由CLI/UI层决定如何展示；这样pytest能直接断言结果，web handler也能把同一value序列化。
-
-## Passing a List：先声明ownership
-
-Python传递object reference。function收到list后若append/pop，caller看到同一对象变化；传`items[:]`只复制外层，nested objects仍共享。防止mutation不应靠调用点偶然加slice，最好由function contract明确“consume input”或“return new result”。
-
-<Stepper>
-  <Step title="选择四种list与return策略">
-  </Step>
-  <Step title="标出caller state与function effect">
-    原地消费要在name/docstring中说明；pure transformation返回new list并保持input snapshot。
-  </Step>
-  <Step title="验证outer与nested ownership">
-    slice copy只隔离append/pop，不隔离内部dictionary mutation；测试要覆盖两层identity。
-  </Step>
-</Stepper>
-
-<Term def="约定function是否可mutation caller提供的对象、是否消费其内容，以及谁拥有returned object。">function ownership contract</Term>
+将读入、退出判断放在调用方，`build_person` 只构造结果，便于测试。下面用有限数据代替键盘输入，可直接运行；改成命令行程序时，可把 `next(entries)` 换成 `input("First (q to quit): ")`。
 
 ```python
-def render_models(unprinted_designs: list[str]) -> list[str]:
-    completed = []
-    for design in unprinted_designs:
-        completed.append(f"rendered:{design}")
-    return completed
-
-unprinted = ["phone case", "robot pendant"]
-completed = render_models(unprinted)
-print(unprinted)
-print(completed)
+# 先执行上面的 build_person 定义。
+entries = iter(["ada", "q"])
+people = []
+while True:
+    first = next(entries)
+    if first == "q":
+        break
+    people.append(build_person(first, "lovelace"))
+assert people == [{"first": "Ada", "last": "Lovelace"}]
 ```
 
-### 防止function修改list的代价
+## 3. 对象身份：默认值与 Passing a List
 
-copy外层list有O(n)时间与memory成本；对小练习可接受，对大数据或nested graph要评估。更好的设计可能是接收任意iterable并逐项yield，或由caller明确转移ownership。不要为了“纯函数”盲目deepcopy整个对象图。
+### 默认值何时创建？
 
-若function本来就是队列consumer，mutation可能最直接：名字用`drain_queue`，docstring写明source会清空，并在异常时定义item outcome。关键不是禁止side effect，而是让它可见、局部且可测试。
-
-## Arbitrary Number of Arguments
-
-`*args`把额外positional arguments收集为tuple，`**kwargs`把额外keyword arguments收集为dictionary。它们适合确实可变的同质输入或扩展metadata，不是隐藏不稳定API的工具。required parameters通常放在前面，`**kwargs`放最后。
-
-<Stepper>
-  <Step title="切换args、kwargs与module alias">
-  </Step>
-  <Step title="观察收集后的tuple/dictionary shape">
-    args保留位置顺序，kwargs保留keyword到value映射；callee仍要验证允许key与value type。
-  </Step>
-  <Step title="把function放进明确module namespace">
-    import module让origin可见，alias只在名称冗长或冲突时使用。
-  </Step>
-</Stepper>
-
-<Term def="用*args收集额外positional tuple、用**kwargs收集额外keyword dictionary的调用接口。">variadic arguments</Term>
+默认表达式在执行 `def` 时求值一次，不是在每次调用时求值。对于字符串、数字、`None` 等不可变对象，共用默认对象通常没有问题；对于<Term def="可以在不更换对象身份的情况下改变内部内容的对象，例如列表与字典。">可变对象（mutable object）</Term>，修改会被所有引用它的地方看到。
 
 ```python
-def build_profile(first: str, last: str, **user_info: object) -> dict:
-    profile = {"first_name": first, "last_name": last}
-    allowed = {"location", "field"}
-    unknown = set(user_info) - allowed
+def add_bad(item, items=[]):
+    items.append(item)
+    return items
+
+
+a = add_bad("A")
+b = add_bad("B")
+assert a is b
+assert a == ["A", "B"]  # a 不是第一次返回时的历史快照
+
+
+def add_item(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+
+
+x = add_item("A")
+y = add_item("B")
+assert x == ["A"] and y == ["B"]
+assert x is not y
+```
+
+实验 B 的 `L0` 就是坏版本共用的列表；修复版本则为两次省略输入的调用分别创建 `L1`、`L2`。如果调用方显式传入同一个列表，修复版本仍会修改并返回它；`None` 修复的只是**默认对象共享**，不是禁止一切修改。
+
+### 原地修改与重新绑定不同
+
+将列表传入函数时，局部参数和调用方名字引用同一个对象。对参数执行 `append` 或 `pop` 会修改共享列表；执行 `items = []` 只是让局部名字转向另一对象，不会重新赋值调用方的名字。用 `is` 比较身份，用 `==` 比较内容。
+
+```python
+def edit(items):
+    items.append("first")  # 修改原对象
+    items = []             # 只重新绑定局部名字
+    items.append("local")
+    return items
+
+
+source = []
+result = edit(source)
+assert source == ["first"]
+assert result == ["local"]
+assert result is not source
+```
+
+### 修改列表与防止修改
+
+函数应说明是否消耗输入、是否保留顺序。下例的 `pop()` 会清空传入列表并倒序处理；换成外层切片后，原列表的槽位得到保留。也可以不用修改输入，直接创建新结果：
+
+```python
+def print_models(unprinted, completed):
+    """Consume unprinted in reverse order into completed."""
+    while unprinted:
+        completed.append(unprinted.pop())
+
+
+def render_models(models):
+    """Return new labels in input order without changing models."""
+    return [f"printed:{model}" for model in models]
+
+
+models = ["case", "gear"]
+completed = []
+print_models(models[:], completed)
+assert models == ["case", "gear"]
+assert completed == ["gear", "case"]
+assert render_models(models) == ["printed:case", "printed:gear"]
+```
+
+这里的<Term def="只新建外层容器、保留对内部元素对象引用的复制方式。">浅拷贝（shallow copy）</Term>足以隔离外层 `pop`，却不能隔离内部字典的修改。实验 B 的 `source[:]` 有新列表，却仍指向同一个 `D0`：
+
+```python
+source = [{"done": False}]
+copy = source[:]
+copy.append("A")
+copy[0]["done"] = True
+assert len(source) == 1
+assert source is not copy
+assert source[0] is copy[0]
+assert source[0]["done"] is True
+```
+
+需要隔离到哪一层，取决于函数改到哪一层。对本章这种只有布尔字段的记录，可以逐条 `dict.copy()`；任意深度的嵌套结构不能靠再切一次片解决。
+
+## 4. 可变参数：Arbitrary Number of Arguments
+
+签名中的<Term def="用 *args 收集额外位置实参为元组，用 **kwargs 收集额外关键字实参为字典的机制。">可变参数（variadic arguments）</Term>适合数量不固定的输入。名字 `args`、`kwargs` 是惯例，真正起作用的是星号。位置实参先满足普通参数，其余才进入 `*toppings`；没有剩余时得到空元组。`**options` 接收未被显式参数消耗的关键字。
+
+```python
+def make_pizza(size, *toppings, **options):
+    """Build an order; only crust is accepted as an extra option."""
+    unknown = set(options) - {"crust"}
     if unknown:
-        raise TypeError(f"unknown profile fields: {sorted(unknown)}")
-    profile.update(user_info)
-    return profile
+        raise TypeError(f"unknown pizza options: {sorted(unknown)}")
+    return {
+        "size": size,
+        "toppings": toppings,
+        "crust": options.get("crust", "thin"),
+    }
+
+
+order = make_pizza(12, "mushroom", "onion", crust="thick")
+assert order["toppings"] == ("mushroom", "onion")
+assert make_pizza(12)["toppings"] == ()
+# 调用处的 * 和 ** 是解包，方向与定义时相反。
+parts = ["mushroom", "onion"]
+settings = {"crust": "thick"}
+assert make_pizza(12, *parts, **settings) == order
 ```
 
-无限接受kwargs会把拼写错误变成新field。即使选择开放metadata，也要记录reserved keys和serialization规则；固定业务参数则优先显式signature，让IDE和TypeError尽早发现错误。
+实参流向是 `12 → size`，两种配料 `→ toppings 元组`，`crust → options 字典`。在定义里收集，在调用里展开，是相反方向的操作；`*parts` 不是把整个列表作为一个配料传入。
 
-## Storing Functions in Modules
+若接口只允许固定的 `crust`，更清晰的签名是 `def make_pizza(size, *toppings, crust="thin"):`。`*toppings` 后的普通参数只能按关键字传入。固定业务字段优先显式声明，否则 `crsut` 这类拼写错误会被 `**options` 悄悄收下；本例通过允许名单拒绝它。
 
-module是`.py`文件和namespace。`import pizza`后通过`pizza.make_pizza`调用，来源最清楚；`from pizza import make_pizza`更短但当前namespace可能冲突；`import pizza as p`适合约定俗成或长名称。避免`from module import *`，它隐藏来源并可能覆盖名字。
+## 5. 模块边界：Storing Functions in Modules
 
-import时module顶层代码会执行一次并缓存。可复用module不应在import时启动交互、访问网络或写文件；把可执行入口放进function，并使用`if __name__ == "__main__":`保护CLI调用。
+### 两个文件建立名字来源
 
-### module边界与依赖方向
+本章用含有 Python 定义的 `.py` 文件作为<Term def="具有自己的名字空间、可供其他代码导入的代码单元；本章使用 .py 文件模块。">模块（module）</Term>。<Term def="名字与其引用对象之间的对应关系；不同模块可以各自拥有同名函数。">名字空间（namespace）</Term>让 `pizza.make_pizza` 与别处的同名函数不冲突。保存下面两个文件到同一目录，然后运行 `python app.py`。
 
-调用方依赖被import module的public names。下划线前缀表达internal helper，但不是安全边界。将I/O与pure transformation拆到不同functions，测试就能import core而不触发用户prompt。
+```python
+# pizza.py
+def make_pizza(size, *toppings):
+    """Return an order without printing or modifying inputs."""
+    return {"size": size, "toppings": toppings}
 
-如果两个modules互相import，通常表示职责或共享type位置不清。把共同contract移到更低层module，让依赖单向；不要靠移动import到function内部长期掩盖循环设计。
 
-## Styling Functions
+if __name__ == "__main__":
+    print(make_pizza(12, "mushroom"))
+```
 
-function使用lowercase_with_underscores，名字以动词表达行为；parameter同样清晰。definition前后blank lines、默认值附近不加多余spaces、call中的keyword等号也按PEP 8。docstring说明contract而非实现步骤。
+```python
+# app.py
+import pizza
+from pizza import make_pizza
+from pizza import make_pizza as bake
+import pizza as p
 
-function过长时按不同抽象层拆分，但不要把每两行机械提取。一个好边界能单独命名、测试和复用，并减少caller需要知道的state。复查时从signature、return、side effects、raises、module dependency五项入手。
+expected = {"size": 12, "toppings": ("mushroom",)}
+assert pizza.make_pizza(12, "mushroom") == expected
+assert make_pizza(12, "mushroom") == expected
+assert bake(12, "mushroom") == expected
+assert p.make_pizza(12, "mushroom") == expected
+assert p is pizza
+assert bake is pizza.make_pizza
+print(expected)
+```
 
-<Callout type="trap" title="mutable default每次调用都会创建新list">
-default在def执行时求值一次，后续calls共享同一list。使用`items=None`并在body中创建，测试连续两次调用证明状态不泄漏。
+`import pizza → pizza → make_pizza` 保留来源；`from pizza import make_pizza → make_pizza` 把函数名字直接引入当前模块。<Term def="用 as 给同一个导入对象另取的本地名字，并非复制对象。">别名（alias）</Term>分别可以用于函数 `bake` 和模块 `p`，上面的身份断言就是证据。
+
+### 顶层执行、入口保护与星号导入
+
+通常在同一解释器进程中，第一次导入执行模块顶层语句，后续导入复用缓存；不应理解为跨进程只执行一次。显式重新加载等情况不在本例范围内。直接执行 `python pizza.py` 时，`__name__` 为 `"__main__"`；被 `app.py` 导入时，它为 `"pizza"`。入口保护仅阻止缩进在它里面的演示代码，不阻止其他顶层语句执行。
+
+`from pizza import *` 会把公开名字引入当前名字空间：若定义 `__all__` 则遵从它，否则通常排除以下划线开头的名字。它容易遮盖已有名字、隐藏来源，故避免作为常规写法。下划线是约定，不是禁止访问的安全屏障。
+
+### Styling Functions：风格让调用约定看得见
+
+函数与参数使用 `lowercase_with_underscores`；顶层函数之间空两行；四空格缩进。文档字符串说明返回、是否修改输入及失败约定。普通默认值和调用关键字的 `=` 两侧不加空格；**带类型标注且有默认值的形参则应加空格**：
+
+```python
+def repeat_label(text: str, count: int = 1) -> str:
+    """Return repeated text without printing."""
+    return text * count
+
+
+assert repeat_label("go", count=2) == "gogo"
+```
+
+对照 `count: int = 1` 与调用中的 `count=2`，不要把“等号两侧永不留空格”当作风格规则。函数拆分应围绕可以命名、测试和复用的行为，不是机械地每两行提取一个函数。
+
+## 常见误区：用反例修正直觉
+
+<Callout type="trap" title="误区一：关键字只是注释，仍按书写顺序传入">
+  倒序关键字调用仍正确，因为按名字绑定。相反，位置参数已经占用 `pet_name` 后又写
+  `pet_name=...` 会在函数体执行前报错。观察实验 A
+  的交叉线与执行次数，不要只看屏幕是否有文字。
 </Callout>
 
-<Callout type="trap" title="传入items[:]就能完全防止function修改原数据">
-slice只做shallow copy，nested dictionary/list仍共享。先定义ownership contract，再按数据shape决定外层copy、元素重建或不允许mutation。
+<Callout type="trap" title="误区二：print 过结果，赋值就会得到它">
+  `shown = show_name("ada")` 显示 Ada，却把 `None` 赋给
+  `shown`。需要组合结果时返回它，再由外层决定是否打印；实验 A
+  可以直接比较两个通道。
 </Callout>
 
-## 本章回顾：signature、ownership与namespace
+<Callout type="trap" title="误区三：默认列表每次都会新建，返回值也是快照">
+  `items=[]` 在定义时创建一次；第一次返回的 `a` 与第二次返回的 `b`
+  都引用它，所以后来追加 B 后，a 也能看到 B。用 `None`
+  和连续两次调用的身份断言验证修复，而不只测试一次。
+</Callout>
 
-1. function signature定义parameter入口，argument binding在body执行前完成。
-2. positional、keyword、default各有可读性与错误边界；mutable default会跨调用共享。
-3. return value可组合，print只是side effect；optional result要显式处理None。
-4. function ownership contract说明input mutation和returned object归属。
-5. variadic arguments收集为tuple/dict，module import建立名字来源与依赖方向。
+<Callout type="trap" title="误区四：传入 items[:] 就能完全防止修改原数据">
+  浅拷贝只隔离外层槽位，内部字典仍共享。先声明函数是否修改输入、修改到哪一层，再决定只复制外层、逐项重建，还是保持只读；不要把可变对象传参误写成“自动复制”。
+</Callout>
+
+## 小结
+
+- 绑定先于函数体；关键字按名匹配。
+- `return` 交付对象；仅打印会隐式返回 `None`。
+- 共享默认值与浅拷贝都要检查对象身份。
+- 星号在定义时收集，在调用时展开。
+- 模块与别名组织来源，不复制函数。
+
+## 闭环练习
 
 <Exercises>
 
-**问题 1：为什么`def add_item(item, items=[])`会跨调用泄漏状态，如何修复？**
+**问题 1 · 修改实验 A 对应代码。** 将 `describe_pet` 改成只 `print`、不 `return` 的版本。先预测 `result`，再用实验确认。接着恢复返回值，并写出“倒序关键字正确”和“重复绑定被拒绝”两条测试。如何证明错误调用没有执行函数体？
 
-<Answer>default list在def执行时创建一次，所有未传items的calls共享。改为`items=None`，body中`if items is None: items = []`，再append并return。连续调用两次且不传items，断言第二次结果不包含第一次元素。</Answer>
+<Answer>
 
-**问题 2：设计一个不会修改输入list的render function，应如何证明？**
+```python
+runs = []
 
-<Answer>接收iterable并构造new completed list返回，不对input append/pop；测试保存before copy，调用后断言input等于before且returned为不同对象。若元素可变，还要明确是否读取还是修改nested objects，并增加identity测试。</Answer>
 
-**问题 3：何时使用*args/**kwargs，何时使用显式parameters？**
+def describe_pet(pet_name, animal_type="dog"):
+    runs.append(pet_name)
+    return f"{pet_name.title()} is a {animal_type}."
 
-<Answer>同质可变位置项如toppings适合*args，开放但受控metadata适合**kwargs；固定业务字段、重要bool或有默认规则的输入用显式parameters，让IDE和binding errors尽早发现问题。kwargs仍需验证allowed keys与types，不能把拼写错误静默保存。</Answer>
+
+result = describe_pet(animal_type="cat", pet_name="milo")
+assert result == "Milo is a cat."
+assert runs == ["milo"]
+try:
+    describe_pet("milo", pet_name="luna")
+except TypeError:
+    pass
+else:
+    raise AssertionError("expected duplicate binding to fail")
+assert runs == ["milo"]  # 没有第二次进入函数体
+```
+
+只打印的版本会在屏幕显示句子，但 `result is None`。这里的 `runs` 仅用于测试调用次数；恢复 `return` 后，字符串通过返回通道交付，而错误发生在记录次数之前。
+
+</Answer>
+
+**问题 2 · 独立实现列表隔离。** 实验 B 的浅拷贝仍改动 `source[0]`。实现 `mark_copy(records)`，输入是只含字符串和布尔字段的字典列表，返回全部标为已完成的新记录；输入与返回记录都不能互相改动。另写一个使用 `None` 默认值的追加函数，证明连续省略输入时互不影响。目标对象图为 `source → L0 → D0(False)`，`result → L1 → D1(True)`，没有共用字典的连线。
+
+<Answer>
+
+```python
+def mark_copy(records):
+    result = []
+    for record in records:
+        copied = record.copy()
+        copied["done"] = True
+        result.append(copied)
+    return result
+
+
+def add_item(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+
+
+source = [{"name": "case", "done": False}]
+result = mark_copy(source)
+assert source == [{"name": "case", "done": False}]
+assert result == [{"name": "case", "done": True}]
+assert result is not source and result[0] is not source[0]
+result[0]["name"] = "gear"
+assert source[0]["name"] == "case"
+assert mark_copy([]) == []
+a, b = add_item("A"), add_item("B")
+assert a == ["A"] and b == ["B"] and a is not b
+```
+
+逐条 `copy()` 对题设的扁平记录足够；若字段是嵌套列表，此答案不再保证内部隔离。`add_item` 仍允许显式传入列表并修改它，这是不同的接口约定。
+
+</Answer>
+
+**问题 3 · 模块、收集与风格验收。** 把可变参数节的 `make_pizza` 保存进 `pizza.py`，用 `bake` 别名在 `app.py` 中调用；证明零配料、列表解包以及拼错选项的行为。导入时不能自动打印订单，直接执行模块时可以演示一次。说明为什么 `from pizza import *` 不如显式别名。
+
+<Answer>
+
+将完整的 `make_pizza(size, *toppings, **options)` 定义保存在 `pizza.py`，把所有演示调用移入以下入口保护内（不要在模块顶层保留演示打印）：
+
+```python
+# 追加到 pizza.py 中的 make_pizza 定义之后。
+if __name__ == "__main__":
+    print(make_pizza(12, "mushroom"))
+```
+
+```python
+# app.py，与 pizza.py 在同一目录。
+from pizza import make_pizza as bake
+
+assert bake(12)["toppings"] == ()
+parts = ["mushroom", "onion"]
+assert bake(12, *parts)["toppings"] == tuple(parts)
+assert bake(12, **{"crust": "thick"})["crust"] == "thick"
+try:
+    bake(12, crsut="thick")
+except TypeError as error:
+    assert "crsut" in str(error)
+else:
+    raise AssertionError("unknown option must fail")
+print("orders checked")
+```
+
+运行 `python app.py` 只应输出 `orders checked`；`python pizza.py` 才输出演示订单。显式导入暴露了 `bake` 的来源，也避免星号导入覆盖其他名字。检查函数与参数名使用下划线、顶层定义间空两行，且普通默认值与调用关键字等号两侧不加空格。
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+## 来源核对与适用范围
+
+以只读目录清单 `pcc3-08` 的七组单元限定范围：Defining a Function、Passing Arguments、Return Values、Passing a List、Arbitrary Number of Arguments、Storing Functions in Modules、Styling Functions。本章为独立重写，不翻译或复现原书正文。出版社页面在本轮访问返回 403；目录范围依据仓库中已登记的清单，具体语言事实依据以下可公开访问的官方资料。
+
+- [Python 3.13：定义函数](https://docs.python.org/3.13/tutorial/controlflow.html#defining-functions)：定义、局部名字、传入对象和隐式返回 `None`。
+- [默认值](https://docs.python.org/3.13/tutorial/controlflow.html#default-argument-values)与[关键字实参](https://docs.python.org/3.13/tutorial/controlflow.html#keyword-arguments)：一次求值、重复绑定及缺参错误。
+- [任意实参列表](https://docs.python.org/3.13/tutorial/controlflow.html#arbitrary-argument-lists)与[调用解包](https://docs.python.org/3.13/tutorial/controlflow.html#unpacking-argument-lists)：元组收集、关键字专用参数与星号的相反方向。
+- [列表方法与浅拷贝](https://docs.python.org/3.13/tutorial/datastructures.html#more-on-lists)：`append`、`pop` 和 `copy`；[数据模型](https://docs.python.org/3.13/reference/datamodel.html#objects-values-and-types)：身份、类型、值与可变性。
+- [模块与导入](https://docs.python.org/3.13/tutorial/modules.html#more-on-modules)、[作为脚本执行](https://docs.python.org/3.13/tutorial/modules.html#executing-modules-as-scripts)：缓存、名字空间、别名与入口保护。
+- [文档字符串](https://docs.python.org/3.13/tutorial/controlflow.html#documentation-strings)及 [PEP 8](https://peps.python.org/pep-0008/)：命名、空行和带标注默认参数的空格规则。
+
+例子使用 Python 3，官方事实参考固定为 3.13 文档。图是这些固定示例的状态演示，不会执行任意 Python，也不把模拟结果当作解释器报错的逐字复刻。
+
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="function signature" definition="函数名、parameters、defaults和调用约束组成的输入接口。" />
-  <GlossaryItem term="argument binding" definition="把call arguments按位置、keyword和default映射到parameters的过程。" />
-  <GlossaryItem term="return value" definition="function交给caller、可继续组合和验证的对象。" />
-  <GlossaryItem term="function ownership contract" definition="声明function能否mutation输入及returned object归属的约定。" />
-  <GlossaryItem term="variadic arguments" definition="由*args与**kwargs收集额外位置和关键字输入的接口。" />
+  <GlossaryItem
+    term="函数（function）"
+    definition="一段可被调用的命名操作；定义创建它，调用才执行其主体。"
+  />
+  <GlossaryItem
+    term="文档字符串（docstring）"
+    definition="函数开头描述用途和调用约定的字符串，可通过 help 查看。"
+  />
+  <GlossaryItem
+    term="形参与实参（parameter / argument）"
+    definition="形参是定义里的接收名字，实参是调用时交给它的实际对象。"
+  />
+  <GlossaryItem
+    term="签名（signature）"
+    definition="参数名字、顺序、默认值和调用限制形成的输入接口。"
+  />
+  <GlossaryItem
+    term="参数绑定（argument binding）"
+    definition="将实参按规则匹配给形参；失败时不会进入函数体。"
+  />
+  <GlossaryItem
+    term="返回值（return value）"
+    definition="函数结束后交给调用方的对象，不等同于屏幕输出。"
+  />
+  <GlossaryItem
+    term="可变对象（mutable object）"
+    definition="内容可在原对象上改变的对象；其他引用它的名字能看到修改。"
+  />
+  <GlossaryItem
+    term="浅拷贝（shallow copy）"
+    definition="只复制外层容器，不复制内部元素对象；嵌套对象仍可能共享。"
+  />
+  <GlossaryItem
+    term="可变参数（variadic arguments）"
+    definition="数量可变的调用输入；*args 收集为元组，**kwargs 收集为字典。"
+  />
+  <GlossaryItem
+    term="模块（module）"
+    definition="可被导入且有独立名字空间的代码单元；本章以 .py 文件实现。"
+  />
+  <GlossaryItem
+    term="名字空间（namespace）"
+    definition="名字到对象的对应关系；各模块的名字可以相互独立。"
+  />
+  <GlossaryItem
+    term="别名（alias）"
+    definition="用 as 给同一个导入对象取的本地名字，不创建对象副本。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 8: Functions" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Python Crash Course, Third Edition · Chapter 8: Functions"
+  sourceUrl="https://nostarch.com/python-crash-course-3rd-edition"
+  sourceBasis="outline-only"
+/>

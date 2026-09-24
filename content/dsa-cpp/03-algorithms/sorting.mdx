@@ -1,201 +1,533 @@
 ---
-title: "第7章 Sorting：从逆序对到外部多路归并"
-type: C
+title: "第7章 排序：移动记录，而不只是排好数字"
+type: D
 section: "排序、并查集与图"
 order: 6
-description: "按第3版十一节完整重构插入、Shell、堆、归并、快速、间接、桶与外部排序，并推导简单交换和一般比较排序下界。"
+description: "保留十一组原书范围：从插入与逆序下界，到 Shell、堆、归并、快速、间接、桶与外部排序；用记录身份检验稳定性。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: dsaa3-07
+draft: true
+qualityVersion: 2
 ---
 
+import { DsaSortingMovementLab } from "@/components/mdx/dsa-cpp/dsa-sorting-movement-lab";
 
-## 从“排序输出相同，工程约束不同”开始
+{/* 本章可视化决策：保留 dsaa3-07 全部十一组，不缩为五概念；预备知识=身份柱图与三项验收；插入=相邻移动轨迹；简单下界=逆序计数；Shell=跨距子序列图；堆=父子索引与取顶图；归并=双段到缓冲区真实写入；快速=分区与递归规模图；间接=索引排列环；一般下界=比较决策树；桶=域到桶槽；外部=有序段与页缓冲流。D 型对比，代码实践；专属 DsaSortingMovementLab，异构度高，不复用通用模板；所有核心术语在章末闭环。 */}
 
-排序预备知识（）先定义“正确”。对 records 按 age 排序时，相同 age 是否保持原输入顺序？对象是8-byte integer 还是4-KB record？数据近乎有序、全相等、逆序，还是大到放不进 RAM？这些条件会改变实际最佳算法。
+<div className="[&_.text-xs]:text-sm [&_.mdx-term_button]:min-h-11 [&_.mdx-term_button]:min-w-11 [&_.mdx-term>a]:min-h-11 [&_.mdx-term>a]:min-w-11 [&_.mdx-term>a]:text-sm [&_.mdx-term>a:not([hidden])]:inline-flex [&_.mdx-term>a]:items-center [&_.mdx-term>a]:justify-center">
 
-先预测 `{A:2, B:1, C:2}` 按数字 key 升序后的结果。稳定排序必须得到 B、A、C；不稳定排序允许 B、C、A。两者 key sequence 都是1、2、2，但 observable record order 不同。
+<Objectives>
 
-官方十一节依次为 **Preliminaries、Insertion Sort、A Lower Bound for Simple Sorting Algorithms、Shellsort、Heapsort、Mergesort、Quicksort、Indirect Sorting、A General Lower Bound for Sorting、Bucket Sort、External Sorting**。这条路线先从局部移动建立下界，再到 O(N log N) 比较排序，最后说明何时绕过比较模型或 RAM 模型。
+- 能追踪记录的键与身份，修改插入/归并规则并用反例检验稳定性。
+- 能推导两种排序下界，并说明 Shell 与桶排序各自依赖什么前提。
+- 能回答：大记录、最坏延迟和磁盘数据分别怎样选择算法与计算成本？
 
+</Objectives>
 
-## 7.1 Preliminaries
+## 直觉：同一批货，排好以后还认得吗？
 
-默认问题是把 N 个 Comparable items 按 nondecreasing order 重排。Comparator 必须满足 strict weak ordering；若 `a<b` 与 `b<a` 都为 false，它们属于同一 equivalence class。Comparator 依赖会变化的外部状态，会让一次 sort 内判断自相矛盾。
+流水线上有两件标着“2”的货，分别先后到达。如果只检查标签是否从小到大，两件货对调也会合格。但订单可能要求先到先处理；只看数字就漏掉了真正的错误。
 
-算法报告至少包括 comparisons、moves/swaps、auxiliary space、worst/average case、stability 和 locality。Asymptotic comparisons 相同，large-object moves 或 cache misses 仍可能差一个数量级。
+这章同时检查“货有没有丢”“次序对不对”“同标签的先后有没有保留”。货物很大时，搬标签比搬货省力；货物塞不进车间时，还要计算进出仓库的次数。
 
-## 7.2 Insertion Sort
+## 7.1 排序预备知识：先写验收契约
 
-插入排序（）在 pass p 前保持 `a[0..p-1]` 已排序。保存 `a[p]`，把所有更大前驱右移，最后填入 hole。
+一条记录含键 `key` 和不会随位置变化的身份 `id`。例如 `3A,1B,2C,1D,3E,2F`，字母代表原输入次序，不是第二排序键。<Term def="等价键的记录在输出中仍保持输入的相对次序。">稳定性</Term>要求 B 仍在 D 前、C 仍在 F 前、A 仍在 E 前。它与数值有序不同；实验会分别报告**有序、身份守恒、稳定**。
+
+比较器需要满足<Term def="不可自比为真，严格关系可传递，互不小于所定义的等价关系也可传递。">严格弱序</Term>。`less(x,x)` 必须为假；“既不小于对方”定义等价，不一定等于 `operator==`。`<=` 不能直接交给 `std::sort` 当比较器。浮点 NaN、比较过程中变动的外部权重也可能破坏契约。本文只用有限整数，故障只在有边界的自写算法中运行，不触发标准库的未定义行为。
+
+成本至少分清：比较次数、记录搬运、额外空间、最坏/期望时间、稳定性、访问是否连续。后面的柱图保留身份；它数**数组槽位写入**，一次交换算两次，不把临时变量赋值伪装成内存或耗时基准。
+
+## 7.2 插入排序：有序前缀怎样长大
+
+<Term def="逐个把新记录放入已经有序的前缀。">插入排序</Term>在第 p
+轮开始时，槽位 `[0,p)` 已有序。让第 p
+条记录向左越过严格更大的前驱，遇到较小或等价键就停。这样前缀扩展一格，未处理后缀不变。
+
+实验与下方 C++ 为便于看身份，采用相邻交换版；保存一条记录、整体右移的“空洞版”写入更少，但跨越关系相同。例子 `3A,1B,2C` 的状态是 `1B,3A,2C → 1B,2C,3A`。等键不跨越，所以稳定。时间是 `Θ(n+I)`，额外空间 `O(1)`；其中 I 是输入逆序对数。小数组或近乎有序输入适合它，不能把此结论推广到大逆序数组。
+
+## 7.3 简单排序算法下界：一次只能跨一个邻居
+
+称位置 i 在 j 前而键更大的二元组为<Term def="前面的键比后面的键大的一对位置。">逆序对</Term>。`3A,1B,2C` 有 `(A,B)`、`(A,C)` 两对。交换相邻逆序元素时，它们与其他元素的左右关系不变，仅这两者关系翻转，因此 I 恰减一。
+
+本节符号：n 为记录数，I 为逆序数。全异且逆序排列时，每对位置都是逆序：
+
+$$
+I_{\max}=1+2+\cdots+(n-1)=\frac{n(n-1)}2.
+$$
+
+这表示只用相邻交换消除逆序的算法，最坏必须做二次数量级的交换。若全异键的排列均匀随机，每对以二分之一概率逆序，期望 I 为 `n(n−1)/4`，也得到该模型下的平均二次下界。**有序输入没有这个逐输入下界**；长距离搬运也不受“一次仅减一”限制。第 7.9 节才讨论一般比较排序。
+
+## 7.4 Shellsort：跨距改变移动能力
+
+<Term def="依次对跨固定间隔的子序列做插入排序，最后间隔为一。">希尔排序</Term>
+先把相距 h 的元素看成邻居。每个余数类独立有序，称为 h
+有序；它不是整数组有序。最后必须执行 h=1 的插入过程才能完成排序。
+
+```text
+输入槽位： 0  1  2  3  4  5
+键：       6  5  4  3  2  1
+h=3 的链： 0→3  1→4  2→5
+三条链排好：3  2  1  6  5  4
+h=1 后：   1  2  3  4  5  6
+```
+
+长跳能一次消去多个逆序；因此它避开第 7.3 节的假设，而非违反定理。复杂度依赖<Term def="Shellsort 各轮使用的间隔序列，末项须为一。">增量序列</Term>。本文代码用 n/2 逐次减半，保守最坏界 `O(n²)`；不能随手给所有 Shellsort 标成 `O(n log n)` 或同一个幂次。仅有 h=1 会退回插入排序。空间 `O(1)`，通常不稳定：`2A,2B,1C` 先做 h=2 得 `1C,2B,2A`，最后 h=1 不会恢复 A/B 次序。这一三元素轨迹用于说明跨距稳定性，不是本文减半序列在 n=3 时的运行轨迹。
+
+## 7.5 堆排序：最大者搬到最右端
+
+<Term def="建立最大堆，重复把堆顶移到未排序区末尾。">堆排序</Term>
+把数组解释成完全二叉树。零下标节点 i 的孩子为
+`2i+1`、`2i+2`；父键不小于孩子。自底向上建堆后，把根与最后一格交换，缩小逻辑堆，再把新根向下调整。
+
+```text
+最大堆 [4,3,2,1]        4
+                      / \
+                     3   2
+                    /
+                   1
+取顶交换：[1,3,2 | 4]
+下滤后：  [3,1,2 | 4]  ← 右侧不再属于堆
+```
+
+建堆不是每个节点都走树高：接近一半是叶子，无需下滤；高度 h 的节点数量按约 `n/2^(h+1)` 下降，加权求和为 `O(n)`。随后至多 n 次取顶，每次 `O(log n)`，最坏 `O(n log n)`，迭代实现额外空间 `O(1)`，不保证稳定。远距离交换使访问不如连续扫描友好；但“必须有最坏时间保证、又不能分配线性缓冲区”时很有价值。下方 `heap` 分支调用标准库建堆/堆排序，不把它伪称成自己实现的下滤。
+
+## 7.6 归并排序：等键从哪一段先拿？
+
+<Term def="先分别排好两半，再从两个段头不断取较小者合成有序段。">归并排序</Term>
+的关键不是递归语法，而是合并不变量：已输出部分有序，且不大于两段尚未消费的记录。两段内部已经稳定时，等键优先取左段，就保持跨段的原输入顺序。
+
+```text
+左段 [1B,2C,3A]   右段 [1D,2F,3E]
+     B / D 相等 → 先 B，再 D
+输出 [1B,1D,2C,2F,3A,3E]
+若等键先右：D 抢在 B 前，即使数字仍然有序。
+```
+
+本节 n 为记录数，T(n) 为计算工作量。忽略取整的平衡递推为：
+
+$$
+T(n)=2T(n/2)+\Theta(n)=\Theta(n\log n).
+$$
+
+每层把全部记录合并一次，共对数层，因此最坏时间有保证。数组版复用一个 `O(n)` 缓冲区，另有 `O(log n)` 递归栈；不是每次递归都分配一个完整数组。链表可用重连节点改变额外空间分析，不能拿来证明数组版“原地”。实验下排明确区分缓冲区和数组，复制回去也计数。
+
+## 7.7 快速排序：分区好不等于每次都快
+
+<Term def="选枢轴分区，再递归处理较小和较大的区域。">快速排序</Term>
+将记录分到枢轴两侧，但分区内部还未排序。用三路分区的语义看一次操作：
+
+```text
+输入       [3A,1B,2C,1D,3E,2F]，枢轴键 2
+一种分区   [1B,1D | 2C,2F | 3A,3E]
+递归规模       2       0       2
+```
+
+图只说明分区集合，不许据此推断原地交换实现稳定。全等键可被三路分区一次收进中段；某些单边两路规则却会每轮只减少一条记录。
+
+平衡时与归并一样是对数层线性分区。在全异键或妥善处理重复键的分区下，随机枢轴对固定输入的**期望**时间为 `O(n log n)`；不加保护的极端分区满足 `T(n)=T(n−1)+Θ(n)=Θ(n²)`。朴素递归栈最坏 `O(n)`；总是先递归较小半边、循环处理较大半边可把栈限到 `O(log n)`，但并不修复二次时间。作者配套实现采用三数取中和小段插入排序；这些优化不是最坏界的证明。
+
+工程库可用深度限制后转堆排序的<Term def="以快速分区为主，递归深度过大时切换有最坏界的算法。">内省排序</Term>。C++17 `std::sort`要求 `O(n log n)` 比较上界，但不规定必须使用某个具体内部算法，也不保证稳定。下方 `quick-library` 是**库排序入口，不是对纯快速排序的计时实验**。键比较代价、重复值、缓存、搬运成本都会影响速度，不能宣称快速排序普遍最快。
+
+## 7.8 间接排序：移动索引，还是移动整条货？
+
+<Term def="先排序索引或指针，再按这个顺序访问或重排原记录。">间接排序</Term>
+让比较器解引用记录的键，却主要移动小索引。若记录是 4
+KiB，一次换两个记录比换两个整数昂贵得多。
+
+```text
+原记录槽：   0:3A  1:1B  2:2C
+排好的索引： [1,2,0]  → 读视图 B,C,A
+物理重排：   新0←旧1，新1←旧2，新2←旧0
+一个置换环： 保存旧0；搬1到0；搬2到1；临时值到2
+```
+
+所谓<Term def="按目标位置与来源位置关系形成的闭合搬运路径。">置换环</Term>可用一个记录临时值完成，每个非平凡环多一次临时保存，总体 `O(n)` 大记录搬运。索引本身占 `O(n)` 空间，即使用有 `O(n log n)` 保证的索引排序，这部分工作仍不可省；访问原键可能不连续。只保留视图无需搬原记录，但需保证记录存活且位置/键不被悄悄修改。稳定排序索引或在等键时按原下标打破平局才能保留稳定性；“间接”本身不保证稳定。代码演示返回视图，再物化为新向量，诚实付出额外 `O(n)` 记录空间，并非原地置换环实现。
+
+## 7.9 排序的一般下界：比较能提供多少信息
+
+本节 n 为**全异键**数量，h 为最坏执行路径上的二元比较次数。确定性比较排序可看成<Term def="内部节点是比较，分支是比较结果，叶子确定输入身份的有序排列。">决策树</Term>：
+
+```text
+          A < B ?
+         /      \
+     A < C ?    B < C ?
+      /  \        /  \
+    继续比较，直至能区分全部 3! = 6 种全异键次序
+```
+
+高度 h 的二叉树最多有 `2^h` 个叶子；要区分 n! 种身份排列，必须有：
+
+$$
+2^h\ge n!\quad\Rightarrow\quad h\ge\lceil\log_2(n!)\rceil=\Omega(n\log n).
+$$
+
+最后一步可用 n! 后半段至少含 n/2 个不小于 n/2 的因子得到下界。这个结论针对只靠比较获得排序信息的通用算法，给的是最坏界；对均匀全异排列还有平均界。重复键可能减少需要区分的情况，不表示全等输入也要 n log n 次比较。它与第 7.3 节的相邻交换下界是**不同计算模型**。
+
+## 7.10 桶排序：键的结构换来哪些条件
+
+<Term def="根据键映射到有序桶，再按桶序输出，必要时桶内再排序。">桶排序</Term>
+利用键值域，而不只问两记录谁更小。对于已知整数域
+`[0,K)`，每个键一个桶，按输入顺序追加记录再顺序收集，时间 `Θ(n+K)`、额外空间
+`O(n+K)`，且稳定。只有计数、不保留记录身份的版本不能直接完成“搬运完整记录”的任务。
+
+```text
+输入 3A,1B,2C,1D,3E,2F
+桶0 []   桶1 [B,D]   桶2 [C,F]   桶3 [A,E]
+按桶号收集 → 1B,1D,2C,2F,3A,3E
+```
+
+若是连续值分区的“区间桶”，桶内仍可能无序。均匀、独立分布和合理桶数能支持期望线性分析；所有元素挤进一桶并使用插入排序时会退化到二次。域过大浪费桶空间，负数、越界、NaN 都须先制定映射与拒绝策略。本文代码只接受 0–9，并在访问桶前检查，不把比较下界错误套到它身上。
+
+## 7.11 外部排序：把一次读写看成一页
+
+<Term def="数据放不进内存时，以块读写成本为核心组织排序。">外部排序</Term>
+通常先读入能容纳的块，在内存中排序后写出
+<Term def="已经排好、可被顺序读取的连续记录段。">有序段</Term>
+，再多路归并。每段保留一页输入缓冲，另留一页输出缓冲；只把各段当前最小记录放进小堆，而不是把整段读入内存。
+
+```text
+磁盘段0 → 输入页0 ┐
+磁盘段1 → 输入页1 ├→ 段头最小堆 → 输出页 → 新磁盘段
+磁盘段2 → 输入页2 ┘
+              内存共4页；一次只能合并3段
+```
+
+本节 P 是数据页数，M 是可用页框数，假设每条记录的页布局固定、M≥3，所有轮次都完整读写、忽略缓存和最后输出流水线优化。初始段数 R 为 `ceil(P/M)`，归并扇入 k 为 `M−1`。当 R≥1 时：
+
+$$
+\text{总轮次}=1+\lceil\log_{M-1}R\rceil,\qquad
+\text{页 I/O}=2P\bigl(1+\lceil\log_{M-1}R\rceil\bigr).
+$$
+
+“1”是生成初始段的一轮；每轮读 P 页再写 P 页。比如 P=40、M=4：段数 `10→4→2→1`，共四轮、320 次页读写。CPU 仍有段内排序及每条输出 `O(log k)` 的段头堆操作，不能把它等同于 I/O 次数。
+
+稳定性要贯穿两阶段：初始段稳定排序，等键合并按原段次序取；非连续生成的段则可携带全局原始序号。内存使用受 M 限制，磁盘临时空间一般仍是 `O(P)`，旧新段并存时峰值取决于回收策略。增大扇入会减少轮次，却挤占每路缓冲；双缓冲用于重叠读写与计算，不会自动减少上述页数。置换选择用堆产生更长初始段，随机输入下常有收益，但逆序输入不能承诺同样效果。工程上还须处理临时文件清理与中断恢复。
+
+## 交互：先猜身份，再看移动
+
+先预测：默认输入排好后，两个键 1 的身份会是谁在前？再把配置从“正确”切到“错误 ≤”，为什么数字顺序仍然合格？对归并选择“等键先右”，寻找 B/D 第一次被反转的写入。最后用“重置”恢复默认输入、正确规则和第零步。
+
+<DsaSortingMovementLab />
+
+上排是本步来源，下排是操作后数组或独立缓冲；跨排连线给出写入去向。此图不模拟 CPU 时间，也不把缓冲副本误判成记录丢失；三项最终验收只对完成后的数组做。模型仅支持至多八条 0–9 记录，界面固定六条以保留可读字号。步进观察操作因果，拖进度回看，播放仅自动推进同一条实际执行轨迹。
+
+## C++17：可拼装、可替换的最小实验
+
+以下 **全部 `cpp` 围栏按出现顺序连接**为 `sorting.cpp`（两个代码页签也都包含）；其他语言围栏不拼入。它们是本站独立编写的 C++17 实验，不是原书源码摘录。命令 `clang++ -std=c++17 -Wall -Wextra -pedantic sorting.cpp -o sorting`，然后 `./sorting insertion 3 1 2 1 3 2`。空输入使用 `./sorting insertion`；未知算法或越界键返回非零退出码。
+
+先定义记录与严格比较；身份只随记录移动，不参与正常的键比较。
 
 ```cpp
-for (std::size_t p = 1; p < a.size(); ++p) {
-    T value = std::move(a[p]);
-    std::size_t hole = p;
-    while (hole > 0 && value < a[hole - 1]) {
-        a[hole] = std::move(a[hole - 1]);
-        --hole;
+#include <algorithm>
+#include <array>
+#include <iostream>
+#include <numeric>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+struct Item { int key; int id; };
+using Items = std::vector<Item>;
+bool lessKey(const Item& a, const Item& b) {
+    return a.key < b.key;
+}
+```
+
+下面两个页签仅改变一个关系。错误函数**仅用于我们的有界循环**，绝不传给标准库排序。
+
+<div className="[&_button]:min-h-11 [&_button]:text-sm">
+<CodeTabs>
+<Tab label="严格跨越">
+
+```cpp
+bool cross(const Item& a, const Item& b) {
+    return a.key < b.key;
+}
+```
+
+</Tab>
+<Tab label="错误：等键也跨越">
+
+```cpp
+bool crossFault(const Item& a, const Item& b) {
+    return a.key <= b.key;
+}
+```
+
+</Tab>
+</CodeTabs>
+</div>
+
+插入每轮向左交换，j>0 先保护下标，故障不会改变循环边界。它与图中 `cross` 的判断和身份交换完全对应。
+
+```cpp
+void insertion(Items& a, bool fault = false) {
+    for (std::size_t p = 1; p < a.size(); ++p)
+        for (std::size_t j = p; j > 0; --j) {
+            bool move = fault ? crossFault(a[j], a[j-1])
+                              : cross(a[j], a[j-1]);
+            if (!move) break;
+            std::swap(a[j], a[j-1]);
+        }
+}
+```
+
+Shell 把相邻距离改成 gap；保存记录后右移，最后落位。减半序列末次 gap=1，空数组也不会下标下溢。
+
+```cpp
+void shell(Items& a) {
+    for (std::size_t gap = a.size()/2; gap > 0; gap /= 2)
+        for (std::size_t i = gap; i < a.size(); ++i) {
+            Item value = a[i];
+            std::size_t j = i;
+            while (j >= gap && lessKey(value, a[j-gap])) {
+                a[j] = a[j-gap];
+                j -= gap;
+            }
+            a[j] = value;
+        }
+}
+```
+
+归并使用半开区间 `[lo,hi)`。正常分支 `!lessKey(right,left)` 表示左不大于右，等价时先左；故障改为左严格小才取左。段耗尽的判断在读取之前。
+
+```cpp
+void mergeRange(Items& a, Items& tmp, std::size_t lo,
+                std::size_t hi, bool fault) {
+    if (hi - lo < 2) return;
+    std::size_t mid = lo + (hi-lo)/2;
+    mergeRange(a, tmp, lo, mid, fault);
+    mergeRange(a, tmp, mid, hi, fault);
+    std::size_t l = lo, r = mid;
+    for (std::size_t out = lo; out < hi; ++out) {
+        bool takeLeft = false;
+        if (l == mid) takeLeft = false;
+        else if (r == hi) takeLeft = true;
+        else takeLeft = fault ? lessKey(a[l], a[r])
+                              : !lessKey(a[r], a[l]);
+        tmp[out] = takeLeft ? a[l++] : a[r++];
     }
-    a[hole] = std::move(value);
+    for (std::size_t i = lo; i < hi; ++i) a[i] = tmp[i];
+}
+void mergeSort(Items& a, bool fault = false) {
+    Items tmp(a.size());
+    mergeRange(a, tmp, 0, a.size(), fault);
 }
 ```
 
-
-逆序对是 indices i 小于 j 但 `a[i]` 大于 `a[j]` 的 pair。Insertion sort 每向左跨一步恰消去一个 inversion，因此时间是 O(N+I)，I 为 inversions 数；已排序输入 I=0 近线性，逆序输入达到：
-
-$$
-I_{\max}=\frac{N(N-1)}{2}
-$$
-
-只在严格更小时移动可保持 equal records 原顺序，因此实现是 stable。小数组或 quicksort cutoff 后的片段常用它收尾。
-
-## 7.3 A Lower Bound for Simple Sorting Algorithms
-
-简单排序算法下界（）不针对全部 comparison sorts，而针对只用 adjacent exchanges 消除 inversions 的 simple algorithms。
-
-逆序 permutation 有 N(N-1)/2 个 inversions；一次 adjacent swap 最多改变一个。因此任何只通过相邻交换排序的算法，在该输入上至少执行：
-
-$$
-\Omega(N^2)
-$$
-
-Shellsort 能让 item 一次跨越多个 positions，heapsort/mergesort/quicksort 也不是只做 adjacent exchange，所以这个下界不能错误外推到它们。第7.9才给一般 comparison model 下界。
-
-## 7.4 Shellsort
-
-希尔排序（）把 array 分成若干 interleaved subsequences。若 array 已经 h-sorted，再执行更小 gap 的 insertion passes；最后 gap=1 保证完全 sorted。
-
-
-第3版作者 `Sort.h` 使用 Shell 原始 increments `N/2, N/4, ..., 1`，并在注释中明确称其为 poor increments。算法骨架正确，但 increment sequence 决定理论和实际性能，不能把某一序列的 bound 当成所有 Shellsort 的共同 bound。
+桶实现先完成所有域检查，再访问十个桶。桶内追加而非头插是保留稳定性的关键。
 
 ```cpp
-for (std::size_t gap = a.size() / 2; gap > 0; gap /= 2)
-    for (std::size_t i = gap; i < a.size(); ++i)
-        gappedInsertion(a, i, gap);
-```
-
-Shellsort in-place、实现短，对中等规模可能有效；通常不 stable，因为 equal items 可能在不同 gap groups 中跨越。
-
-## 7.5 Heapsort
-
-堆排序（）在 0-based array 上用 max-heap。Build phase 调 `percDown`；每轮把最大值 root 与末尾交换，缩小 logical heap，再从 root 下滤。
-
-$$
-T_{\mathrm{heap}}(N)=O(N)+\sum_{k=2}^{N}O(\log k)=O(N\log N)
-$$
-
-
-它 worst-case O(N log N)、auxiliary space O(1)，但通常不 stable。Heap 的跳跃访问 locality 不如顺序 merge 或常见 quicksort partition。作者实现的 `leftChild(i)=2i+1` 与第6章 1-based heap 公式不同，混用 indexing convention 会越界。
-
-## 7.6 Mergesort
-
-归并排序（）满足 recurrence：
-
-$$
-T(N)=2T(N/2)+\Theta(N)=\Theta(N\log N)
-$$
-
-Merge 用两个 cursors 选择较小 front。相等时先取 left run 才保持 stability：
-
-```cpp
-while (left <= leftEnd && right <= rightEnd)
-    if (!(a[right] < a[left]))
-        tmp[out++] = a[left++];
-    else
-        tmp[out++] = a[right++];
-```
-
-第3版实现只分配一次 `tmpArray` 并在递归中复用，避免每层 allocation。Array mergesort 需要 O(N) auxiliary storage；linked lists 可用 relinking，但 locality 和 ownership 模型不同。Stable records 和 sequential I/O 是其强项。
-
-## 7.7 Quicksort
-
-快速排序（）平均 recurrence 接近：
-
-$$
-T(N)=2T(N/2)+\Theta(N)=\Theta(N\log N)
-$$
-
-若每次 pivot 都是 extreme，则变成 `T(N)=T(N-1)+Theta(N)=Theta(N^2)`。第3版 `Sort.h` 用 median-of-three 排序 left、center、right，把 pivot 藏到 `right-1`，并对 size 不超过10的 subarray 改用 insertion sort。
-
-```cpp
-const T& pivot = median3(a, left, right);
-int i = left;
-int j = right - 1;
-for (;;) {
-    while (a[++i] < pivot) {}
-    while (pivot < a[--j]) {}
-    if (i >= j) break;
-    std::swap(a[i], a[j]);
+void bucket(Items& a) {
+    for (const Item& x : a)
+        if (x.key < 0 || x.key >= 10)
+            throw std::invalid_argument("bucket domain: 0..9");
+    std::array<Items, 10> bins;
+    for (const Item& x : a) bins[x.key].push_back(x);
+    std::size_t out = 0;
+    for (const Items& bin : bins)
+        for (const Item& x : bin) a[out++] = x;
 }
-std::swap(a[i], a[right - 1]);
 ```
 
-Median-of-three sentinels 让 scans 安全停下，但 duplicate-heavy input 仍需仔细 partition policy。Modern production sort 常加入 depth limit，退化时切 heapsort，形成 introspective guard。
+间接版本稳定地排序下标。原数组保持不动直到物化结束；不能一边覆盖它，一边继续用旧索引解引用。
 
+```cpp
+void indirect(Items& a) {
+    std::vector<std::size_t> index(a.size());
+    std::iota(index.begin(), index.end(), 0);
+    std::stable_sort(index.begin(), index.end(),
+        [&](std::size_t i, std::size_t j) {
+            return lessKey(a[i], a[j]);
+        });
+    Items result;
+    result.reserve(a.size());
+    for (std::size_t i : index) result.push_back(a[i]);
+    a = std::move(result);
+}
+```
 
-## 7.8 Indirect Sorting
+统一入口明确区分“自写纯算法”和“标准库入口”。`std::stable_sort` 在额外缓冲充足时需要 `O(n log n)` 次比较，否则上界可达 `O(n log² n)`；本例索引与物化向量的线性空间并不代替库自身的缓冲。间接排序的优势是减少大记录搬运，不是自动减少比较。
 
-间接排序（）分两阶段：构造 pointer/index array，以 pointee key 排序；再把 permutation 分解成 cycles，每个 cycle 用一个 temporary 完成。
+```cpp
+void run(Items& a, const std::string& algorithm) {
+    if (algorithm == "insertion") insertion(a);
+    else if (algorithm == "insertion-fault") insertion(a, true);
+    else if (algorithm == "merge") mergeSort(a);
+    else if (algorithm == "merge-fault") mergeSort(a, true);
+    else if (algorithm == "shell") shell(a);
+    else if (algorithm == "bucket") bucket(a);
+    else if (algorithm == "indirect") indirect(a);
+    else if (algorithm == "heap") {
+        std::make_heap(a.begin(), a.end(), lessKey);
+        std::sort_heap(a.begin(), a.end(), lessKey);
+    } else if (algorithm == "quick-library") {
+        std::sort(a.begin(), a.end(), lessKey);
+    } else throw std::invalid_argument("unknown algorithm");
+}
+```
 
+最后读取键并附上原始身份，打印实际结果。最多八条与图的模型边界一致；限制规模是教学护栏，不是算法的理论限制。
 
-第3版 `largeObjectSort` 的目标是平均只做约 `N + ln N` 次大型 Comparable moves，而 comparisons 主要移动 pointers。Handle comparator 必须比较 pointee；cycle 修复时还要同步更新 pointer positions，避免再次移动已归位对象。
+```cpp
+int main(int argc, char** argv) {
+    try {
+        if (argc < 2 || argc > 10)
+            throw std::invalid_argument("algorithm and 0..8 keys required");
+        Items a;
+        for (int i = 2; i < argc; ++i) {
+            std::size_t used = 0;
+            int key = std::stoi(argv[i], &used);
+            if (used != std::string(argv[i]).size() || key < 0 || key > 9)
+                throw std::invalid_argument("key domain: 0..9");
+            a.push_back({key, i-2});
+        }
+        run(a, argv[1]);
+        for (const Item& x : a)
+            std::cout << x.key << char('A'+x.id) << ' ';
+        std::cout << '\n';
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
+}
+```
 
-Indirect sort 也可不物理重排原 records，而把 sorted indices 作为 view 返回。选择 materialize 还是 view 取决于后续 traversal locality、lifetime 与 mutation contract。
+对输入 `3 1 2 1 3 2`，正确插入与归并都应打印 `1B 1D 2C 2F 3A 3E`；两个故障版本都打印 `1D 1B 2F 2C 3E 3A`。这不是用数字是否升序能发现的错误。验收还应检查空、单元素、逆序、全等、重复混合及非法输入；不可仅对一组漂亮样例运行。
 
-## 7.9 A General Lower Bound for Sorting
+## 常见误区：把合格条件拆开
 
-排序的一般下界（）把 deterministic comparison sort 表示为 decision tree。Distinct keys 有 N! 种 input permutations，每个 leaf 必须代表一个结果；binary comparison tree 高度至少：
+<Callout type="trap" title="数字排好了，稳定性就对了？">
 
-$$
-\left\lceil\log_2(N!)\right\rceil=\Omega(N\log N)
-$$
+**现象 →** 错误配置输出仍是升序，但 B/D 反转。  
+**原因 →** 插入允许等键跨越，或归并等键先右。  
+**修法 →** 恢复严格跨越、等键先左，同时检查身份与顺序。
 
+</Callout>
 
-这个下界只约束通过 pairwise comparisons 获得 order information 的通用排序。Bucket/radix sort 使用 key representation 或有限 domain，不受同一模型约束；它们付出的代价是 domain assumptions 与额外 storage。
+<Callout type="trap" title="所有排序都有同一个下界？">
 
-## 7.10 Bucket Sort
+**现象 →** 用二次下界否定归并，或用比较下界否定桶排序。  
+**原因 →** 混淆相邻交换、比较决策树和整数域访问模型。  
+**修法 →** 先写能做哪些操作，再应用相应定理。
 
-桶排序（）若 N 个 integer keys 位于已知范围，可由 value 直接选 bucket。均匀且 bucket 数 B 合理时：
+</Callout>
 
-$$
-T(N,B)=O(N+B)
-$$
+<Callout type="trap" title="选了快速排序，就无需计算磁盘成本？">
 
+**现象 →** 数据放不下内存，却只比较 CPU 大 O。  
+**原因 →** 忽略页读写、缓冲占用和最坏分区。  
+**修法 →** 外部数据先算段数与轮次；内存排序另按稳定性和延迟选型。
 
-若所有 items 落入一个 bucket，桶内 comparison sort 仍可能成为 O(N log N) 或更差。正确性还要定义 domain boundary、negative keys、floating-point NaN 和 stable bucket append。所谓 linear sorting 依赖明确前提，不是免费突破下界。
+</Callout>
 
-## 7.11 External Sorting
+## 小结
 
-外部排序（）把主成本从 comparisons 转为 block reads/writes。第一阶段读入能放进 RAM 的 chunks，各自内部排序并写成 runs；第二阶段用 input buffers、output buffer 与 priority queue 做 k-way merge。
+- 正确输出须同时核对键顺序、身份与稳定性。
+- 下界依赖模型；Shell 依赖间隔，桶依赖值域。
+- 选型要计搬运、空间、最坏延迟和页读写。
 
+<div className="[&_button]:min-h-11 [&_button]:text-sm">
+<Exercises>
 
-若初始有 R 个 runs、一次 merge fan-in 为 k，merge passes 约为：
+**问题 1：改规则，但不要改掉身份。** 用上方代码运行 `insertion-fault` 与 `merge-fault`，输入 `2 1 2`。先写出键顺序为何仍合格，再修改各自实际分支恢复稳定性。另把插入改为稳定降序，需要怎样改条件？不要仅反转升序输出。
 
-$$
-\left\lceil\log_k R\right\rceil
-$$
+<Answer>
 
-增大 k 可减少 passes，却要为更多 runs 分配 buffers 并增加 heap fan-in。Replacement selection 可生成平均长于 RAM capacity 的 initial runs；double buffering 可重叠 I/O 和 computation。验收应报告总 bytes、sequential passes、temporary disk space 和 crash cleanup。
+两个故障版本都得到 `1B 2C 2A`；A/C 键相同而身份反转。修复插入的实际跨越分支，让它只在 `a.key < b.key` 时为真；修复归并的 `takeLeft`，让两段均未耗尽时使用 `!lessKey(a[r],a[l])`。不要删除或重命名身份来掩盖问题。
 
+稳定降序插入把正常跨越条件改成 `a.key > b.key`，等键仍不跨越；本例输出 `2A 2C 1B`。直接把稳定升序结果整体反转会得到 `2C 2A 1B`，反而破坏稳定性。增加空、单条、全等三类回归测试；全等输入应完全不变。
 
-## 统一选择：按数据与契约决定排序
+</Answer>
 
+**问题 2：两种下界，三个逃生口？** 对六个全异键逆序输入，求相邻交换最少次数；决策树至少多高？再解释 Shell 的跨距、十桶整数排序和全等输入分别改变了哪个前提。给出 h=3 的第一轮结果，说明为何还没排完。
 
-## 本章回顾
+<Answer>
 
-1. 排序验收不止key order，还包括stability、space、adaptivity、move cost和storage层级。
-2. Insertion sort工作与inversions相关，适合小或近乎有序输入。
-3. Adjacent-exchange简单排序有quadratic worst-case下界，不能外推到全部sorts。
-4. Shellsort用gap让元素远移，increment sequence决定表现。
-5. Heapsort worst-case O(N log N)且in-place；mergesort stable但需buffer；quicksort平均快但要防退化。
-6. Indirect sorting用handles和permutation cycles减少large-object moves。
-7. Comparison decision tree给出一般 Omega(N log N)下界。
-8. Bucket sort利用key domain，性能依赖分布和范围。
-9. External sorting优化runs、fan-in和sequential I/O，而不是只数CPU comparisons。
+相邻交换至少 `6×5/2=15` 次；决策树至少 `ceil(log₂(6!))=10` 层。两者衡量的操作模型不同，不能拿 10 次比较当成 10 次相邻交换就够用。
 
+Shell 跨距可以一次消去多个逆序，仍是比较排序，逃不开一般比较最坏界；十桶算法直接利用 `[0,10)` 值域，付出桶与记录存储，不满足“只靠比较”假设。全等输入不具备六个全异键的 720 种排列信息量。h=3 后得到 `3,2,1,6,5,4`，每条间隔链有序但邻居未必有序，仍需 h=1。
+
+</Answer>
+
+**问题 3：用成本选型，不背“最快”排行榜。** ① 4 KiB 记录只需要一份按键遍历的视图；② 最坏延迟必须有保证，无法分配线性缓冲区；③ 要求稳定且能给数组分配缓冲；④ 40 页数据、4 页内存；⑤ 八百万条 0–9 整数记录。各用什么，代价是什么？解释为何纯快速排序不总是答案。
+
+<Answer>
+
+① 用间接排序，保留排序索引即可，原记录零搬运，但索引占 `O(n)` 且键访问可能跳跃；需要稳定时稳定排序索引或用原下标解平局。② 迭代堆排序给最坏 `O(n log n)`、额外 `O(1)`，牺牲稳定性；深度受限的库排序也可考虑，但栈预算另算。③ 稳定归并，额外 `O(n)` 缓冲与 `O(log n)` 栈。④ 初始10段，三路归并为4、2、1段，共四轮320次页 I/O，并预留临时磁盘；跨段等键仍须稳定合并。⑤ 十桶顺序追加并收集，`O(n+10)` 时间、`O(n+10)` 额外记录空间；若只要数值不保留记录，可计数后重建。
+
+未经保护的快速排序会二次退化，通常不稳定；即便期望比较数好，也无法消除大对象搬运和外部 I/O。库 `std::sort` 的保证不能冒充所有纯快速排序的保证。
+
+</Answer>
+
+</Exercises>
+</div>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="稳定性">
+    同键记录保持原输入的先后次序；不是“每次运行输出一样”。
+  </GlossaryItem>
+  <GlossaryItem term="严格弱序">
+    比较必须自洽，不能自己小于自己；等价键也要形成自洽分组。
+  </GlossaryItem>
+  <GlossaryItem term="插入排序">
+    不断把下一条记录插入已经排好的前缀。
+  </GlossaryItem>
+  <GlossaryItem term="逆序对">在前面的键反而更大的一对位置。</GlossaryItem>
+  <GlossaryItem term="希尔排序">
+    先隔着若干格插入排序，再缩小间隔直到一格。
+  </GlossaryItem>
+  <GlossaryItem term="增量序列">
+    Shell 各轮的间隔列表，决定其具体复杂度性质。
+  </GlossaryItem>
+  <GlossaryItem term="堆排序">把当前最大记录反复移到数组尾部。</GlossaryItem>
+  <GlossaryItem term="归并排序">排好小段，再把有序小段合成大段。</GlossaryItem>
+  <GlossaryItem term="快速排序">
+    围绕枢轴分区，再排两侧；分区质量决定递归规模。
+  </GlossaryItem>
+  <GlossaryItem term="内省排序">
+    深度太大就切换算法的排序保护策略。
+  </GlossaryItem>
+  <GlossaryItem term="间接排序">
+    排索引或指针，减少大记录在排序过程中的移动。
+  </GlossaryItem>
+  <GlossaryItem term="置换环">
+    一圈位置彼此提供目标记录，可借一个临时位置轮流搬运。
+  </GlossaryItem>
+  <GlossaryItem term="决策树">
+    把一次次比较及其结果画成树，用来数区分输入所需的信息。
+  </GlossaryItem>
+  <GlossaryItem term="桶排序">按键的域或区间分桶，再按桶序收集。</GlossaryItem>
+  <GlossaryItem term="外部排序">
+    数据超过内存时，主要优化磁盘页读写的排序。
+  </GlossaryItem>
+  <GlossaryItem term="有序段">
+    可顺序读取、内部已排好的记录段，是外部归并的输入。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与范围声明
+
+范围对应 Mark Allen Weiss《Data Structures and Algorithm Analysis in C++》第三版 Chapter 7，完整保留 7.1–7.11 十一组。出版社目录只用于确定范围，未获得原书完整正文访问或开放改编授权；本章解释、例子与 C++17 代码均为独立教学重写，不宣称原书逐段翻译。
+
+- [出版社完整目录](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)：公开目录只用于范围核对，不作为技术事实来源。
+- [Weiss 第三版作者配套 Sort.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/Sort.h)：实际访问，核对插入条件、减半增量、零下标堆、归并左优先、快速排序截止策略与间接排序。历史接口不是本章 C++17 示例的兼容承诺。作者目录页与探测的课件路径返回 403，未作为已读正文引用。
+- [Pat Morin《Open Data Structures》比较排序](https://opendatastructures.org/ods-cpp/11_1_Comparison_Based_Sorti.html)及[计数与基数排序](https://opendatastructures.org/ods-cpp/11_2_Counting_Sort_Radix_So.html)：核对比较下界、比较排序分析、整数域与稳定分配的条件；本文十桶记录版为独立实现。
+- [C++ 工作草案排序契约](https://eel.is/c++draft/alg.sorting)、[sort](https://eel.is/c++draft/sort)、[stable.sort](https://eel.is/c++draft/stable.sort)：用于核对严格弱序与库复杂度；这是持续更新的草案链接，不冒充第三版书中接口或固定 C++17 文本。
+- [UC Berkeley CS186：Sorting](https://cs186berkeley.net/notes/note8/)：实际访问，核对页框、初始段、M−1 路归并和完整读写的 I/O 模型。本文40页计算为独立算例。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Data Structures and Algorithm Analysis in C++（第三版），Chapter 7"
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+/>
+
+</div>

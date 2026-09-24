@@ -1,200 +1,525 @@
 ---
-title: "第5章 Hashing：从碰撞分布到可扩展目录"
+title: "第5章 Hashing：碰撞、墓碑与可扩展目录"
 type: C
 section: "散列与优先队列"
 order: 4
-description: "按第3版七节完整重构散列基本思想、散列函数、分离链接、开放定址、再散列、标准库散列表与可扩展散列，并用探查轨迹核查不变量。"
+description: "用实际探查和目录分裂核对散列七组概念：从键相等、负载与删除，到 C++17 容器和可扩展散列。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: dsaa3-05
+draft: true
+qualityVersion: 2
 ---
 
+import {
+  DsaHashingProbeLab,
+  DsaHashingDirectoryLab,
+} from "@/components/mdx/dsa-cpp/dsa-hashing-probe-lab";
 
-## 从“碰撞是散列表的正常路径”开始
+{/* 决策卡：保留 dsaa3-05 全部七组，不把广章伪装成五个概念。基本思想/函数→地址与相等键代码；分离链接→桶链代码；开放定址→真实槽状态和探查序号 SVG；再散列→旧新索引迁移；标准库→C++17 对照与集合 oracle；可扩展散列→二进制目录指针、桶槽和局部深度 SVG。练习1回收前三组与探查，练习2实现删除/再散列/标准容器，练习3回收目录与选型。独立模块 DsaHashingProbeLab + DsaHashingDirectoryLab，共享一个纯模型导出。所有首现术语对应文末词典。 */}
 
-散列基本思想（）不是让不同 keys 永不相撞，而是让它们近似均匀地落入有限 buckets，并在相撞后仍能正确 `find`、`insert` 与 `remove`。若表长为 M，整数 key 的最小模型是：
+<Objectives>
+
+- 能解释相等键、地址冲突与负载的区别，并比较桶链、表内探查和目录寻址。
+- 能修改并运行 C++17 删除与再散列代码，用标准容器检验重复键、负数和满表边界。
+- 能回答：为什么查找不能停在墓碑，为什么桶分裂有时不需要目录翻倍？
+
+</Objectives>
+
+## 先给物品找位置，再处理位置被占用
+
+工厂里按零件编号找物品，若每次都从头翻完整排货架，库存越多就越慢。我们希望先计算一个位置，直接去那里找。
+
+两个编号可能算出同一个位置。此时需要明确的续找规则；拿走中间一件物品后，也不能让后面的物品突然“失踪”。本章把放入、取出和扩建货架看作同一套规则来检验。
+
+## 1. 散列基本思想：地址只是候选位置
+
+<Term def="先由键计算位置，再在候选位置检查是否相等的检索方法">散列</Term>
+不承诺一次命中。键经过
+<Term def="把键确定性地映射为整数摘要的函数">散列函数</Term>，再由容量映射到
+<Term def="散列表中由索引定位的存储单元或一组记录">桶</Term>
+。不同键得到同一候选地址，称为
+<Term def="不同键竞争同一候选位置的现象">碰撞</Term>
+。碰撞后必须比较键本身；“摘要相等”不能当作“键相等”。
+
+例如容量 7，整数 5、12、19 都先访问 5。主实验实际把它们依次放到 5、6、0，并非用动画预写结果。若键比较和函数计算都是常数成本，分布均匀且负载受控，查询期望为常数；最坏情况下仍可能检查全部键。字符串函数还要读字符，长度成本不能凭空消失。
+
+散列表适合成员判断和编号查找，不提供有序遍历、前驱或范围查询。需要“编号 100 到 200”时，平衡树往往比散列表合适。后面的标准容器程序用集合充当语义参照，但不依赖它的具体桶实现。
+
+### 函数契约：先正确，再谈均匀
+
+相等键必须得到相同摘要；反方向不成立。若自定义相等比较忽略大小写，函数也必须按同一种大小写规则处理。容器内键的相等关系与摘要必须稳定；不能通过外部可变对象间接修改它们。现代标准库的相关契约见 [C++17 草案的无序容器要求](https://timsong-cpp.github.io/cppwp/n4659/unord.req)。
+
+整数教学模型使用规范化余数。C++ 中 `-1 % 7` 为 `-1`，所以先取余，再在负数时加 7，得到索引 6。不能直接拿负余数访问数组。下方 `home` 实现这一规则，支持 `INT_MIN`，不通过取绝对值溢出来“修复”。
+
+[作者伴随代码](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/SeparateChaining.cpp)展示按字符反复乘 37 再相加。字符简单相加会把 `ab` 和 `ba` 混在一起；乘法递推区分位置。本文用 `std::size_t` 进行定义明确的无符号回绕，不照搬历史示例的有符号溢出风险。它是教学函数，不是抗攻击哈希。
+
+## 2. 分离链接法：冲突记录放在同一条链
+
+<Term def="每个桶保存一条记录链，碰撞后在该链中比较键">分离链接法</Term>让
+5、12、19 都留在第 5
+桶的链中。插入前沿链检查重复键；删除时仅移除目标节点，不会截断其他记录的查询。下方
+`Chain`
+是完整可编译的最小集合实现，对应[作者的桶链结构](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/SeparateChaining.h)，但不是原文件的翻译。
+
+<Term def="活跃元素数除以桶数或槽数，用于衡量容量利用程度">负载因子</Term>记为
+α。链式方案允许 α 大于
+1；这表示平均每条链超过一个元素，不表示桶数组越界。代价是节点分配与沿链访问，不能只看数组的空间。练习
+1 对同一输入比较链与连续槽。
+
+### 从负载推到工作量
+
+本节符号：N 是活键数；M 是桶数或槽数；D 是删除标记数；α 是活负载；β 是包含删除标记的占用比例。
 
 $$
-h(x)=x \bmod M
+\alpha=N/M,\qquad \beta=(N+D)/M
 $$
 
-先预测把 19、14、23、1、68、20 放进长度 7 的表。19 和68都映射到5，14映射到0；这不表示 hash function “坏了”，只说明 collision resolution 现在成为 correctness 的一部分。若只测试没有碰撞的数据，最危险的分支从未运行。
+这表示主图删除 12 后，N=2、D=1、M=7，活负载降为 2/7，但仍有 3/7 的槽不能作为查找的空槽终点。
 
-本书第3版第5章的官方七节依次是 **General Idea、Hash Function、Separate Chaining、Hash Tables Without Linked Lists、Rehashing、Hash Tables in the Standard Library、Extendible Hashing**。下面保持这个顺序：先确定地址质量，再比较链式与表内探查，最后处理增长、标准接口和外存目录。
+均匀分配到 M 个链桶时，一次失败查询平均需检查 N/M 个链节点，因为每个键落到目标桶的概率是 1/M；再加桶定位的固定成本，就是期望 O(1+α)。分布偏斜时单链可长达 N。不能把这个链长估计直接套给连续探查。
 
+## 3. 不用链表的散列表：沿槽探查
 
-## 5.1 General Idea
+<Term def="发生碰撞后继续探查同一个数组中的其他槽">开放定址法</Term>
+省掉外部链。第 i 次探查位置写成 `(h(x)+f(i)) mod M`，i 从 0
+开始。主实验使用线性探查 `f(i)=i`，因此恰好访问一圈就覆盖 M
+个槽；所有循环最多执行 M 次。
 
-理想散列表把 key 映射到 array index，直接访问 bucket。只要 hash evaluation 是常数时间、分布均匀、load factor 受控，lookup 的 expected cost 可写成：
+删除不能简单清空槽。<Term def="记录此槽曾被占用，查找应继续但插入可以复用的删除标记">墓碑</Term>保留探查链的连续性。查询见空槽可宣布不存在，见墓碑必须继续。插入可以记住第一块墓碑，却必须继续排除后方已有相等键，才能复用它。否则删除 12 后再插入 19，会产生两份 19。
 
-$$
-\mathbb{E}[T_{\mathrm{find}}]=O(1)
-$$
+### 探查策略不能只替换一个公式
 
-这个 O(1) 是 average/expected guarantee，不是“任何输入都一步完成”。攻击者控制字符串时，可构造大量 collisions；resize 时也会出现单次 O(N) 工作。接口设计必须把 average case、worst case 与 amortized resize cost 分开陈述。
+线性探查会形成连续占用段，使后来从这一段出发的键也被推到尾部，称为<Term def="碰撞让连续占用段增长，进而吸引更多探查的现象">聚集</Term>。<Term def="用平方偏移而非连续偏移寻找后续槽">二次探查</Term>使用 `f(i)=i²`，但不保证走遍全表：M=8、起点 0 时只出现 0、1、4。即使 5 个槽空着，也可能无法插入。
 
-散列表不维护 sorted order，因此不擅长 predecessor、range scan 或 ordered iteration。BST 用比较关系换取次序和 logarithmic bound；hash table 用额外 capacity 与分布假设换取平均常数 lookup。容器选择由所需 operations 决定，而不是笼统比较谁“更快”。
+对奇素数 M，i 取 0 到 `(M-1)/2` 时平方余数互异：若 i²≡j²，则 M 整除 `(i-j)(i+j)`，在该范围只能 i=j。所以至少有 `(M+1)/2` 个候选槽；不足一半的槽被占用时可找到空槽。删除后要区分活键与墓碑，不能用很低的 α 推断很快遇空。作者探查文件明确写有“素数、半空”的前提；本章线性模型不依赖该前提。
 
-## 5.2 Hash Function
+<Term def="用第二个函数决定探查步长的开放定址方法">双重散列</Term>使用
+`h1(x)+i·h2(x)`；步长须与 M 互素。M=8、步长 2 只访问四槽，步长 3
+才覆盖八槽。无论哪一种策略，仍应有探查次数上界，而不是 `while(true)`
+等待永远不会遇到的空槽。
 
-散列函数（）必须满足两个语义条件：相等 keys 产生相同 hash；对象留在容器期间，参与 hash/equality 的字段不能以破坏 bucket 定位的方式变化。均匀分布是性能目标，不是 equality contract 的替代品。
+## 4. 先预测，再让墓碑故障发生
 
-对字符串，只相加字符会忽略顺序，使 `abc` 与 `cba` 必然碰撞。第3版作者示例采用 multiplier 37 的 Horner recurrence：
+猜一猜：保留槽 6 的墓碑，查找 19 要访问哪些槽？把故障打开后，19 是否真的被删除了？
 
-$$
-H_0=0,\qquad H_{i+1}=37H_i+\operatorname{code}(s_i)
-$$
+<DsaHashingProbeLab />
 
-```cpp
-std::size_t hashString(std::string_view key) {
-    std::size_t value = 0;
-    for (unsigned char ch : key)
-        value = 37 * value + ch;
-    return value;
+按“故障”会立即查询输入键，正确轨迹 `5 → 6 → 0` 会被截成 `5 → 6`；存储中的 19 没消失，只是错误算法提前宣布失败。输入 `-1` 再插入，应从 6 开始探查。把操作切到插入，尝试已有的 19，应报告重复而不是把墓碑当成新键位置。
+
+输入 0、1、2、3、4 等键逐次插入可以逼近满表。表满时不存在的键最多探查 M 次，然后明确失败；若只剩墓碑，则绕完一圈后可以复用墓碑。重置同时恢复初始表、输入 19、查找操作、故障关闭和原始图形。
+
+## 5. 再散列：不能原位把模数换掉
+
+<Term def="建立新容量的空表并按新地址规则重新插入活键">再散列</Term>
+改变容量后要重新定位每个活键。初始图选择“再散列到 11 槽”：键 19 从物理槽 0 移到
+8，键 5 仍在
+5；墓碑不搬家。这不是把数组尾部补空槽就结束。扩容分配、扫描和重新插入都要计入成本。
+
+均匀散列与受控负载下，常见再散列的期望工作量为 O(N+M新)；若每次容量按比例增长，增长成本可分摊到多次插入。劣质函数让重插入产生长探查，单次重建仍可能退化。这里不声称无条件线性。相同容量重建也有意义：它清理墓碑，却不增加可容纳的活键数。
+
+主图固定重建到 11，模型与 C++ 允许指定 1–31；目标比活键数还小时返回失败、保留原表。此处不做自动增长，目的是让满表和删除条件可以被直接观察。生产容器通常在更低负载就扩容，以免查询接近整圈扫描。
+
+## 6. C++17 可运行对照：先实现，再用容器核查
+
+下面依次拼接所有标为 `hash_lab.cpp` 的 **8 段**，保存为一个文件。每段不超过 30 行；跨段的类定义故意保持开放。这是独立编写的整数集合教学程序，不是完整通用容器。运行 `clang++ -std=c++17 -Wall -Wextra -Werror hash_lab.cpp -o hash_lab && ./hash_lab`，应输出 `hash lab ok`。练习中的 `exercise.cpp` 是第二个文件，不要拼入第一个。
+
+### A1：头文件、函数与槽状态
+
+`home` 先缩小余数再相加，避免负数越界；`wordHash` 使用无符号运算。槽不拿某个整数充当“空”，所以负数也能成为有效键。
+
+```cpp file=hash_lab.cpp
+#include <algorithm>
+#include <cassert>
+#include <climits>
+#include <cstddef>
+#include <iostream>
+#include <list>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+int home(int key, int m) {
+    if (m < 1 || m > 31) throw std::invalid_argument("capacity");
+    int r = key % m;
+    return r < 0 ? r + m : r;
 }
+std::size_t wordHash(const std::string& text) {
+    std::size_t h = 0;
+    for (unsigned char c : text) h = 37 * h + c;
+    return h;
+}
+enum State { Empty, Live, Deleted };
+struct Slot { State state = Empty; int key = 0; };
+struct Search { int found = -1, vacant = -1, visits = 0; };
 ```
 
-这是对官方 `hash(const string&)` 的现代无符号改写。原示例使用 `int` 展示 recurrence；生产代码应避免依赖 signed overflow，并把混合后的 hash 对实际 bucket count 取模。table resize 会改变 bucket index，但不改变 key equality。
+### A2：有限探查
 
+查找记录首个可用位置，却继续检查重复键。只有空槽或完整一圈能证实不存在；参数 `wrong` 专门复现错误的墓碑终止，默认关闭。
 
-选择 prime table size 常用于降低 key pattern 与 modulus 的共同周期。它不能修复一个只读取 key 局部字段的差 hash function，也不能阻止 adversarial collision。正确评估应统计 bucket occupancy histogram、最长链、probe length 分位数，而不是只看平均时间。
-
-## 5.3 Separate Chaining
-
-分离链接法（）让 table array 存放 `list<HashedObj>`。`myhash(x)` 选择链，链内再做 equality search。若 N 个元素分到 M 个 buckets，负载因子（）为：
-
-$$
-\lambda=\frac{N}{M}
-$$
-
-均匀散列下，unsuccessful lookup 检查约 lambda 个元素；successful lookup 通常检查约 `1 + lambda/2` 个。Separate chaining 允许 lambda 超过1，但链越长，cache locality 和 tail latency 越差。
-
-
-第3版官方 `SeparateChaining.h` 的核心插入逻辑可以压缩为：
-
-```cpp
-bool insert(const Key& key) {
-    auto& chain = buckets[myhash(key)];
-    if (std::find(chain.begin(), chain.end(), key) != chain.end())
-        return false;
-    chain.push_back(key);
-    if (++size > buckets.size())
-        rehash();
-    return true;
-}
-```
-
-`remove` 必须同时从链中 erase 并减少 active size；`makeEmpty` 不只 clear 各链，也应让 size 回到0。官方示例的构造器参数名为 `size`，但正文代码固定把 `theLists` resize 到101；忠实阅读要区分教材要展示的算法与可直接复用的通用组件。
-
-链式方案 deletion 简单，并且 table 不会因一个 bucket 满而插入失败；代价是每个 node allocation、pointer chasing 和较弱 locality。若 key/value 很小且访问密集，开放定址往往更紧凑。
-
-## 5.4 Hash Tables Without Linked Lists
-
-不用链表的散列表，也就是开放定址法（），把 collision resolution 留在同一个 array 内。第 i 次探查的一般形式是：
-
-$$
-h_i(x)=\bigl(h(x)+f(i)\bigr)\bmod M
-$$
-
-- linear probing 取 `f(i)=i`，连续 slots locality 好，但容易 primary clustering；
-- quadratic probing 取 `f(i)=i^2`，打散连续团簇，但表长和 load 条件决定能否找到空位；
-- double hashing 取 `f(i)=i h_2(x)`，第二 hash 必须与 M 合适，才能遍历足够多 slots。
-
-
-第3版 `QuadraticProbing.h` 用奇数增量 1、3、5、7 递推平方差，避免每轮真的做 multiplication：
-
-```cpp
-std::size_t findPos(const Key& key) const {
-    std::size_t offset = 1;
-    std::size_t pos = myhash(key);
-    while (slots[pos].state != EMPTY && slots[pos].key != key) {
-        pos = (pos + offset) % slots.size();
-        offset += 2;
+```cpp file=hash_lab.cpp
+struct Table {
+    std::vector<Slot> slots;
+    explicit Table(int m = 7) {
+        home(0, m);
+        slots.resize(m);
     }
-    return pos;
+    Search scan(int key, bool wrong = false) const {
+        Search r;
+        int m = static_cast<int>(slots.size());
+        for (int i = 0; i < m; ++i) {
+            int p = (home(key, m) + i) % m;
+            const auto& s = slots[p];
+            ++r.visits;
+            if (s.state == Live && s.key == key) {
+                r.found = p; return r;
+            }
+            if (s.state == Deleted && wrong) return r;
+            if (s.state != Live && r.vacant < 0) r.vacant = p;
+            if (s.state == Empty) return r;
+        }
+        return r;
+    }
+```
+
+### A3：插入与删除
+
+满表返回 `false`，没有越界写；重复键也返回 `false`。删除将状态改成墓碑。旧键字段即使还在，也不能被当作活键命中。
+
+```cpp file=hash_lab.cpp
+    bool insert(int key) {
+        auto r = scan(key);
+        if (r.found >= 0 || r.vacant < 0) return false;
+        slots[r.vacant] = {Live, key};
+        return true;
+    }
+    bool contains(int key) const { return scan(key).found >= 0; }
+    bool erase(int key) {
+        auto r = scan(key);
+        if (r.found < 0) return false;
+        slots[r.found].state = Deleted;
+        return true;
+    }
+```
+
+### A4：事务式重建
+
+先构造临时表，成功搬完所有活键后才交换。容量不足不会破坏原表，且删除标记自然被丢弃。至此关闭 `Table` 类。
+
+```cpp file=hash_lab.cpp
+    bool rebuild(int capacity) {
+        Table next(capacity);
+        for (const auto& s : slots)
+            if (s.state == Live && !next.insert(s.key)) return false;
+        slots.swap(next.slots);
+        return true;
+    }
+    std::size_t size() const {
+        return std::count_if(slots.begin(), slots.end(),
+            [](const Slot& s) { return s.state == Live; });
+    }
+};
+```
+
+### A5：对照桶链
+
+这里固定七桶，便于与七槽表使用同一输入；链可以继续增长。`remove` 删除后不需要墓碑。虽然 `list.remove` 会移除所有相等项，但插入已保证唯一键。
+
+```cpp file=hash_lab.cpp
+struct Chain {
+    std::vector<std::list<int>> buckets{7};
+    bool contains(int key) const {
+        const auto& b = buckets[home(key, 7)];
+        return std::find(b.begin(), b.end(), key) != b.end();
+    }
+    bool insert(int key) {
+        if (contains(key)) return false;
+        buckets[home(key, 7)].push_back(key);
+        return true;
+    }
+    bool erase(int key) {
+        if (!contains(key)) return false;
+        buckets[home(key, 7)].remove(key);
+        return true;
+    }
+};
+```
+
+### 标准库散列表：历史目录不等于现代 API
+
+原书冻结为第三版目录，其 5.6 是“Hash Tables in the Standard Library”。这不意味着历史正文已经使用今天的 C++17 API。本文的<Term def="按散列与相等关系组织元素、不保证排序的现代标准容器">无序容器</Term>示例是现代补充：`unordered_set` 存唯一键，`unordered_map` 存唯一键及值；多重版本才允许等价键重复。C++17 用 `find` 判断存在，不能偷用 C++20 的 `contains`。
+
+`max_load_factor` 是负载策略；`reserve(n)` 按元素数量请求容量，`rehash(b)` 按桶数请求。实际桶数由实现选择，不可断言必为某个素数。重排会使迭代器失效，但不会使保留元素的指针或引用失效；删除目标元素另当别论。标准也没有要求内部必须采用本章的线性探查。
+
+### A6：用键相等区分真正的碰撞
+
+以下常量函数故意让全部键碰撞，却仍应保存两个不同键。`operator[]` 可能插入不存在的键；只想查找请用 `find`。程序在 `rehash` 后重新取得迭代器，而非访问失效的旧迭代器。
+
+```cpp file=hash_lab.cpp
+struct ConstantHash {
+    std::size_t operator()(int) const { return 0; }
+};
+void standardCheck() {
+    std::unordered_map<int, int, ConstantHash> counts;
+    counts.max_load_factor(0.7f);
+    counts.reserve(10);
+    ++counts[5]; ++counts[12]; ++counts[5];
+    assert(counts.size() == 2 && counts.at(5) == 2);
+    counts.rehash(23);
+    assert(counts.find(12) != counts.end());
+    assert(counts.load_factor() <= counts.max_load_factor());
+    counts.erase(5);
+    assert(counts.find(5) == counts.end());
 }
 ```
 
-因为 `(i+1)^2-i^2=2i+1`，奇数 offset 依次得到 quadratic positions。prime table 且 load 不超过一半时，教材实现可以依赖探查找到空 slot；超过边界后，不能只把 loop 写成“总会结束”。
+### A7：独立集合参照
 
-删除不能直接标成 EMPTY。假设 key A、B 发生碰撞，B 位于 A 后面的 probe slot；若删除 A 后写 EMPTY，查 B 会在 A 的旧位置提前停止，错误报告 absent。因此 slot 至少有 `ACTIVE`、`EMPTY`、`DELETED` 三态，DELETED 是 tombstone：lookup 继续越过它，insert 可复用它。
+参照只知道键集合，不复写我们的探查逻辑。每次操作后比较一个查询区间，并检查两边元素数。固定容量的表允许“满”失败，所以插入成功时才将键加入参照；边界测试还必须单独检验是否错误地提前报告满。
 
-
-Tombstones 太多会延长 unsuccessful lookup，即使 active load 不高。因此监控不仅要看 active entries，还要看 occupied-or-deleted ratio；定期 rehash 可同时清理墓碑。
-
-## 5.5 Rehashing
-
-再散列（）不是把旧 array 原样复制。因为 modulus 和 probe sequence 都依赖 table size，每个 active key 必须重新 insert；DELETED entries 不迁移。
-
-
-官方 quadratic probing 实现在 active size 超过 array size 一半时，把容量扩到约两倍后的下一个 prime。正确流程是保存旧表、创建全 EMPTY 新表、把 size 归零、逐个插入旧表中的 ACTIVE entries：
-
-```cpp
-void rehash() {
-    auto old = std::move(slots);
-    slots.assign(nextPrime(2 * old.size()), Entry{});
-    size = 0;
-    for (const Entry& entry : old)
-        if (entry.state == ACTIVE)
-            insert(entry.key);
+```cpp file=hash_lab.cpp
+void compare(const Table& table, const std::unordered_set<int>& oracle) {
+    assert(table.size() == oracle.size());
+    for (int key = -30; key <= 30; ++key)
+        assert(table.contains(key) == (oracle.count(key) != 0));
+    for (int key : oracle) assert(table.contains(key));
+}
+void regression() {
+    Table table;
+    std::unordered_set<int> oracle;
+    for (int key : {5, 12, 19, -1}) {
+        assert(table.insert(key) == oracle.insert(key).second);
+        compare(table, oracle);
+    }
+    assert(table.erase(12) == (oracle.erase(12) != 0));
+    compare(table, oracle);
+    assert(table.contains(19) && table.scan(19, true).found < 0);
+    assert(!table.insert(19));
+    assert(table.rebuild(11));
+    compare(table, oracle);
+    assert(table.scan(19).found == 8);
+    assert(!table.rebuild(1));
+    compare(table, oracle);
 }
 ```
 
-若容量按固定比例增长，每个 key 在多次扩容中被搬移的总次数形成几何级数：
+### A8：运行入口与边界
 
-$$
-N+\frac{N}{2}+\frac{N}{4}+\cdots \lt 2N
-$$
+容量 1 可以同时验证成功插入、整圈失败、删除和墓碑复用。`HASH_LAB_NO_MAIN` 允许练习文件复用实现而不重复入口。
 
-所以 resize 单次 O(N)，但分摊到一串 insert 上仍可保持 amortized O(1)。如果每次只增加一个 slot，搬移总工作会退化为 quadratic。异常安全还要求新表构造或 key copy 失败时，不破坏旧表的可用状态。
+```cpp file=hash_lab.cpp
+#ifndef HASH_LAB_NO_MAIN
+int main() {
+    regression(); standardCheck();
+    assert(home(-1, 7) == 6);
+    assert(home(INT_MIN, 7) >= 0);
+    assert(wordHash("ab") != wordHash("ba"));
+    Table one(1);
+    assert(one.insert(4) && !one.insert(5));
+    assert(one.scan(5).visits == 1);
+    assert(one.erase(4) && one.insert(5));
+    Chain chain;
+    for (int k : {5, 12, 19}) assert(chain.insert(k));
+    assert(!chain.insert(19));
+    assert(chain.erase(12) && chain.contains(19));
+    std::cout << "hash lab ok\n";
+}
+#endif
+```
 
-## 5.6 Hash Tables in the Standard Library
+## 7. 可扩展散列：只分裂装不下的桶
 
-标准库散列表（）在现代 C++ 中是 `std::unordered_set` 和 `std::unordered_map`。第3版成书时标准库 incorporation 是重要主题；今天使用时应抓住接口 contract，而不是假设实现一定等同于书中的 list buckets。
+<Term def="用可增长的位目录指向固定容量桶，溢出时只分裂相关桶的散列结构">
+  可扩展散列
+</Term>
+面向动态增长的文件：目录项指向数据桶，多个目录项可以共用一个桶。与整张开放定址表重建不同，它尽量只重新分配溢出桶中的记录。这也是
+[Fagin
+等人的原始论文摘要](https://research.ibm.com/publications/extendible-hashinga-fast-access-method-for-dynamic-files)所述动态文件目标；这里不把摘要当作论文全文。
 
+<Term def="整个目录当前用于索引的散列位数">全局深度</Term> g 决定目录有 `2^g`
+项；<Term def="某个桶区分记录所使用的散列位数">局部深度</Term> ℓ 不超过
+g。局部深度为 ℓ 的桶恰被 `2^(g-ℓ)`
+个目录项引用。图使用低位，某些教材使用高位；只要分裂和寻址一致，两种约定都可以。
 
-`unordered_set<Key, Hash, KeyEqual>` 保持 unique keys；`unordered_map<Key, Value, Hash, KeyEqual>` 保存 key-value pairs。对于任何 `KeyEqual(a,b)` 为 true 的 a、b，必须有 `Hash(a)==Hash(b)`。反向不要求成立：相同 hash 可以是不同 key，容器会再用 equality 区分。
+### 分裂与翻倍是不同动作
 
-`reserve(n)` 按目标 element count 预留，`rehash(b)` 请求至少一定 bucket count；`max_load_factor` 影响何时增长。Rehash 会改变 bucket placement 并使 iterators 失效，references/pointers 的规则应以所用标准版本和具体 operation contract 为准。不要把 iterator 长期缓存跨越潜在 insertion。
+一个容量 2 的桶溢出时，按下一位将原桶记录分成两组，两个桶的 ℓ 都加一。若原先 ℓ 小于 g，已有目录位够用，只改指向这两个桶的相关引用；若原先 ℓ 等于 g，先将目录复制成两半、令 g 加一，再分裂桶。没有溢出的桶不会凭空多存一份记录。
 
+本例 `index = ((key mod 2^g)+2^g) mod 2^g`，等价于取规范化整数的低 g 位。初始奇数桶装 1、3；插入 5 后 g=2，低位 01 桶装 1、5，11 桶装 3，而目录 00、10 仍共用偶数桶。这是实际位结构，不是“扩容”标题卡。目录接口与位不变量可对照 [CMU BusTub 的目录定义](https://raw.githubusercontent.com/cmu-db/bustub/master/src/include/storage/page/extendible_htable_directory_page.h)。
 
-需要 ordered traversal、range query 或稳定 worst-case logarithmic operation 时，选择 `set/map`；需要平均常数 exact lookup 且不依赖次序时，才选择 unordered family。基准应包含真实 key distribution、reserve policy 与 miss ratio。
+猜一猜：接着插入 9，哪个桶会再分裂？随后插入 7、11，为什么不必再把目录翻倍？
 
-## 5.7 Extendible Hashing
+<DsaHashingDirectoryLab />
 
-可扩散列（）解决 disk-based table 增长问题。普通 rehash 需要重写整个大文件；extendible hashing 用内存 directory 指向固定大小 disk buckets，只分裂溢出的 bucket。
+模型最多使用低 4 位。键 1、17、33 的低 4 位完全相同；桶满后增加这些目录位仍无法分离，所以它报告上限并回滚整次插入。真实实现需要更长摘要、溢出策略或明确失败处理，不应无限翻倍。图没有实现桶合并、目录收缩、磁盘页缓存或并发；不能把一次内存操作当作真实磁盘性能测量。
 
+## 常见误区
 
-global depth d 表示 directory 使用 d 个 hash bits，因此入口数为：
+<Callout type="trap" title="删除就清空">
 
-$$
-|\mathrm{directory}|=2^d
-$$
+**现象 →** 删除 12 后找不到仍存着的 19。**原因 →** 错把墓碑视为空槽。**修法 →** 查找越过墓碑，插入先排除重复键；用主图故障按钮比较实际路径。
 
-每个 bucket 另有 local depth。插入导致 bucket overflow 时：
+</Callout>
 
-1. 若 local depth 小于 global depth，只分裂该 bucket，并重定向一部分 directory entries；
-2. 若两者相等，directory 先加倍，global depth 加1，再分裂 bucket；
-3. 只有 hash suffix 属于该 bucket 的 records 需要重新分配，其他 disk buckets 不动。
+<Callout type="trap" title="有空位就一定能插入">
 
-这种结构让一次 lookup 通常是 directory memory access 加一次 bucket I/O。代价是 directory 可能增长、poor hash suffix distribution 会反复分裂，而且并发更新需要保护 directory 与 bucket metadata 的一致性。它不是通用 in-memory `unordered_map` 的复杂替代品，而是针对动态外存文件的局部增长方案。
+**现象 →** 二次探查在 8 槽表里反复撞同三槽。**原因 →** 探查序列不覆盖全表，素数与负载前提被省略。**修法 →** 保留有界扫描并验证策略条件；线性探查的一圈保证不能借给其他策略。
 
-## 统一验证：从 hash contract 到增长策略
+</Callout>
 
+<Callout type="trap" title="扩容只要 resize">
 
-## 本章回顾
+**现象 →** 新数组里键还在，却按新模数找不到。**原因 →** 地址规则变化，记录仍停在旧槽。**修法 →** 重插活键，丢弃墓碑；不要修改容器中参与散列的键。
 
-1. Hashing 把 key comparison 转成 address computation，但 collision resolution 是正常且必要的路径。
-2. Hash function 必须服从 equality contract，并尽量让真实 keys 均匀分布。
-3. Separate chaining 允许 load factor 超过1，删除简单，但承担 allocation 与 pointer chasing。
-4. Open addressing 把 entries 留在 array，linear、quadratic 与 double hashing 由 probe sequence 区分。
-5. Tombstone 维持删除后的 probe reachability；直接写 EMPTY 会制造 false miss。
-6. Rehash 必须按新容量重新插入 active keys，几何增长给出 amortized O(1) insert。
-7. Standard unordered containers 承诺平均复杂度与语义，不承诺教材中的具体 bucket representation。
-8. Extendible hashing 用 directory 和 local split 控制动态磁盘文件的 I/O 与增长范围。
+</Callout>
 
+<Callout type="trap" title="目录翻倍就是复制全部数据">
+
+**现象 →** 目录增长后把每个桶的数据也复制一份。**原因 →** 把目录引用误认为记录。**修法 →** 图中跟随共享连线，只重分配溢出桶，并检查局部深度对应的引用数。
+
+</Callout>
+
+## 小结
+
+- 地址碰撞不等于键相等，负载也不等于最坏探查次数。
+- 删除留标记，再散列重插活键，用独立集合检查实现。
+- 查找越过墓碑；局部深度小于全局深度时无需翻倍。
+
+<Exercises>
+
+**问题 1：同样的键，三种寻址规则会发生什么？**
+
+容量 7，依次插入 5、12、19、-1，再删除 12。写出链式结构和线性表的状态、N/M 与 `(N+D)/M`，并预测查找 19 的正确与故障路径。若改用容量 8 的平方探查，从 0 出发为什么仍可能失败？
+
+<Answer>
+
+链式第 5 桶为 `[5,19]`，第 6 桶为 `[-1]`，其他链空；无需墓碑。线性表依次把四键放在 5、6、0、1，删除后槽 6 为墓碑。N=3、M=7、D=1，因此活负载 3/7、含墓碑占用比例 4/7；两个比例不是同一性能指标。
+
+查找 19 正确访问 5、6、0，故障只访问 5、6。5 与 19 地址相同却不是同一键；`-1` 的规范化余数是 6，而非负数组下标。容量 8 的平方余数只取 0、1、4，若这三处已占用，其他五槽空着也无济于事。链式可以继续增长，开放定址必须处理容量上限。
+
+</Answer>
+
+**问题 2：改出“清理墓碑但不扩容”，并让参照程序揭穿错误修改。**
+
+为 A1–A8 增加函数 `compact(Table&)`：容量不变，活键集合不变，所有墓碑清零。保存下列答案为 `exercise.cpp`，与 `hash_lab.cpp` 同目录，编译运行。随后把删除改成 `Empty`，或把 `rebuild` 改成仅 `resize`，原回归断言应失败；不要通过取消断言修测试。
+
+<Answer>
+
+直接复用事务式 `rebuild`，不需要另一套迁移算法。删除后槽 6 不能作为查询终点；清理后可以，因为 19 已按新表状态重插。测试同时检查集合、容量和墓碑数，而不是仅输出一句“成功”。
+
+```cpp file=exercise.cpp
+#define HASH_LAB_NO_MAIN
+#include "hash_lab.cpp"
+bool compact(Table& table) {
+    return table.rebuild(static_cast<int>(table.slots.size()));
+}
+int main() {
+    regression(); standardCheck();
+    Table table;
+    std::unordered_set<int> oracle{5, 19};
+    for (int k : {5, 12, 19}) table.insert(k);
+    table.erase(12);
+    assert(compact(table));
+    assert(table.slots.size() == 7);
+    compare(table, oracle);
+    for (const auto& s : table.slots) assert(s.state != Deleted);
+    Table full(3);
+    for (int k : {0, 3, 6}) assert(full.insert(k));
+    assert(!full.insert(9) && full.scan(9).visits == 3);
+    assert(full.erase(3) && full.insert(9));
+    assert(!full.insert(6));
+    std::cout << "compact ok\n";
+}
+```
+
+运行 `clang++ -std=c++17 -Wall -Wextra -Werror exercise.cpp -o exercise && ./exercise`，应输出 `compact ok`。可进一步修改实验组件的再散列容量为当前表长，观察墓碑消失但容量不变。UI 模型保持键范围 -999–999；C++ 示例则允许全部 `int` 值。
+
+</Answer>
+
+**问题 3：目录为何只在部分分裂时翻倍，什么时候该选标准容器？**
+
+目录实验初始已有 1、3；依次插入 5、9、7、11。写出最终 g、各桶的记录和局部深度，检查每个桶被多少目录项引用。再判断：内存里的用户编号计数与固定页容量的增长文件，哪个优先用 `unordered_map`，哪个适合研究可扩展散列？
+
+<Answer>
+
+5 使 g 从 1 到 2，9 又使 g 从 2 到 3。最终 B0 为空、ℓ=1，被 000、010、100、110 四项引用；B1 为 `[1,9]`、ℓ=3，对应 001；B3 为 `[5]`、ℓ=3，对应 101。另一个奇数分支先装 `[3,7]`，插入 11 后按位 2 分裂成 B2 `[3,11]` 对应 011、B4 `[7]` 对应 111，两者 ℓ=3。最后一次原局部深度为 2，小于 g=3，所以目录不翻倍。桶编号是本实验的分配顺序，不是算法通用常量。
+
+内存计数优先选 C++17 `unordered_map`，并根据预计数量设置 `reserve`；不要为此维护磁盘目录。固定页容量且希望局部分裂的文件适合研究可扩展散列，但还需持久化和并发机制。不能从现代标准库名称推断它使用本实验的目录，也不能宣称第三版历史正文就采用了 C++17 接口。
+
+</Answer>
+
+</Exercises>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="散列">
+    先算候选位置，再核对键是否相等的查找方法。
+  </GlossaryItem>
+  <GlossaryItem term="散列函数">
+    给同一键稳定地产生整数摘要；不同键允许摘要相同。
+  </GlossaryItem>
+  <GlossaryItem term="桶">根据索引找到的一个存储位置或一组记录。</GlossaryItem>
+  <GlossaryItem term="碰撞">
+    不同键要从同一个候选位置开始找，不代表键相等。
+  </GlossaryItem>
+  <GlossaryItem term="分离链接法">
+    让一个桶中的冲突记录排成链，逐个比较。
+  </GlossaryItem>
+  <GlossaryItem term="负载因子">
+    活键数除以桶或槽数，不包含已经删除的标记。
+  </GlossaryItem>
+  <GlossaryItem term="开放定址法">
+    冲突记录继续在同一数组里寻找位置。
+  </GlossaryItem>
+  <GlossaryItem term="墓碑">
+    删除留下的路标：此处可复用，但查找还得往后走。
+  </GlossaryItem>
+  <GlossaryItem term="聚集">
+    连续占用段越长，后续键越容易被挤到同一段尾部。
+  </GlossaryItem>
+  <GlossaryItem term="二次探查">
+    用平方偏移寻找后续槽；不保证遍历全部槽。
+  </GlossaryItem>
+  <GlossaryItem term="双重散列">
+    第二个函数给出步长，步长与容量互素才能走遍槽。
+  </GlossaryItem>
+  <GlossaryItem term="再散列">
+    更换地址规则后把活键重新插入，顺便清掉墓碑。
+  </GlossaryItem>
+  <GlossaryItem term="无序容器">
+    现代 C++ 标准中按散列查找、不保证排序的一组容器。
+  </GlossaryItem>
+  <GlossaryItem term="可扩展散列">
+    用增长的位目录管理固定容量桶，满桶局部分裂。
+  </GlossaryItem>
+  <GlossaryItem term="全局深度">
+    整个目录使用多少位，g 位对应 2 的 g 次方个引用。
+  </GlossaryItem>
+  <GlossaryItem term="局部深度">
+    一个桶已经用多少位区分记录，可小于目录使用的位数。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与访问边界
+
+本章按 Mark Allen Weiss《Data Structures and Algorithm Analysis in C++》第三版第 5 章七节范围独立重写，不声称读到原书完整正文，也不声称出版社网页授予开放改编许可。冻结清单保留 2006 标识；出版社版权栏显示 2007，本文不据此修改版本清单。2026-09-24 实际 GET 以下来源，均返回 HTTP 200，证据存档含 URL、时间、响应体与完整 SHA256：
+
+- [出版社目录](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)：仅核定七组范围，不作技术事实全文依据。
+- 作者 [SeparateChaining.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/SeparateChaining.h)、[QuadraticProbing.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/QuadraticProbing.h)、[SeparateChaining.cpp](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/SeparateChaining.cpp)：核查桶链、探查状态、再散列与 37 倍递推；代码是历史教学材料，不等于现代工业实现。
+- [C++17 工作草案 N4659 的无序容器条款镜像](https://timsong-cpp.github.io/cppwp/n4659/unord.req)：核查相等/散列契约、唯一键、负载接口及迭代器规则；不是第三版正文，也不是付费 ISO 出版文本。
+- [IBM Research 原论文条目](https://research.ibm.com/publications/extendible-hashinga-fast-access-method-for-dynamic-files)：核查可扩展散列的作者与动态文件目的，仅访问摘要。[CMU BusTub 目录接口](https://raw.githubusercontent.com/cmu-db/bustub/master/src/include/storage/page/extendible_htable_directory_page.h)提供低位掩码、局部/全局深度及完整性条件的工程参照；本章小模型不冒充其数据库实现。
+
+所有正文、实验和 C++ 代码均为此次独立教学实现。全文程序可由上面八段依次拼接，练习程序单独保存；不存在需要额外下载的隐藏实现。浏览器双视口与正式质量验收尚由主审执行，本章保持草稿。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Mark Allen Weiss · Data Structures and Algorithm Analysis in C++ · Third Edition · Chapter 5"
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+/>

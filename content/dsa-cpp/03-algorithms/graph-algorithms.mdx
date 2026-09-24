@@ -1,189 +1,561 @@
 ---
-title: "第9章 Graph Algorithms：从依赖序到复杂性边界"
+title: "第9章 图算法：前沿、不变量与可核验的结果"
 type: C
 section: "排序、并查集与图"
 order: 8
-description: "按第3版七节完整重构图定义、拓扑排序、最短路、网络流、最小生成树、DFS应用与NP完全性，并强调算法前提和证据。"
+description: "沿七组原书范围，推导拓扑序、最短路、残量网络、生成森林、DFS low-link 与 NP 归约，运行有边界检查的 C++17。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: dsaa3-09
+draft: true
+qualityVersion: 2
 ---
 
+import { DsaGraphAlgorithmsFrontierLab } from "@/components/mdx/dsa-cpp/dsa-graph-algorithms-frontier-lab";
 
-## 从“先确认图的语义，再运行算法”开始
+{/* 范围先行：dsaa3-09 七组分别是定义、拓扑排序、最短路、网络流、MST、DFS 应用、NP 完全性。不是五个以内的新概念。前六组用实际图执行轨迹；NP 用证书代码与双向等价归约。详见本批 DECISION.md。 */}
 
-图的定义（）决定算法是否适用。同一组 endpoints，在 directed graph 中可达性不对称；在 weighted graph 中最少 edges 不一定是最短 distance；负 edge 又会破坏 Dijkstra 的 greedy finalization。
+<Objectives>
 
-先预测 A 到 B 权重2、A 到 C 权重5、B 到 C 权重1。按 edge count，A-C 一步最短；按 weight，A-B-C 成本3更短。若需求只写“shortest”，实现无法判断优化的是 hops、distance、time 还是风险。
+- 能根据方向、权重、连通性选择算法，并指出它何时必须拒绝输入。
+- 能修改并运行 C++17 距离代码，用前沿图定位“首次发现就锁定”的错误。
+- 能回答：怎样用割、森林、low-link 或证书验证结果，而不把验证误当成求解？
 
-官方七节依次为 **Definitions、Topological Sort、Shortest-Path Algorithms、Network Flow Problems、Minimum Spanning Tree、Applications of Depth-First Search、Introduction to NP-Completeness**。它们从 graph model 和 traversal 逐步进入优化问题，最后说明哪些问题不应期待已知 polynomial exact algorithm。
+</Objectives>
 
+## 先问清楚：这张地图要解决什么
 
-## 9.1 Definitions
+仓库到码头，走两段短路可能比走一段长路更省时。若只数经过几条路，就会把“转弯少”误当成“时间短”。本章先固定要优化的量，再决定怎样找路线。
 
-令 graph G=(V,E)。Undirected edge `{u,v}` 可双向走；directed edge `(u,v)` 只从 u 到 v。Path 是相邻 edges 连接的 vertex sequence，simple path 不重复 vertices；cycle 从某 vertex 出发并返回。Directed acyclic graph 简称 DAG。
+有些路只能单向走，有些桥运力有限，还有些工序必须等上游完成。不先写出这些限制，同一张地图会算出互相矛盾的答案。
 
-Sparse graph 通常用 adjacency list，storage 为：
+## 9.1 图的定义：边的含义就是输入契约
+
+图的定义先区分对象与连接：顶点集合 V 表示对象，边集合 E 表示连接关系；无向边可以双向走，有向边 u→v 只允许从 u 到 v。因此同一对端点是否可双向到达，取决于边的方向，不能只看图上有没有连线。
+
+<Term def="由顶点集合与连接关系组成的模型">图</Term>记作 G=(V,E)，下文 n
+表示顶点数，m
+表示边数。边的数字可以是长度、费用或容量，**换一个问题，数字的含义也会变**。实验中的“路线”和“流”使用同一种画法，但不共享优化目标。
+
+<Term def="按边方向从一个顶点走到另一个顶点的顶点序列">路径</Term>
+允许连续走相邻边；简单路径不重复顶点。除首尾外不重复顶点的闭合路径称为环；无向图中还要求不重复使用同一条边，不能把走一条边再原路返回算成环。对有向图，“A
+能到 B”不能推出“B 能到
+A”。无向图可按互相可达分成连通分量；从一个源点出发的搜索不会自动覆盖孤立点。
+
+<Term def="每个顶点保存其出边列表的图存储方式">邻接表</Term>占 O(n+m)
+空间；无向边通常在两端各存一次，必须用同一个边编号关联。邻接矩阵占 O(n²)
+空间，可 O(1) 查询指定两点是否相连；邻接表适合稀疏图。复杂度中的 m
+指原始边数，双存储只增加常数。
+
+自环、平行边、无效端点都必须有明确政策。本章 C++ 构造器接受自环与平行边，拒绝越界；实验的 DFS 用**父边编号**，不是父顶点，因而不会误删第二条平行边。先在实验选“有向环 + 孤立 E”：环不会让带发现标记的 BFS 无限运行，但 E 仍不可达。
+
+## 9.2 拓扑排序：前沿是“没有未完成前置条件”
+
+拓扑排序要求每条有向边的起点都排在终点之前，因此它给出的是依赖关系的先后证据，而不是顶点名字的字典序。只要出现有向环，环上每个顶点都在等另一个顶点，无法选出第一个，全图就不存在这样的排列。
+
+<Term def="没有有向环的有向图">DAG</Term>
+适合表示依赖；对它求出的合法顶点排列称为
+<Term def="每条有向边的起点都排在终点之前的顶点排列">拓扑排序</Term>
+。下面用剩余入度实现这个约束。
+
+Kahn 算法维护剩余入度（还没删除的入边条数）。初始把**所有**零入度点放入队列；取出 u 后逐条扣除其出边贡献，某点降到零才入队。每条边只扣一次，所以邻接表实现是 O(n+m)。不连通不是失败：多个分量的零入度点可以同时在前沿里。
+
+实验选单位权路线与 Kahn，初始只有 A；删掉 A 的出边后 B 可输出，C 仍要等 B。再换“有向环 + 孤立 E”，算法只能输出 E。**剩余子图含环，不等于每个剩余点都在环上**：D 只是依赖环而被阻塞。若输出数不足 n，必须报告失败，不能拿这段前缀冒充全图拓扑序。多个合法前沿点意味着答案不唯一；按编号破同权只保证可复现，不增加图的约束。
+
+## 9.3 最短路径算法：何时可以不再回头
+
+最短路径算法最小化从源点到目标点的路径边权之和，而不是无条件最小化经过的边数。单位权图可按层扩展；非负权图可按最小暂定距离定案；存在负边时，这一贪心定案依据可能失效。选算法前必须先核对权重条件，并把不可达与受可达负环影响的顶点区别处理。
+
+### 单位权与首次发现
+
+<Term def="按先入先出顺序逐层扩展顶点的搜索">BFS</Term>让第 k 层表示从源点走 k
+条边。若一个点第一次从第 k
+层发现，它不可能还有更少边的未发现路线：更浅层已经全部扩展。因此在入队时标记发现是正确的，时间
+O(n+m)。这证明的是**最少边数**；只有边权全为1时，它直接等于距离。所有边权同为正数
+c 时，也可用跳数乘 c；混合权重不能这样做。
+
+默认图的 A→C 权重5，A→B→C 权重2+1=3。BFS 只看跳数会偏爱一步的 A→C。实验为了不偷偷改变题意，会拒绝非单位权输入；把图切到“有向单位权路线”才能计算单位权距离。
+
+### 松弛与 Dijkstra 的定案条件
+
+<Term def="发现经由某条边的更短路线时更新距离与父边">松弛</Term>
+允许推翻旧估计。这里 d[v] 是目前找到的源点到 v 的最小费用，w(u,v) 是边权，∞
+表示尚无路线。
 
 $$
-O(|V|+|E|)
+d[v] \leftarrow \min(d[v],\ d[u]+w(u,v)).
 $$
 
-Matrix 用 O(V²) space，查询任意 edge O(1)，适合 dense graph 或 bitset operations。Adjacency list traversal 的 BFS/DFS 为 O(V+E)，前提是每条 edge只被常数次处理。
+这个式子在说：先走到 u，再走一条边，若更省就换路线；只有 d[u] 有限时才做加法。
 
+<Term def="对非负边权按最小暂定距离取点的最短路算法">Dijkstra</Term>
+选择未定案点中 d 最小者
+u。若存在更短路线，它必从已定案区域跨到未定案区域；那个跨出点的暂定距离不会超过该路线长度。非负后续边不可能再降低费用，于是与“u
+最小”矛盾。这才允许在**取最小值时**定案，不是在首次发现时定案。
 
-实现要决定 vertex identity、parallel edges、self-loops、missing vertex 和 numeric overflow。Distance 加 weight 前若 lhs 是 infinity sentinel，会 overflow；大型权重也不应挤进过窄 integer。
+默认图第一步给 B=2、C=5；取出 B 后必须把 C 改为3、D 暂设9；再取 C 才把 D 改为5。开故障后 C 被锁成5，D 被锁成9。实验用小数组排序前沿，展示的是选择逻辑；后面的 C++ 用小根堆，旧条目仍可能留在堆里，弹出时要与最新 d 比较再决定是否跳过。
 
-## 9.2 Topological Sort
+### 负权、DAG 与负环
 
-拓扑排序（）用于 build dependencies、course prerequisites 和 task scheduling。Kahn algorithm 维护 in-degree：
+负权反例为 A→B=2、A→C=5、C→B=−4、B→D=2。若早早定案 B，就可能返回 D=4，但正确路线 A→C→B→D 为3。实验直接拒绝 Dijkstra 的负权输入，**没有负环也不能免除非负权前提**。
+
+若图是 DAG，可按拓扑序逐条松弛，允许负边，仍为 O(n+m)。一般图可用 <Term def="反复扫描全部边进行松弛，并检查可达负环的算法">Bellman–Ford</Term>：无可达负环时，最短简单路径最多 n−1 条边；完成 n−1 轮全边扫描后再扫一轮，若仍能改善，则存在源点可达负环。基本版本 O(nm)。这时不是“所有点都没有距离”，而是该负环及其可达后继没有有限最短值；不受影响的点仍可能有有限距离。
+
+## 动手试：同一张图，不同的前沿
+
+先预测：默认图处理完 A 后，C 的5能否立即定案？打开“发现过就不再松弛”，逐步走到结束，比较 C、D 的数字。再完整重置，确认不仅图恢复，输入、算法、故障和步骤也一起恢复。
+
+<DsaGraphAlgorithmsFrontierLab />
+
+建议分三轮操作：路线图比较 Dijkstra/BFS/Kahn；流图比较启用/禁止反向残量；无向图比较 Kruskal/DFS。错误选型会明确拒绝，不会把有向图自动改成无向图。
+
+## 9.4 网络流问题：反向边是撤销操作，不是倒运货物
+
+网络流问题在本节具体指最大流：给定有向网络、不同的源点与汇点以及非负边容量，在不超过容量且中间点流量守恒的约束下，最大化源到汇的净流量。它可以同时沿多条路线分配运输量，不是在图中挑一条最短路径；一次可行分配也不一定已经达到最大流。
+
+### 先有可行流，再谈最大流
+
+<Term def="满足边容量限制与中间点守恒的源到汇运输分配">网络流</Term>中，s
+是源点，t 是汇点，c(u,v) 是非负容量，f(u,v) 是实际流量。每条边满足 0≤f≤c；除
+s、t 外，每点流入之和等于流出之和。流值是源的净流出量，不是把所有边的 f
+相加。沿长路径送一份货，流值仍是一份。
+
+<Term def="记录还能增加或撤销多少流量的有向图">残量网络</Term>
+为一条原边保留正向余量 c−f 和反向余量
+f。反向边允许取消旧分配。若原图本来就有反向原边，应把它作为另一条带独立编号的边处理，不能把两种用途混成一个容量。
+
+### 一个必须撤销的完整例子
+
+实验选“流：必须撤销 B→C”和“增广路”。五条原边 A→B、B→C、C→D、A→C、B→D 的容量均为1。模型按边编号做 DFS，第一条增广路为 A→B→C→D，瓶颈1，流值变1。此时 C→B 出现反向残量1。
+
+下一次搜索找到 A→C→B→D：A→C、B→D 加1，B→C **减1**，最终两路 A→B→D 与 A→C→D 各送1，流值2。若删除反向残量搜索，算法停在1；可行不等于最优。图中实线是原边的 f/c，虚线是反向残量，点击确实运行路径搜索与流量更新，不是播放预填的答案。
+
+### 最大流—最小割的条件
+
+<Term def="把源与汇分开的顶点划分及其从源侧跨出的边">割</Term>把顶点分成含 s 的
+S 与含 t 的另一侧。把 S
+内所有点的守恒式相加，内部边抵消，只剩跨割净流，所以任意可行流值都不超过从 S
+跨出的总容量。
+
+若在**完整残量网络**中再也没有 s 到 t 的路，令 S 为从 s 可达的点：从 S 跨出的原边全饱和，跨入 S 的原边流量为零（否则有反向残量能跨出）。于是流值恰等于割容量，既是最大流也是最小割。实验正常结束的 `S={A}`，割容量2；故障结束搜索得 `S={A,C}`，割容量2却只有流1，证书立即失败。
+
+每次按路径最小正残量增广就是 Ford–Fulkerson 方法；本模型容量为有界整数，每步至少增加1，保证终止。这个终止理由依赖整数容量和值域，不是仅关于 n、m 的多项式次数证明；推广到任意实数容量不能照搬它。若用 BFS 选最少边增广路，得到 Edmonds–Karp，时间 O(nm²)。后者的复杂度结论不能套给本实验的 DFS 选路。
+
+## 9.5 最小生成树：总连线便宜，不等于从源出发都便宜
+
+最小生成树要求在连通无向加权图中连接全部顶点、不形成环，并使选中边的总权最小。这个目标没有指定源点；若输入不连通，则不存在覆盖全图的一棵生成树，必须改求各连通分量的最小生成森林。
+
+例如 A—B=2、B—C=2、A—C=3 时，<Term def="连通无向加权图中连接所有顶点且总权最小的无环边集">最小生成树</Term>（MST）选前两条共4，但其 A 到 C 的路长4，大于原图直连的3。不要用最短路树替代 MST，也不要把 MST 当所有点对的最短路。
+
+### 为什么跨割最轻边安全
+
+把当前已选森林的一个分量与其余点分开，选跨割最轻边 e。若某棵兼容已选森林的最优生成树不含 e，加入 e 会产生环；这个环还要经过另一条跨割边 f。由于 w(e)≤w(f)，删 f 不会更贵，同时仍连通无环。这一交换论证保证存在包含 e 的最优解；它不声称 e 必须出现在**所有**最优解中。同权边可能产生不同树，负权对这一证明没有破坏。
+
+Kruskal 全局按权排序，用并查集检查两端是否同属一个分量，同组拒绝，否则合并。排序主导 O(m log m)。Prim 则从当前树的边界取最轻跨边；索引小根堆实现常写 O(m log n)。它们选择前沿的方式不同，不是 Dijkstra 的距离松弛。
+
+### 不连通时必须换结果名称
+
+实验选无向图：B—C=−1，A—B=2，A—C=3，B—D=4，E 孤立。Kruskal 先选 B—C，再选 A—B；A—C 成环而被拒绝；最后选 B—D，总权5。E 无边可接。因此结果是 <Term def="在每个连通分量内分别求出的最小生成树集合">最小生成森林</Term>，含 n−k 条边（k 为分量数），这里是5−2=3条。只返回数字5却宣称“连接了所有点”，就是把不连通输入藏起来了。
+
+## 9.6 深度优先搜索应用：回溯带回什么信息
+
+深度优先搜索应用的关键不只是遍历顶点，而是利用发现顺序、递归栈和回溯信息判断图的结构。有向图用栈中状态识别回边与环；无向图用子树能否绕回祖先来识别割点和桥。这些判据依赖图的方向及搜索树中的角色，根节点和父边必须单独处理，不能共用一个 visited 标记代替全部信息。
+
+### 发现、回溯与 low-link
+
+<Term def="沿一条分支尽量深入，再回溯处理其余分支的搜索">DFS</Term>
+为未发现点递归建立搜索树。不连通图需对每个未发现点启动一次，得到森林。对有向环检测要区分未发现、仍在递归栈中、已经完成：遇到栈中点才是回边；只看一个
+visited 位不能区分“当前祖先”和“已经完成的另一支”。在 DAG
+上倒排完成顺序可得拓扑序，必须先排除环。
+
+对无向图，disc[v] 是发现时刻；<Term def="子树沿树边向下再至多走一条非父回边能达到的最早发现序号">low-link</Term> 记作 low[v]。初值为 disc[v]。从孩子 c 返回，合并 low[c]；遇到已发现点 w 的非父边，则合并 disc[w]。它不是全图任意路径上的最小编号，也不能把无向割点公式不加区分地套给有向 SCC。
+
+### 割点、桥与根的例外
+
+<Term def="删除后使无向图连通分量数增加的顶点">割点</Term>的非根判据是：存在 DFS 孩子 c，使 low[c]≥disc[v]。这说明 c 的子树绕不过 v 到达更早祖先。根没有更早祖先，必须单独数 DFS 子树：至少两个才是割点。<Term def="删除后使连通分量数增加的无向边">桥</Term>的判据更严格：树边 v—c 满足 low[c]>disc[v]；等号意味着仍有回边能回到 v，边未必是桥。
+
+在无向预设中按边顺序搜索，disc 为 A=1、B=2、C=3、D=4、E=5；C 经 A 的回边使 low[C]=1，回溯后 low[B]=1；D 的 low=4。因此 B 是割点，B—D 是桥；A 虽邻接 B、C，却只有**一个 DFS 孩子**，不是割点。E 是零孩子的根，也不是割点。实验节点给出 disc/low，逐次回溯会更新这些数字。
+
+平行边尤其要检查父**边**：两条 A—B 中，一条是树边，另一条能回到 A，所以都不是桥。若按“对方顶点等于父顶点”跳过两条，便会误报桥。双连通分量可在此 DFS 上另维护边栈：树边及通向祖先的回边入栈；当 low[c]≥disc[v] 时，弹至 v—c，得到一个边块，割点可属于多个块。这里未把这个辅助边栈冒充为实验已实现的功能。
+
+### 强连通分量不是无向连通分量
+
+<Term def="有向图中任意两点都能互相到达的最大顶点集合">强连通分量</Term>
+（SCC）要求双向可达。Kosaraju–Sharir 先在反向图做
+DFS，得到逆后序，再按此顺序在原图启动 DFS，每次得到一个 SCC，时间 O(n+m)。压缩各
+SCC 后必为 DAG：若压缩图仍有环，环上的组就能互相到达，本应合为一组。
+
+“有向环 + 孤立 E”中，A、B、C 是一个 SCC，D 与 E 各自一组，压缩边是 `{A,B,C}→{D}`。这个例子也解释 Kahn 为何既留下环上点，又留下 D。可用两点互相可达来独立验证分组，而不是仅看 DFS 输出了几组。
+
+### 欧拉回路消耗边，不是给点打一次标记
+
+<Term def="每条边恰好经过一次并回到起点的闭合路线">欧拉回路</Term>
+允许重复顶点。对至少一条边的无向图，它要求所有非孤立点处于同一连通分量，且每点度数为偶数。开放的欧拉迹则要求恰两个奇度点（或全偶时闭合）。只检查偶数度会漏掉两个互不相连的环。
+
+构造时用栈沿未使用的边前进；当前点无可用边才出栈加入结果，最后逆序得到路线。这是 Hierholzer 的拼接思想，不是“每点只访问一次”的 DFS。无向边的两份邻接记录必须共享一个 used 边标记，最终验证用了 m 条边、序列长 m+1。三角 A—B—C—A 是回路；实验无向图加了 B—D 后，B、D 为奇度，只剩开放迹，例如 D—B—A—C—B。孤立 E 不妨碍覆盖全部已有边。
+
+## 9.7 NP完全性简介：验答案，不等于找答案
+
+NP完全性简介要区分两项任务：给出一个候选证书后验证它，以及没有证书时求解原判定问题。属于 NP 只保证“是”实例有可在多项式时间核验的证书；证明一个问题 NP 完全，还要证明所有 NP 问题都能多项式归约到它。下面通过哈密顿回路证书与旅行商判定的构造，分别说明验证条件和归约方向。
+
+### 把问题改写成 yes/no
+
+<Term def="可由确定性算法在输入长度的多项式时间内判定的问题类">P</Term>和
+<Term def="答案为是的实例具有多项式长度证书且可多项式验证的问题类">NP</Term>
+在这里都指判定问题。NP 是 nondeterministic polynomial time 的缩写，**不是 not
+polynomial**。P 包含于 NP；P 是否等于 NP
+仍未解决。验证“是”的证书不意味着也有同样容易核验的“否”证书。
+
+例如“有没有一圈路线，每个顶点恰访问一次再回起点？”是哈密顿回路判定。一个 <Term def="供验证器检查某个是答案的有限见证">证书</Term>就是 n+1 个顶点编号：首尾相同、前 n 个各不相同、连续两点有边。用邻接矩阵检查 O(n)，用本章邻接表逐段扫描，建图与验证仍为输入规模的多项式。**给你一圈路线去检查**，和**从所有排列中找一圈路线**不是同一项工作。
+
+三角 A—B—C—A 的证书可通过；A—B—A—A 会因重复而失败。前文欧拉回路检查每条边一次，这里检查每个顶点一次；两种问题不要只因都叫“回路”就混为一谈。后面的 C++ 验证器不搜索，不会证明某图没有哈密顿回路。
+
+### 归约方向与一个可手算的构造
+
+<Term def="用多项式时间转换实例并保持是非答案的映射">多项式归约</Term> Y≤pX
+的含义是：先把 Y 的实例变成 X 的实例，再调用 X 的求解器，就能解 Y。证明 X 是
+<Term def="属于 NP 且所有 NP 问题都能多项式归约到它的问题">NP 完全</Term>
+，通常分两步：证明 X∈NP；从一个已知 NP 完全问题 Y 构造 Y≤pX。只做 X≤pY 不能证明
+X 难。
+
+一个具体方向是“哈密顿回路 → 旅行商判定”：给定至少3点的简单无向图，补成完全图；原有边权为1，补出的边权为2，问有无总长≤n 的旅行商回路。若原图有哈密顿回路，n 条原边给出总长 n；反过来，n 条边每条至少1，要使总长≤n，就必须全是1，所以全来自原图。构造 O(n²)，且两个方向保持 yes/no。这段论证展示归约机制；从头证明哈密顿回路本身 NP 完全还需要已知难问题到它的归约，不能用这张构造循环证明自己。
+
+对 NP 完全问题，目前没有已知的通用多项式精确算法；这不是已证明“任何输入都很慢”。小输入可以穷举，特殊结构可能有高效算法，近似算法须说明误差保证，启发式可能既不保证最优，也不能可靠证明无解。不能仅因实验5个点跑得快就推翻复杂性分类。
+
+## C++17：把距离与证书做成可执行契约
+
+以下 **7 个 cpp 代码块按出现顺序、不加省略地拼接**为 `graph_lab.cpp`，就是完整独立程序。使用 `clang++ -std=c++17 -Wall -Wextra -Werror -pedantic graph_lab.cpp -o graph_lab`，再运行 `./graph_lab`。没有作者旧版接口依赖；这些代码为本章独立编写。图只通过 `makeGraph` 构造：1–64 点、至多512条输入边、整数权重绝对值≤1000。最短简单路径的绝对值不超过63000，远小于 INF，因此这里不会在松弛中溢出。不是任意精度图计算库。
+
+**块 1/7：头文件、图类型与有界构造。** 无向图加反向邻接记录；有向图绝不偷偷补反边。
 
 ```cpp
-queue<Vertex> ready;
-for (Vertex v : vertices)
-    if (indegree[v] == 0) ready.push(v);
-
-while (!ready.empty()) {
-    Vertex u = ready.front();
-    ready.pop();
-    order.push_back(u);
-    for (Vertex v : outgoing[u])
-        if (--indegree[v] == 0) ready.push(v);
-}
-```
-
-
-若输出数少于 V，剩余 subgraph 含 directed cycle，不存在 topological order。多个 zero-in-degree vertices 意味着结果不唯一；需要 deterministic build 时，用 min-heap 或固定 ordering 选择 ready vertex。
-
-DFS 也可按 finish time 逆序生成 topological order，但必须用 gray/active state 检测 back edge。只用 visited boolean 会把 cycle 漏成一个看似合法 sequence。
-
-## 9.3 Shortest-Path Algorithms
-
-最短路径算法（）共享 relaxation：
-
-$$
-d[v]\leftarrow \min\bigl(d[v],\,d[u]+w(u,v)\bigr)
-$$
-
-但 worklist 与 finalization 条件不同：
-
-- unweighted graph：BFS FIFO queue，第一次发现给出最少 hops，O(V+E)；
-- nonnegative weights：Dijkstra min-priority queue，extract-min vertex 可 finalized；
-- DAG：按 topological order relax，即使有 negative edges 也可 O(V+E)；
-- general negative edges：Bellman-Ford 做 V-1 rounds，并用额外 round 检测 reachable negative cycle。
-
-
-```cpp
-while (!queue.empty()) {
-    auto [distance, u] = queue.top();
-    queue.pop();
-    if (distance != best[u]) continue;
-    for (const Edge& edge : graph[u])
-        if (relax(u, edge.to, edge.weight))
-            queue.push({best[edge.to], edge.to});
-}
-```
-
-这段 lazy Dijkstra 用 duplicate entries 替代 decrease-key；只在 all weights nonnegative 时正确。Parent pointers 应能重建 path，并满足每条 selected parent edge 的 distance equation。
-
-
-Unreachable vertex 保持 infinity；negative cycle reachable 时不存在有限 shortest distance，不能只返回最后一轮数组。
-
-## 9.4 Network Flow Problems
-
-网络流问题（）给每条 edge capacity c(u,v)，flow 满足：
-
-$$
-0\le f(u,v)\le c(u,v),\qquad
-\sum_u f(u,x)=\sum_v f(x,v)
-$$
-
-对 source/sink 之外每个 vertex 都守恒。Residual network 的 forward residual 是 c-f，reverse residual 是 f；reverse edge 允许后续 augmenting path 撤销早期决策。
-
-
-Ford-Fulkerson 反复找 source-to-sink augmenting path，并增加 path 上最小 residual capacity。Integral capacities 下得到 integral flow；用 BFS 选最短 augmenting path 是 Edmonds-Karp，给出 polynomial O(VE²) bound。
-
-Max-flow min-cut theorem 提供 certificate：没有 augmenting path 时，从 source 在 residual graph 可达的 set S 与其余 vertices 构成 cut，cut capacity 等于 flow value。验收不只看一个数字，还要验证 capacity、conservation 和 cut equality。
-
-## 9.5 Minimum Spanning Tree
-
-最小生成树（）与 shortest-path tree 不同。MST 最小化整棵 tree 的 total weight，不保证 source 到每个 vertex 的 path 最短。
-
-Kruskal 按 weight 扫 edges，用 disjoint sets 拒绝 cycle；Prim 从当前 tree 到外部的 crossing edges 中取最轻。两者都基于 cut property：对任意 cut，跨越它的 minimum-weight edge 是某棵 MST 的 safe choice。
-
-
-Kruskal 主要成本 O(E log E) sorting；Prim 用 binary heap 和 adjacency list 是 O(E log V)。Disconnected graph 输出 minimum spanning forest，不是 spanning tree。Equal weights 可能产生多棵不同但同总重 MST。
-
-## 9.6 Applications of Depth-First Search
-
-深度优先搜索应用（）不止“访问所有 nodes”：
-
-- undirected connected components 与 cycle detection；
-- articulation points 和 biconnected components；
-- directed strongly connected components；
-- Euler circuits/trails；
-- topological sort 与 directed cycle detection。
-
-
-对 undirected DFS tree，low(v) 是 v subtree 通过 zero or more tree edges 加最多一条 back edge 能到达的最早 discovery time：
-
-$$
-\operatorname{low}(v)=\min\left(
-\operatorname{disc}(v),
-\operatorname{disc}(w)_{\text{back edge}},
-\operatorname{low}(child)
-\right)
-$$
-
-Non-root vertex v 若存在 child c 使 `low(c) >= disc(v)`，v 是 articulation point；root 则需至少两个 DFS children。Undirected graph 遇到 parent edge 时不能误判成 back edge。
-
-```cpp
-disc[u] = low[u] = ++clock;
-for (Vertex v : adjacent[u]) {
-    if (disc[v] == 0) {
-        dfs(v, u);
-        low[u] = std::min(low[u], low[v]);
-        if (parent != none && low[v] >= disc[u])
-            articulation[u] = true;
-    } else if (v != parent) {
-        low[u] = std::min(low[u], disc[v]);
+#include <algorithm>
+#include <cassert>
+#include <functional>
+#include <iostream>
+#include <queue>
+#include <stdexcept>
+#include <tuple>
+#include <vector>
+using namespace std;
+struct Edge { int to, w; };
+struct Graph { bool directed; vector<vector<Edge>> adj; };
+constexpr int INF = 1000000000;
+Graph makeGraph(int n, vector<tuple<int,int,int>> edges,
+                bool directed = true) {
+    if (n < 1 || n > 64 || edges.size() > 512)
+        throw invalid_argument("graph size");
+    Graph g{directed, vector<vector<Edge>>(n)};
+    for (auto [u,v,w] : edges) {
+        if (u < 0 || v < 0 || u >= n || v >= n ||
+            w < -1000 || w > 1000)
+            throw invalid_argument("edge");
+        g.adj[u].push_back({v,w});
+        if (!directed) g.adj[v].push_back({u,w});
     }
+    return g;
 }
 ```
 
-SCC 算法可用两遍 DFS 的 Kosaraju，或一遍 DFS stack 的 Tarjan。无论哪种，component output 应验证 component 内 mutual reachability，component condensation graph 必须是 DAG。
+**块 2/7：完整 Dijkstra。** 小根堆存 `(距离,顶点)`，允许同点多个旧候选；`du != d[u]` 丢弃的是过期条目，不是阻止更优路线。使用标准库默认大根堆会破坏选点前提，因此显式传 `greater`。此有界程序保留距离，实验另显示父边。
 
-## 9.7 Introduction to NP-Completeness
+```cpp
+vector<int> dijkstra(const Graph& g, int source) {
+    int n = static_cast<int>(g.adj.size());
+    if (source < 0 || source >= n)
+        throw invalid_argument("source");
+    for (const auto& row : g.adj) for (auto e : row)
+        if (e.w < 0) throw invalid_argument("negative weight");
+    vector<int> d(n, INF); d[source] = 0;
+    using Item = pair<int,int>;
+    priority_queue<Item, vector<Item>, greater<Item>> ready;
+    ready.push({0,source});
+    while (!ready.empty()) {
+        auto [du,u] = ready.top(); ready.pop();
+        if (du != d[u]) continue;
+        for (auto e : g.adj[u]) {
+            int candidate = du + e.w;
+            if (candidate < d[e.to]) {
+                d[e.to] = candidate;
+                ready.push({candidate,e.to});
+            }
+        }
+    }
+    return d;
+}
+```
 
-NP完全性简介（）首先区分 decision 与 optimization。P 是能在 polynomial time 求解的 decision problems；NP 是给定 certificate 后能在 polynomial time 验证 yes answer 的 problems。
+**块 3/7：BFS 的条件不同。** 可以在首次入队时锁定层数，但先检查所有边都是单位权；不可达点仍是 INF。前沿容器换成 FIFO，不是把 Dijkstra 的比较器删掉就结束了。
 
-Problem X 是 NP-complete，需要：
+```cpp
+vector<int> bfs(const Graph& g, int source) {
+    int n = static_cast<int>(g.adj.size());
+    if (source < 0 || source >= n)
+        throw invalid_argument("source");
+    for (const auto& row : g.adj) for (auto e : row)
+        if (e.w != 1) throw invalid_argument("unit weights only");
+    vector<int> d(n, INF); d[source] = 0;
+    queue<int> ready; ready.push(source);
+    while (!ready.empty()) {
+        int u = ready.front(); ready.pop();
+        for (auto e : g.adj[u]) if (d[e.to] == INF) {
+            d[e.to] = d[u] + 1;
+            ready.push(e.to);
+        }
+    }
+    return d;
+}
+```
 
-1. X 属于 NP；
-2. 一个已知 NP-complete problem Y 可在 polynomial time 归约到 X。
+**块 4/7：Kahn 的队列也是 FIFO，但入队理由是入度归零。** 输入必须有向，失败抛异常，避免用户把不完整前缀当结果。孤立点在初始化时也会入队。
 
+```cpp
+vector<int> topological(const Graph& g) {
+    if (!g.directed) throw invalid_argument("directed only");
+    int n = static_cast<int>(g.adj.size());
+    vector<int> degree(n), order;
+    for (const auto& row : g.adj) for (auto e : row)
+        ++degree[e.to];
+    queue<int> ready;
+    for (int v = 0; v < n; ++v)
+        if (degree[v] == 0) ready.push(v);
+    while (!ready.empty()) {
+        int u = ready.front(); ready.pop(); order.push_back(u);
+        for (auto e : g.adj[u])
+            if (--degree[e.to] == 0) ready.push(e.to);
+    }
+    if (static_cast<int>(order.size()) != n)
+        throw invalid_argument("directed cycle");
+    return order;
+}
+```
 
-归约方向是 `Y <=p X`：若能快速解 X，就能通过转换快速解 Y，因此 X 至少和 Y 一样难。把 X 归约到 Y 只能说明 X 不比 Y 更难，不能证明 X NP-hard。
+**块 5/7：哈密顿证书验证器。** 约定至少3点，检查首尾、唯一性、端点和每一条边；失败只否定这份证书，不否定图里所有可能的回路。`used` 在这里标记证书中的顶点，不是最短路定案数组。
 
+```cpp
+bool verifyHamiltonian(const Graph& g, const vector<int>& tour) {
+    int n = static_cast<int>(g.adj.size());
+    if (n < 3 || static_cast<int>(tour.size()) != n + 1)
+        return false;
+    if (tour.front() != tour.back()) return false;
+    vector<bool> used(n, false);
+    for (int i = 0; i < n; ++i) {
+        int u = tour[i], v = tour[i+1];
+        if (u < 0 || v < 0 || u >= n || v >= n || used[u])
+            return false;
+        used[u] = true;
+        bool edge = false;
+        for (auto e : g.adj[u]) if (e.to == v) edge = true;
+        if (!edge) return false;
+    }
+    return true;
+}
+```
 
-NP-complete 不等于“小输入绝对不能解”。工程上可用 exact exponential search、branch-and-bound、parameterized algorithms、approximation 或 heuristics；必须清楚声明 optimality 与 failure guarantees。
+**块 6/7：确定性自测的前半段。** 这是 `main` 的开始，尚未闭合；不要单独编译此块。检查具体向量，不以“程序没崩”为正确证据。
 
-## 统一验证：结果之外还要保留证据
+```cpp
+int main() {
+    Graph routes = makeGraph(4, {
+        {0,1,2}, {0,2,5}, {1,2,1}, {1,3,7}, {2,3,2}});
+    assert((dijkstra(routes,0) == vector<int>{0,2,3,5}));
+    Graph unit = makeGraph(5, {
+        {0,1,1}, {0,2,1}, {1,2,1}, {1,3,1}, {2,3,1}});
+    assert((bfs(unit,0) == vector<int>{0,1,1,2,INF}));
+    assert(topological(unit).size() == 5);
+    assert(dijkstra(unit,4)[0] == INF);
+    Graph triangle = makeGraph(3, {{0,1,1},{1,2,1},{2,0,1}});
+    assert(verifyHamiltonian(triangle,{0,1,2,0}));
+    assert(!verifyHamiltonian(triangle,{0,2,1,0}));
+    assert(!verifyHamiltonian(triangle,{0,1,0,0}));
+```
 
+**块 7/7：把拒绝路径也当成测试，随后闭合 main。** 不删除断言；不要用 `-DNDEBUG` 编译这个教学自测。最后输出是前面全部断言和拒绝检查通过后的提示。
 
-## 本章回顾
+```cpp
+    auto rejects = [](auto action) {
+        bool caught = false;
+        try { action(); }
+        catch (const invalid_argument&) { caught = true; }
+        assert(caught);
+    };
+    rejects([&] { bfs(routes,0); });
+    rejects([&] { topological(triangle); });
+    rejects([&] { dijkstra(makeGraph(2,{{0,1,-1}}),0); });
+    rejects([&] { topological(makeGraph(2,{{0,1,1}},false)); });
+    rejects([&] { makeGraph(2,{{0,2,1}}); });
+    rejects([&] { dijkstra(routes,4); });
+    cout << "C++17 graph contracts passed\n";
+}
+```
 
-1. Graph direction、weight与path objective必须在选择算法前固定。
-2. Adjacency list让sparse graph遍历达到O(V+E)。
-3. Topological order只存在于DAG，输出不足V是cycle certificate。
-4. BFS、Dijkstra、DAG relaxation和Bellman-Ford分别对应不同weight前提。
-5. Residual reverse edges让max-flow撤销旧flow，min-cut给出最优certificate。
-6. MST最小化总tree weight，不是source shortest paths。
-7. DFS discovery/finish/low-link支持SCC、articulation和Euler结构分析。
-8. NP-complete证明要求in NP加known-hard到new problem的polynomial reduction。
+懒删除堆版每次成功松弛至多增加一个候选，允许平行边时可写 O((n+m) log(n+m)) 的保守界，空间 O(n+m)。不要把实验的小数组扫描速度当成这个堆实现的速度。所有可执行定义都已在以上七块中给齐，无需下载隐藏辅助文件。
 
+## 容易踩的坑
+
+<Callout type="trap">
+
+**现象 →** 默认图的 C 停在5，D 停在9。  
+**原因 →** 把“发现过”误作 Dijkstra 的“已取最小值定案”。  
+**修法 →** 保留更优松弛，弹出时检查旧堆条目；用实验故障开关复现差异。
+
+</Callout>
+
+<Callout type="trap">
+
+**现象 →** 容量都没超，流却卡在1而非2。  
+**原因 →** 搜索漏掉可撤销旧流的反向残量边。  
+**修法 →** 同时维护 c−f 和 f，最后核对可行性、完整残量可达集与割容量。
+
+</Callout>
+
+<Callout type="trap">
+
+**现象 →** DFS 把只有一个树孩子的根标为割点。  
+**原因 →** 不加区分地套用非根 low 判据，或把邻居数当孩子数。  
+**修法 →** 根单独数 DFS 子树；跳过父边编号而非所有通向父顶点的边。
+
+</Callout>
+
+## 小结与练习
+
+- 先固定方向、权重与目标，再检查算法前提。
+- 修改距离代码，用独立答案检验松弛与拒绝路径。
+- 以割、森林、回溯证据验结果，区分验解与求解。
+
+<div className="[&_button]:min-h-11">
+<Exercises>
+
+**问题 1：真正修改距离代码。** 把块2的松弛条件临时改为 `d[e.to] == INF`，默认路线将输出什么？然后修回，并自行为本程序实现路径还原：返回距离及父顶点，源点与不可达点的路径如何区分？若把单位图加上 D→A，BFS 与 Kahn 各发生什么？
+
+<Answer>
+
+错误修改返回 `[0,2,5,9]`，因为首次发现 C、D 后不再接受改善。正确版为 `[0,2,3,5]`。路径实现可新增结果结构，包含 `distance` 和 `parent` 两个向量；parent 初值−1，只在严格改善距离时写入 `parent[e.to]=u`。还原前先检查 distance：INF 返回空路径；源点返回只含源点的路径；其余从终点逆向沿 parent 直到源点，再反转。默认 D 的正确路径是 A→B→C→D。不要用 parent 为−1 同时代表源点与不可达而不看距离。
+
+加 D→A 后，BFS 仍用首次入队标记而终止，原来从 A 的距离不变；Kahn 因有向环无法输出全部顶点，必须抛错。E 孤立并不妨碍 BFS 计算其余点，也不妨碍无环时的拓扑序。
+
+</Answer>
+
+**问题 2：给三类结果各写一份独立证据。** 流预设第一步后能否停止？无向预设为什么总权5不是全图 MST？删除 B、删除 A 后连通分量数各是多少？若把 A—C 改成第二条 A—B，DFS 应怎样处理平行父边？另解释有向环预设的 SCC 和无向预设的欧拉迹。
+
+<Answer>
+
+流第一步虽可行，但 A→C→B→D 仍是残量增广路；第二步撤销 B→C，流值2。`S={A}` 的出割容量2，因此达到上界。独立验证应逐边查 0≤f≤c，逐中间点查守恒，再枚举含 A 不含 D 的割求最小容量，不能只信模型的最终提示。
+
+无向图包含两个分量（ABCD 与 E），所选3条边总权5，是最小生成森林；MST 不存在。删 B 后 A、C 仍通过 A—C 相连，D 与 E 各孤立，共3个分量；删 A 后 BCD 与 E，共2个，所以 B 是割点而 A 不是。把 A—C 改成平行 A—B 后，两条 A—B 都不是桥；B—C、B—D 是桥。DFS 只跳过实际树边编号，另一条 A—B 必须更新 low。
+
+有向例子的 SCC 是 `{A,B,C}、{D}、{E}`，压缩后只有第一组到 D 的边。原无向预设只有 B、D 为奇度点，已有边处在同一非孤立分量，可走 D—B—A—C—B；没有闭合欧拉回路。孤立 E 不要求被一条边覆盖。
+
+</Answer>
+
+**问题 3：验证器能证明什么？** 给三角图的证书 `[0,1,2,0]` 和 `[0,1,0,0]`，逐项解释结果。把三点路径 A—B—C 做成权1/2的旅行商实例，阈值取3，为什么答案为否？如果有人展示“新问题 X≤p旅行商”，能据此宣布 X 为 NP 完全吗？
+
+<Answer>
+
+第一份首尾相同、前三点互异、三条有向边都存在，通过。第二份前三点重复0，失败；它只是一份坏证书，原三角图仍有好证书。三点路径补出的 A—C 权2，其余两边权1，任何三点回路总长4>3，对应原路径没有哈密顿回路。这是构造的 yes/no 等价，不是用几个样例证明全部实例。
+
+X≤p旅行商仅说明 X 可借旅行商求解器解决，不能建立 X 的 NP-hard 性。需要从已知 NP 完全问题到 X 的多项式归约，并证明 X∈NP。一个多项式验证器只完成后半项；没有自动提供找证书的多项式算法。NP 也不表示“非多项式”。
+
+</Answer>
+
+</Exercises>
+</div>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="图">
+    把对象写成点，把允许的连接写成边；方向和边的数值必须先约定。
+  </GlossaryItem>
+  <GlossaryItem term="路径">
+    沿合法边连续行走的顶点序列；简单路径不重复顶点。
+  </GlossaryItem>
+  <GlossaryItem term="邻接表">
+    每点保存出边列表；无向边通常有两份关联记录。
+  </GlossaryItem>
+  <GlossaryItem term="DAG">
+    没有有向环的有向图，才能把全部依赖排成先后顺序。
+  </GlossaryItem>
+  <GlossaryItem term="拓扑排序">
+    每条依赖都从前面的点指向后面的点的排列。
+  </GlossaryItem>
+  <GlossaryItem term="BFS">
+    用队列按离源点的边数逐层搜索；混合权重时不直接给最小费用。
+  </GlossaryItem>
+  <GlossaryItem term="松弛">
+    发现更省的走法就更新距离，并记录它来自哪里。
+  </GlossaryItem>
+  <GlossaryItem term="Dijkstra">
+    对非负权图反复取最小暂定距离，确定一个点并检查出边。
+  </GlossaryItem>
+  <GlossaryItem term="Bellman–Ford">
+    通过多轮松弛允许负边，并检查源点可达负环。
+  </GlossaryItem>
+  <GlossaryItem term="网络流">
+    在容量以内运输，所有中间点进多少就出多少。
+  </GlossaryItem>
+  <GlossaryItem term="残量网络">
+    既记录还能加多少，也记录还能撤销多少的调整空间。
+  </GlossaryItem>
+  <GlossaryItem term="割">
+    把源与汇分到两侧；源侧跨出的总容量给流值设上界。
+  </GlossaryItem>
+  <GlossaryItem term="最小生成树">
+    用总权尽量小的无环边把连通无向图的所有点连接起来。
+  </GlossaryItem>
+  <GlossaryItem term="最小生成森林">
+    不连通时，在每个分量内各建一棵最小生成树。
+  </GlossaryItem>
+  <GlossaryItem term="DFS">
+    一路深入到不能继续，再回头处理剩余分支的搜索。
+  </GlossaryItem>
+  <GlossaryItem term="low-link">
+    无向 DFS 子树经树边和至多一条非父回边能触及的最早发现序号。
+  </GlossaryItem>
+  <GlossaryItem term="割点">删除它会使无向图分裂出更多连通分量。</GlossaryItem>
+  <GlossaryItem term="桥">删除这条无向边会使连通分量数增加。</GlossaryItem>
+  <GlossaryItem term="强连通分量">
+    有向图里能够互相到达的一整组点，且已不能再扩大。
+  </GlossaryItem>
+  <GlossaryItem term="欧拉回路">
+    恰好用每条边一次并回到起点；不要求每点只出现一次。
+  </GlossaryItem>
+  <GlossaryItem term="P">
+    可以在输入长度的多项式时间内求出是或否的问题类。
+  </GlossaryItem>
+  <GlossaryItem term="NP">
+    是答案有短证书且可多项式验证的问题类；不是“非多项式”。
+  </GlossaryItem>
+  <GlossaryItem term="证书">
+    交给验证器的一份见证；一份失败的见证不能证明所有见证都失败。
+  </GlossaryItem>
+  <GlossaryItem term="多项式归约">
+    快速转换问题实例，保持是非答案，用目标问题的求解器解决原问题。
+  </GlossaryItem>
+  <GlossaryItem term="NP 完全">
+    既能多项式验是答案，又至少与所有 NP 问题一样难的判定问题。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与适用边界
+
+原书范围依据 Mark Allen Weiss《Data Structures and Algorithm Analysis in C++》第3版、ISBN 9780321441461 的[出版社完整目录](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)，对应 9.1–9.7 七组。目录只能证明范围，不能证明正文事实；这里没有原书完整正文访问或开放改编授权的声明。C++17 程序、图输入、实验模型与教学案例均为独立编写，不声称是作者历史代码的翻译。
+
+本章实际核对的事实资料（2026-09-24 获取）来自算法作者 Robert Sedgewick、Kevin Wayne 的公开配套资料，以及标准草案与 Clay 研究所：
+
+- [BFS 实现](https://algs4.cs.princeton.edu/41graph/BreadthFirstPaths.java.html)、[Kahn 实现](https://algs4.cs.princeton.edu/42digraph/TopologicalX.java.html)：首次发现、入度与全图输出条件。
+- [Dijkstra 实现](https://algs4.cs.princeton.edu/44sp/DijkstraSP.java.html)、[DAG 最短路](https://algs4.cs.princeton.edu/44sp/AcyclicSP.java.html)、[Bellman–Ford](https://algs4.cs.princeton.edu/44sp/BellmanFordSP.java.html)：权重前提、松弛与可达负环；作者示例语言为 Java，不是本页 C++ 的出处。
+- [Ford–Fulkerson / Edmonds–Karp 实现与证书检查](https://algs4.cs.princeton.edu/64maxflow/FordFulkerson.java.html)、[FlowEdge 残量更新代码](https://algs4.cs.princeton.edu/64maxflow/FlowEdge.java.html)：正反余量、守恒与最小割；本实验刻意用 DFS 选路，不冒称该来源的 BFS 实现。
+- [MST 的割性质与 Prim](https://algs4.cs.princeton.edu/43mst/)、[Kruskal](https://algs4.cs.princeton.edu/43mst/KruskalMST.java.html)、[无向割点 DFS](https://algs4.cs.princeton.edu/41graph/Biconnected.java.html)、[SCC](https://algs4.cs.princeton.edu/42digraph/KosarajuSharirSCC.java.html)、[欧拉回路](https://algs4.cs.princeton.edu/41graph/EulerianCycle.java.html)：森林、low 的根特例、反图顺序与边消耗。本文模型额外使用父边编号处理平行边，而非照搬简单图的父顶点判断。
+- [计算复杂性讲义](https://algs4.cs.princeton.edu/66intractability/)、[归约讲义](https://algs4.cs.princeton.edu/65reductions/)、[Clay 的 P vs NP 问题说明](https://www.claymath.org/millennium/p-vs-np/)：验解与求解、归约方向和未决边界。配套讲义主要以搜索形式介绍，本章明确采用判定问题定义。
+- [C++ 标准工作草案 priority_queue](https://eel.is/c++draft/priority.queue)：比较器与堆容器语义。网页是持续更新的草案，不当作“第3版当年的 C++17 标准”；本页只使用 C++17 已支持的接口，并以 C++17 编译验证。
+
+<Attribution
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  workTitle="Mark Allen Weiss · Data Structures and Algorithm Analysis in C++ · Third Edition"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

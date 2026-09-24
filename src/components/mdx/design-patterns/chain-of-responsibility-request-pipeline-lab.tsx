@@ -2,45 +2,109 @@
 
 import { useState } from "react";
 
-type Scenario = "accepted" | "guest" | "quota" | "unhandled";
+export type ChainRequest = {
+  id: string;
+  traceId: string;
+  authenticated: boolean;
+  quota: number;
+  path: string;
+};
+export type ChainResult =
+  | { kind: "handled"; handler: string }
+  | { kind: "rejected"; handler: string; reason: string }
+  | { kind: "unhandled"; requestId: string; reason: string };
 
-const SCENARIOS: Record<
-  Scenario,
-  {
-    label: string;
-    request: string;
-    stopAt: string;
-    result: string;
-    tone: "success" | "warning";
+export abstract class Handler {
+  constructor(protected readonly next?: Handler) {}
+  abstract handle(
+    request: ChainRequest,
+    trace: string[],
+  ): ChainResult | undefined;
+  protected forward(request: ChainRequest, trace: string[]) {
+    return (this.next ?? new ChainTail()).handle(request, trace);
   }
-> = {
-  accepted: {
-    label: "已登录且有额度",
-    request: "POST /reports",
-    stopAt: "RouteHandler",
-    result: "路由处理成功",
-    tone: "success",
-  },
+}
+
+export class AuthHandler extends Handler {
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("AuthHandler");
+    if (!request.authenticated) {
+      return { kind: "rejected", handler: "AuthHandler", reason: "未登录" };
+    }
+    return this.forward(request, trace);
+  }
+}
+export class QuotaHandler extends Handler {
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("QuotaHandler");
+    if (request.quota <= 0) {
+      return {
+        kind: "rejected",
+        handler: "QuotaHandler",
+        reason: "额度已用尽",
+      };
+    }
+    return this.forward(request, trace);
+  }
+}
+
+export class RouteHandler extends Handler {
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("RouteHandler");
+    return request.path === "/reports"
+      ? { kind: "handled", handler: "RouteHandler" }
+      : this.forward(request, trace);
+  }
+}
+export class ChainTail extends Handler {
+  constructor(private readonly silent = false) {
+    super();
+  }
+  handle(request: ChainRequest, trace: string[]): ChainResult | undefined {
+    trace.push("ChainTail");
+    if (this.silent) return undefined; // 仅供故障注入，非合法终态
+    return { kind: "unhandled", requestId: request.id, reason: "没有匹配路由" };
+  }
+}
+
+export function dispatch(
+  request: ChainRequest,
+  head?: Handler,
+  trace: string[] = [],
+): ChainResult {
+  const result = (head ?? new ChainTail()).handle(request, trace);
+  if (result === undefined) throw new Error("链尾静默丢弃请求");
+  return result;
+}
+export function buildChain(silentTail = false): Handler {
+  return new AuthHandler(
+    new QuotaHandler(new RouteHandler(new ChainTail(silentTail))),
+  );
+}
+export function runRequestPipeline(request: ChainRequest, silentTail = false) {
+  const trace: string[] = [];
+  const result = buildChain(silentTail).handle(request, trace);
+  return { result, trace }; // 实验保留故障空值；正常调用方使用 dispatch
+}
+
+type Scenario = "accepted" | "guest" | "quota" | "unhandled";
+const BASE_REQUEST: ChainRequest = {
+  id: "r1",
+  traceId: "t1",
+  authenticated: true,
+  quota: 1,
+  path: "/reports",
+};
+const SCENARIOS: Record<Scenario, { label: string; request: ChainRequest }> = {
+  accepted: { label: "已登录且有额度", request: BASE_REQUEST },
   guest: {
     label: "未登录请求",
-    request: "POST /reports",
-    stopAt: "AuthHandler",
-    result: "身份拒绝，后续不再调用",
-    tone: "warning",
+    request: { ...BASE_REQUEST, authenticated: false },
   },
-  quota: {
-    label: "额度已用尽",
-    request: "POST /reports",
-    stopAt: "QuotaHandler",
-    result: "配额拒绝，后续不再调用",
-    tone: "warning",
-  },
+  quota: { label: "额度已用尽", request: { ...BASE_REQUEST, quota: 0 } },
   unhandled: {
     label: "没有匹配路由",
-    request: "POST /unknown",
-    stopAt: "ChainTail",
-    result: "链尾显式报告未处理",
-    tone: "warning",
+    request: { ...BASE_REQUEST, path: "/unknown" },
   },
 };
 
@@ -64,13 +128,33 @@ export function ChainOfResponsibilityRequestPipelineLab() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
 
   const current = SCENARIOS[scenario];
-  const visitedCount = silentTail && scenario === "unhandled" ? 3 : scenario === "accepted" ? 3 : scenario === "guest" ? 1 : scenario === "quota" ? 2 : 3;
+  // 选择/切换时执行无副作用模型作预览，运行按钮保存同一模型的轨迹。
+  const execution = runRequestPipeline(current.request, silentTail);
+  const { result, trace } = execution;
+  const lost = result === undefined;
+  const visitedCount = trace.length;
+  const resultLabel = !result
+    ? "无结果：链尾静默丢弃"
+    : result.kind === "handled"
+      ? "路由处理成功"
+      : result.kind === "rejected"
+        ? result.reason
+        : "未处理：" + result.reason;
+  const stopAt =
+    result && result.kind !== "unhandled" ? result.handler : "ChainTail";
+  const resultKindLabel = !result
+    ? "结果丢失"
+    : result.kind === "handled"
+      ? "终局成功"
+      : result.kind === "rejected"
+        ? "终局拒绝"
+        : "终局未处理";
+  const resultTone =
+    result?.kind === "handled"
+      ? "border-success text-success"
+      : "border-warning text-warning";
 
-  function addEvent(
-    label: string,
-    detail: string,
-    tone: TraceEvent["tone"],
-  ) {
+  function addEvent(label: string, detail: string, tone: TraceEvent["tone"]) {
     setEvents((items) => [
       ...items,
       { id: items.length + 1, label, detail, tone },
@@ -83,7 +167,7 @@ export function ChainOfResponsibilityRequestPipelineLab() {
       "选择请求",
       SCENARIOS[next].label +
         "：沿 Auth → Quota → Route 顺序传递，只有一个节点应该给出终局结果。",
-      next === "accepted" ? "success" : "warning",
+      "neutral",
     );
   }
 
@@ -100,14 +184,32 @@ export function ChainOfResponsibilityRequestPipelineLab() {
   }
 
   function runChain() {
+    const run = runRequestPipeline(current.request, silentTail);
     setRunCount((count) => count + 1);
-    addEvent(
-      silentTail && scenario === "unhandled" ? "静默丢弃请求" : "运行责任链",
-      silentTail && scenario === "unhandled"
-        ? "反例路径：三个处理者都放行后，链尾没有结果，调用方无法完成一次性验收。"
-        : current.result + "；终局节点是 " + current.stopAt + "。",
-      silentTail && scenario === "unhandled" ? "warning" : current.tone,
-    );
+    const outcome = run.result;
+    setEvents((items) => [
+      ...items,
+      ...run.trace.map((name, index) => ({
+        id: items.length + index + 1,
+        label: name,
+        detail:
+          index < run.trace.length - 1
+            ? "转交后继"
+            : !outcome
+              ? "静默丢弃：没有合法终态"
+              : outcome.kind === "handled"
+                ? "处理成功，停止传递"
+                : outcome.kind === "rejected"
+                  ? "拒绝：" + outcome.reason
+                  : "未处理：" + outcome.reason + "；请求 " + outcome.requestId,
+        tone:
+          index < run.trace.length - 1
+            ? ("neutral" as const)
+            : outcome?.kind === "handled"
+              ? ("success" as const)
+              : ("warning" as const),
+      })),
+    ]);
   }
 
   function reset() {
@@ -118,26 +220,20 @@ export function ChainOfResponsibilityRequestPipelineLab() {
   }
 
   const nodes = [
-    {
-      name: "AuthHandler",
-      detail: scenario === "guest" ? "拒绝请求" : "放行",
-      active: visitedCount >= 1,
-      stop: scenario === "guest",
-    },
-    {
-      name: "QuotaHandler",
-      detail: scenario === "quota" ? "拒绝请求" : "放行",
-      active: visitedCount >= 2,
-      stop: scenario === "quota",
-    },
-    {
-      name: "RouteHandler",
-      detail: scenario === "unhandled" ? "继续到链尾" : "处理请求",
-      active: visitedCount >= 3,
-      stop: scenario === "accepted",
-    },
-  ];
-  const resultTone = silentTail && scenario === "unhandled" ? "border-warning text-warning" : current.tone === "success" ? "border-success text-success" : "border-warning text-warning";
+    "AuthHandler",
+    "QuotaHandler",
+    "RouteHandler",
+    "ChainTail",
+  ].map((name) => {
+    const active = trace.includes(name);
+    const stop = active && name === trace.at(-1);
+    return {
+      name,
+      active,
+      stop,
+      detail: !active ? "未访问" : stop ? resultLabel : "转交后继",
+    };
+  });
 
   return (
     <section
@@ -156,7 +252,7 @@ export function ChainOfResponsibilityRequestPipelineLab() {
               身份、配额与路由责任链实验台
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-secondary">
-              选择请求场景，观察处理者何时停止传递，以及链尾为何必须返回可追踪结果。
+              选择请求场景，预览实际执行轨迹；运行按钮记录一次执行。访问数包含实际到达的链尾。
             </p>
           </div>
           <button
@@ -180,9 +276,7 @@ export function ChainOfResponsibilityRequestPipelineLab() {
                     className={
                       "min-h-11 rounded-control border px-3 py-2 text-left text-xs transition-colors " +
                       (scenario === key
-                        ? key === "accepted"
-                          ? "border-success text-success"
-                          : "border-warning text-warning"
+                        ? "border-accent text-accent"
                         : "border-border text-secondary hover:border-accent hover:text-primary")
                     }
                     key={key}
@@ -226,75 +320,162 @@ export function ChainOfResponsibilityRequestPipelineLab() {
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
                 REQUEST → HANDLERS → RESULT
               </p>
-              <span className={"rounded-control border px-2 py-1 text-xs " + resultTone}>
-                {silentTail && scenario === "unhandled"
-                  ? "结果丢失"
-                  : current.tone === "success"
-                    ? "终局成功"
-                    : "终局拒绝"}
+              <span
+                className={
+                  "rounded-control border px-2 py-1 text-xs " + resultTone
+                }
+              >
+                {resultKindLabel}
               </span>
             </div>
 
             <div className="mt-4 rounded-control border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-secondary">Request</p>
-                <span className="font-mono text-xs text-primary">{current.request}</span>
+                <span className="font-mono text-xs text-primary">
+                  {"POST " + current.request.path}
+                </span>
               </div>
               <p className="mt-2 text-xs leading-5 text-secondary">
                 请求只携带上下文，不需要知道哪个处理者会最终接手。
               </p>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              {nodes.map((node) => (
-                <div
-                  className={
-                    "rounded-control border p-3 " +
-                    (node.stop
-                      ? "border-warning"
-                      : node.active
-                        ? "border-accent"
-                        : "border-border")
-                  }
-                  key={node.name}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-primary">{node.name}</p>
-                    <span className="font-mono text-[11px] text-secondary">
-                      {node.active ? "已访问" : "未访问"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-secondary">{node.detail}</p>
-                </div>
-              ))}
-            </div>
+            <svg
+              aria-label={
+                "请求执行路径：" + trace.join(" → ") + "；" + resultLabel
+              }
+              className="mt-4 block h-auto w-full"
+              data-result-kind={result?.kind ?? "silent-fault"}
+              data-trace={trace.join(",")}
+              role="img"
+              viewBox="0 0 330 410"
+            >
+              <title>实际请求路径与终止边界</title>
+              <text x="12" y="26" fill="var(--text-secondary)" fontSize="20">
+                实线：已访问 · 虚线：未执行
+              </text>
+              {nodes.map((node, index) => {
+                const y = 63 + index * 90;
+                const terminalColor =
+                  result?.kind === "handled"
+                    ? "var(--success)"
+                    : "var(--warning)";
+                const color = node.stop
+                  ? terminalColor
+                  : node.active
+                    ? "var(--accent)"
+                    : "var(--text-secondary)";
+                return (
+                  <g
+                    data-node={node.name}
+                    data-visited={node.active}
+                    data-stop={node.stop}
+                    key={node.name}
+                  >
+                    {index < nodes.length - 1 && (
+                      <line
+                        x1="38"
+                        y1={y + 15}
+                        x2="38"
+                        y2={y + 75}
+                        stroke={
+                          nodes[index + 1].active
+                            ? "var(--accent)"
+                            : "var(--border)"
+                        }
+                        strokeWidth="3"
+                        strokeDasharray={
+                          nodes[index + 1].active ? "none" : "5 5"
+                        }
+                      />
+                    )}
+                    <circle
+                      cx="38"
+                      cy={y}
+                      r="14"
+                      fill="var(--bg)"
+                      stroke={color}
+                      strokeWidth="3"
+                    />
+                    {node.active && (
+                      <circle cx="38" cy={y} r="6" fill={color} />
+                    )}
+                    <text x="69" y={y - 2} fill={color} fontSize="20">
+                      {node.name}
+                    </text>
+                    <text
+                      x="69"
+                      y={y + 24}
+                      fill="var(--text-secondary)"
+                      fontSize="20"
+                    >
+                      {node.detail}
+                    </text>
+                    {node.stop && (
+                      <g
+                        data-terminal-boundary={result?.kind ?? "silent-fault"}
+                      >
+                        <polygon
+                          points={`5,${y - 7} 18,${y} 5,${y + 7}`}
+                          fill={terminalColor}
+                        />
+                        <line
+                          x1="18"
+                          y1={y + 31}
+                          x2="58"
+                          y2={y + 31}
+                          stroke={terminalColor}
+                          strokeWidth="4"
+                        />
+                        <text
+                          x="69"
+                          y={y + 50}
+                          fill={terminalColor}
+                          fontSize="20"
+                        >
+                          {lost
+                            ? "故障：终局丢失"
+                            : result?.kind === "unhandled"
+                              ? "尾部：明确未处理"
+                              : "终止：不再传递"}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
 
             <div className="mt-3 rounded-control border border-border px-3 py-2 text-center font-mono text-xs text-secondary">
-              {silentTail && scenario === "unhandled"
-                ? "RouteHandler → ∅"
-                : scenario === "accepted"
-                  ? "Auth → Quota → Route → ✓"
-                  : scenario === "guest"
-                    ? "Auth → ✕"
-                    : scenario === "quota"
-                      ? "Auth → Quota → ✕"
-                      : "Auth → Quota → Route → ChainTail"}
+              {trace.join(" → ") +
+                (lost
+                  ? " → ∅"
+                  : result?.kind === "handled"
+                    ? " → ✓"
+                    : result?.kind === "rejected"
+                      ? " → ✕"
+                      : " → 未处理")}
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-control border border-accent p-3">
                 <p className="text-xs font-semibold text-accent">已访问节点</p>
-                <p className="mt-2 font-mono text-lg text-primary">{visitedCount}</p>
+                <p className="mt-2 font-mono text-lg text-primary">
+                  {visitedCount}
+                </p>
               </div>
               <div className={"rounded-control border p-3 " + resultTone}>
                 <p className="text-xs font-semibold">当前结果</p>
                 <p className="mt-2 text-xs leading-5 text-primary">
-                  {silentTail && scenario === "unhandled" ? "无结果" : current.result}
+                  {resultLabel}
                 </p>
               </div>
               <div className="rounded-control border border-border p-3">
                 <p className="text-xs font-semibold text-secondary">运行次数</p>
-                <p className="mt-2 font-mono text-lg text-primary">{runCount}</p>
+                <p className="mt-2 font-mono text-lg text-primary">
+                  {runCount}
+                </p>
               </div>
             </div>
 
@@ -304,14 +485,16 @@ export function ChainOfResponsibilityRequestPipelineLab() {
               role="status"
             >
               <p className="text-sm font-semibold">
-                {silentTail && scenario === "unhandled"
+                {lost
                   ? "反例：链尾没有终局结果，掉单被伪装成正常无响应"
-                  : current.tone === "success"
+                  : result?.kind === "handled"
                     ? "合同观察：RouteHandler 一次性处理请求"
-                    : "合同观察：" + current.stopAt + " 给出可追踪拒绝"}
+                    : result?.kind === "unhandled"
+                      ? "合同观察：ChainTail 显式报告未处理"
+                      : "合同观察：" + stopAt + " 给出可追踪拒绝"}
               </p>
               <p className="mt-2 text-xs leading-5 text-secondary">
-                {silentTail && scenario === "unhandled"
+                {lost
                   ? "责任链允许请求无人处理，但必须显式报告；否则调用方无法区分配置错误与业务成功。"
                   : "处理者只需要知道自己的规则和后继者，不需要让请求发送者了解整条链的具体顺序。"}
               </p>
@@ -320,7 +503,9 @@ export function ChainOfResponsibilityRequestPipelineLab() {
             <div className="mt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-secondary">传递轨迹</p>
-                <span className="text-xs text-secondary">{events.length} 条</span>
+                <span className="text-xs text-secondary">
+                  {events.length} 条
+                </span>
               </div>
               <div className="mt-2 space-y-2">
                 {events.length === 0 ? (
@@ -330,7 +515,10 @@ export function ChainOfResponsibilityRequestPipelineLab() {
                 ) : (
                   events.map((event) => (
                     <div
-                      className={"rounded-control border px-3 py-2 text-xs " + toneClass(event.tone)}
+                      className={
+                        "rounded-control border px-3 py-2 text-xs " +
+                        toneClass(event.tone)
+                      }
                       key={event.id}
                     >
                       <p className="font-semibold">{event.label}</p>

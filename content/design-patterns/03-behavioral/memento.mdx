@@ -11,7 +11,7 @@ qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
 officialUnitId: designpatterns-21
-draft: false
+draft: true
 ---
 
 import { MementoSnapshotCanvasLab } from "@/components/mdx/design-patterns/memento-snapshot-canvas-lab";
@@ -66,7 +66,7 @@ import { MementoSnapshotCanvasLab } from "@/components/mdx/design-patterns/memen
 
 <Term def="承载一次状态捕获结果、供原发器恢复且不向看护者暴露内部细节的快照对象。">备忘录</Term>
 
-备忘录是状态边界，不是原发器的公开实体。看护者可以保存它、给它编号或丢弃它，但不应该修改它的内部状态；在 TypeScript 中可以通过只读属性和复制数据强化这个边界。
+备忘录是状态边界，不是原发器的公开实体。看护者可以保存它、给它编号或丢弃它，但不应该修改它的内部状态；在 TypeScript 中可以用只读类型限制静态写入，用复制与运行时冻结保护本例的四个标量字段。
 
 ### 看护者
 
@@ -152,7 +152,7 @@ import { MementoSnapshotCanvasLab } from "@/components/mdx/design-patterns/memen
 
 ## 章专属实验：画布快照与恢复边界
 
-先预测：选择“改标题”后创建快照，再选择“增加笔画”并应用编辑，恢复第一条快照时标题应保留而笔画数应回到捕获值。打开“共享引用反例”后重复流程，旧快照会随当前编辑变化，事件轨迹应明确指出不可变性被破坏。实验的重置按钮会恢复画布、历史栈、模式开关和事件轨迹。
+先预测：从重置状态开始，选择“改标题”并点击“应用编辑动作”，再创建快照；接着选择“增加笔画”并点击“应用编辑动作”，最后恢复第一条快照，画布应回到标题“评审版本”、2 笔的捕获状态。打开“共享引用反例”后重复流程，旧快照会随当前编辑变化，事件轨迹应明确指出不可变性被破坏。实验的重置按钮会恢复画布、历史栈、模式开关和事件轨迹。
 
 <Stepper>
   <Step title="选择编辑并预测快照内容">
@@ -171,9 +171,13 @@ import { MementoSnapshotCanvasLab } from "@/components/mdx/design-patterns/memen
 
 ## 把快照边界写进 TypeScript
 
-接口先表达三种责任，再讨论具体存储。`CanvasMemento` 的构造函数和字段可以进一步放到模块私有范围，使看护者只能拿到一个可保存的值对象。
+以下两块按顺序放入同一个独立文件 `memento.ts`；题 2 的参考解续接该文件，不与其他章节组装。本例选择“四个标量的只读副本 + 冻结”，而不是通用深冻结。为观察断言保留公开只读 `state`，因此这是防篡改边界，不是隐藏字段的安全边界；看护者的实现不解释字段。若要求外部连读取都不允许，应改用模块私有的不透明快照。
+
+`readonly state: CanvasState` 只禁止重新绑定 `state`，并不禁止 `saved.state.title = "污染"`。下面的 `Readonly<CanvasState>` 在 TypeScript 检查时拒绝字段赋值，但类型会被擦除；`Object.freeze` 才在运行时禁止写入、删除和新增属性。状态副本与快照外壳都要冻结，否则 JavaScript 调用者仍可替换 `state`。严格模式赋值失败会抛错，`Reflect.set` 则返回 `false`。这些区别分别参见 [TypeScript 只读属性说明](https://www.typescriptlang.org/docs/handbook/2/objects.html#readonly-properties) 与 [MDN Object.freeze](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze)。
 
 ```ts
+export {}; // 独立模块，避免与 DOM 的 CanvasState / history 等全局名冲突
+
 type CanvasState = {
   title: string;
   strokes: number;
@@ -182,7 +186,12 @@ type CanvasState = {
 };
 
 class CanvasMemento {
-  constructor(readonly version: 1, readonly state: CanvasState) {}
+  readonly state: Readonly<CanvasState>;
+
+  constructor(readonly version: 1, state: CanvasState) {
+    this.state = Object.freeze({ ...state });
+    Object.freeze(this);
+  }
 }
 
 interface HistoryCaretaker {
@@ -191,17 +200,24 @@ interface HistoryCaretaker {
 }
 ```
 
+第二块续接类型定义。构造、捕获、恢复都切断引用；`edit` 刻意修改当前状态，以检验历史是否真正独立，而不是仅靠“每次编辑恰好换对象”过关。
+
 ```ts
 class CanvasOriginator {
-  private state: CanvasState = {
-    title: "发布草稿",
-    strokes: 2,
-    color: "ink",
-    zoom: 100,
-  };
+  private state: CanvasState;
+
+  constructor(state: CanvasState = {
+    title: "发布草稿", strokes: 2, color: "ink", zoom: 100,
+  }) {
+    this.state = { ...state };
+  }
+
+  edit(next: CanvasState) {
+    Object.assign(this.state, next);
+  }
 
   capture() {
-    return new CanvasMemento(1, { ...this.state });
+    return new CanvasMemento(1, this.state);
   }
 
   restore(snapshot: CanvasMemento) {
@@ -211,7 +227,9 @@ class CanvasOriginator {
 }
 ```
 
-这里的浅复制足以覆盖示例中的标量字段；若状态包含数组、嵌套对象或外部资源，应使用明确的深复制或可重建标识。关键断言不是“调用过 capture”，而是后续编辑不能改变 `snapshot.state`，恢复后所有恢复不变量都成立。
+浅复制和浅冻结仅足以覆盖这里的字符串、数字四字段；数组、嵌套对象、资源句柄不在本实现合同内。这里不做业务取值校验：空标题、Unicode 和 JavaScript `number` 值都原样保存，包括 `NaN`、无穷大和负零；它不是画布输入验证器。只支持版本 1，不实现迁移、容量淘汰、撤销/重做游标或持久化。
+
+实验台用纸面上的标题、笔迹与实际缩放展示状态；历史按钮内的纸面副本用于对比，引用图按对象身份显示所选历史与当前状态是否共享。放大或笔画过多时，超出纸面的笔迹会被裁剪，笔画总数仍完整显示。实验台对应的是引用隔离：安全捕获复制并冻结，恢复得到新的可变副本；反例捕获刻意不冻结所共享的状态。界面没有外部写入快照的入口，不能用按钮操作代替下面的 TypeScript 静态拒绝与 JavaScript 运行时防篡改断言。
 
 ## 练习、答案与 13 个节点验收
 
@@ -225,10 +243,107 @@ class CanvasOriginator {
 多层画布状态更适合评估备忘录，因为它需要恢复一组完整状态且不应暴露内部字段；单一插入操作可用命令记录补偿动作。若命令逆操作无法涵盖外部副作用或多个字段，仍应回到状态快照或事务方案。
 </Answer>
 
-**问题 2：追踪不可变性。** 在实验台中捕获快照，编辑标题和笔画数，再恢复快照。分别记录捕获、编辑、恢复三个时刻的状态，并说明哪条断言证明历史没有被污染。
+**问题 2：修复并执行不可变快照。** 先把第一块的 `CanvasMemento` 临时换回旧实现 `class CanvasMemento { constructor(readonly version: 1, readonly state: CanvasState) {} }`，验证无需 any 或 cast 的 `saved.state.title = "污染"` 能通过编译并污染恢复结果。再实际改回只读副本与双层冻结；不能仅给引用加 readonly，也不能只复制不冻结。按前述顺序提取两块，再续接下面四块为 `memento.ts`，执行 `tsc --strict --target ES2022 --module commonjs --outDir out memento.ts && node out/memento.js`。断言失败必须退出失败；说明哪一条分别证明输入隔离、外部不可写、恢复独立和历史顺序。
 
 <Answer>
-恢复后标题、笔画数、颜色和缩放都应等于捕获时的值，且事件轨迹应显示快照编号没有变化。只恢复标题而遗漏笔画数不能通过；如果编辑后快照卡片自身的数值也变化，则说明共享可变引用污染了历史。
+修复就是上方 `CanvasMemento` 的构造函数：复制后冻结四标量，再冻结外壳。下面是续接的参考验收，不是另一个实现。先补只负责保存顺序的看护者及断言工具；`latest()` 在空历史返回 `undefined`，后续返回最后保存的对象，不按标题或数值排序。
+
+```ts
+class MemoryHistory implements HistoryCaretaker {
+  private snapshots: CanvasMemento[] = [];
+  save(snapshot: CanvasMemento) { this.snapshots.push(snapshot); }
+  latest() { return this.snapshots[this.snapshots.length - 1]; }
+}
+function check(ok: boolean, label: string) {
+  if (!ok) throw new Error(label);
+}
+function equal(a: Readonly<CanvasState>, b: Readonly<CanvasState>) {
+  return a.title === b.title && a.color === b.color &&
+    Object.is(a.strokes, b.strokes) && Object.is(a.zoom, b.zoom);
+}
+const input: CanvasState = {
+  title: "草稿🖋️", strokes: 2, color: "ink", zoom: 100,
+};
+const origin = new CanvasOriginator(input);
+const saved = origin.capture();
+const captured = { ...saved.state };
+input.title = "输入已改";
+check(equal(origin.capture().state, captured), "原发器输入隔离");
+const edited: CanvasState = {
+  title: "评审", strokes: 9, color: "accent", zoom: 125,
+};
+origin.edit(edited);
+check(equal(saved.state, captured), "输入与后续编辑不污染历史");
+```
+
+第二块续接：`@ts-expect-error` 表示该行必须被编译器拒绝；去掉它们单独编译应见只读错误，不应运行这个负例。`if (false)` 避免把静态负例混作正常运行；运行时另用无 cast 的 `Reflect.set` 验证。
+
+```ts
+if (false) {
+  // @ts-expect-error 快照字段只读
+  saved.state.title = "污染";
+  // @ts-expect-error 快照引用只读
+  saved.state = edited;
+  // @ts-expect-error 版本只读
+  saved.version = 1;
+}
+check(Object.isFrozen(saved) && Object.isFrozen(saved.state), "两层冻结");
+for (const key of ["title", "strokes", "color", "zoom"]) {
+  check(!Reflect.set(saved.state, key, "污染"), `拒绝写 ${key}`);
+  check(!Reflect.deleteProperty(saved.state, key), `拒绝删 ${key}`);
+}
+check(!Reflect.set(saved.state, "extra", 1), "拒绝扩展状态");
+check(!Reflect.set(saved, "state", edited), "拒绝替换状态");
+check(!Reflect.set(saved, "version", 2), "拒绝篡改版本");
+check(equal(saved.state, captured), "外部写入不污染历史");
+origin.restore(saved);
+check(equal(origin.capture().state, captured), "四字段同时恢复");
+origin.edit(edited);
+check(equal(saved.state, captured), "恢复后再次编辑仍独立");
+```
+
+第三块续接：验证直接传入构造函数的对象也不与快照共享引用；按保存先后维护历史，恢复旧版本不重排或替换最新条目。
+
+```ts
+const directInput = { ...captured };
+const direct = new CanvasMemento(1, directInput);
+directInput.title = "构造后修改";
+check(equal(direct.state, captured), "构造输入隔离");
+const history = new MemoryHistory();
+check(history.latest() === undefined, "空历史");
+history.save(saved);
+check(history.latest() === saved, "首条历史");
+const later = origin.capture();
+history.save(later);
+check(history.latest() === later, "按保存顺序取最新");
+origin.restore(saved);
+check(history.latest() === later, "恢复旧条目不重排历史");
+origin.restore(later);
+check(equal(origin.capture().state, edited), "后条历史独立恢复");
+```
+
+第四块续接：只验“原样保存”，不虚构输入范围校验。`Object.is` 用来区分负零并比较 `NaN`；不做 JSON 序列化，后者会丢失这些数值语义。运行成功打印一行，任一断言失败则抛错。
+
+```ts
+for (const title of ["", "画布🧑🏽‍🎨e\u0301\n第二行"]) {
+  for (const value of [0, -0, -1, 0.5, Number.MAX_SAFE_INTEGER,
+    Number.MIN_VALUE, Number.MAX_VALUE, NaN, Infinity, -Infinity]) {
+    const expected: CanvasState = {
+      title, strokes: value, color: "accent", zoom: value,
+    };
+    const boundary = new CanvasOriginator(expected);
+    const snapshot = boundary.capture();
+    boundary.edit(edited);
+    boundary.restore(snapshot);
+    check(equal(boundary.capture().state, expected), "边界值原样恢复");
+    boundary.edit(edited);
+    check(equal(snapshot.state, expected), "边界快照独立");
+  }
+}
+console.log("PASS: 快照隔离、静态只读、运行时冻结、恢复与历史、20 组边界");
+```
+
+上述提取运行只验代码合同。实验台仍需记录捕获、编辑、恢复三个时刻的四字段和编号；安全历史卡片不应随编辑变化，反例模式则应暴露共享引用污染。它不替代浏览器验收，也不证明嵌套状态、版本迁移或安全存储。
 </Answer>
 
 **问题 3：设计生产实现。** 快照包含大图层、文件句柄和用户隐私字段。请提出容量、资源和安全方面的三个处理决定。

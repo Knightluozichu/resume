@@ -1,227 +1,401 @@
 ---
-title: "第7章：User Input and while Loops"
+title: "第7章：用户输入与 while 循环"
 type: C
 section: "Part I · Basics"
 order: 7
-description: "将raw input解析为可信值，用可证明终止的while管理交互状态和collection搬运。"
+description: "追踪输入、状态更新与返回路径，写出能跳过、能退出且不会卡住的循环。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+draft: true
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pcc3-07"
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccUserInputWhileLab } from "@/components/mdx/python-crash-course/v2/user-input-and-while-loops";
+
+{/* 知识点清单与可视化决策：输入转换（prompt/input/strip/int）→代码对照与输入带；取模→代码余数与SVG分流；while循环→条件菱形、执行点、状态尺；循环控制（退出值/flag/break/continue）→两条返回路径与退出节点、flag代码；终止依据→状态尺与故障重复轨迹；列表搬运/删除、问卷字典→可运行代码与逐轮状态表。前五项为新概念，均首现Term并收入Glossary，集合操作复用前章知识。专属组件PccUserInputWhileLab，独立执行模型，不复用通用文字卡片。目录只读核对pcc3-07的五组concepts，原书来源访问级别outline-only。 */}
 
 <Objectives>
 
-- 能描述input返回raw string的边界，实现strip、int parse、范围与modulo验证
-- 能比较sentinel、flag、break和continue，分析while loop的state transition与退出证明
-- 能设计列表搬运、删除全部匹配和问卷dictionary流程，判断每次iteration如何接近终止
+- 能解释为什么键入数字后仍要转换，并用余数判断整数奇偶。
+- 能修改示例，跳过不需要的输入，并实现列表清理与问卷收集。
+- 能回答：把更新放到跳过语句之后，程序为什么可能永远停不下来？
 
 </Objectives>
 
-## 为什么交互程序先处理边界，再处理循环
+## 直觉：从“做一次”到“继续接收，直到结束”
 
-`input(prompt)`暂停程序，读取一行并返回string；即使用户输入`42`，结果仍是`"42"`。因此比较、加法和modulo之前必须parse。把raw input直接带进核心逻辑，会让类型错误与业务错误混在一起，也让“重新提示”难以控制。
+想象工厂收件处：来一件就登记一件，空单退回，收到收工通知才停。若只能登记一次，第二件就没人处理；若只知道重复登记却没有停下来的办法，收工通知也会被当成普通货物。
 
-while根据condition重复执行，不知道用户何时停止。循环正确性包含两部分：每轮工作符合contract，以及state最终有机会让condition变False或执行break。只验证第一轮输出，无法证明不会无限循环。
+程序也需要区分“收到什么”“这一件做不做”“接下来是否还要收”。本章要把这三件事拆开，让你既能连续处理，也能说清每次为什么继续或结束。
 
-<Term def="input返回、尚未经过类型解析、规范化和业务验证的原始字符串。">raw input</Term>
+## 五个概念：输入怎样变成可推进的工作
 
-## How the input Function Works
+### 1. 输入转换：拿到的是文字，不是你眼中的数字
 
-prompt应告诉用户期望格式和退出方式，长prompt可先组成string再传入input。输入的末尾newline不会进入返回值，但用户可输入前后spaces；是否strip要按字段语义决定，密码等数据未必允许随意清洗。
+这里的<Term def="把输入得到的字符串变成计算所需的类型；转换不等于检查业务规则。">输入转换</Term>发生在读取之后、计算之前。`input(prompt)`先显示提示，再读取一行，返回字符串；末尾换行被去掉，但空格不会自动去掉。直接按回车得到 `""`，不是数字零。[官方 input 文档](https://docs.python.org/3/library/functions.html#input)还说明：输入流结束会抛出 `EOFError`，并不会自动返回 `"quit"`。
 
-<Stepper>
-  <Step title="选择一个raw input场景">
-  </Step>
-  <Step title="按normalize、parse、validate顺序处理">
-    strip只处理边界空白，int负责语法转换，范围与modulo属于业务规则。
-  </Step>
-  <Step title="失败时保留原因并重新提示">
-    ValueError与out-of-range是不同失败；错误消息应告诉用户如何修复，而不是直接退出或使用0替代。
-  </Step>
-</Stepper>
+下面是完整小程序，键入 `7` 后依次输出 `str`、`77`、`14`。提示文本也说明了输入格式。实验的“输入”场景用带引号的小格表示同一件事：数字外观仍是文字。
 
-<Term def="把raw string转换为目标type，并把语法失败与业务验证失败分开的边界流程。">parse boundary</Term>
+```python
+prompt = "请输入一个整数（例如 7）："
+raw = input(prompt)
+print(type(raw).__name__)
+print(raw + raw)
+number = int(raw)
+print(number + number)
+```
+
+`int("7")` 得到整数 7，`int(" 7 ")` 也可以；`int("7.5")` 和 `int("")` 会抛出 `ValueError`，不是自动变成 7 或 0。`strip()`只去掉首尾空白，不会把任意文字变成数字。这里接受前后空白；密码等有空格含义的数据不能照搬这个决定。
+
+### 2. 取模运算符（Modulo Operator）：用余数分流
+
+整数的<Term def="用 % 取得整数除法的余数；右侧不能为零。">取模（modulo）</Term>运算能判断是否整除：`n % 2 == 0`表示偶数。例如 7 件物品每 2 件一组，可分成 3 组，还剩 1 件，因此 `7 % 2`是 1；6 件恰好分成 3 组，余数为 0。实验把这个余数判断画成分流菱形：余数为零就走左侧返回路径，否则才进入输出区。
+
+下面不需要键盘输入，可以直接运行；余数一列依次是 `0、1、0、1`。本章只用整数和正除数 2，不把浮点余数混进奇偶判断。
+
+```python
+for number in [0, 1, 2, 7]:
+    print(number, number % 2, number % 2 == 0)
+```
+
+### 3. while 循环：每一轮都要重新过门
+
+所谓<Term def="先检查条件，为真才执行循环体；执行后回到条件再次检查。">while 循环</Term>不是“把一段代码复制很多次”，而是重复检查同一条件。条件可能一开始就为假，因此循环体允许执行零次。需要知道次数时可以用 `for`；不知道用户何时结束、却知道继续条件时，`while`更直接。
+
+到实验中把上限改成 0：执行点从检查处直接走向退出，输出区保持空。上限为 3 时，`n`从 0 前进到 3；**在进入本轮前检查 `n < 3`，进入后才增加 `n`**，所以本轮输出可以包含 3，并不矛盾。[while 的官方定义](https://docs.python.org/3/reference/compound_stmts.html#the-while-statement)正是这种“先检查、后执行”。
+
+### 4. 循环控制：结束本轮与结束整个循环不同
+
+这里把改变后续执行路线的做法称为<Term def="通过条件、标志、break或continue决定继续本轮、开始下一轮或离开循环。">循环控制</Term>。`continue`跳过本轮余下代码，回到条件检查；`break`直接离开最近一层循环，不再检查其条件。实验中，左侧回路与右上退出节点因此是两条不同路径。[官方 break](https://docs.python.org/3/reference/simple_stmts.html#the-break-statement)与[continue](https://docs.python.org/3/reference/simple_stmts.html#the-continue-statement)定义可对照核查。
+
+`"quit"`只是约定的退出值，不是 Python 的特殊单词。若多个分支都可能要求停止，可以用 `active`这样的布尔变量作标志（flag）；但赋值 `active = False`不会立即跳出本轮，剩余代码仍会执行，下一轮才重新检查。下面刻意用 `else`避免把退出值也打印出来。
+
+```python
+active = True
+while active:
+    message = input("登记内容，quit 结束：").strip()
+    if message == "quit":
+        active = False
+    else:
+        print("已登记：", message)
+print("收工")
+```
+
+### 5. 终止依据：说明什么状态会变，而不是盼着它停止
+
+一个<Term def="解释循环何时能够离开：有限工作持续减少，或用户触发可到达的退出路径。">终止依据</Term>要同时看条件与更新。实验的正常计数每轮先做 `n += 1`，所以距离上限越来越近；错误版的偶数分支跳过更新，下一轮看见原样的 `n=0`，再执行同一个跳过动作。
+
+交互程序则不同：用户若始终不输入 `quit`，程序可以一直等待或工作，不能声称“必定结束”。它的保证是：**退出输入一旦被读取，就能到达退出语句**。等待键盘输入不是忙着执行的无限循环。遇到演示里的错误计数，在普通终端通常可用 `Ctrl+C`中断。
+
+## 实验：沿返回路径找出被跳过的更新
+
+先预测：把计数上限从 3 调到 6，循环体输出会变成什么？再把更新移到 `continue`后面，输出会变多、变少，还是无法结束？
+
+<PccUserInputWhileLab />
+
+按这个顺序动手，不必一次看完全部帧：
+
+1. **正常计数**：上限 3，单步到 `n=2`，看左回路亮起；再继续到条件为假。记录输出 `1、3`，并区分三次执行循环体与两次输出。
+2. **故障计数**：同样上限 3，两次走过左回路，状态尺仍在 0。虚线更新节点没有执行；轨迹被演示器截断，不是 Python 发现错误后自动停止。
+3. **输入退出**：依次消费 `"2"`、`""`、`"quit"`。空行触发 `continue`，但下一轮会读取新的一行；`quit`触发 `break`，第四格 `"4"`仍未读取。
+4. **反例核验**：把故障版上限改成 0，竟然也能退出，因为循环体根本没执行。因此“某一次正常结束”不足以证明更新位置正确。
+
+解释图时，要同时指出“回到了哪一行”和“状态有没有改变”。可以拖动进度回看，或点击“重置全部”清空预测、恢复默认场景。
+
+## 可运行代码：从轨迹到自己的程序
+
+下面各代码块都是可单独运行的 Python 3 程序，无第三方依赖。复制到文件后用 `python3 文件名.py`运行；交互程序按给定次序逐行输入。浏览器实验是有限执行模型，不替代真正的 Python 运行。
+
+### 计数：先保证推进，再决定这一轮是否输出
+
+这是实验正常场景的完整代码。改动 `limit`即可重复图中的边界测试；上限 6 时输出 `1、3、5`，最后再输出 `结束`。
+
+```python
+n = 0
+limit = 3
+while n < limit:
+    n += 1
+    if n % 2 == 0:
+        continue
+    print(n)
+print("结束")
+```
+
+`n=0`提供起点，`n < limit`决定是否进入，`n += 1`保证进展。偶数分支只取消本次输出，不取消已经发生的增加。缩进结束后的最后一行不属于循环体。**不要直接运行无限版本**：先在实验故障场景看轨迹；排错时可单步调试，避免让终端反复空转。
+
+### 输入：每次重新读取，再检查退出与跳过
+
+这段与实验输入场景一致。依次输入 `2`、空行、`quit`，输出只有 `2`和最后的`结束`；不需要再输入第四行。若把 `input()`移到循环外，空行分支也会不断检查旧输入。
 
 ```python
 while True:
-    raw_age = input("Age (or 'quit'): ").strip()
-    if raw_age == "quit":
+    raw = input("值或 quit: ").strip()
+    if raw == "quit":
+        break
+    if raw == "":
+        continue
+    print(raw)
+print("结束")
+```
+
+若需要整数，转换应放在退出检查之后，否则 `int("quit")`会先失败。下面增加一个局部的错误恢复段：`try`尝试转换，`except ValueError`只处理“这段文字不能转成整数”，然后重新读取。异常的完整机制留到第 10 章；此处不捕获所有错误，也不把失败伪装成数字零。
+
+```python
+while True:
+    raw = input("0～20 的整数，quit 结束：").strip()
+    if raw == "quit":
         break
     try:
-        age = int(raw_age)
+        number = int(raw)
     except ValueError:
-        print("Enter a whole number.")
+        print("请输入整数文字")
         continue
-    if not 0 <= age <= 130:
-        print("Age must be between 0 and 130.")
+    if not 0 <= number <= 20:
+        print("超出范围")
         continue
-    print(f"Accepted age: {age}")
+    print("偶数" if number % 2 == 0 else "奇数")
 ```
 
-### int转换不等于完整验证
+依次输入 `7.5、-1、8、quit`，预期反馈是“请输入整数文字、超出范围、偶数”，随后退出。转换成功仅说明得到整数，不说明范围合格；两条失败路径都回到新的 `input()`，因此不会困在旧值上。
 
-`int("-3")`合法，但年龄可能不允许负数；`int("003")`得到3，若字段是保留前导零的编号，就不应转为integer。type选择要由领域决定：数量、年龄适合int，邮政编码、账号和电话号码通常保留string。
+### 列表间搬运（Moving Items Between Lists）：每轮减少一件待办
 
-parse成功后保留typed value，后续不要重复转换raw string。若需要审计，可同时记录raw和normalized，但日志要避免敏感信息。
-
-## The Modulo Operator
-
-`a % b`给出除以b的remainder，可判断偶数、整除、轮转slot。`number % 2 == 0`表示even，`number % 10 == 0`表示10的multiple。除数为0会ZeroDivisionError，因此若b来自input要先验证非零。
-
-<Term def="除法后的余数运算，用于整除、奇偶和周期位置判断；除数不能为0。">modulo invariant</Term>
+集合不需要用户发出结束信号：`while pending`在列表非空时继续。`pop()`拿走末项并返回它，`append()`把拿出的项放到另一个列表；一次拿出对应一次放入，**每轮结束时**两个列表的元素总数保持不变。这里的“搬运”是从待办列表删除，再把同一个值加入完成列表，不是复制后仍留在原处。
 
 ```python
-number = int(input("Enter an integer: "))
-if number % 2 == 0:
-    print(f"{number} is even.")
-else:
-    print(f"{number} is odd.")
-
-if number % 10 == 0:
-    print("It is a multiple of ten.")
+pending = ["A", "B", "C"]
+finished = []
+while pending:
+    item = pending.pop()
+    finished.append(item)
+    print(pending, finished)
+assert finished == ["C", "B", "A"]
 ```
 
-Python对负数的modulo结果遵循floor division关系，结果符号与除数一致。仅判断是否整除时`% divisor == 0`对正负被除数都稳定；若把remainder用于array slot，要明确期望范围和除数符号。
+不要假定原有顺序被保留。下面是程序实际打印的三轮状态，待办长度从 3 降到 0，所以能够结束。若必须按 A、B、C 处理，小列表示例可改为 `pop(0)`；大规模队列再考虑更合适的容器。
 
-## Introducing while Loops
+| 完成轮数 | pending           | finished          |
+| -------- | ----------------- | ----------------- |
+| 0        | `['A', 'B', 'C']` | `[]`              |
+| 1        | `['A', 'B']`      | `['C']`           |
+| 2        | `['A']`           | `['C', 'B']`      |
+| 3        | `[]`              | `['C', 'B', 'A']` |
 
-for适合遍历有限collection，while适合重复直到state满足条件。典型state包括message sentinel、active flag、remaining work或重试次数。每轮结束前必须能指出哪一项state改变，否则循环可能永远重复同一输入。
+“总数不变”要选对观察时刻。第一轮 `pop()`刚执行后，`pending`有 2 项、`finished`有 0 项，另 1 项由 `item`暂存；执行 `append()`后，两个列表才重新合计 3 项。若在两句之间插入 `continue`，待办仍会减少，循环仍能结束，但取出的项没有进入完成列表。**能够终止不等于搬运完整**，这也是为什么上面的断言要检查最终内容，而不只是检查待办为空。
 
-<Stepper>
-  <Step title="切换sentinel、flag、break或continue">
-  </Step>
-  <Step title="画出每轮state transition">
-    prompt得到新input，分支处理，state更新，再回到condition；continue跳到下一轮，break立即退出。
-  </Step>
-  <Step title="证明存在exit path">
-    至少一类可达input能改变condition或触发break，外部EOF/异常也要决定如何处理。
-  </Step>
-</Stepper>
+### 删除所有匹配项（remove all instances）：先确认目标仍存在
 
-<Term def="一次while iteration对控制变量、collection或外部状态造成的可观察变化。">loop state transition</Term>
+`remove(value)`一次只删除第一个相等项。要删除所有 `"作废"`，每次先检查还在不在，再删一个；每轮匹配项数量减少 1，从 2 到 1 到 0。用 `for`一边沿原列表前进一边删除，可能跳过移动到当前位置的相邻项。
 
 ```python
-prompt = "Tell me something (enter 'quit' to stop): "
-message = ""
-
-while message != "quit":
-    message = input(prompt).strip()
-    if message != "quit":
-        print(message)
+records = ["保留", "作废", "作废", "归档"]
+while "作废" in records:
+    records.remove("作废")
+print(records)
+assert records == ["保留", "归档"]
 ```
 
-sentinel把退出值同时放在condition和input中，适合单一控制值；flag适合多个事件都能结束循环；`while True`配break能把退出检查靠近输入，但必须清楚列出所有break路径。三种写法没有绝对优劣，选择最能表达state machine的一种。
+[官方列表方法说明](https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)还规定：找不到目标时 `remove()`会抛出 `ValueError`；空列表 `pop()`会抛出 `IndexError`。前面的成员检查和非空检查不是装饰，而是操作的前提。这里列表很小，重点是正确性，不把逐项查找删除当作大数据最优方案。
 
-### break与continue改变的是控制流位置
+### 问卷字典：何时写入，重复名字怎么办
 
-break跳出最近一层loop；continue跳过本轮剩余body，回到condition。多层嵌套中break不会自动退出所有循环。若控制流需要多个flag和跨层break，通常应提取function并用return表达更清晰的完成路径。
-
-continue之前要确保state已推进。若invalid item不会从queue移除，continue会永久处理同一元素；因此mutation顺序和failure policy必须一起设计。
-
-## Avoiding Infinite Loops
-
-无限循环常由condition变量从未更新、更新方向错误、某个continue绕过更新，或外部input永远无法满足sentinel造成。调试时记录iteration number和关键state，并设置临时max iterations；不要只强制终止进程而丢失最后状态。
-
-<Term def="证明每次iteration都让某个有限度量接近退出，或存在可达事件直接终止循环的论证。">termination proof</Term>
-
-对数字循环，可用distance-to-boundary；对queue搬运，可用source length；对删除匹配，可用remaining matches；对用户交互则依赖明确sentinel并处理EOF/取消。没有有限度量的服务loop也应有外部shutdown signal。
-
-## Using a while Loop with Lists and Dictionaries
-
-while可以把items从一个list移动到另一个、删除全部匹配，或持续收集responses到dictionary。关键是每轮mutation符合invariant：source减少、匹配数下降，或问卷明确询问是否继续。
-
-官方目录把前两种模式概括为 **Moving Items Between Lists** 与 **remove all instances**：前者要求总元素数守恒，后者要求remaining matches单调下降到0。
-
-<Stepper>
-  <Step title="选择collection loop场景">
-  </Step>
-  <Step title="记录before、operation与after">
-    搬运使用pop再append，删除全部匹配每次remove一个，问卷每轮写入一个key-value pair。
-  </Step>
-  <Step title="检查终止度量与数据完整性">
-    既要证明loop结束，也要证明没有丢item、重复移动或静默覆盖不该覆盖的response。
-  </Step>
-</Stepper>
+用用户输入填充字典（Filling a Dictionary with User Input）时，问卷每次读取姓名和选项，再写入字典。约定姓名唯一且不能为空；重复姓名保留最新答案。这是明确的规则选择，不是字典帮你保留了两份记录。[官方字典文档](https://docs.python.org/3/tutorial/datastructures.html#dictionaries)说明：已有键再次赋值会替换旧值。
 
 ```python
-unconfirmed_users = ["alice", "brian", "candace"]
-confirmed_users = []
-
-while unconfirmed_users:
-    current_user = unconfirmed_users.pop()
-    print(f"Verifying user: {current_user.title()}")
-    confirmed_users.append(current_user)
-
-print(sorted(confirmed_users))
+answers = {}
+polling = True
+while polling:
+    name = input("姓名，quit 结束：").strip()
+    if name == "quit":
+        polling = False
+    elif name == "":
+        print("姓名不能为空")
+    else:
+        choice = input("想去哪里？").strip()
+        if choice == "":
+            print("选项不能为空，本次未记录")
+            continue
+        answers[name] = choice
+print(answers)
 ```
 
-### Moving Items from One List to Another
+输入 `小林、海边、小林、山里、quit`，最终只有 `{'小林': '山里'}`。逐次检查下面的状态：循环执行了三轮，但只提交了两次答案，而且字典中只有一个姓名。
 
-上例每轮让unconfirmed length减少1，confirmed length增加1，总元素数保持不变，这是可测试invariant。pop末尾是O(1)且会反转相对顺序；若必须FIFO，初学例可pop(0)，真实大queue应使用`collections.deque`。
+| 本轮读取       | 本轮动作               | 轮末字典           |
+| -------------- | ---------------------- | ------------------ |
+| `小林`、`海边` | 新增姓名，写入答案     | `{'小林': '海边'}` |
+| `小林`、`山里` | 同一个键，替换旧答案   | `{'小林': '山里'}` |
+| `quit`         | 标志设为假，不询问选项 | `{'小林': '山里'}` |
 
-处理过程中若验证失败，要决定item进入rejected list、重新排队还是终止；不能pop后异常导致item凭空丢失。先完成validation再mutation，或用try/finally记录outcome。
+`polling=False`之后本轮没有其他工作，下一次检查时退出；空选项的 `continue`回到姓名读取，不写入半条记录。循环轮数、成功写入次数和不同姓名数是三个不同的量，不能用字典长度判断已经问过几次。
 
-### Removing All Instances of Specific Values
+## 常见误区：观察现象，再修正路径
 
-`while "pastrami" in sandwich_orders: sandwich_orders.remove("pastrami")`每轮减少一个匹配，最终membership为False。数据量大时构建过滤后的新list更直接，也避免O(n²)扫描；本章写法用于练习condition与mutation的配合。
-
-若remove前后没有匹配数下降，termination proof失败。不要在没有membership guard时直接remove，否则最后一次会ValueError。
-
-### Filling a Dictionary with User Input
-
-问卷loop每轮收集name和response，写入`responses[name] = response`。同名再次出现会覆盖旧value；若应保留多次响应，就让value成为list或使用唯一ID。继续提示应规范化为yes/no，非法回答重新询问而不是默认结束。
-
-输入系统还要考虑用户按Ctrl-D/Ctrl-Z产生EOF、Ctrl-C取消和空姓名。小练习可明确退出，生产交互要在边界捕获对应异常并保存已确认数据。
-
-<Callout type="trap" title="input返回数字，因为用户输入的是数字字符">
-input始终返回string。必须先int/float parse并处理ValueError，再做数值比较或modulo；账号等看似数字的数据可能本来就应保持string。
+<Callout type="trap" title="把键入的 8 当成整数 8">
+  **现象 →** `raw + raw`得到 `88`而非 16。 **原因 →**
+  `input()`返回字符串，字符串加法是拼接。 **修法 →** 先检查退出值，再用
+  `int()`转换；失败时重新提示，成功后再检查范围。
 </Callout>
 
-<Callout type="trap" title="while True 配一个break就一定会终止">
-break分支可能永远不可达，或continue在检查前跳走。需要列出state transition与可达exit input，并为collection loop提供单调下降的termination measure。
+<Callout type="trap" title="continue 只是跳过 print，不会影响更新">
+  **现象 →** 实验故障版永远停在 `n=0`。 **原因 →** 更新也在
+  `continue`之后，本轮余下代码全部被跳过。 **修法 →**
+  把必要推进放到跳过之前；单步核对下轮状态确实改变。
 </Callout>
 
-## 本章回顾：输入、状态与退出
+<Callout type="trap" title="标志设成 False，后面的语句就不执行了">
+  **现象 →** 输入退出值后仍被打印或记录。 **原因 →** 改标志只是赋值，下一次到
+  while 才检查。 **修法 →** 用 `else`隔开后续工作；若需立刻离开当前循环，用
+  `break`。
+</Callout>
 
-1. raw input先normalize、parse、validate，再进入typed core。
-2. modulo用于remainder规则，不能绕过type和除数验证。
-3. sentinel、flag、break/continue都应对应可读state transition。
-4. termination proof说明每轮如何接近退出或哪个事件可终止。
-5. collection loop既要结束，也要保持元素总数、匹配数或response ownership不变量。
+<Callout type="trap" title="一次 remove 能删光所有匹配项">
+  **现象 →** 相邻的两个“作废”只少了一个。 **原因 →**
+  `remove()`只删第一个；遍历原列表时删除还可能漏项。 **修法 →** 小列表用 `while
+  目标 in 列表`逐次删除，每次都检查是否仍存在。
+</Callout>
 
+## 小结
+
+- 输入先得字符串，转成整数后才能做奇偶计算。
+- 跳过、退出、集合更新都要有明确的执行位置。
+- 判断能否结束，要检查每条返回路径是否推进状态。
+
+<div className="[&_button]:min-h-11 [&_button]:min-w-11">
 <Exercises>
 
-**问题 1：设计一个整数输入循环，如何区分parse失败和范围失败？**
+**问题 1 · 预测与解释。** 正常计数上限为 6 时，循环体执行几次、输出几次？故障版上限为 0 能结束，是否证明它正确？
 
-<Answer>先strip raw string并识别quit；try `int(raw)`，ValueError提示whole number并continue；parse成功后单独检查min/max，越界提示允许范围并continue；合法值才进入业务逻辑。测试空、3.5、负数、上下边界和quit。</Answer>
+<Answer>
 
-**问题 2：如何证明从source list搬运到target list的while会终止且不丢数据？**
+循环体执行 6 次，输出 3 次，内容为 `1、3、5`。第 6 轮的 `continue`回到条件时看到 `6 < 6`为假。故障版上限 0 时一次也不进入循环体，根本没有经过错误路径；上限 3 就会在 0 重复。因此边界测试必须同时覆盖“零次执行”和“确实进入”。
 
-<Answer>度量是len(source)，每轮pop恰好减少1，有限初始长度最终到0；invariant是len(source)+len(target)保持初始总数，每个pop value恰好append一次。若中间可能失败，增加rejected outcome或在mutation前验证，测试顺序契约。</Answer>
+</Answer>
 
-**问题 3：continue为什么可能制造无限循环？**
+**问题 2 · 改实验对应代码。** 把计数程序改成“只输出 1～6 中的偶数”，且始终能够结束。要求只改分流条件，不移动更新行。写出预期输出，并解释为什么不会卡住。
 
-<Answer>continue跳过本轮余下代码。若state update或queue pop位于其后，下一轮看到相同condition和同一item，循环无法推进。把推进动作放在可能continue之前，或重构为先消费input再分类，并用iteration trace证明度量下降。</Answer>
+**小分问：** 待办列表为 `["A", "作废", "作废", "B"]`，先预测反复 `pop()` 再 `append()` 的完整结果。然后独立改为按原顺序搬运，搬完再删除全部 `"作废"`，目标为 `["A", "B"]`。必须检查源列表清空、相邻重复项全删，并测试空列表输入。
+
+<Answer>
+
+```python
+n = 0
+while n < 6:
+    n += 1
+    if n % 2 != 0:
+        continue
+    print(n)
+```
+
+输出 `2、4、6`。改成“余数不为零则跳过”，就过滤了奇数。必要推进仍在 `continue`之前，所有六轮都会增加 `n`；若连更新一起挪到最后，则不能用同样的理由保证退出。可先在实验中定位更新，再复制代码到 Python 修改。
+
+小分问中，默认 `pop()` 从末尾取，结果是 `["B", "作废", "作废", "A"]`，不是原顺序。小列表改用 `pop(0)` 从开头取；删除阶段用成员检查控制 `while`，避免边遍历边删除跳过第二个相邻的 `"作废"`。
+
+```python
+pending = ["A", "作废", "作废", "B"]
+finished = []
+while pending:
+    finished.append(pending.pop())
+assert pending == []
+assert finished == ["B", "作废", "作废", "A"]
+
+for original, expected in (
+    (["A", "作废", "作废", "B"], ["A", "B"]),
+    ([], []),
+    (["作废", "作废"], []),
+):
+    pending, finished = original.copy(), []
+    while pending:
+        finished.append(pending.pop(0))
+    assert pending == [] and finished == original
+    while "作废" in finished:
+        finished.remove("作废")
+    assert finished == expected
+    assert "作废" not in finished
+```
+
+空列表让两个 `while` 都执行零轮，不会对空列表调用 `pop()`；全作废列表则验证结果确实可以为空。只断言源列表清空，抓不住搬运漏项或顺序颠倒，所以搬运后先检查完整内容，再检查删除后的结果。
+
+</Answer>
+
+**问题 3 · 独立实现。** 写一个队伍问卷：空姓名跳过，`quit`退出，重复姓名拒绝覆盖；合法的新姓名才询问队伍。按次序输入 `阿宁、蓝队、阿宁、quit`，目标字典为 `{'阿宁': '蓝队'}`，重复姓名处不得再询问队伍。
+
+<Answer>
+
+```python
+teams = {}
+while True:
+    name = input("姓名，quit 结束：").strip()
+    if name == "quit":
+        break
+    if name == "":
+        continue
+    if name in teams:
+        print("姓名已登记")
+        continue
+    team = input("队伍：").strip()
+    if team == "":
+        print("队伍不能为空")
+        continue
+    teams[name] = team
+print(teams)
+```
+
+先检查退出，再检查空值和重复，最后询问队伍并写入。两个姓名相关的 `continue`都跳过了队伍读取，下一轮重新问姓名。另测试第一行就是 `quit`，应输出空字典；第一行空白时不应出现队伍提示。若用户永不输入退出值，问卷不会被保证自动结束。
+
+</Answer>
 
 </Exercises>
+</div>
 
-## 术语表
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="raw input" definition="input返回、尚未解析和验证的原始字符串。" />
-  <GlossaryItem term="parse boundary" definition="把raw string转换为typed value并区分语法与业务失败的边界。" />
-  <GlossaryItem term="modulo invariant" definition="用余数表达整除、奇偶或周期位置的规则。" />
-  <GlossaryItem term="loop state transition" definition="一次while iteration对控制状态造成的可观察变化。" />
-  <GlossaryItem term="termination proof" definition="说明每轮接近退出或存在可达终止事件的论证。" />
+  <GlossaryItem term="输入转换">
+    把读到的文字变成所需类型，例如把 `"8"`变为整数
+    8；格式正确与范围合格要分别检查。
+  </GlossaryItem>
+  <GlossaryItem term="取模（modulo）">
+    取模运算符（modulo operator）在这里是 `%`：求整数除法的余数。例如 7 分成每组
+    2 个后剩 1 个，所以 `7 % 2`是 1；对 2 取模为零就是偶数。
+  </GlossaryItem>
+  <GlossaryItem term="while 循环">
+    条件为真才做一轮，做完再检查；起初为假就一轮也不做。
+  </GlossaryItem>
+  <GlossaryItem term="循环控制">
+    决定下一段代码走向的安排：`continue`开始下一轮，`break`离开最近的循环，标志在下次条件检查时生效。
+  </GlossaryItem>
+  <GlossaryItem term="终止依据">
+    指出工作量如何减少或退出输入如何到达退出路径；不能只说“运行起来没卡住”。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 7: User Input and while Loops" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 来源与范围
+
+本章按《Python Crash Course》第三版第 7 章 **User Input and while Loops**限定范围。只读核对仓库目录清单中的 `pcc3-07`，覆盖输入与转换、取模、循环控制、列表搬运及删除、用户输入填充字典。清单的原书访问级别是 **outline-only**，不把目录核对说成全文核对；本文、图示与示例均为独立重写，不复现原书练习。
+
+机制依据为本次实际获取核对的 Python 3 官方资料（2026-09-23）：
+
+- [input 与 int](https://docs.python.org/3/library/functions.html#input)：返回字符串、去掉末尾换行、输入结束行为；[int 转换规则](https://docs.python.org/3/library/functions.html#int)。
+- [整数运算与取模](https://docs.python.org/3/reference/expressions.html#binary-arithmetic-operations)：余数语义与除数不能为零。
+- [while 语句](https://docs.python.org/3/reference/compound_stmts.html#the-while-statement)、[break](https://docs.python.org/3/reference/simple_stmts.html#the-break-statement)、[continue](https://docs.python.org/3/reference/simple_stmts.html#the-continue-statement)：检查时机与控制转移。
+- [列表方法](https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)与[字典](https://docs.python.org/3/tutorial/datastructures.html#dictionaries)：`pop/remove`的效果、失败边界与重复键覆盖。
+
+出版社页面用于书目信息与目录范围，不构成改编授权；不声称原书采用 CC BY-NC 4.0，也不提供未经核实的中文译本或授权链接。所有可运行示例均完整包含在本页，无需额外源码文件。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Python Crash Course, Third Edition — Chapter 7: User Input and while Loops"
+  sourceUrl="https://nostarch.com/python-crash-course-3rd-edition"
+/>

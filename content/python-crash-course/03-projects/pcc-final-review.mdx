@@ -7,7 +7,10 @@ description: "把第三版20章串成program contracts、Alien Invasion、data p
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+draft: true
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +20,9 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccFinalReviewLab } from "@/components/mdx/python-crash-course/v2/pcc-final-review";
+
+{/* 知识点清单：program contract stack(交互栈层图)/state lifetime(三项目矩阵)/invariant evidence(三项目矩阵)/data lineage(代码对照)/identity ownership boundary(代码对照+故障注入)/failure taxonomy(交互分类图) */}
 
 <Objectives>
 
@@ -28,11 +34,17 @@ import { Attribution } from "@/components/mdx/attribution";
 
 ## 为什么总复习必须以三个完整项目验收20章
 
-单章100分证明页面结构与核心知识齐全，不证明学习者能在真实系统中迁移。第三版的设计正是先用1–11章建立programming primitives，再用三个项目改变约束：游戏按frame处理持续状态，data pipeline面对不可信source，Web app面对并发requests、users和production environment。总复习要比较三者共同contract与不同failure。
+单章自动高分仅说明所检查规则已满足，知识完整性仍需来源、范围、实践与人工核查；总复习检验迁移，不补回遗漏教学。**本页是本站原创迁移复习，不是原书 Afterword 的改编，也不替代主章或技术附录的教学。**
+
+第三版的设计正是先用1–11章建立programming primitives，再用三个项目改变约束：游戏按frame处理持续状态，data pipeline面对不可信source，Web app面对并发requests、users和production environment。总复习要比较三者共同contract与不同failure。
 
 先预测：Pygame bullet leak、API valid-empty与Django IDOR分别属于syntax、state、data还是identity问题；哪些tests可以共用，哪些evidence必须项目专属。预测后用三套交互图建立诊断与验收矩阵。
 
 <Term def="从environment、values、control、function/class、I/O到test oracle逐层消费并约束行为的基础contract集合。">program contract stack</Term>
+
+> 猜一猜：Alien Invasion 最依赖 contract stack 的哪几层？bullet leak 属于六类故障中的哪一类？切到「三项目矩阵」点 evidence 格，对比三张图能否互相替代。
+
+<PccFinalReviewLab />
 
 ## Part I：第1–11章如何成为共同底座
 
@@ -40,22 +52,64 @@ import { Attribution } from "@/components/mdx/attribution";
 
 这些知识不是在项目开始时“学完就丢”。Ship.update读取第7章式state，Bullet/Alien是第9章objects；CSV/API使用第6章nested shape与第10章exception boundary；Django Model/View是class/function contracts，authorization tests依赖第11章isolation。
 
+<CodeTabs>
+  <Tab label="通用 skeleton">
+
 ```python
 def execute_boundary(raw_input, parser, operation):
-    normalized = raw_input.strip()                  # ch2
-    value = parser(normalized)                      # ch7/8
     try:
+        normalized = raw_input.strip()              # ch2
+        value = parser(normalized)                  # ch7/8
         return operation(value)                     # ch8/9
     except (ValueError, OSError) as error:          # ch10
         return {"ok": False, "reason": type(error).__name__}
 ```
 
-这个skeleton可以是terminal input、CSV field、API parameter或Django form field。不同framework改变adapter，不改变“normalize → parse/validate → operation → specific failure”的基础链。
+  </Tab>
+  <Tab label="三种 adapter 实例">
+
+```python
+# 接在上面的函数后，保存为 boundary_review.py
+age = execute_boundary(" 20 ", int, lambda v: v + 1)
+highs = []
+row_ok = execute_boundary(" 31 ", int, highs.append)
+# 只构造参数，不发起网络请求
+page = execute_boundary(" 2 ", int, lambda v: {"page": v})
+print(age, highs, page)  # 21 [31] {'page': 2}
+print(execute_boundary("bad", int, lambda v: v + 1))
+# {'ok': False, 'reason': 'ValueError'}
+```
+
+  </Tab>
+</CodeTabs>
+
+两段代码按顺序放在同一文件即可运行：第一个操作返回年龄，第二个把温度加入列表，第三个仅构造分页参数，**不是完整 API 客户端或 Django 表单程序**。输入约定为字符串；`strip`、解析和操作都在 `try` 内，因此 `int("bad")` 的 `ValueError` 与操作的 `OSError` 都转换为失败字典。
+
+这里没有吞掉所有异常：传入非字符串等编程错误仍向外传播；操作已有的副作用也不会被自动撤销。成功结果可以是数值、字典或 `None`（如列表的 `append`），不能把“返回了值”当成功判据。不同框架改变连接代码，不改变“规范化 → 解析/验证 → 操作 → 约定错误处理”的基础链。
+
+把下面断言接在同一文件末尾：有效输入检查返回值，无效输入检查解析失败，故意注入的操作错误检查捕获边界。全部通过时不会有额外输出；把 `value = parser(normalized)` 移到 `try` 之前，第二条断言就会变成未捕获异常。
+
+```python
+assert execute_boundary(" 20 ", int, lambda v: v + 1) == 21
+assert execute_boundary("bad", int, lambda v: v + 1) == {
+    "ok": False, "reason": "ValueError"
+}
+
+def unavailable(value):
+    raise OSError("deliberate demo failure")
+
+assert execute_boundary("2", int, unavailable) == {
+    "ok": False, "reason": "OSError"
+}
+```
 
 ## 三大项目：相同结构，不同时间和信任模型
 
+以下游戏、数据与 Web 代码是对应项目中的局部检查片段，需要该章项目对象或测试配置，不能逐块当作独立程序。上面的 `boundary_review.py` 才是本节可单文件执行的最小样本。
+
 <Stepper>
-  <Step title="切换Alien Invasion、Data与Learning Log">
+  <Step title="比较三个项目消费的基础层">
+    先预测游戏与 Web 最依赖哪些基础层。回到本页实验的“contract stack”视图，依次点击图下的 Alien Invasion、Data Visualization、Learning Log 按钮，比较被高亮的层及连线，再说明为什么三项目不能共用同一份运行截图。
   </Step>
   <Step title="比较input和state lifetime">
     游戏state跨frames，data state跨records与artifacts，Web state跨requests/session/database/release。
@@ -73,6 +127,9 @@ def execute_boundary(raw_input, parser, operation):
 
 游戏invariants包括：window每帧drain events；Ship始终在screen；active bullets不超过limit且越界最终清零；edge一帧最多drop一次；collision删除数与score一致；一次ship hit只减一条life；inactive不更新world但继续event/draw；restart清空上一局动态状态。
 
+<CodeTabs>
+  <Tab label="state snapshot">
+
 ```python
 snapshot = {
     "frame": frame_number,
@@ -85,6 +142,22 @@ snapshot = {
 }
 ```
 
+  </Tab>
+  <Tab label="transition 断言">
+
+```python
+before = snapshot
+fire(); update()
+after = take_snapshot()
+# 一次按键最多一次 bullet transition
+assert after["bullets"] <= before["bullets"] + 1
+# 碰撞删除数与 score 一致
+assert after["score"] - before["score"] == hit_count * alien_points
+```
+
+  </Tab>
+</CodeTabs>
+
 保存collision前后snapshot比录屏更能定位重复transition。视觉用于观察，state trace用于证明。
 
 ### Data Visualization：source到artifact的lineage
@@ -94,6 +167,9 @@ snapshot = {
 <Term def="从source identity到raw、accepted/skipped records、transform、visual encoding和export artifact的可追溯记录。">data lineage</Term>
 
 data invariants包括：x/y或dates/highs/lows对齐；dice frequency总和等于rolls；CSV accepted+skipped=raw；GeoJSON lon/lat顺序与range正确；API先过status/decode/schema；normalized records是typed；chart labels、units与axis不误导；PNG/HTML存在并记录source/seed/version。
+
+<CodeTabs>
+  <Tab label="lineage report">
 
 ```python
 report = {
@@ -107,6 +183,20 @@ report = {
 assert report["accepted"] + sum(skipped_by_reason.values()) == raw_count
 ```
 
+  </Tab>
+  <Tab label="valid empty vs failure">
+
+```python
+if status != 200 or not schema_ok(payload):
+    return {"ok": False, "reason": "invalid_response"}
+if len(payload["items"]) == 0:
+    return {"ok": True, "records": [], "note": "valid_empty"}
+# 空图可以是合格结果，绝不能与 contract failure 混在一起
+```
+
+  </Tab>
+</CodeTabs>
+
 空chart必须区分valid empty与invalid response。前者是data result，后者是contract failure；把两者都变成空list会制造虚假成功。
 
 ### Learning Log：identity、persistence与release
@@ -116,6 +206,11 @@ assert report["accepted"] + sum(skipped_by_reason.values()) == raw_count
 <Term def="在authentication之后按request.user、object owner与action限制query和write的安全边界。">identity and ownership boundary</Term>
 
 Web invariants包括：migration graph与database一致；invalid form不写data；valid POST采用redirect；owner由server设置；anonymous重定向login；other user对list/detail/edit均不可见且POST不改变record；DEBUG=False、secret/hosts正确；collectstatic、Gunicorn、health与custom errors通过。
+
+下面沿用第19章的 `learning_log` 项目、`learning_logs` 应用和真实模型：**归属字段在 `Topic.owner`，`Entry` 只有指向 Topic 的 `topic` 外键，没有 `Entry.owner`**，所以条目查询必须沿 `topic__owner` 限定当前用户。写测试中的 `client`、用户/条目 fixtures 与 `edit_url` 需由该项目测试提供，不是可单独运行的脚本。
+
+<CodeTabs>
+  <Tab label="cross-user 写测试">
 
 ```python
 def test_cross_user_update_is_impossible(client, alice, bob_entry):
@@ -127,12 +222,35 @@ def test_cross_user_update_is_impossible(client, alice, bob_entry):
     assert bob_entry.text == before
 ```
 
-template隐藏edit link不是authorization。URL可被直接构造，真正边界必须在query中scope owner，并用第二用户fixtures验证database未变。
+  </Tab>
+  <Tab label="query 层 owner scope">
+
+```python
+# learning_logs/selectors.py（基于第19章项目）
+from django.shortcuts import get_object_or_404
+from .models import Entry
+
+
+def entries_for(request):
+    return Entry.objects.filter(topic__owner=request.user).order_by("id")
+
+
+def entry_for(request, entry_id):
+    return get_object_or_404(entries_for(request), pk=entry_id)
+```
+
+  </Tab>
+</CodeTabs>
+
+这两个函数是供视图调用的查询辅助函数，**不是返回 HTTP 响应的完整视图**；调用视图必须先使用第19章的登录保护，匿名请求转到登录页。对已登录用户，列表视图消费 `entries_for()`，只展示本人主题下的条目，空列表也是正常的 200；详情视图先调用 `entry_for()`，本人条目找到后正常展示（200），他人条目与不存在的编号都在过滤后的集合中找不到，返回 404。不能把“列表不含他人数据”写成“列表一律404”。
+
+template 隐藏 edit link 不是 authorization。URL 可被直接构造，边界必须在查询中沿 Topic 的 owner 过滤，并用两个用户分别验证列表隔离、本人详情可读、越权详情404及越权写入不改变数据库。
 
 ## 跨章调试：从症状追producer到consumer
 
 <Stepper>
   <Step title="选择一个跨章故障症状">
+    先判断“API 200 但数据形状错误”属于语法还是外部边界问题。回到本页实验切换“故障分类”，保持“注入故障”关闭并点击 Boundary；观察突出显示的故障类及证据要求，再与 Identity 对比，分别写下要收集的数据计数和用户—对象记录。
   </Step>
   <Step title="先找最早不满足的contract">
     200 response不等于valid schema，authenticated不等于owner，HTML 200不等于static成功。
@@ -165,7 +283,8 @@ capstone最小结构：
 5. **Verification**：unit、boundary、two-user security、artifact与release evidence。
 
 <Stepper>
-  <Step title="逐项打开capstone五类验收">
+  <Step title="为 capstone 整理五类验收证据">
+    先预测正常运行截图能覆盖下列哪些验收：正常、边界、故障、安全、运维。在本页实验切到“三项目矩阵”，依次点击 evidence 行的 A、D、L 按钮，比较三项目的证据要求；再在自己的清单中补齐五类记录，矩阵本身不会执行验收或给出通过结论。
   </Step>
   <Step title="happy path只是第一项的一部分">
     还要覆盖invalid input、missing/corrupt source、wrong owner、static/boot failure与recovery。
@@ -189,13 +308,19 @@ capstone最小结构：
 项目消费第1–11章contracts。alias、loop termination、argument binding、exception或test isolation缺口会在project放大；应从症状回退到最小基础章并重验consumer。
 </Callout>
 
+<Callout type="trap" title="HTTP 200 等于一切正常">
+**现象 →** API 返回 200，就认为 data pipeline 无误，图上却没数据。
+**原因 →** 200 只说明 transport 成功；JSON 可能 schema drift、valid empty 或字段类型变了，`items` 空与非法响应被混成同一条空 chart。
+**修法 →** 分层检查：status→decode→schema→valid empty；每级过不去就报 contract failure，空 chart 要有明确 note 而非静默。
+</Callout>
+
 ## 本章回顾：掌握意味着能解释、实现、复现和交付
 
-1. 第1–11章构成三个项目共同的program contract stack。
-2. Alien Invasion用state transition evidence证明实时loop与object lifecycle。
-3. Data项目用data lineage证明source到artifact没有静默丢失或误导。
-4. Learning Log用identity boundary与release evidence证明多用户和production安全。
-5. 总验收必须覆盖normal、boundary、failure、security与operations，并绑定同一revision。
+- 第1–11章构成三项目共同的 program contract stack
+- Alien Invasion 用 state transition evidence 证明实时 loop
+- Data 项目用 data lineage 证明 source 到 artifact 无静默丢失
+- Learning Log 用 identity boundary 和 release evidence 保安全
+- 总验收覆盖 normal/boundary/failure/security/operations，同一 revision
 
 <Exercises>
 
@@ -207,20 +332,54 @@ capstone最小结构：
 
 <Answer>保存request/status/headers，确认JSON decode；验证top-level与items schema，区分valid empty；逐item normalize并报告accepted/skipped，检查数值sort和chart inputs；最后检查labels/axis/export。若exception policy有问题回第10章，nested dict回第6章，encoding回第15章。修复producer后重跑所有下游，不只绕过Plotly错误。</Answer>
 
-**问题 3：一个capstone何时达到可交付，而不只是“能演示”？**
+**问题 3：一个 capstone 何时达到可交付，而不只是“能演示”？独立实现 `make_capstone_report()` 汇总各层结果，任一层 fail 就整体 fail，并指出首个失败层。**
 
-<Answer>同一commit下有自动behavior tests、boundary/failure scenarios、identity/ownership security matrix、chart/build/runtime artifacts和operations evidence；clean environment可build，schema migration与static成功，process/health/logs正常，并有rollback路径。正常演示、invalid source、wrong owner和deployment failure都有明确outcome与恢复策略。</Answer>
+<Answer>
+同一 commit 下有自动 behavior tests、boundary/failure scenarios、identity/ownership security matrix、chart/build/runtime artifacts 和 operations evidence；干净环境可构建，数据库迁移与静态文件成功，进程/健康检查/日志正常，并有回滚路径。正常演示、无效数据、错误 owner 和部署失败都有明确结果与恢复策略。
+
+以下函数只汇总调用方提供的布尔值和说明，不会执行验收。每条说明应指向实际证据，不能用手填 True 证明知识完整或项目已可交付：
+
+```python
+LAYERS = ["environment", "values", "control", "abstraction",
+          "boundary", "tests"]
+
+def make_capstone_report(layer_results: dict) -> dict:
+    report = {"revision": layer_results.get("commit", "?"), "layers": {}}
+    for layer in LAYERS:
+        passed, note = layer_results.get(layer, (False, "missing"))
+        report["layers"][layer] = {"status": "pass" if passed else "fail",
+                                   "note": note}
+    failed = [l for l in LAYERS if report["layers"][l]["status"] == "fail"]
+    report["overall"] = "pass" if not failed else "fail"
+    report["first_failure"] = failed[0] if failed else None
+    return report
+
+res = {"environment": (True, "python 3.13"),
+       "values": (True, "tests ok"),
+       "control": (False, "game_active loop 未固定"),
+       "abstraction": (True, "bullet invariant ok"),
+       "boundary": (True, "csv accepted==raw"),
+       "tests": (False, "cover 未达标"),
+       "commit": "a1b2c3"}
+r = make_capstone_report(res)
+print(r["overall"])          # fail
+print(r["first_failure"])    # control
+print(r["layers"]["control"]["note"])
+```
+
+关键：每层独立记录，缺失层按 fail 处理；全部输入结果为通过时才汇总为 pass。`first_failure` 按 `LAYERS` 顺序定位，不代表所有根因都已找到；报告也不能替代所引用的测试与人工验收。
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="program contract stack" definition="第1–11章组成的environment、value、control、abstraction、I/O与test基础集合。" />
-  <GlossaryItem term="state transition evidence" definition="记录before、event、after与invariants以证明状态变化正确的证据。" />
-  <GlossaryItem term="data lineage" definition="从source到records、transform、encoding和artifact的可追溯记录。" />
-  <GlossaryItem term="identity and ownership boundary" definition="按user、object owner与action限制query和write的安全边界。" />
-  <GlossaryItem term="release evidence" definition="与commit关联的build、migration、static、process、health与log结果。" />
+  <GlossaryItem term="program contract stack">第1–11章组成的environment、value、control、abstraction、I/O与test基础集合。</GlossaryItem>
+  <GlossaryItem term="state transition evidence">记录before、event、after与invariants以证明状态变化正确的证据。</GlossaryItem>
+  <GlossaryItem term="data lineage">从source到records、transform、encoding和artifact的可追溯记录。</GlossaryItem>
+  <GlossaryItem term="identity and ownership boundary">按user、object owner与action限制query和write的安全边界。</GlossaryItem>
+  <GlossaryItem term="release evidence">与commit关联的build、migration、static、process、health与log结果。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Python Crash Course, Third Edition, integrated review of Chapters 1–20" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

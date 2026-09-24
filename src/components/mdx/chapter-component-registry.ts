@@ -13524,6 +13524,55 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       MementoSnapshotCanvasLab: module0.MementoSnapshotCanvasLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/03-behavioral/observer": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/observer-subscription-delivery-lab");
+    return {
+      ObserverSubscriptionDeliveryLab: module0.ObserverSubscriptionDeliveryLab,
+    } as ChapterMdxComponents;
+  },
+  "design-patterns/03-behavioral/state": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/state-transition-ownership-lab");
+    return {
+      StateTransitionOwnershipLab: module0.StateTransitionOwnershipLab,
+    } as ChapterMdxComponents;
+  },
+  "design-patterns/03-behavioral/strategy": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/strategy-route-cost-lab");
+    return {
+      StrategyRouteCostLab: module0.StrategyRouteCostLab,
+    } as ChapterMdxComponents;
+  },
+  "design-patterns/03-behavioral/template-method": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/template-method-import-pipeline-lab");
+    return {
+      TemplateMethodImportPipelineLab: module0.TemplateMethodImportPipelineLab,
+    } as ChapterMdxComponents;
+  },
+  "design-patterns/03-behavioral/visitor": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/visitor-double-dispatch-ast-lab");
+    return {
+      VisitorDoubleDispatchAstLab: module0.VisitorDoubleDispatchAstLab,
+    } as ChapterMdxComponents;
+  },
+  "design-patterns/04-compound/compound-patterns": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/compound-patterns-order-notification-lab");
+    return {
+      CompoundOrderNotificationLab: module0.CompoundOrderNotificationLab,
+    } as ChapterMdxComponents;
+  },
+  "design-patterns/04-compound/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/final-review-contract-lab");
+    return {
+      DesignPatternsReviewContractLab: module0.DesignPatternsReviewContractLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
@@ -13727,11 +13776,70 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.DbcOfficialFinalReviewVerificationGateLab,
     } as ChapterMdxComponents;
   },
+  "dsa-cpp/00-introduction/algorithm-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-algorithm-analysis-cost-lab");
+    return {
+      DsaAlgorithmAnalysisCostLab: module0.DsaAlgorithmAnalysisCostLab,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/00-introduction/introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-introduction-contract-lab");
+    return {
+      DsaIntroductionContractLab: module0.DsaIntroductionContractLab,
+      DsaIntroductionMatrixLab: module0.DsaIntroductionMatrixLab,
+    } as ChapterMdxComponents;
+  },
   "dsa-cpp/01-linear-structures/lists-stacks-queues": async () => {
     const module0 =
-      await import("@/components/mdx/dsa-cpp/diagrams/lists-stacks-queues");
+      await import("@/components/mdx/dsa-cpp/dsa-lists-stacks-queues-storage-lab");
     return {
-      DsaAdtBoundaryDiagram: module0.DsaAdtBoundaryDiagram,
+      DsaListsStacksQueuesStorageLab: module0.DsaListsStacksQueuesStorageLab,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/01-linear-structures/trees": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-trees-rotation-lab");
+    return {
+      DsaTreesRotationLab: module0.DsaTreesRotationLab,
+      DsaTreesBTreeFigure: module0.DsaTreesBTreeFigure,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/02-hashing-heaps/hashing": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-hashing-probe-lab");
+    return {
+      DsaHashingProbeLab: module0.DsaHashingProbeLab,
+      DsaHashingDirectoryLab: module0.DsaHashingDirectoryLab,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/02-hashing-heaps/priority-queues-heaps": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-priority-queues-heaps-merge-lab");
+    return {
+      DsaPriorityQueuesHeapsMergeLab: module0.DsaPriorityQueuesHeapsMergeLab,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/03-algorithms/disjoint-set-class": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-disjoint-set-class-forest-lab");
+    return {
+      DsaDisjointSetClassForestLab: module0.DsaDisjointSetClassForestLab,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/03-algorithms/graph-algorithms": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-graph-algorithms-frontier-lab");
+    return {
+      DsaGraphAlgorithmsFrontierLab: module0.DsaGraphAlgorithmsFrontierLab,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/03-algorithms/sorting": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-sorting-movement-lab");
+    return {
+      DsaSortingMovementLab: module0.DsaSortingMovementLab,
     } as ChapterMdxComponents;
   },
   "dsa-cpp/04-design-analysis/algorithm-design-techniques": async () => {
@@ -13751,6 +13859,23 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DsaAmortizedHeapConsolidationLab:
         module0.DsaAmortizedHeapConsolidationLab,
       DsaAmortizedSplayAccessLab: module0.DsaAmortizedSplayAccessLab,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/05-advanced/advanced-data-structures": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-advanced-data-structures-repair-lab");
+    return {
+      DsaAdvancedDataStructuresRepairLab:
+        module0.DsaAdvancedDataStructuresRepairLab,
+      DsaAdvancedAuxiliaryFigures: module0.DsaAdvancedAuxiliaryFigures,
+    } as ChapterMdxComponents;
+  },
+  "dsa-cpp/05-advanced/separate-compilation-class-templates": async () => {
+    const module0 =
+      await import("@/components/mdx/dsa-cpp/dsa-separate-compilation-class-templates-link-lab");
+    return {
+      DsaSeparateCompilationClassTemplatesLinkLab:
+        module0.DsaSeparateCompilationClassTemplatesLinkLab,
     } as ChapterMdxComponents;
   },
   "easy-cpp-5e/00-intro/learning-map": async () => {
@@ -14499,6 +14624,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ExceptionContractFailureDiagram: module0.ExceptionContractFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "effective-executive/00-official-learning-map/eex19-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-executive/eex19-official-learning-map-work-evidence-lab");
+      return {
+        EexLearningMapWorkEvidenceLab: module0.EexLearningMapWorkEvidenceLab,
+      } as ChapterMdxComponents;
+    },
   "effective-modern-cpp/00-deducing-types/item-01-template-type-deduction":
     async () => {
       const module0 =
@@ -23867,21 +24000,6 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       PccGettingStartedLab: module0.PccGettingStartedLab,
     } as ChapterMdxComponents;
   },
-  "python-crash-course/02-official/variables-and-simple-data-types":
-    async () => {
-      const module0 =
-        await import("@/components/mdx/python-crash-course/v2/variables-and-simple-data-types");
-      return {
-        PccVariablesLabelsLab: module0.PccVariablesLabelsLab,
-      } as ChapterMdxComponents;
-    },
-  "python-crash-course/03-official/introducing-lists": async () => {
-    const module0 =
-      await import("@/components/mdx/python-crash-course/v2/introducing-lists");
-    return {
-      PccIntroducingListsLab: module0.PccIntroducingListsLab,
-    } as ChapterMdxComponents;
-  },
   "python-crash-course/03-projects/pcc-final-review": async () => {
     const module0 =
       await import("@/components/mdx/python-crash-course/v2/pcc-final-review");
@@ -23889,25 +24007,109 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       PccFinalReviewLab: module0.PccFinalReviewLab,
     } as ChapterMdxComponents;
   },
-  "python-crash-course/04-official/working-with-lists": async () => {
-    const module0 =
-      await import("@/components/mdx/python-crash-course/v2/working-with-lists");
-    return {
-      PccWorkingWithListsLab: module0.PccWorkingWithListsLab,
-    } as ChapterMdxComponents;
-  },
-  "python-crash-course/05-official/if-statements": async () => {
-    const module0 =
-      await import("@/components/mdx/python-crash-course/v2/if-statements");
-    return {
-      PccIfStatementsLab: module0.PccIfStatementsLab,
-    } as ChapterMdxComponents;
-  },
   "python-crash-course/06-official/dictionaries": async () => {
     const module0 =
       await import("@/components/mdx/python-crash-course/v2/dictionaries");
     return {
       PccDictionariesLab: module0.PccDictionariesLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/07-official/user-input-and-while-loops": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/user-input-and-while-loops");
+    return {
+      PccUserInputWhileLab: module0.PccUserInputWhileLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/08-official/functions": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/functions");
+    return {
+      PccFunctionsLab: module0.PccFunctionsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/09-official/classes": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/classes");
+    return {
+      PccClassesLab: module0.PccClassesLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/10-official/files-and-exceptions": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/files-and-exceptions");
+    return {
+      PccFilesExceptionsLab: module0.PccFilesExceptionsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/11-official/testing-your-code": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/testing-your-code");
+    return {
+      PccTestingCodeLab: module0.PccTestingCodeLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/12-official/a-ship-that-fires-bullets": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/a-ship-that-fires-bullets");
+    return {
+      PccShipBulletsLab: module0.PccShipBulletsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/13-official/aliens": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/aliens");
+    return {
+      PccAliensLab: module0.PccAliensLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/14-official/scoring": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/scoring");
+    return {
+      PccScoringLab: module0.PccScoringLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/15-official/generating-data": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/generating-data");
+    return {
+      PccGeneratingDataLab: module0.PccGeneratingDataLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/16-official/downloading-data": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/downloading-data");
+    return {
+      PccDownloadingDataLab: module0.PccDownloadingDataLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/17-official/working-with-apis": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/working-with-apis");
+    return {
+      PccWorkingApisLab: module0.PccWorkingApisLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/18-official/getting-started-with-django": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/getting-started-with-django");
+    return {
+      PccDjangoLab: module0.PccDjangoLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/19-official/user-accounts": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/user-accounts");
+    return {
+      PccUserAccountsLab: module0.PccUserAccountsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/20-official/styling-and-deploying-an-app": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/styling-and-deploying-an-app");
+    return {
+      PccDeployingLab: module0.PccDeployingLab,
     } as ChapterMdxComponents;
   },
   "ray-tracing-weekend/01-output/rtw-01-output-image": async () => {

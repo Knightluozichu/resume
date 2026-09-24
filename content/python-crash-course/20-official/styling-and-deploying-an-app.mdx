@@ -1,357 +1,850 @@
 ---
-title: "第20章：Styling and Deploying an App"
+title: "第20章：设置样式与交付应用"
 type: C
-section: "Part II · Projects · Web Applications"
+section: "第二部分 · 项目 · Web 应用"
 order: 20
-description: "用django-bootstrap5完成responsive Learning Log，并以环境配置、YAML、Gunicorn、migrate和logs建立部署闭环。"
+description: "为 Learning Log 制作 Bootstrap 5 导航、表单和卡片，在隔离沙盒验证生产配置、静态收集与错误页面，分清历史平台流程和当前部署边界。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+practiceMode: code
+officialUnitId: pcc3-20
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccDeployingLab } from "@/components/mdx/python-crash-course/v2/styling-and-deploying-an-app";
+
+{/* 知识点与视觉决策：manifest八组逐项覆盖。1 django-bootstrap5/Bootstrap5：模板标签代码与浏览器轮廓；2 base/navigation/responsive：768与992断点交互；3 forms/card：绑定表单与条目卡片真实几何重排、无效POST测试；4 Platform.sh/deployment：作者当前Scalingo更新与Upsun官方HTTP核对、历史/当前配置表；5 requirements/gunicorn：锁定依赖与WSGI导入测试；6 env/secret/allowedhosts/debug：路径故障注入与独立进程断言；7 YAML/git/migrate/collectstatic：历史片段、本地发布计划、数据库圆柱与静态目录分流；8 logs/custom404500：路径中断、独立错误模板和测试客户端。五组核心术语均进Glossary；不是通用Stepper卡片，单步推进实际路径，控件改变布局与分支。独立最小沙盒沿用learning_log、learning_logs、accounts、Topic/Entry及第19章认证边界，不覆写其他章工程。 */}
 
 <Objectives>
 
-- 能实现django-bootstrap5的responsive base template、navigation、forms与Entry cards，并比较mobile/desktop和auth states
-- 能设计production dependencies与settings，区分DEBUG、SECRET_KEY、ALLOWED_HOSTS、database和static files配置
-- 能分析Platform.sh deployment的Git、YAML、build、migrate、collectstatic、Gunicorn、logs与error-page链路
+- 能改出随屏幕宽度重排的导航、条目卡片和表单，并保留登录、退出与所有权检查。
+- 能在本地隔离项目验证环境变量、数据库迁移、静态收集和错误页面，说明旧平台配置为何不能照抄。
+- 能回答：为什么首页返回 200 不代表样式已发布？缺密钥、陌生 Host、数据库缺表应分别在哪一层定位？
 
 </Objectives>
 
-## 为什么 styling 与 deployment 必须一起验证真实工作流
+## 页面做出来，为什么还不能交付？
 
-漂亮home page不代表应用可用：mobile navigation可能遮挡logout，invalid form errors可能不可见，production static files可能404，migration也可能未应用。最终验收必须从anonymous register/login，到owner创建Topic/Entry、edit、logout，再到另一用户无法访问，并在production-like settings下执行。
+一条生产线既要把产品做对，也要把产品完整地送到使用者手里。笔记能保存，只证明内部工序可用；手机上按钮挤成一团、公开页面暴露内部错误，都是交付失败。
 
-先预测：`DEBUG=False`但未配置ALLOWED_HOSTS会出现什么；HTML正常但Bootstrap CSS 404时应查template还是collectstatic；release先启动新code后才migrate会怎样。把预测转成release gates，不让“push成功”替代部署证据。
+本章把外观和交付分开检查：先让页面在不同宽度下好用，再确认换一台机器仍能得到同样结果。我们只在本机验证，不创建收费资源，也不把“检查通过”说成已经上线。
 
-<Term def="在同一base template中根据viewport和session state组织navigation、content与commands的页面骨架。">responsive shell</Term>
+## 五个边界，连接八组知识点
 
-本章仍以第三版的django-bootstrap5与Platform.sh为项目背景。云平台schema、runtime version和commands会更新，实际部署时须用当前官方文档核对YAML；核心contract保持不变：reproducible build、externalized config、schema migration、static assets、WSGI process与observable health。
+### 1. 外观边界：模板继承，不是复制每一页
 
-## Installing django-bootstrap5
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center"><Term def="页面根据可用宽度改变列数或导航展开方式，而不是只把全部内容等比例缩小。">响应式布局</Term></span>
+由浏览器应用样式规则。Bootstrap 5 提供导航、栅格、按钮和卡片；`django-bootstrap5` 则把 Django 表单对象转换为相应标记，不负责身份认证、数据库或发布。
 
-在项目virtual environment安装package并加入`INSTALLED_APPS`，再运行system check。package name、Python interpreter和settings registration是三个独立条件。
+公共 `base.html` 放页面标题、viewport、导航和资源引用；子模板只填 `content`。本例 `col-12 col-md-6` 在 768 CSS 像素开始并排，`navbar-expand-lg` 在 992 像素开始横排。下图可分别越过两个断点，观察“内容已经两列、菜单仍折叠”的中间区间。
 
-```bash
-python -m pip install django-bootstrap5
-python -m django --version
-python manage.py check
+窄屏导航的展开需要 Bootstrap 的 JavaScript bundle，只有 CSS 不够。`bootstrap_css` 与 `bootstrap_javascript` 默认生成外部资源链接：模板渲染成功不等于浏览器已成功下载它们。本地 `app.css` 则由另一条静态路径提供，两者不能混为一谈。
+
+### 2. 表单边界：装饰输入，不跳过服务端验证
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center"><Term def="已经带上用户提交内容的 Django 表单；验证失败时同时保留输入与错误。">绑定表单</Term></span>
+应以 `EntryForm(request.POST)` 构造，再由 `is_valid()` 判断。失败时重新渲染同一个对象，`bootstrap_form` 才能显示错误；若换成空表单，读者的输入和错误都会丢失。
+
+第19章的边界必须继续存在：登录才能读主题；按 `owner=request.user` 过滤主题；保存条目前先验证主题所有权。隐藏按钮仅改变外观，不能阻止直接发来的 POST。本章没有把 `owner` 或 `topic` 放进可编辑字段。
+
+条目用 `.card` 表达标题和正文；表单用标签、错误文本和按钮表达操作。图中两者是独立区域，宽度变化只改变排列，不改变访问权限。退出使用带 CSRF 令牌的 POST 表单，而不是 Django 5.2 不再接受的 GET 退出链接。
+
+### 3. 运行边界：代码能导入，还要配置能成立
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center"><Term def="Python Web 服务器调用应用的标准接口；Gunicorn 通过该接口把请求交给 Django。">WSGI</Term></span>
+不是数据库，也不是静态资源目录。启动目标 `learning_log.wsgi:application` 表示模块和其中的应用对象。Gunicorn 缺包、模块名拼错或配置导入失败，都会使 worker 无法启动；此时甚至还没有 Django 错误页。
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center"><Term def="进程启动时从代码外部注入的配置值；密钥、主机名与运行模式不应写死在仓库里。">环境变量</Term></span>
+把同一份代码和不同环境分开。`SECRET_KEY` 必须足够随机且保密；`DEBUG=False` 隐藏调试详情；`ALLOWED_HOSTS` 接受主机名而非 URL，不是用户权限表，也不是 CORS 设置。缺少密钥应立即报错，不能悄悄退回公开的示例密钥。
+
+图中“缺密钥”截断 WSGI，“陌生 Host”截断动态请求，“忘记 migrate”直到数据库层才失败。Bootstrap 与这些错误无关。静态中间件可能提前返回文件，所以 Django 的 Host 校验不能代替边缘服务器的主机限制。
+
+### 4. 静态边界：找到源文件，不等于用户取得到
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:min-w-11 [&_a]:items-center"><Term def="把各应用的静态源文件汇入发布目录的构建动作；Django 命令是 collectstatic。">静态收集</Term></span>
+读取应用的 `static/` 等源目录，输出到 `STATIC_ROOT`；`STATIC_URL` 只是浏览器请求前缀，不是磁盘路径。样式源文件能在开发模式下找到，不意味着关闭调试以后仍有人提供它。
+
+本例选择 WhiteNoise：紧跟 `SecurityMiddleware`，从已收集目录提供 CSS，并使用带内容哈希的文件名。它适合本例的静态资源，不负责用户上传文件、备份或数据库持久化。图中 CSS 命中直接回浏览器；HTML 才继续进入视图与数据库。文件丢失时先错在静态交付链，而不是主题查询。
+
+图中的 CSS 丢失故障假设哈希清单仍在，只缺发布文件。若连 `staticfiles.json` 都没生成，Manifest 存储可能在模板生成 CSS 地址时抛出“缺少清单条目”的异常，导致 **HTML 500**。所以静态配置错误不一定只表现为 CSS 404，必须读日志确认。
+
+### 5. 发布边界：代码版本、数据版本和平台约定
+
+依赖清单回答“装什么”，迁移文件回答“数据库应长什么样”，部署配置回答“何时执行什么”。Git 记录代码、迁移和经审查的配置，不应记录密钥、本机数据库或收集产物。`migrate` 使用已提交的迁移；不要在发布时临时 `makemigrations`。
+
+一次发布要按阶段找日志：安装失败看构建日志；密钥缺失看启动日志；缺表看迁移和运行日志；静态 404 看文件路径与收集记录。`collectstatic` 不创建数据库表，`migrate` 也不会生成 CSS。下面的 YAML 对照与沙盒命令分别验证这些职责，不能用“平台显示绿色”替代检查。
+
+## 先预测，再切换路径
+
+猜一猜：把宽度从 767 调到 768，再调到 992，哪块先变化？选择“静态：app.css”并注入“忘记 migrate”，CSS 应不应该失败？再换成“CSS 文件丢失（清单仍在）”，为什么请求会落回 Django？
+
+<PccDeployingLab />
+
+动手试：推进到末步，看正常 HTML 的数据库路径；保持故障条件只换请求类型，比较失败是否仍成立。最后点“重置全部”：宽度回到 390、HTML、正常配置、菜单关闭、时间线暂停且回到起点。
+
+## 平台时效：保留历史知识，不伪装当前教程
+
+本章核对日期为 **2026-09-23**。出版社图书页此次 HTTP **403**，只按已登记的第三版目录映射 `pcc3-20`，未读取原书正文，因此 `sourceAccess: outline-only`。技术细节由下列公开官方文档独立核验。
+
+作者的[部署更新页](https://ehmatthes.github.io/pcc_3e/updates/deploying_django/)返回 **200**，明确说明原书后半章使用 Platform.sh；该公司已改名 Upsun，作者不再推荐用它学习首次部署，目前的替代教程使用 **Scalingo** 与 `django-simple-deploy`。这不意味着本章需要创建 Scalingo 账户，也不保证任何免费试用政策长期有效。
+
+| 对象 | 此次官方页面所示 | 本章怎样处理 |
+| --- | --- | --- |
+| 原书 Platform.sh 流程 | 作者确认它是书中平台；`docs.platform.sh` 跳转至 Upsun Fixed 文档 | 讲 Git、YAML、钩子、迁移等职责，不执行历史推送 |
+| Upsun Fixed | 官方仍解释 `.platform.app.yaml`；其 Django 指南注明以 Django 4 为背景 | 历史／Fixed 配置只用于识别，不能称为本章 Django 5.2 已部署配置 |
+| 当前 Upsun Cloud 指南 | `.upsun/config.yaml` 合并应用、服务与路由；示例使用平台 socket、关系变量及静态挂载 | 不把历史三文件格式换个名称就当作迁移完成 |
+| 作者当前替代路径 | Scalingo，另有自动部署工具和账户前提 | 只指出变化；不运行自动提交、账户或付费命令 |
+
+下面是**历史 Platform.sh／Fixed 形状示意**，不是完整部署文件，不要放进正在使用的云项目。省略了路由、数据库服务、持久卷、关系解析、资源额度和平台 CLI 配置；代码只用于说明 YAML 缩进与钩子职责，未做云端验证。
+
+```yaml title="历史配置形状（仅阅读，不执行）"
+name: learning-log
+type: "python:3.12"
+web:
+  commands:
+    start: "gunicorn learning_log.wsgi:application"
+hooks:
+  build: |
+    python -m pip install -r requirements.txt
+  deploy: |
+    python manage.py migrate --noinput
+    python manage.py collectstatic --noinput
 ```
 
-```python
+不要从这个片段推断默认监听端口、服务连接或挂载能用。此次[Upsun Cloud Django 指南](https://developer.upsun.com/docs/get-started/stacks/django)把收集与迁移放在 deploy 阶段，静态目录有可写挂载，启动用 `$SOCKET`；这些与下面的本地目录约定不同。build 阶段通常拿不到数据库，依赖安装成功后仍可能在 deploy 阶段失败。真正迁移平台必须重新核对当前模板与计费条件，本章不承担远程交付承诺。
+
+## 可运行实践：一个独立的最小 Learning Log
+
+这是**学习项目，不是本站的部署方案**。为了不依赖相邻章的施工进度，以下文件组成完整沙盒：保留 `learning_log` 配置包、`learning_logs` 应用、`Topic/Entry` 和 `accounts` 登录／退出入口。第19章已有注册、编辑等功能的项目不要被这些最小文件覆盖；本例通过本地脚本创建测试用户，不重复实现注册页面。
+
+### 1. 固定版本，准备空目录
+
+使用 Python **3.12** 与 Django **5.2 LTS**。本次实际运行环境是 Python 3.12.12、Django 5.2.17；下列四个顶层运行依赖经过本地验证。清单不是长期安全更新策略，正式交付还要锁定传递依赖并定期检查安全更新。
+
+```text title="requirements.txt"
+Django==5.2.17
+django-bootstrap5==26.3
+gunicorn==26.2.0
+whitenoise==6.12.0
+```
+
+读者在仓库外新建空目录和虚拟环境；这里没有运行服务器的命令。已有本章验证环境时，跳过安装，使用已有解释器即可。
+
+```bash
+mkdir learning-log-sandbox && cd learning-log-sandbox
+python3.12 -m venv .venv
+. .venv/bin/activate
+# 先把上面的 requirements.txt 保存到当前目录。
+python -m pip install -r requirements.txt
+python -m django startproject learning_log .
+python manage.py startapp learning_logs
+python manage.py startapp accounts
+mkdir -p templates/registration templates/learning_logs
+mkdir -p learning_logs/static/learning_logs
+```
+
+`manage.py`、`learning_log/wsgi.py`、两个应用的 `__init__.py` 与 `apps.py` 保留生成版本；下面覆盖同名文件。为了避免误把敏感文件纳入 Git，先写 `.gitignore`。对这个 Learning Log 工程只做 `git status`、`git diff --check` 审核，不自动提交或推送；第8小节的本地提交仅发生在另建的一次性 Git 临时仓库。
+
+```text title=".gitignore"
+.venv/
+.env
+__pycache__/
+*.sqlite3
+staticfiles/
+*.log
+```
+
+### 2. 配置：从启动入口就拒绝缺密钥
+
+完整替换 `learning_log/settings.py` 为第一段，再把后两段按顺序追加到**同一文件**。`os.environ.get()` 只读取进程环境，不会自动加载 `.env`。本例默认关闭调试；只有显式 `DJANGO_DEBUG=1` 才打开，发布环境不要设置它。
+
+```python title="learning_log/settings.py"
+import os
+from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if len(SECRET_KEY) < 50:
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be at least 50 chars")
+DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1"
+).split(",") if h.strip()]
 INSTALLED_APPS = [
-    # Django built-ins...
-    "django_bootstrap5",
-    "learning_logs",
-    "accounts",
+    "django.contrib.auth", "django.contrib.contenttypes",
+    "django.contrib.sessions", "django.contrib.messages",
+    "django.contrib.staticfiles", "django_bootstrap5",
+    "learning_logs", "accounts",
+]
+ROOT_URLCONF = "learning_log.urls"
+WSGI_APPLICATION = "learning_log.wsgi.application"
+DATABASES = {"default": {
+    "ENGINE": "django.db.backends.sqlite3",
+    "NAME": BASE_DIR / "db.sqlite3",
+}}
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+LANGUAGE_CODE = "zh-hans"
+TIME_ZONE = "Asia/Shanghai"
+USE_TZ = True
+```
+
+中间件顺序有意义：安全检查在前，静态命中可以提前返回；会话之后才能解析当前用户。SQLite 只用于这个本地沙盒，云环境的数据库服务、备份与持久卷不能靠复制 `db.sqlite3` 解决。
+
+```python title="learning_log/settings.py（追加2）"
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+TEMPLATES = [{
+    "BACKEND": "django.template.backends.django.DjangoTemplates",
+    "DIRS": [BASE_DIR / "templates"], "APP_DIRS": True,
+    "OPTIONS": {"context_processors": [
+        "django.template.context_processors.request",
+        "django.contrib.auth.context_processors.auth",
+        "django.contrib.messages.context_processors.messages",
+    ]},
+}]
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "learning_logs:index"
+LOGOUT_REDIRECT_URL = "accounts:login"
+```
+
+最后指定静态输出和日志。不要把 `STATIC_ROOT` 同时当作源目录。日志输出到标准错误便于收集；排障时只保存必要信息，别记录用户笔记、完整请求体、Cookie 或密钥。
+
+```python title="learning_log/settings.py（追加3）"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    },
+}
+LOGGING = {
+    "version": 1, "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {"django.request": {
+        "handlers": ["console"], "level": "ERROR", "propagate": False,
+    }},
+}
+```
+
+### 3. 数据与视图：美化不能绕开所有权
+
+模型沿用共同项目的命名。这里不依赖 `__str__` 显示标签，模板明确使用 `topic.text`；两种模型都带创建时间，条目按新到旧排序。
+
+```python title="learning_logs/models.py"
+from django.conf import settings
+from django.db import models
+
+class Topic(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL,
+                              on_delete=models.CASCADE)
+    text = models.CharField(max_length=200)
+    date_added = models.DateTimeField(auto_now_add=True)
+
+class Entry(models.Model):
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE,
+                              related_name="entries")
+    text = models.TextField()
+    date_added = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date_added", "-pk"]
+```
+
+表单只开放条目正文；关联哪个主题，由服务端从经过授权的查询结果决定。
+
+```python title="learning_logs/forms.py"
+from django import forms
+from .models import Entry
+
+class EntryForm(forms.ModelForm):
+    class Meta:
+        model = Entry
+        fields = ["text"]
+        labels = {"text": "条目内容"}
+        widgets = {"text": forms.Textarea(attrs={"rows": 3})}
+```
+
+主题页同时显示已有条目和新增表单。`request.POST or None` 在空 POST 时会错误地得到未绑定表单，因此这里显式判断请求方法。成功后重定向，避免刷新页面重复提交。
+
+```python title="learning_logs/views.py"
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect, render
+from .forms import EntryForm
+from .models import Topic
+
+@login_required
+def index(request):
+    topics = Topic.objects.filter(owner=request.user).order_by("pk")
+    return render(request, "learning_logs/index.html", {"topics": topics})
+
+@login_required
+def topic(request, pk):
+    selected = get_object_or_404(Topic, pk=pk, owner=request.user)
+    form = EntryForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        entry = form.save(commit=False)
+        entry.topic = selected
+        entry.save()
+        return redirect("learning_logs:topic", pk=pk)
+    return render(request, "learning_logs/topic.html", {
+        "topic": selected, "form": form,
+    })
+```
+
+项目路由只连接这两个页面与认证入口，没有生产用的“制造 500”URL。
+
+```python title="learning_log/urls.py"
+from django.urls import include, path
+from learning_logs import views
+
+urlpatterns = [
+    path("accounts/", include("accounts.urls")),
+    path("", include(([
+        path("", views.index, name="index"),
+        path("topics/<int:pk>/", views.topic, name="topic"),
+    ], "learning_logs"))),
 ]
 ```
 
-把dependency写入production manifest，否则local template tag可用、remote build却`TemplateSyntaxError`。安装命令成功后还要render一页，确认CSS/JS实际加载。
+认证复用 Django 的实现；登录模板明确设置，退出必须 POST。这是第19章认证接口的最小接续，不是新的自制密码系统。
 
-## Base Template and Responsive Navigation
+```python title="accounts/urls.py"
+from django.contrib.auth.views import LoginView, LogoutView
+from django.urls import path
 
-base template加载Bootstrap CSS/JavaScript，定义navbar、container和content block。brand回到home，Topics是主要workspace，右侧根据`user.is_authenticated`显示username/logout或login/register。mobile使用navbar toggler折叠菜单，但所有commands仍可键盘访问。
+app_name = "accounts"
+urlpatterns = [
+    path("login/", LoginView.as_view(
+        template_name="registration/login.html"), name="login"),
+    path("logout/", LogoutView.as_view(), name="logout"),
+]
+```
 
-```django
-{% load django_bootstrap5 %}
+### 4. 基础模板：导航跟随认证状态
+
+把下面两段按顺序合为 `templates/base.html`。`load` 加载的是注册到 Django 的标签库，不是下载 CSS。链接用命名路由，避免换 URL 后全站导航失效。
+
+```html title="templates/base.html"
+{% load django_bootstrap5 static %}
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hans">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Learning Log</title>
   {% bootstrap_css %}
-  {% bootstrap_javascript %}
+  <link rel="stylesheet" href="{% static 'learning_logs/app.css' %}">
 </head>
 <body>
-  <nav class="navbar navbar-expand-md navbar-light bg-light mb-4 border">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{% url 'learning_logs:index' %}">Learning Log</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-              data-bs-target="#navbarCollapse" aria-controls="navbarCollapse"
-              aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarCollapse">
-        <!-- named navigation and auth state -->
-      </div>
+<nav class="navbar navbar-expand-lg bg-body-tertiary" aria-label="主导航">
+  <div class="container">
+    <a class="navbar-brand" href="{% url 'learning_logs:index' %}">学习笔记</a>
+    <button class="navbar-toggler" type="button"
+      data-bs-toggle="collapse" data-bs-target="#mainNav"
+      aria-controls="mainNav" aria-expanded="false" aria-label="展开导航">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <a class="nav-link me-auto" href="{% url 'learning_logs:index' %}">主题</a>
+```
+
+后半段使用 POST 退出并保留 CSRF 令牌；用户名只影响可见状态，不代替视图里的所有权检查。
+
+```html title="templates/base.html（追加2）"
+      {% if user.is_authenticated %}
+        <span class="navbar-text me-3">{{ user.username }}</span>
+        <form method="post" action="{% url 'accounts:logout' %}">
+          {% csrf_token %}<button class="btn btn-outline-secondary">退出</button>
+        </form>
+      {% else %}
+        <a class="nav-link" href="{% url 'accounts:login' %}">登录</a>
+      {% endif %}
     </div>
-  </nav>
-  <main class="container">{% block content %}{% endblock content %}</main>
+  </div>
+</nav>
+<main class="container py-4">{% block content %}{% endblock content %}</main>
+{% bootstrap_javascript %}
 </body>
 </html>
 ```
 
-`meta viewport`使mobile CSS按device width布局。toggler的target id必须与collapse id一致，JavaScript bundle必须加载；若button可见但不展开，先检查这两个contract与console，而不是调整随机CSS。
+登录失败也要保留绑定表单。`next` 来自 LoginView 的上下文，成功登录后由框架检查跳转目标；不要自行信任请求里任意外部网址。
 
-<Stepper>
-  <Step title="切换viewport与session state">
-  </Step>
-  <Step title="验证navigation命令完整">
-    mobile/desktop都能到home、topics、login/register或logout；active用户不会看到重复冲突command。
-  </Step>
-  <Step title="执行keyboard与overflow检查">
-    tab order清楚、toggler有accessible name、长username不覆盖内容，320px宽度无水平滚动。
-  </Step>
-</Stepper>
-
-## Styling the Home Page and Topic Pages
-
-home page用jumbotron-like section突出实际任务，不是营销页：anonymous用户理解Learning Log并能register，authenticated用户直接进入Topics。headings保持语义层级，button/link只用于真实command。
-
-Topic detail把每条Entry显示为card：header含date与edit link，body显示text。不要把整页每个section都做nested card；card只框定重复Entry item。empty state告诉用户如何添加第一条record。
-
-```django
-{% for entry in entries %}
-  <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between">
-      <span>{{ entry.date_added|date:'M d, Y H:i' }}</span>
-      <a href="{% url 'learning_logs:edit_entry' entry.id %}">Edit entry</a>
-    </div>
-    <div class="card-body">{{ entry.text|linebreaks }}</div>
-  </div>
-{% empty %}
-  <p>There are no entries for this topic yet.</p>
-{% endfor %}
-```
-
-user content保持autoescape；`linebreaks`转换paragraph但仍escape，不需要`safe`。date format与timezone来自project policy，部署前确认`TIME_ZONE`和`USE_TZ`。
-
-## Styling Forms and Validation Errors
-
-django-bootstrap5 template tags统一field labels、widgets、help text与errors。form仍是Django Form object，server validation不变；styling不能隐藏non-field errors或CSRF failure。
-
-<Term def="把Django bound form、field errors与submit command映射到一致Bootstrap markup的模板边界。">form rendering boundary</Term>
-
-```django
+```html title="templates/registration/login.html"
+{% extends 'base.html' %}
 {% load django_bootstrap5 %}
 {% block content %}
-  <h2>Add a new topic</h2>
-  <form action="{% url 'learning_logs:new_topic' %}" method="post">
-    {% csrf_token %}
-    {% bootstrap_form form %}
-    {% bootstrap_button button_type="submit" content="Add topic" %}
-  </form>
+<h1>登录学习笔记</h1>
+<form method="post" action="{% url 'accounts:login' %}">
+  {% csrf_token %}
+  {% bootstrap_form form %}
+  <input type="hidden" name="next" value="{{ next }}">
+  <button class="btn btn-primary">登录</button>
+</form>
 {% endblock content %}
 ```
 
-invalid POST后检查：用户input保留，error紧邻field，summary或focus让screen-reader用户发现问题，颜色不是唯一提示。button text描述command；login/new/edit forms不要共享错误action URL。
+首页只列当前用户的主题，空集合有明确提示；最小沙盒暂不提供新建主题页面，稍后的初始化脚本会创建一个主题。
 
-## Production Dependency Manifest
-
-production build必须从repository里的manifest安装相同direct dependencies。`requirements.txt`至少包含Django、django-bootstrap5、Gunicorn与database driver，并固定可验证version。开发工具可分组，不让debug toolbar进入production。
-
-<Term def="记录production所需packages与versions、供clean environment重复安装的依赖清单。">production dependency manifest</Term>
-
-```text
-Django==5.x.y
-django-bootstrap5==x.y.z
-gunicorn==x.y.z
-psycopg[binary]==x.y.z
-```
-
-以上`x.y.z`在真实项目中必须替换为已测试的精确版本，不能原样部署。`pip freeze`可捕获transitive packages，却也会混入本机无关工具；更成熟项目用lockfile从direct dependencies解析。验收是在clean environment安装、migrate、test、collectstatic并boot，不是只看manifest存在。
-
-## Gunicorn and the WSGI Boundary
-
-Django `runserver`不用于production。Gunicorn导入`learning_log.wsgi:application`，管理worker processes并监听平台提供的host/port或Unix socket。process command、module path和bind target必须与平台routing一致。
-
-```bash
-gunicorn learning_log.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3
-```
-
-worker数量不是越多越好，受memory、CPU和request workload约束。boot时不要执行long migration；schema change放release/deploy hook，web process只负责serve requests。health check应快速且不泄露secrets。
-
-<Term def="在platform router与Django application之间管理production worker processes的WSGI服务边界。">WSGI process</Term>
-
-## Production Settings from Environment
-
-SECRET_KEY、database credentials与hostnames不写入Git。production `DEBUG=False`，SECRET_KEY缺失应fail fast，ALLOWED_HOSTS只包含实际domains。database来自platform relationship或URL；local可继续SQLite，但tests要覆盖production engine的关键差异。
-
-<Term def="由environment注入secrets、hosts、database和runtime模式，并与source code分离的配置集合。">production configuration</Term>
-
-```python
-import os
-
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
-SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
-    if host.strip()
-]
-
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
-```
-
-development不要复用production secret，production也不要通过fallback获得公开default。若ALLOWED_HOSTS为空，启动check可fail，避免部署后每个request都DisallowedHost。secure cookies、HTTPS redirect、trusted origins等根据platform TLS topology设置，并运行`python manage.py check --deploy`审查。
-
-<Stepper>
-  <Step title="切换development与production config">
-  </Step>
-  <Step title="让missing secret尽早失败">
-    build或boot明确报环境变量名，日志不输出值；不要fallback到repository中的假secret。
-  </Step>
-  <Step title="验证request host和database engine">
-    smoke test使用真实deployed hostname；migration与关键queries在production database上执行。
-  </Step>
-</Stepper>
-
-## Static Files and collectstatic
-
-Bootstrap package、本地CSS与admin assets通过Django static finders发现；`collectstatic`把它们汇总到STATIC_ROOT，平台或middleware再提供。template render成功不意味着static URL可访问。
-
-```bash
-python manage.py collectstatic --noinput
-python manage.py findstatic admin/css/base.css
-```
-
-<Term def="把各apps和packages的static resources收集到versioned deploy目录并由production server提供的流程。">static asset pipeline</Term>
-
-release验证至少请求一条CSS并检查200、content type与cache headers。若HTML无样式，查看browser network中的static URL、collectstatic output和platform route；不要先改template classes。
-
-## Platform.sh Configuration and YAML Ownership
-
-第三版使用Platform.sh。配置通常描述Python runtime、build/deploy hooks、web start command、static route、database service与public route。YAML indentation就是结构，错误会导致build前validation失败。
-
-```yaml
-# Conceptual .platform.app.yaml; verify exact keys against the active platform schema.
-name: learning-log
-type: python:3.x
-
-hooks:
-  build: |
-    pip install -r requirements.txt
-    python manage.py collectstatic --noinput
-  deploy: |
-    python manage.py migrate --noinput
-
-web:
-  commands:
-    start: gunicorn learning_log.wsgi:application --bind 0.0.0.0:$PORT
-```
-
-```yaml
-# Conceptual service and route ownership.
-services:
-  database:
-    type: postgresql
-routes:
-  "https://{default}/":
-    type: upstream
-    upstream: "learning-log:http"
-```
-
-这些片段表达第三版章节的部署职责，不保证未来平台字段原样有效。把平台CLI validation作为preflight；repository里只保存non-secret infrastructure config，credentials由platform relationship/environment注入。
-
-## Git as the Release Input
-
-平台从pushed commit构建，因此untracked local file、未提交migration或只存在shell的package都不会部署。release前确认diff、tests、migration files、manifest和YAML属于同一commit。不要把generated secret或local database加入Git。
-
-```bash
-git status --short
-python manage.py makemigrations --check
-python manage.py check --deploy
-python manage.py test
-```
-
-push只是触发build，不是成功证据。记录commit SHA、platform deployment id、build result、migration result与smoke-test URL；出现failure能定位具体release。
-
-## Deployment Order and Release Gates
-
-build安装dependencies并产出static artifacts；deploy hook对target database应用migrations；web process启动Gunicorn；router/health check确认可服务。对于向后不兼容schema change，应采用expand/migrate/contract，让旧新code过渡期间都能工作，避免rolling deployment窗口出错。
-
-<Stepper>
-  <Step title="逐项通过release pipeline">
-  </Step>
-  <Step title="保存每个gate的artifact">
-    commit、dependency install log、collected static count、applied migrations、process boot和HTTP smoke result都要可追溯。
-  </Step>
-  <Step title="失败时停在最早boundary">
-    build失败不启动；migration失败不宣告healthy；static失败即使home 200也不算完成。
-  </Step>
-</Stepper>
-
-<Term def="release必须通过且有证据的build、schema、static、process与health检查点。">release gate</Term>
-
-## Troubleshooting Deployments with Logs
-
-先按时间线区分build logs、deploy/migration logs、web boot logs与request logs。ImportError查dependency/build；no such column查migration；DisallowedHost查hostname config；CSS 404查static pipeline；502/503查Gunicorn boot/bind与health。
-
-日志包含timestamp、severity、request ID和safe context，不打印SECRET_KEY、database URL、password或full user input。一次failure保存first root exception，后续cascade往往只是结果。修复后重新部署新commit，不在remote container手改造成不可复现状态。
-
-## Custom Error Pages and DEBUG=False Verification
-
-`404.html`与`500.html`在production settings下提供友好但不泄密的response。500 page不能显示stack trace、settings或query；真正diagnostics留在restricted logs。custom handler本身应简单，避免database故障时再次查询导致二次failure。
-
-```django
-{% extends "learning_logs/base.html" %}
+```html title="templates/learning_logs/index.html"
+{% extends 'base.html' %}
 {% block content %}
-  <h1>We could not complete that request.</h1>
-  <p>Please return to the home page and try again.</p>
+<h1>我的主题</h1>
+<ul>
+  {% for topic in topics %}
+    <li><a href="{% url 'learning_logs:topic' topic.pk %}">{{ topic.text }}</a></li>
+  {% empty %}
+    <li>还没有主题；请先运行本章初始化脚本。</li>
+  {% endfor %}
+</ul>
 {% endblock content %}
 ```
 
-本地用`DEBUG=False`与合法ALLOWED_HOSTS测试404/500/static，不要等production第一次发现template missing。故意请求不存在URL验证404，构造受控test view验证500并确认logs有trace、browser无敏感信息。
+主题页把条目卡片和新增表单置于两个 `col-md-6` 中。`linebreaksbr` 保留换行并继续遵守模板转义，不应为了“显示漂亮”给用户输入加 `safe`。
 
-## Production Smoke Matrix
+```html title="templates/learning_logs/topic.html"
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+{% block content %}
+<h1>{{ topic.text }}</h1>
+<div class="row g-3">
+  <section class="col-12 col-md-6" aria-label="已有条目">
+    {% for entry in topic.entries.all %}
+      <article class="card mb-3">
+        <h2 class="card-header h6">{{ entry.date_added|date:'Y-m-d H:i' }}</h2>
+        <div class="card-body">{{ entry.text|linebreaksbr }}</div>
+      </article>
+    {% empty %}<p>还没有条目。</p>{% endfor %}
+  </section>
+  <section class="col-12 col-md-6" aria-label="新增条目">
+    <h2 class="h4">新增条目</h2>
+    <form method="post">
+      {% csrf_token %}{% bootstrap_form form %}
+      <button class="btn btn-primary">保存条目</button>
+    </form>
+  </section>
+</div>
+{% endblock content %}
+```
 
-anonymous：首页200、register/login forms有样式、CSRF有效。authenticated owner：Topics list、create/edit和logout工作。second user：直接猜ids仍404。operations：admin/static可用，migration current，health endpoint稳定，logs无持续errors。mobile：navbar、forms/cards和long text不overflow。
+这份本地静态文件使触控按钮至少 44 像素高，并防止长条目撑破卡片。Bootstrap 的外部资源没有被 `collectstatic` 自动下载；离线交付需要另行合规保存资源并改变引用地址。
 
-smoke test使用专门test account和可清理data，不在production执行破坏性security test。自动browser checks与server-side tests互补：前者看assets/layout，后者验证ownership和database invariants。
+```css title="learning_logs/static/learning_logs/app.css"
+.navbar-toggler, .btn, .nav-link { min-height: 44px; }
+.nav-link { display: inline-flex; align-items: center; }
+.card-body { overflow-wrap: anywhere; }
+```
 
-<Callout type="trap" title="平台显示deployment succeeded就代表应用可用">
-build成功不证明migration、static、Gunicorn、route和核心workflow。必须通过release gates并保存HTTP、asset、schema与log证据。
+### 5. 错误页：在出错时减少依赖
+
+Django 在 `DEBUG=False` 时按约定查找顶层 `404.html`、`500.html`。这里不用依赖用户查询、外部 CSS 或普通页面上下文的基础模板：数据库已经出错时，再查询数据库生成错误页会导致二次失败。
+
+```html title="templates/404.html"
+<!doctype html>
+<html lang="zh-Hans">
+<head><meta charset="utf-8"><title>页面不存在</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body><h1>没有找到这页笔记</h1><p>地址可能已改变，也可能无权查看。</p>
+<a href="/">返回主题列表</a></body>
+</html>
+```
+
+500 不显示异常类型、路径或堆栈；管理员通过受控日志排查，不让读者通过网页看到内部信息。后面的故障路由仅在测试模块中生效。
+
+```html title="templates/500.html"
+<!doctype html>
+<html lang="zh-Hans">
+<head><meta charset="utf-8"><title>服务暂时不可用</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body><h1>暂时无法保存笔记</h1><p>请稍后重试，管理员会检查错误记录。</p>
+<a href="/">返回主题列表</a></body>
+</html>
+```
+
+### 6. 迁移、收集、导入：不监听端口也能检查
+
+密钥在本机随机生成，只存在当前进程环境中，不是云账户凭证。下面的 `testserver` 仅供 Django 测试客户端使用；正式环境换成审查过的具体域名，不能用 `*` 消除报错。
+
+```bash
+export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
+export DJANGO_DEBUG=0
+export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,testserver
+python manage.py makemigrations learning_logs
+python manage.py migrate --noinput
+python manage.py collectstatic --noinput
+python manage.py check
+python -c "from gunicorn.util import import_app; print(callable(import_app('learning_log.wsgi:application')))"
+python manage.py check --deploy
+```
+
+前四项应产生迁移、创建表、输出收集结果并通过常规检查；WSGI 导入打印 `True`。`check --deploy` 在这份**尚未配置 HTTPS**的沙盒中会报告 `security.W004`（HSTS）、`W008`（HTTPS 重定向）、`W012`（会话安全 Cookie）、`W016`（CSRF 安全 Cookie）。退出码可能仍为 0；警告不等于已安全上线。可用 `--fail-level WARNING` 把警告变成发布门禁失败。
+
+这些设置要等真实 TLS 终止、可信代理头与 HTTPS 域名确认后再配置；盲目开启代理信任或 HSTS 可能造成漏洞或锁死访问。本章没有检验 HTTPS、外部 CSS 下载、真实 Gunicorn 监听、并发、云数据库或收费平台。公开服务不能直接使用这份教学配置。
+
+初始化只创建本地测试账户，且不需要交互输入密码。用户和主题都是沙盒数据，不会访问真实账户。
+
+```python title="seed.py"
+import os
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "learning_log.settings")
+import django
+django.setup()
+from django.contrib.auth import get_user_model
+from learning_logs.models import Topic, Entry
+
+user, _ = get_user_model().objects.get_or_create(username="learner")
+user.set_password("local-practice-only-not-production")
+user.save()
+topic, _ = Topic.objects.get_or_create(owner=user, text="部署练习")
+Entry.objects.get_or_create(topic=topic, text="先检查设置，再检查交付路径。")
+print("本地测试数据已就绪")
+```
+
+运行 `python seed.py` 后，SQLite 里应有一条主题和一条条目。已有迁移时，第二次运行 `migrate` 应报告无需应用新的迁移；初始化脚本重复执行不会重复创建同内容条目。
+
+### 7. 把发布意图写清楚，但不自动执行远程动作
+
+下面是完整的**本地检查计划** `release-plan.yaml`，不是任何云平台接受的部署格式。按字符串列出前面实际运行的动作，可以检查缩进与阶段顺序；不应对来自外部的 YAML 使用 `eval` 或任意执行其中命令。
+
+```yaml title="release-plan.yaml"
+scope: local-check-only
+runtime: python3.12
+install:
+  - python -m pip install -r requirements.txt
+schema:
+  - python manage.py migrate --noinput
+static:
+  - python manage.py collectstatic --noinput
+verify:
+  - python manage.py check
+  - python manage.py test learning_logs
+entrypoint: learning_log.wsgi:application
+remote_deploy: false
+```
+
+本地从代码到数据的顺序是：修改模型后生成并审查迁移，交付时安装依赖、应用既有迁移、收集静态、导入应用并测试。实际平台可能因只读构建目录或挂载时机调整静态阶段，因此不能照抄上表作为云 YAML。Git 审核至少确认迁移文件已纳入版本、`.env` 和数据库没有纳入版本；一次回退代码也不会自动回退数据库结构。
+
+### 8. Git 微实验：保存、比较，再安全恢复
+
+这段支持附录 D 的本地版本管理范围，不是远程部署。Git 把**工作区**（正在编辑的文件）、**暂存区**（下次准备提交的内容）和**提交快照**（本地历史）分开：`add` 选择内容进入暂存区，`commit` 把暂存区保存成快照，`log` 查看历史。`git diff` 比较工作区与暂存区，`git diff --cached` 比较暂存区与当前提交；刚创建但尚未跟踪的文件不会出现在普通 `diff` 中，要先用 `status` 发现它们。
+
+<Callout type="warning" title="只在一次性的临时仓库练习">
+
+恢复会覆盖指定文件的未暂存修改；未提交且没有备份的内容可能永久丢失。先读差异、复制文件到仓库外，再明确恢复对象，不使用 `reset --hard`、`clean -fd` 或对整个目录盲目恢复。下面不操作 Learning Log 工程或本站仓库，不连接远程，也不需要真实密钥。
+
 </Callout>
 
-<Callout type="trap" title="把SECRET_KEY和database URL写进YAML最省事">
-repository会永久暴露secrets并难以按environment轮换。YAML只声明relationship与变量名称，secret values由platform管理；missing时fail fast且日志不打印内容。
+在 macOS/Linux 的 Bash 或 Zsh 中按顺序运行四段，保持同一个终端会话，需要 Git 2.23 或以上（`restore` 从该版本提供）。第一段创建唯一临时目录；每个 Git 操作都用 `-C` 明确目标，`${git_repo:?}` 在变量丢失时直接报错，避免落到当前项目。若任何命令失败，先停止排错，不跳到下一段。不要把路径变量改成已有项目。
+
+```bash
+# git-lab-1：准备；只写临时目录。
+git --version
+git_lab=$(mktemp -d "${TMPDIR:-/tmp}/pcc-git.XXXXXX") || exit 1
+git_repo="$git_lab/repo"
+mkdir "$git_repo" "$git_lab/backup" "$git_lab/no-hooks"
+git -C "${git_repo:?}" -c init.templateDir= init
+cat > "$git_repo/.gitignore" <<'IGNORE'
+.env
+.env.*
+*.sqlite3
+*.db
+*.pem
+*.key
+.venv/
+IGNORE
+printf 'release=local-check\n' > "$git_repo/release-note.txt"
+printf 'DEMO_ONLY=not-a-secret\n' > "$git_repo/.env"
+printf 'fake database, not SQLite\n' > "$git_repo/db.sqlite3"
+git -C "${git_repo:?}" status --short
+git -C "${git_repo:?}" check-ignore .env db.sqlite3
+```
+
+预期 `status --short` 只有 `?? .gitignore` 和 `?? release-note.txt`；`??` 表示未跟踪。`check-ignore` 应列出两个模拟文件。真实 `.env`、数据库和密钥**不能入版本**；`.gitignore` 只影响未跟踪文件，不会把已经入库的秘密从历史中抹去，也不是秘密扫描器。若真实密钥已经泄漏，应先撤销／轮换，再处理历史与访问范围，不能只补一条忽略规则。
+
+```bash
+# git-lab-2：只暂存点名的两个教学文件。
+git -C "${git_repo:?}" add -- .gitignore release-note.txt
+git -C "${git_repo:?}" status --short
+git -C "${git_repo:?}" diff --cached --stat
+git -C "${git_repo:?}" -c user.name='Local Git Learner' \
+  -c user.email='learner@example.invalid' \
+  -c commit.gpgSign=false -c core.hooksPath="$git_lab/no-hooks" \
+  commit -m 'Save local release note'
+git -C "${git_repo:?}" log -1 --oneline
+git -C "${git_repo:?}" status --short
+```
+
+暂存后应看到两个 `A `（左列表示暂存区的新增）；提交后 `log` 出现一条带短哈希的记录，最后的状态输出为空。提交身份只是虚构标签，`-c` 仅对本条命令生效，不改全局配置；空模板、空钩子目录与禁用签名让这个小仓库不执行自定义提交脚本。这里的 `commit` 只保存本地快照，绝不意味着已经上传或发布。
+
+```bash
+# git-lab-3：制造一处未暂存修改，先观察，再在仓库外备份。
+printf 'release=broken-css-path\n' > "${git_repo:?}/release-note.txt"
+git -C "${git_repo:?}" status --short
+git -C "${git_repo:?}" diff -- release-note.txt
+git -C "${git_repo:?}" diff --cached -- release-note.txt
+cp "$git_repo/release-note.txt" "$git_lab/backup/release-note.before-restore.txt"
+git -C "${git_repo:?}" diff -- release-note.txt > "$git_lab/backup/change.patch"
+cat "$git_lab/backup/release-note.before-restore.txt"
+```
+
+此时状态是 ` M release-note.txt`（右列表示工作区修改）；普通差异应有 `-release=local-check` 与 `+release=broken-css-path`，而暂存差异为空。仓库外副本应含 `release=broken-css-path`，补丁记录这次文本变化。**确认这两份备份存在且内容正确后**，再执行恢复。备份目录和小仓库都在临时路径，系统清理后可能消失；真实工程需另做持久且安全的备份。
+
+```bash
+# git-lab-4：仅恢复这个文件；不要改成整个目录。
+test -s "${git_lab:?}/backup/change.patch" &&
+  cmp -s "${git_repo:?}/release-note.txt" "$git_lab/backup/release-note.before-restore.txt" &&
+  git -C "${git_repo:?}" restore -- release-note.txt
+cat "$git_repo/release-note.txt"
+git -C "${git_repo:?}" diff --exit-code -- release-note.txt
+git -C "${git_repo:?}" status --short
+```
+
+前三行用 `&&` 串联：只有补丁非空、`cmp -s` 确认副本与当前文件逐字一致，才允许恢复；否则保留原文件，回到备份步骤检查，不删掉保护条件。
+
+预期文件恢复为 `release=local-check`，差异命令退出码为 0，状态输出为空，仓库外副本仍保留错误版本。这里 `restore -- 文件` 默认从**暂存区**恢复工作区；本例提交后没有再次 `add`，暂存区恰好与当前提交 `HEAD` 一致。若你已暂存新内容，它不会替你回到旧提交；应先分别检查两个 `diff`，不要靠重复恢复来碰运气。
+
+这个实验仅恢复一个文本文件，不切换版本、不撤销提交、更不操作数据库。实际交付要记录提交哈希和迁移状态：**回退代码不回退数据库**，旧代码未必兼容新表结构。数据库恢复须另外审核迁移、备份及恢复方案；静态产物也要与代码版本匹配。下一节的检查和后文排错表验证的是这些边界，不是让 Git 包办发布。
+
+## 自动化验收：真正发送测试请求
+
+把以下三段依次写入 `learning_logs/tests.py`。使用 Django 自带测试运行器，不需要浏览器或运行服务器。测试运行器使用独立测试数据库；显式强制 `DEBUG=False`，否则看见的可能是调试页面。断言状态码与正文，而不是只验证“不报异常”。
+
+```python title="learning_logs/tests.py"
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase, override_settings
+from django.urls import path
+from django.contrib.staticfiles.storage import staticfiles_storage
+from learning_log.urls import urlpatterns as normal_urls
+from .models import Topic, Entry
+
+def explode(request):
+    raise RuntimeError("test-only-marker")
+
+urlpatterns = normal_urls + [path("__failure__/", explode)]
+
+@override_settings(DEBUG=False, ALLOWED_HOSTS=["testserver"],
+                   ROOT_URLCONF="learning_logs.tests")
+class DeliveryTests(TestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user("owner", password="test-only")
+        other = get_user_model().objects.create_user("other")
+        self.topic = Topic.objects.create(owner=self.owner, text="部署练习")
+        self.foreign = Topic.objects.create(owner=other, text="不可见主题")
+        Entry.objects.create(topic=self.topic, text="<script>bad()</script>")
+        self.url = f"/topics/{self.topic.pk}/"
+
+    def test_anonymous_redirect(self):
+        self.assertRedirects(self.client.get("/"), "/accounts/login/?next=/")
+```
+
+第二段检查导航、绑定错误、样式类和越权 POST。卡片中的恶意标签被转义，说明样式增强没有破坏原来的安全边界。
+
+```python title="learning_logs/tests.py（追加2）"
+    def test_form_card_and_owner(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(self.url)
+        for expected in ["card-body", "col-md-6", "navbar-expand-lg",
+                         "bootstrap", "退出", "&lt;script&gt;"]:
+            self.assertContains(response, expected)
+        empty = self.client.post(self.url, {"text": ""})
+        self.assertTrue(empty.context["form"].is_bound)
+        self.assertIn("text", empty.context["form"].errors)
+        self.assertContains(empty, "is-invalid")
+        valid = self.client.post(self.url, {"text": "新的条目"})
+        self.assertRedirects(valid, self.url)
+        self.assertTrue(self.topic.entries.filter(text="新的条目").exists())
+        blocked = self.client.post(f"/topics/{self.foreign.pk}/", {"text": "越权"})
+        self.assertEqual(blocked.status_code, 404)
+        self.assertEqual(self.foreign.entries.count(), 0)
+
+    def test_login_logout_and_csrf(self):
+        self.assertTrue(self.client.login(username="owner", password="test-only"))
+        self.assertEqual(self.client.get("/accounts/logout/").status_code, 405)
+        strict = Client(enforce_csrf_checks=True)
+        strict.force_login(self.owner)
+        self.assertEqual(strict.post("/accounts/logout/").status_code, 403)
+        strict.get(self.url)
+        token = strict.cookies["csrftoken"].value
+        self.assertEqual(strict.post("/accounts/logout/", {
+            "csrfmiddlewaretoken": token}).status_code, 302)
+```
+
+第三段使用故意抛异常的**测试专用路由**。`raise_request_exception=False` 才会拿到 500 响应；它不会掩盖服务器日志。静态断言同时验证哈希路径、实际文件内容和不访问数据库。
+
+```python title="learning_logs/tests.py（追加3）"
+    def test_error_pages_and_host(self):
+        self.assertContains(self.client.get("/absent/"), "没有找到这页笔记", status_code=404)
+        quiet = Client(raise_request_exception=False)
+        with self.assertLogs("django.request", level="ERROR") as captured:
+            response = quiet.get("/__failure__/")
+        self.assertContains(response, "暂时无法保存笔记", status_code=500)
+        self.assertNotContains(response, "test-only-marker", status_code=500)
+        self.assertIn("test-only-marker", "\n".join(captured.output))
+        self.assertEqual(self.client.get("/", HTTP_HOST="evil.invalid").status_code, 400)
+
+    def test_static_without_database(self):
+        url = staticfiles_storage.url("learning_logs/app.css")
+        self.assertNotEqual(url, "/static/learning_logs/app.css")
+        with self.assertNumQueries(0):
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        body = b"".join(response.streaming_content)
+        self.assertIn(b"min-height: 44px", body)
+        self.assertFalse(settings.DEBUG)
+```
+
+先完成收集，再运行测试。最后的缺密钥命令**应失败**；如果它成功了，配置中存在不应有的默认密钥。严禁为了得到绿色结果而删除这个检查。
+
+```bash
+python manage.py test learning_logs -v 2
+env -u DJANGO_SECRET_KEY python manage.py check
+```
+
+这五个测试方法覆盖未登录跳转、有效和无效表单、越权、POST 退出、CSRF、Host、静态文件及 404/500。它们不证明导航按钮在真实浏览器能展开，也不证明 CSS CDN 可用。图中的缺表故障可在临时数据库副本中进一步复现，不能在真实学习数据上删表。
+
+## 常见误区：按最先出错的边界找原因
+
+<Callout type="trap" title="首页 200，但没有样式">
+
+**现象 →** 页面内容存在，按钮没有 Bootstrap 外观。
+
+**原因 →** HTML、外部 Bootstrap 资源和本地 CSS 是不同请求。
+
+**修法 →** 分别检查资源 URL；对本地文件核对 collectstatic 与 STATIC_ROOT，不能只重跑数据库迁移。用图的静态故障分支定位。
+
 </Callout>
 
-## 本章回顾：从可读界面到可运营release
+<Callout type="trap" title="设置 DEBUG=False 后全站 400">
 
-1. django-bootstrap5提供responsive shell、navigation、forms和cards，但必须验证auth与mobile states。
-2. production manifest让clean build安装Django、Bootstrap、Gunicorn与database driver。
-3. production configuration从environment读取secret、hosts与database，DEBUG必须关闭。
-4. collectstatic、migrate与Gunicorn各有独立artifact和failure boundary。
-5. Platform YAML、Git commit、logs、custom error pages和smoke matrix构成部署闭环。
+**现象 →** 正常路由也收到 Bad Request。
+
+**原因 →** Host 未在 ALLOWED_HOSTS，或把带协议的整段网址当成主机名。
+
+**修法 →** 在环境中列出准确主机名并查 DisallowedHost；不要用星号绕过检查，CSRF 的可信来源又是另一项设置。
+
+</Callout>
+
+<Callout type="trap" title="错误页面写好了，仍看见堆栈">
+
+**现象 →** 请求显示调试详情，或测试直接抛异常。
+
+**原因 →** DEBUG 仍开启，或测试客户端默认重新抛出异常。
+
+**修法 →** 用独立进程核对调试开关；测试 500 时关闭异常重抛，并断言正文没有敏感标记、日志确有记录。
+
+</Callout>
+
+<Callout type="trap" title="推送了代码，就以为数据库也被上传">
+
+**现象 →** 应用能启动，查主题却报缺表，或者远程没有本地笔记。
+
+**原因 →** Git 不传递数据库状态；迁移只管理结构，不搬运用户数据。
+
+**修法 →** 应用既有迁移，另行设计数据迁移与备份。本章只验证沙盒数据库，不执行真实推送。
+
+</Callout>
+
+## 小结与练习
+
+- 两个断点分别控制内容列数与导航展开。
+- 表单样式与卡片不能替代认证、验证和所有权检查。
+- 环境、迁移、静态和进程必须分别验收。
+- 历史平台配置不是当前可执行部署承诺。
+- 200、400、404、500 与启动失败指向不同边界。
+
+<div className="[&_button]:min-h-11 [&_button]:min-w-11">
 
 <Exercises>
 
-**问题 1：production页面HTML正常但完全没有样式，如何定位？**
+**问题 1：** 在交互图中依次设置 767、768、991、992 像素，预测列数与导航状态。把主题模板的 `col-md-6` 改成 `col-lg-6` 后，怎样同步修改图的代码，才不会误导读者？
 
-<Answer>用browser network确认CSS URL/status/content type；检查template已加载Bootstrap tags、dependency已在production manifest安装、collectstatic输出含目标files、STATIC_ROOT/route正确。HTML 200不代表static gate通过，修复后直接请求CSS并检查cache headers。</Answer>
+<Answer>
 
-**问题 2：一份安全production settings至少要如何处理DEBUG、SECRET_KEY与ALLOWED_HOSTS？**
+原规则依次是“一列／折叠、两列／折叠、两列／折叠、两列／横排”。模板改成 `col-lg-6` 后，768 至 991 应仍是一列。修改本章组件 `deployingSnapshot` 中的 `columns: width < 768 ? 1 : 2` 为阈值 992，同时改控件提示、图注和正文；不要只改文字。保持菜单断点为 992，逐个测试 991 与 992，并检查重置仍回到 390、一列、菜单关闭。
 
-<Answer>DEBUG默认false；SECRET_KEY只从environment读取且缺失立即boot failure，不记录value；ALLOWED_HOSTS来自明确deployed domains并由真实Host smoke test验证。database credentials同样externalize，再运行check --deploy并测试404/500不泄露stack。</Answer>
+</Answer>
 
-**问题 3：从Git push到宣布release成功需要哪些证据？**
+**问题 2：** 独立实现一个“未登录者能看登录表单，但不能看到任何私有主题”的回归测试；再给登录表单提交错误密码，验证错误没有被样式层吞掉。
 
-<Answer>记录commit SHA；clean build安装locked dependencies并collectstatic；deploy hook成功migrate target database；Gunicorn按平台socket/port启动；health、home、login、static和owner workflow smoke通过；logs无持续root errors。任一gate失败都不能只凭平台绿色状态宣布完成。</Answer>
+<Answer>
+
+在 `DeliveryTests` 中增加下面方法。它不需要真实密码或云账户。请求主题直接检验服务端门禁，检查登录失败后的非字段错误，避免只看按钮颜色。
+
+```python
+    def test_public_login_private_topics(self):
+        login = self.client.get("/accounts/login/")
+        self.assertContains(login, "登录学习笔记")
+        self.assertContains(login, "form-control")
+        self.assertNotContains(login, self.topic.text)
+        private = self.client.get(self.url)
+        self.assertEqual(private.status_code, 302)
+        wrong = self.client.post("/accounts/login/", {
+            "username": "owner", "password": "wrong-password",
+        })
+        self.assertEqual(wrong.status_code, 200)
+        self.assertTrue(wrong.context["form"].non_field_errors())
+        self.assertNotIn("_auth_user_id", self.client.session)
+```
+
+</Answer>
+
+**问题 3：** 同一个版本出现三条报告：Gunicorn 导入失败；HTML 是 500 而 CSS 是 200；HTML 是 200 而 app.css 是 404。你先查哪些证据？如果 `check --deploy` 只输出四个警告，能宣布上线安全吗？
+
+小分问：临时 Git 仓库中未暂存的改动想放弃，恢复前后各查什么？回退代码能否同时回退数据库？
+
+<Answer>
+
+第一种先看启动日志和密钥注入，再查依赖是否含 Gunicorn、模块名是否正确，不先改模板。第二种说明静态支路可用，查 500 日志中的缺表／其他异常与 `showmigrations`，不能未经核实就认定只有迁移问题。第三种查静态清单、哈希文件和路径映射；迁移不会修复 CSS。四个 HTTPS 相关警告不是验收通过，更没有证明代理头可信、证书有效或 Cookie 在真实 HTTPS 下正确。还应核对当前平台文档、备份与回退策略；本章未执行云部署，因此只能报告本地检查结果。
+
+Git 小分问：先用 `status` 确认目标，分别查看 `diff` 与 `diff --cached`，把要覆盖的文件复制到仓库外并检查备份；只对确认过的文件执行 `restore -- 文件`，再检查内容、差异和状态。默认恢复来源是暂存区，不必然是旧提交；没有提交或备份的修改可能丢失。代码快照不含数据库状态，回退前要独立检查迁移兼容性和数据备份，也不能把 `.env`、数据库或密钥提交进去。
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+</div>
+
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="responsive shell" definition="按viewport和session state组织navigation、content与commands的base页面骨架。" />
-  <GlossaryItem term="form rendering boundary" definition="把bound form、errors与submit command映射到一致Bootstrap markup的位置。" />
-  <GlossaryItem term="production dependency manifest" definition="记录production packages与versions、支持clean install的依赖清单。" />
-  <GlossaryItem term="WSGI process" definition="在platform router与Django application间管理workers的服务边界。" />
-  <GlossaryItem term="production configuration" definition="由environment注入secrets、hosts、database与runtime mode的配置集合。" />
-  <GlossaryItem term="static asset pipeline" definition="收集apps与packages静态资源并由production server提供的流程。" />
-  <GlossaryItem term="release gate" definition="release必须通过且有证据的build、schema、static、process与health检查点。" />
+  <GlossaryItem term="响应式布局">按可用宽度改变页面排列。这里 768 控制内容两列，992 控制导航横排，不改变用户权限。</GlossaryItem>
+  <GlossaryItem term="绑定表单">带着用户提交内容的表单对象；验证失败后把同一对象交回模板，才能显示输入与错误。</GlossaryItem>
+  <GlossaryItem term="WSGI">让 Python Web 服务器调用 Django 的接口。本例入口是 learning_log.wsgi 中的 application。</GlossaryItem>
+  <GlossaryItem term="环境变量">进程启动时从代码外部获得的字符串配置。不是自动加密的保险箱，也不会自动从 .env 加载。</GlossaryItem>
+  <GlossaryItem term="静态收集">把应用的 CSS 等文件集中到发布目录；生成文件并不等于远程服务器已经提供了它。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 20: Styling and Deploying an App" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 资料核验与使用边界
+
+- [出版社第三版图书页](https://nostarch.com/python-crash-course-3rd-edition)：本次 403，只作目录来源，不声称读过完整章节。
+- [作者的 Django 部署更新](https://ehmatthes.github.io/pcc_3e/updates/deploying_django/)：200，核对 Platform.sh → Upsun 变化以及当前 Scalingo 替代路线；本文不复制其正文或执行其账户步骤。
+- [Django 5.2 部署检查清单](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/)、[静态部署](https://docs.djangoproject.com/en/5.2/howto/static-files/deployment/)、[错误视图](https://docs.djangoproject.com/en/5.2/ref/views/)：均 200，核对设置、静态与 404/500 行为。
+- [django-bootstrap5 标签](https://django-bootstrap5.readthedocs.io/en/latest/templatetags.html)、[Bootstrap 5.3 导航](https://getbootstrap.com/docs/5.3/components/navbar/)：均 200，核对表单渲染、资源标签和导航断点；本地使用 django-bootstrap5 26.3。
+- [Upsun Fixed 配置](https://fixed.docs.upsun.com/create-apps/app-reference.html)、[当前 Upsun Cloud Django 指南](https://developer.upsun.com/docs/get-started/stacks/django)：均 200，分清配置入口与运行时约定，没有云账户实测。
+- [Gunicorn 当前快速开始](https://gunicorn.org/quickstart/)、[WhiteNoise Django 集成](https://whitenoise.readthedocs.io/en/stable/django.html)：均 200，核对应用入口、静态中间件与存储配置。旧 Gunicorn stable/run 文档地址此次 404，未把失效页当作证据。
+
+- [Git 官方入门](https://git-scm.com/docs/gittutorial)、[`git diff`](https://git-scm.com/docs/git-diff)、[`git restore`](https://git-scm.com/docs/git-restore)、[忽略规则](https://git-scm.com/docs/gitignore)、[`git commit`](https://git-scm.com/docs/git-commit)：2026-09-24（Asia/Shanghai）补核，均 HTTP 200；核对暂存／比较／恢复来源与忽略规则边界。微实验为独立教学，不声称读取原书附录 D 正文。
+
+以上资料限定事实来源，不构成对原书全文的授权。本文为按目录范围独立撰写的中文教学与本地实验，不宣称原书或平台文档使用本站许可证。本地测试不能取代真实浏览器和部署环境的验收。
+
+<Attribution mode="independent-rewrite" sourceBasis="outline-only" workTitle="Python Crash Course, Third Edition · Chapter 20: Styling and Deploying an App" sourceUrl="https://nostarch.com/python-crash-course-3rd-edition" />

@@ -1,176 +1,565 @@
 ---
-title: "第4章 Trees：从二叉搜索到多路外存索引"
+title: "第4章 Trees：顺序、高度与外存页"
 type: C
 section: "线性结构与树"
 order: 3
-description: "按第3版八节完整重构树术语、二叉树、BST、AVL、Splay、遍历、B-Tree 及标准库 set/map，并核查高度、不变量与旋转。"
+description: "从树的八组基础知识出发，用可执行 C++17、真实旋转和外存页图分别检查顺序、数据完整性与高度保证。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+officialUnitId: dsaa3-04
+practiceMode: code
+draft: true
+qualityVersion: 2
 ---
 
+import {
+  DsaTreesRotationLab,
+  DsaTreesBTreeFigure,
+} from "@/components/mdx/dsa-cpp/dsa-trees-rotation-lab";
 
-## 从“树快不快取决于高度”开始
+{/* 决策卡：保留 dsaa3-04 八组官方范围，不把原章缩为 AVL。预备知识/二叉树→实际父子边与高度；BST/AVL→保留中间子树的根旋转与丢键故障；Splay→旋转图+可执行双旋；遍历→模型实际三序输出；B树→页分裂专图；set/map→标准语义代码对照。C型，code，所有高亮术语收于Glossary。详细动笔前决策见本批trees-worker/PLAN.md。 */}
 
-tree preliminaries（）先建立成本坐标。树操作通常沿一条 root-to-node path 前进，时间取决于 height h，而不是只取决于节点数 N。
+## 学习目标
 
-先预测把1到10000按升序插入普通 BST。每个新 key 都落在最右侧，树退化成 linked list，最后一次 search 走近10000层；若保持平衡，height 约为 log2 10000，小于14。写“BST search O(log N)”而不附 balance condition 是错误的。
+<Objectives>
 
-官方八节依次为 **Tree Preliminaries、Binary Trees、Binary Search Trees、AVL Trees、Splay Trees、Tree Traversals、B-Trees、Sets and Maps in the Standard Library**。它们不是八种互斥容器，而是从通用层次结构逐步加入 arity、ordering、balance、access adaptation 与 storage-page constraints。
+- 能检查树的顺序、高度与键集合，解释普通搜索树、AVL、伸展树及外存页树的不同保证。
+- 能修改 C++17 旋转与删除代码，用精确遍历序列检验根、子树及重复键处理。
+- 能回答：为什么旋转后中序仍递增，却可能丢了键；为什么 `map[key]` 也可能改变容器？
 
+</Objectives>
 
-## 4.1 Preliminaries
+## 直觉：路径短，不等于东西没丢
 
-root 没有 parent；除 root 外每个 node 恰有一个 parent；从 ancestor 到 descendant 的 edges 构成 path。node depth 是从 root 到它的 edge 数，tree height 是最深 node 的 depth。leaf 没有 children，subtree 由某 node 及全部 descendants 构成。
+在一张分岔地图上找地址，每到一个路口便排除一半方向，往往比逐个找快。但若地图画成一条长走廊，就必须一路走到底；仅有分岔的外形并不能保证省事。
 
-含 N 个 nodes 的 tree 恰有 N-1 条 parent-child edges。证明可从“除 root 外每个 node 各贡献一条 incoming edge”得到。这个关系用于检查 clone、serialize 和 deletion 是否丢边或成环。
+重新连接路口可以缩短路线，却也可能把一个街区从地图上抹掉。本章同时检查“找路是否更短”和“原来的地址是否都还在”，避免只盯着漂亮的形状。
 
-## 4.2 Binary Trees
+## 概念：八组范围，三条检查线
 
-binary trees（）的左右位置有语义，即使只有一个 child 也要区分 left/right。height 为 h 的 binary tree：
+### 1. 树的预备知识（Preliminaries）：谁归谁管
+
+<Term def="一个根与若干互不相交子树递归组成的层次结构">树</Term>
+中，根没有父节点，其余每个节点恰有一个父节点；没有孩子的是叶。某个节点连同它的全部后代构成子树。路径由相接的边组成，本文按**边数**计长。
+
+<Term def="从根到节点经过的边数">深度</Term>描述节点的位置；
+<Term def="节点到其最深叶子的最长路径边数；空树约定为负一">高度</Term>
+描述向下还要走多远。单节点高度为 0，空树高度约定为 −1。实验初始根 40 的高度为
+2，叶 10 的深度为 2。每个非根节点各提供一条入边，所以非空树有 N−1
+条边；这只是必要检查，单看边数不能排除环或不连通。
+
+参看下方实验的真实连线。通用树允许任意多个孩子：目录可用“孩子数组”，也可用“第一个孩子／下一个兄弟”两个链接表示，后者的兄弟链接不等于原树的孩子边。练习 1 会用边、深度和遍历一起核验。
+
+### 2. 二叉树（Binary Trees）：左右是位置，不是大小
+
+<Term def="每个节点有区分左右的两个孩子位置，每个位置可以为空">二叉树</Term>
+不自动要求键有序。只有一个孩子时，左孩子和右孩子也是不同形状。表达式树可把运算符放在内部、操作数放在叶子：例如根为乘号、左孩子为加号、右孩子为
+3，就能保存括号结构，不适用按数值大小找路。
+
+实验只用数值键，仍然展示了二叉树的左右结构：初始 30 是 20 的右孩子，右旋后变成 40 的左孩子。**同一个节点换了父节点，但不能消失**。若高度是 h，链状树最少 h+1 个节点；第 d 层至多有 2 的 d 次方个节点，逐层填满才能达到最大数量。下一节给出完整上下界。
+
+### 3. 二叉搜索树（BST）：约束整个子树
+
+<Term def="左侧后代全较小、右侧后代全较大的二叉树">二叉搜索树</Term>
+将比较结果变成路径方向。约定键唯一，重复插入不改变树。查找与插入每层只选一个孩子，代价是
+O(h+1)，不是无条件 O(log N)。升序插入会形成长度 N
+的右链；实验选择“长链”可看到这一反例。
+
+删除叶子只需断开链接；一个孩子时让父链接接到孩子；两个孩子时用<Term def="中序中紧跟当前键的键，即非空右子树的最小键">后继</Term>替换当前键，再在右子树删除那个后继。后继没有左孩子，因此第二次删除退化为简单情况。第六节的 `erase` 以引用修改拥有该子树的链接，删除根也不例外。
+
+只比较父子会漏错：根 40 的左孩子 20 的右孩子若是 45，每一条局部边都看似正确，但 45 仍违反根的左侧范围。完整检查要传递上下界，或在键唯一的前提下检查中序**严格**递增。
+
+### 4. AVL 树：每一处都要平衡
+
+<Term def="每个节点左右子树高度差的绝对值至多为一的搜索树">AVL 树</Term>
+在有序之外增加逐节点的高度约束。
+<Term def="左子树高度减右子树高度">平衡因子</Term>取 −1、0、1
+才合格；仅根合格还不够。插入后沿原路径返回、更新高度，修复第一次失衡：LL
+右旋，RR 左旋，LR 先左旋左孩子再右旋，RL 先右旋右孩子再左旋。
+
+<Term def="局部改接父子边，同时保持中序顺序的变换">旋转</Term>
+必须保留中间子树。右旋时设旧根 q、左孩子 p、中间子树 B 为 p 的右子树：先把 B
+接成 q 的左子树，再把 q 接成 p 的右子树，最后令**外部根链接指向 p**。因为 B
+中所有键满足 p＜B＜q，改接后仍有序。若缓存高度，先更新下降的 q，再更新上升的 p。
+
+下方根旋转实验可验证 LL/RR、键完整性与高度；LR/RL 选项故意提醒“先旋孩子”，不是自动修复器。实际双旋见练习 2 的代码修改。AVL 删除也沿路径向上更新并可能多处旋转；作者第三版配套 `AvlTree.h` 的 `remove` 留为未实现，本章不将其冒充现成实现。
+
+### 5. 伸展树（Splay Trees）：付费重排访问路径
+
+<Term def="访问后把目标或查找终止节点通过规定旋转提升到根的搜索树">伸展树</Term>
+不要求任何时刻都满足 AVL 平衡。设访问节点 x、父 p、祖父 g：若 p 已是根，做一次
+zig；若 x 与 p 同为左孩子或同为右孩子，zig-zig **先旋 g 与 p，再旋 p 与
+x**；方向相反时，zig-zag **先旋 p 与 x，再旋 g 与
+x**。两类都有镜像情况，不能用“反复让 x 单旋上去”替代算法。
+
+例如链 50→30→10 向左下降，访问 10 时依次右旋根 50、右旋新根 30，结果根 10、右孩子 30、右孙 50。形状依旧是链！在实验的长链上连续左旋可观察同向的根变换；第六节 `splay` 给出完整搜索路径递归和左右两类配对，而非把这个根按钮冒充完整伸展操作。
+
+<Term def="对一串操作的总代价作保证，而非承诺每次操作都快">摊还复杂度</Term>
+区别于随机输入下的平均时间。伸展树一次访问最坏可为
+O(N)；从空树开始的标准操作序列每次摊还 O(log(N+1))（N
+为序列最大规模）。任意初始树还要计入初始势能项，不能推断第一次深链访问只花对数时间。热点键可靠近根，但硬实时、每次延迟必须有上界的场景不应据此选它。[原论文
+§2–3](https://www.cs.cmu.edu/~sleator/papers/self-adjusting.pdf)证明了这一序列保证。
+
+### 6. 树的遍历（Tree Traversals）：访问时刻决定输出
+
+<Term def="按固定次序访问每个节点的过程">遍历</Term>
+在递归入口输出就是前序（根、左、右），左右递归之间输出就是中序（左、根、右），退出时输出就是后序（左、右、根）。实验初始前序为
+`40 20 10 30 50`，中序为 `10 20 30 40 50`，后序为 `10 30 20 50
+40`；按钮每次实际重新计算这些序列。
+
+前序适合先处理目录再走子目录；中序仅对搜索树产生有序键；后序适合先累计子目录大小再计算父目录，或先释放孩子再释放父节点。层序则用队列，先根再逐层左右扩展，初始输出 `40 20 50 10 30`。所有完整遍历耗时 O(N)，递归辅助栈为 O(h+1)，层序队列大小取决于最宽层。
+
+只用前序保存键无法唯一恢复任意二叉树，通常还须记录空孩子或其他形状信息。代码的三序断言验证的不只是“排序好了”，还验证旋转前后的结构确实不同。
+
+### 7. B 树（B-Trees）：一次读一页，比一次追一个指针划算
+
+<Term def="节点含多键、所有叶同深的多路搜索树">B 树</Term>
+针对
+<Term def="把数据页在慢存储和内存之间搬运次数作为主要成本的模型">外存模型</Term>
+：一个页容纳许多键和孩子地址，一次读页便排除多个区间。节点内用二分查找决定下一页，页内
+CPU 比较与页 I/O 是两个成本，不能混为一个常数。
+
+**本章采用最小度数 t≥2 的约定**，不用含糊的“阶”。非根节点有 t−1 到 2t−1 个键；含 k 个键的内部节点有 k+1 个孩子，即 t 到 2t 个。非空根至少一个键；内部根至少两个孩子；空树允许空根。所有叶子同深。教材也可能用“最大孩子数 M”或其他页容量约定；本文取 M=2t，不能把不同约定的上下限直接混用。
+
+<DsaTreesBTreeFigure />
+
+图中 t=2，满页 `[10,20,30]` 在插入 40 前分裂，20 提升为新根，两个叶页分别保留 10 与 30，再把 40 插到右页。多余的键不是丢掉，而是换到父页。删除若使非根页少于 t−1 个键，优先从富余兄弟经父分隔键借一个，否则将该页、父分隔键与兄弟合并；空内部根缩成唯一孩子，所有叶仍同深。练习 3 计算实际页数、分裂和借键边界。
+
+### 8. 标准库 set 与 map：买保证，不买指定树形
+
+<Term def="保存唯一键的容器；map 还关联一个值">set 与 map</Term>
+提供按键查询和有序迭代；常见实现是平衡搜索树，但 C++17
+标准不要求某一种树布局。比较器须满足
+<Term def="允许等价组的自洽严格比较；等价表示双向比较都为假">严格弱序</Term>
+。唯一键的“相同”是 `!comp(a,b) && !comp(b,a)`，不一定是 `a==b`。
+
+`set` 迭代器不能修改键，`map` 元素类型是 `pair<const Key,T>`，可改映射值但不能原地改键破坏排序。按键 `find`、普通单元素插入及按键删除具有对数复杂度；不要将此笼统套给所有重载，例如按迭代器删除为摊还常数。插入通常不使既有迭代器失效，删除仅使被删元素的迭代器失效。
+
+`map[key]` 在键不存在时插入默认构造值，`int` 得到 0。只想查存在性用 `find`，要缺失时报错用 `at`。本章明确使用 **C++17**，不使用 C++20 才加入的 `contains`。下方独立程序与练习 3 将这一副作用变成可核验的大小差异。[N4659 §26.2.6、§26.4.4.3](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4659.pdf)是语义核对依据。
+
+## 高度推导：节点数怎样限制路径长度
+
+符号：N 是非空树节点总数；h 是按边数计算的树高；S(h) 是高度 h 的 AVL 最少节点数；t 是 B 树最小度数；K 是 B 树键总数。
 
 $$
-h+1 \le N \le 2^{h+1}-1
+h+1 \le N \le \sum_{d=0}^{h}2^d=2^{h+1}-1
 $$
 
-左边是完全退化链，右边是每层填满的 full tree。反推任意 N-node binary tree 的最小可能 height 约为 log2 N，最大为 N-1。
+这表示二叉树从一条长链到层层填满，两端分别给出最少和最多节点；例如 N=5 时 h 可以从 2 到 4，而非必然为 2。
 
+$$
+\lceil\log_2(N+1)\rceil-1\le h\le N-1
+$$
 
-binary expression tree 的 leaves 是 operands，internal nodes 是 operators；filesystem tree 通常不限两个 children，需要 first-child/next-sibling 或 child vector。树的 shape 与 node payload 是两个维度。
+这是上式分别解出 h：左边只给出可能的最低高度，不能拿来当任意二叉树的实际高度。
 
-## 4.3 The Search Tree ADT — Binary Search Trees
+$$
+S(-1)=0,\quad S(0)=1,\quad S(h)=1+S(h-1)+S(h-2)
+$$
 
-binary search trees（）把 comparison result 转成 path direction。第3版默认忽略 duplicate；若需要 multiset，必须把 count 或 tie policy 写入 invariant。
+AVL 想达到高度 h 又用最少节点，较高孩子必须为 h−1，另一个最低只能为 h−2，再加根。依次得到 0、1、2、4、7、12；这个斐波那契式增长是指数级，所以反过来高度是 O(log N)。
 
+$$
+K\ge 1+2(t-1)\sum_{i=0}^{h-1}t^i=2t^h-1
+$$
 
-官方 `BinarySearchTree.h` 用 `BinaryNode*& t` 让递归 helper 能改写 parent 的 child pointer：
+非空 B 树的最稀内部根只有两个孩子，下一层以后至少乘 t，每个非根节点至少 t−1 个键；因此查找经过 h+1 页，为 O(1+log_t(K+1)) 次页访问。页缓存、页内查找和实际填充率还会影响耗时。
+
+## 交互：先预测，再把边接过去
+
+猜一猜：默认树右旋后，键 30 的父节点是谁？勾选故障再做同一次旋转，中序还会递增吗？
+
+<DsaTreesRotationLab />
+
+先右旋：根从 40 变 20，30 接到 40 的左侧，中序五个键全保留。再左旋应恢复原结构。然后“重置全部”，勾故障并右旋：30 消失，中序仍严格递增，但“键集合”报告失败。这是**真实改坏模型**，而不是切换一条预设红字。切换 LL/RR 看一次旋转恢复平衡；切换空树看安全拒绝；切换长链看局部旋转不保证全局平衡。
+
+实验只有输入树、左右旋转、故障开关、重置五个主控件。SVG 只表示二叉树，B 树页分裂另图展示；不承诺在这里执行 B 树删除或整套 AVL/Splay 自动操作。
+
+## C++17：从完整程序检验不变量
+
+以下是独立编写的教学程序，不是作者代码的复制，也不是生产 AVL 容器。`unique_ptr` 表示独占节点所有权，`std::move` 转交所有权；无共享子树。高度每次递归重算以便审计，不冒充常数时间缓存；`balanced` 的这种验证写法最坏为 O(N²)，不是 AVL 容器的操作成本。示例限定小树，深链递归可能耗尽栈。
+
+### 文件一：按顺序拼接 tree.cpp 的七段
+
+新建空文件 `tree.cpp`，将下面标为 `tree.cpp 1/7` 至 `7/7` 的七个 C++ 块**依次原样连接**；段与段之间的说明不要放入文件。所有声明、头文件和 `main` 均已给出，不依赖站点或作者头文件。
+
+第一段定义节点并提供唯一键插入。子树链接用引用传递，因此空根也能被填入新节点。
 
 ```cpp
-void insert(const Comparable& x, BinaryNode*& t) {
-    if (t == nullptr)
-        t = new BinaryNode{x, nullptr, nullptr};
-    else if (x < t->element)
-        insert(x, t->left);
-    else if (t->element < x)
-        insert(x, t->right);
+// tree.cpp 1/7
+#include <algorithm>
+#include <cassert>
+#include <cstdlib>
+#include <initializer_list>
+#include <iostream>
+#include <memory>
+#include <utility>
+#include <vector>
+struct Node;
+using Tree = std::unique_ptr<Node>;
+struct Node {
+    int key;
+    Tree left, right;
+    explicit Node(int k) : key(k) {}
+};
+void insert(Tree& t, int k) {
+    if (!t) t = std::make_unique<Node>(k);
+    else if (k < t->key) insert(t->left, k);
+    else if (t->key < k) insert(t->right, k);
+}
+Tree make(std::initializer_list<int> keys) {
+    Tree t;
+    for (int k : keys) insert(t, k);
+    return t;
 }
 ```
 
-deletion 分三种：
-
-1. leaf 直接删除并置 null；
-2. one child 让 parent link 绕过旧 node；
-3. two children 用 right subtree minimum 替换当前 key，再删除那个 successor。
+第二段查找只走一条路径。删除时先把旧节点移到局部所有者 `old`，再取走孩子，避免一边销毁父对象、一边读取其内部链接。两个孩子时递归删除后继的原位置。
 
 ```cpp
-if (t->left && t->right) {
-    t->element = findMin(t->right)->element;
-    remove(t->element, t->right);
-} else {
-    BinaryNode* old = t;
-    t = t->left ? t->left : t->right;
-    delete old;
+// tree.cpp 2/7
+bool contains(const Tree& t, int k) {
+    if (!t) return false;
+    if (k == t->key) return true;
+    return contains(k < t->key ? t->left : t->right, k);
 }
-```
-
-replacement 必须来自 right minimum 或 left maximum，才能保持两侧 ordering。copy assignment 先 `makeEmpty`，再递归 `clone`，确保两个 tree 不共享 nodes。
-
-
-## 4.4 AVL Trees
-
-AVL trees（）在 node 中保存 height。一次 insertion 先按 BST path 递归，再沿返回路径更新 height，找到第一个 imbalance。
-
-
-若新 key 插入 left-left 或 right-right，single rotation；left-right 或 right-left，double rotation。rotation 必须同时保持 inorder key sequence 和重新计算受影响 nodes 的 heights。
-
-最少节点数 S(h) 满足：
-
-$$
-S(h)=S(h-1)+S(h-2)+1
-$$
-
-取空树高度为 -1、单节点高度为 0，则边界条件与第一次展开是：
-
-$$
-S(-1)=0,\qquad S(0)=1,\qquad S(1)=2
-$$
-
-它按 Fibonacci 速度增长，所以 h=O(log N)。search/insert worst-case logarithmic。忠实于第3版官方代码要注意：该 `AvlTree.h` 的 insertion 完整实现，但 `remove` 明确仍是 unimplemented；本章不能把删除代码假装成原书示例已提供。
-
-## 4.5 Splay Trees
-
-splay trees（）允许单次操作 O(N)，但任意足够长操作序列的 amortized cost 是 O(log N)。重复访问热点 key 时，它会停在靠近 root 的位置。
-
-
-zig 是 parent 为 root 的单旋；zig-zig 对同方向祖孙做两次同向旋转；zig-zag 对相反方向做两次相反旋转。第3版后续完整实现采用 top-down splay：搜索时把较小/较大 fragments 暂存在 header 两侧，最后一次性重组。
-
-Splay 适合 access locality、无需每 node height/color metadata；却不适合要求每次 operation latency 都有 logarithmic worst-case 的场景。amortized guarantee 不是 per-operation guarantee。
-
-## 4.6 Tree Traversals Revisited
-
-tree traversals（）把 recursive structure 映射成线性序列：
-
-- preorder：root、left、right，适合复制/前缀表示；
-- inorder：left、root、right，BST 输出 sorted keys；
-- postorder：left、right、root，适合释放 subtree；
-- level order：按 depth，用 Queue 做 BFS。
-
-
-官方 BST `printTree` 用 inorder；`makeEmpty` 用 postorder，必须先释放 children 再 delete parent。若先删 parent 再读取 child pointers，会 use-after-free。
-
-```cpp
-void makeEmpty(BinaryNode*& t) {
-    if (t != nullptr) {
-        makeEmpty(t->left);
-        makeEmpty(t->right);
-        delete t;
+void erase(Tree& t, int k) {
+    if (!t) return;
+    if (k < t->key) erase(t->left, k);
+    else if (t->key < k) erase(t->right, k);
+    else if (t->left && t->right) {
+        Node* successor = t->right.get();
+        while (successor->left) successor = successor->left.get();
+        t->key = successor->key;
+        erase(t->right, t->key);
+    } else {
+        Tree old = std::move(t);
+        t = old->left ? std::move(old->left) : std::move(old->right);
     }
-    t = nullptr;
 }
 ```
 
-recursive traversal 时间 Θ(N)，额外 stack 是 O(h)。对退化树 h=N，递归销毁也可能 stack overflow；这是 tree shape 与 implementation strategy 的共同风险。
+第三段以输出时刻实现三种遍历。`check` 同时比较**完整预期键序列**与严格递增性；只调用 `is_sorted` 不足以发现重复键，更不能证明没丢键。
 
-## 4.7 B-Trees
+```cpp
+// tree.cpp 3/7
+void visit(const Tree& t, int order, std::vector<int>& out) {
+    if (!t) return;
+    if (order == 0) out.push_back(t->key);
+    visit(t->left, order, out);
+    if (order == 1) out.push_back(t->key);
+    visit(t->right, order, out);
+    if (order == 2) out.push_back(t->key);
+}
+std::vector<int> walk(const Tree& t, int order = 1) {
+    std::vector<int> out;
+    visit(t, order, out);
+    return out;
+}
+int height(const Tree& t) {
+    return t ? 1 + std::max(height(t->left), height(t->right)) : -1;
+}
+bool balanced(const Tree& t) {
+    return !t || (std::abs(height(t->left) - height(t->right)) <= 1
+        && balanced(t->left) && balanced(t->right));
+}
+void check(const Tree& t, std::vector<int> expected) {
+    const auto got = walk(t);
+    assert(got == expected);
+    for (std::size_t i = 1; i < got.size(); ++i)
+        assert(got[i - 1] < got[i]);
+}
+```
 
-B-trees（）针对外部存储。binary tree node 只含一个 key，随机读取一条 path 会触发许多 page I/O；B-Tree 让一个 page 装 m-1 keys 与最多 m children，一次 I/O 排除更大范围。
+第四段把中间子树转给旧根，再把旧根接给新根。末行的 `t = std::move(pivot)` 是外部根重赋值，不可省略。两个函数对空树、缺孩子均返回 `false`，不会解引用空指针。
 
+```cpp
+// tree.cpp 4/7
+bool right(Tree& t) {
+    if (!t || !t->left) return false;
+    Tree old = std::move(t), pivot = std::move(old->left);
+    old->left = std::move(pivot->right);
+    pivot->right = std::move(old);
+    t = std::move(pivot);
+    return true;
+}
+bool left(Tree& t) {
+    if (!t || !t->right) return false;
+    Tree old = std::move(t), pivot = std::move(old->right);
+    old->right = std::move(pivot->left);
+    pivot->left = std::move(old);
+    t = std::move(pivot);
+    return true;
+}
+```
 
-除 root 外节点至少半满；所有 leaves 位于同一 depth。insert 向 leaf 前进，full page split 并把 separator 提升 parent；delete 若 underflow，则从 sibling borrow 或 merge。高度约：
+第五段是独立的递归伸展版本：先在更深子树处理目标，再按同向或交叉关系执行旋转。缺失键仍将搜索终止节点移到根，调用者应比较根键判断是否找到。它与作者配套的带临时头节点的自顶向下实现不同。
 
-$$
-O(\log_m N)
-$$
+```cpp
+// tree.cpp 5/7
+void splay(Tree& t, int k) {
+    if (!t || t->key == k) return;
+    if (k < t->key) {
+        if (!t->left) return;
+        if (k < t->left->key) {
+            splay(t->left->left, k);
+            right(t); // zig-zig: first rotate the grandparent
+        } else if (t->left->key < k) {
+            splay(t->left->right, k);
+            if (t->left->right) left(t->left); // zig-zag
+        }
+        if (t->left) right(t);
+    } else {
+        if (!t->right) return;
+        if (t->right->key < k) {
+            splay(t->right->right, k);
+            left(t);
+        } else if (k < t->right->key) {
+            splay(t->right->left, k);
+            if (t->right->left) right(t->right);
+        }
+        if (t->right) left(t);
+    }
+}
+```
 
-fanout m 由 page size、key/pointer width 与 fill policy 决定。单纯增大 m 会增加 page 内 search cost，但通常可用 binary search；最重要的是减少慢层级访问。
+第六段的边界测试包括空树、唯一根、单孩子和双孩子删除；这不是只观察正常图形。最后六种输入覆盖左右 zig、zig-zig 和 zig-zag，缺失键访问也有明确根结果。
 
-## 4.8 Sets and Maps in the Standard Library
+```cpp
+// tree.cpp 6/7
+void boundaries() {
+    Tree e; assert(!left(e) && !right(e) && height(e) == -1);
+    erase(e, 9); splay(e, 9); check(e, {});
+    auto one = make({7}); assert(!left(one) && !right(one));
+    erase(one, 7); check(one, {});
+    auto child = make({7, 9});
+    erase(child, 7); assert(child->key == 9); check(child, {9});
+    auto both = make({20, 10, 30, 25, 40});
+    erase(both, 20); assert(both->key == 25);
+    check(both, {10, 25, 30, 40});
+    erase(both, 40); erase(both, 999); check(both, {10, 25, 30});
+    for (auto keys : {std::vector<int>{30, 10}, {10, 30},
+                     {50, 30, 10}, {10, 30, 50},
+                     {50, 10, 30}, {10, 50, 30}}) {
+        Tree t;
+        for (int k : keys) insert(t, k);
+        const auto expected = walk(t);
+        const int target = keys.back();
+        splay(t, target); assert(t && t->key == target); check(t, expected);
+        auto pre = keys.size() == 2 ? std::vector<int>{target, keys[0]}
+            : target == 10 ? std::vector<int>{10, 30, 50}
+            : target == 50 ? std::vector<int>{50, 30, 10}
+                           : std::vector<int>{30, 10, 50};
+        assert(walk(t, 0) == pre);
+    }
+    auto miss = make({20, 10, 30});
+    splay(miss, 25); assert(miss->key == 30);
+    check(miss, {10, 20, 30});
+}
+```
 
-标准库set与map（）通常由平衡搜索树实现，但标准只承诺 observable semantics 与 complexity，不承诺一定是某种红黑树布局。
+第七段规定精确三序和旋转后的根。编译运行时不要定义 `NDEBUG`，否则断言会被关闭。输出一行只是所有断言通过后的提示，断言本身才是检验。
 
-`set<Key>` 只保存 unique key；`map<Key,Value>` 的 iterator dereference 得到 pair，key 是 const，value 可改。ordered iteration 依据 comparator，而不是 insertion order。
+```cpp
+// tree.cpp 7/7
+int main() {
+    auto t = make({40, 20, 10, 30, 50});
+    insert(t, 30); check(t, {10, 20, 30, 40, 50});
+    assert(contains(t, 30) && !contains(t, 99));
+    assert((walk(t, 0) == std::vector<int>{40, 20, 10, 30, 50}));
+    assert((walk(t, 2) == std::vector<int>{10, 30, 20, 50, 40}));
+    assert(height(t) == 2 && balanced(t));
+    assert(right(t) && t && t->key == 20);
+    check(t, {10, 20, 30, 40, 50});
+    assert((walk(t, 0) == std::vector<int>{20, 10, 40, 30, 50}));
+    assert((walk(t, 2) == std::vector<int>{10, 30, 50, 40, 20}));
+    assert(left(t) && t && t->key == 40);
+    auto chain = make({10, 20, 30, 40, 50});
+    assert(height(chain) == 4 && !balanced(chain));
+    boundaries();
+    std::cout << "tree: all invariants passed\n";
+}
+```
 
+### 文件二：独立的 ordered.cpp
 
-官方 `mapDemo.cpp` 演示了一个重要副作用：`salaries["Jan"]` 在 key 不存在时插入 default `double{}`，即0；只读存在性查询应使用 `find` 或现代 `contains`。在 const map 上也没有 mutating `operator[]`。
+将以下一个完整块存为 `ordered.cpp`。它不使用 `tree.cpp` 的定义，直接检验标准库唯一键、顺序、只读查找与插入查询的差别。
 
+```cpp
+// ordered.cpp
+#include <cassert>
+#include <iostream>
+#include <map>
+#include <set>
+#include <string>
+#include <vector>
+int main() {
+    std::set<int> s{30, 10, 20, 20};
+    assert((std::vector<int>(s.begin(), s.end())
+            == std::vector<int>{10, 20, 30}));
+    assert(!s.insert(20).second && s.size() == 3);
+    std::map<std::string, int> salary{{"Pat", 75}};
+    assert(salary.find("Jan") == salary.end() && salary.size() == 1);
+    assert(salary["Jan"] == 0 && salary.size() == 2);
+    salary.at("Jan") = 42;
+    assert(salary.at("Jan") == 42);
+    std::cout << "ordered: 10 20 30; Jan=42; size=2\n";
+}
+```
 
-## 统一选择：你需要哪一种高度保证
+在这两个文件所在目录执行下列命令。`clang++` 可换支持 C++17 的 `g++`；有 AddressSanitizer 的环境可再加 `-fsanitize=address,undefined -fno-omit-frame-pointer`。这里只运行有保护的错误模型，不以越界或悬空指针制造“演示效果”。
 
+```bash
+clang++ -std=c++17 -Wall -Wextra -Werror -pedantic tree.cpp -o tree
+./tree
+clang++ -std=c++17 -Wall -Wextra -Werror -pedantic ordered.cpp -o ordered
+./ordered
+```
 
-## 本章回顾
+正常情况下精确输出分别为 `tree: all invariants passed` 和 `ordered: 10 20 30; Jan=42; size=2`。对照实验的前序和后序，你应能指出哪条边变了，而非只得到一个“通过”的口号。
 
-1. Tree operation cost 通常由 height 控制，N 相同的不同 shape 可差一个数量级。
-2. Binary tree 每 node 至多两个 ordered children，height 介于 log N 和 N-1。
-3. BST ordering 支持定向 search；two-child deletion 用 successor/predecessor 保持顺序。
-4. 普通 BST 无平衡保证，sorted insertion 会退化。
-5. AVL 通过四类 rotation 保持 balance factor，给出 worst-case logarithmic height。
-6. Splay 把 accessed node 移到 root，提供 amortized 而非每次 logarithmic。
-7. Inorder 输出 BST sorted keys，postorder 适合安全释放。
-8. B-Tree 用 page-sized multiway nodes 降低外存 I/O path。
-9. std::set/map 承诺 ordered associative semantics；map operator[] 会插入缺失 key。
+## 常见误区
 
+<Callout type="trap" title="有序不等于完整">
+  **现象 →** 勾故障后中序仍递增。 **原因 →** 子树 30
+  被丢弃，剩余键当然仍可能有序。 **修法 →**
+  分别检查顺序、预期键集合和高度；实验直接显示缺键，测试比较完整序列。
+</Callout>
+
+<Callout type="trap" title="旋一次就一定平衡？">
+  **现象 →** 长链做一次旋转后仍不满足 AVL。 **原因 →** 旋转只改局部边，AVL
+  要求每个节点满足高度差；伸展甚至不承诺全局平衡。 **修法 →**
+  按失衡类型旋转并沿路径维护，区别单次最坏界与序列摊还界。
+</Callout>
+
+<Callout type="trap" title="查一个工资却多了一条记录">
+  **现象 →** `salary["Jan"]` 之后大小加一。 **原因 →** `operator[]`
+  是可能插入的取值接口，不是纯查询。 **修法 →** C++17 用 `find` 或
+  `at`；改键应删除再插入，不直接改迭代器中的键。
+</Callout>
+
+## 小结与练习
+
+- 高度决定路径成本，三类检查不能互相替代。
+- 旋转、删除必须同时保住根链接和剩余键。
+- 页树优化 I/O，标准容器保证语义而非树形。
+
+<Exercises>
+
+**问题 1：默认图右旋后怎样证明没丢地址？** 给出根、边数、树高和三种遍历；再解释故障模式为何能骗过单一“递增”检查。最后比较 AVL 与伸展树的单次时间保证。
+
+<Answer>
+  根 20，5 节点、4 边，高度 2。前序 `20 10 40 30 50`，中序 `10 20 30 40
+  50`，后序 `10 30 50 40
+  20`。每条边连接唯一父节点且所有节点可达；中序与原始五键精确相同。故障丢 30
+  后仍有序，但只剩 4 节点、3 边，键集合检查失败。AVL
+  在正确维护后以对数高度限制每次搜索路径；伸展的一次访问可能沿长度 N
+  的链，不能把摊还界当本次延迟保证。
+</Answer>
+
+**问题 2：改代码实现 LR 修复，并加入安全负例。** 在 `tree.cpp` 的 `boundaries` 定义前添加一个函数，并在 `main` 中调用它。用 `{50,20,40}` 验证左孩子先左旋、根再右旋。再给右旋制造“丢中间子树”故障，说明哪个断言应当失败。
+
+<Answer>
+加入以下完整函数，再在 `main` 的 `boundaries();` 后添加 `exercise_lr();`，编译运行。原来的根旋转按钮不提供孩子选择，因此不能把两次根旋转当作这里的双旋。
+
+```cpp
+// exercise_lr: insert before boundaries(), then call from main
+void exercise_lr() {
+    auto t = make({50, 20, 40});
+    assert(!balanced(t));
+    assert(left(t->left));
+    assert(right(t));
+    assert(t->key == 40 && height(t) == 1 && balanced(t));
+    check(t, {20, 40, 50});
+    assert((walk(t, 0) == std::vector<int>{40, 20, 50}));
+}
+```
+
+安全负例在一个单独副本中将 `right` 的 `old->left = std::move(pivot->right);` 改成 `old->left.reset();`。中间子树仍暂归 `pivot->right` 所有，下一次赋值会正常释放它，不发生悬空访问，但默认树旋转后的 `check(t, {10,20,30,40,50})` 必须断言失败：实际只剩 `10,20,40,50`。恢复正确转移再运行，不要把失败版当正常答案。
+
+</Answer>
+
+**问题 3：在页树与标准容器之间选，并改掉隐式插入。** 一个 t=2 的 B 树满根 `[10,20,30]` 要插入 40，分裂后有几页？若树高为 3，最少有多少键，冷缓存查找最多沿路径读几页？删除后的叶 `[30]` 若要删 30、兄弟 `[10]` 也只有一键，可以直接借吗？最后修改 `ordered.cpp`，让查询缺失 Jan 后仍只一条记录。
+
+<Answer>
+分裂并插入后有三页：根 `[20]`、左叶 `[10]`、右叶 `[30,40]`。高度 3 时最少 `2×2³−1=15` 键，查找路径含根共 4 页。若回到根 `[20]`、叶 `[10]` 和 `[30]` 再删 30，兄弟只有 t−1 个键，不能借；应把 10、父分隔键 20 合并到同一叶，再让空根降高。页树适合页 I/O 昂贵的索引；普通内存唯一键查询应先用标准容器，不为模拟磁盘页而自造树。
+
+在 `ordered.cpp` 中，保留 `salary.find` 那条断言，**用下列块替换从 `assert(salary["Jan"]...)` 到原输出语句的四行**，保持其余文件不变。查询不再插入；预期输出改为 `lookup: missing; size=1`。
+
+```cpp
+// exercise_lookup: replacement inside ordered.cpp main
+const auto it = salary.find("Jan");
+assert(it == salary.end());
+assert(salary.size() == 1);
+std::cout << "lookup: missing; size=1\n";
+```
+
+</Answer>
+
+</Exercises>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="树">
+    以根统领互不相交子树的层次结构；不能有环或多父节点。
+  </GlossaryItem>
+  <GlossaryItem term="深度">从根往下走到节点所经过的边数。</GlossaryItem>
+  <GlossaryItem term="高度">向下到最远叶子的边数；本文空树取 −1。</GlossaryItem>
+  <GlossaryItem term="二叉树">
+    左右两个孩子位置各最多放一棵子树，不自带排序。
+  </GlossaryItem>
+  <GlossaryItem term="二叉搜索树">
+    每个节点左侧全部键较小，右侧全部键较大。
+  </GlossaryItem>
+  <GlossaryItem term="后继">按中序顺序紧挨当前键之后的键。</GlossaryItem>
+  <GlossaryItem term="AVL 树">
+    在所有节点都限制左右高度差的搜索树。
+  </GlossaryItem>
+  <GlossaryItem term="平衡因子">左子树高度减去右子树高度。</GlossaryItem>
+  <GlossaryItem term="旋转">
+    保留中序、改接局部父子边的操作；需更新外部根链接。
+  </GlossaryItem>
+  <GlossaryItem term="伸展树">
+    按 zig、zig-zig、zig-zag 把访问节点提升到根的搜索树。
+  </GlossaryItem>
+  <GlossaryItem term="摊还复杂度">
+    把一串操作的总代价摊到各次，不保证每次都快。
+  </GlossaryItem>
+  <GlossaryItem term="遍历">
+    有规则地访问全部节点，输出时刻决定前中后序。
+  </GlossaryItem>
+  <GlossaryItem term="B 树">
+    一页保存多个键、所有叶同深的多路搜索树。
+  </GlossaryItem>
+  <GlossaryItem term="外存模型">
+    重点计算数据页读写次数，而不是只数 CPU 操作。
+  </GlossaryItem>
+  <GlossaryItem term="set 与 map">
+    按比较器保存唯一键的标准容器，map 还保存键对应的值。
+  </GlossaryItem>
+  <GlossaryItem term="严格弱序">
+    双向都不小于表示等价；比较规则必须保持自洽。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与改写边界
+
+本章按 Mark Allen Weiss《Data Structures and Algorithm Analysis in C++》第三版第 4 章的**八组目录范围**独立重写。出版社页面用于确认范围；未取得原书章节全文，不宣称逐页忠实翻译、原书开放授权或拥有整书改编许可。以下正文资料分别用于核对机制，不能用目录页代替事实证据：
+
+- [作者第三版配套代码目录](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/)及 [BinarySearchTree.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/BinarySearchTree.h)：子树引用、后继删除、递归中序。
+- [AvlTree.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/AvlTree.h)：高度边界、单／双旋、先更新下降节点高度；该文件的删除未实现。
+- [SplayTree.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/SplayTree.h)与 [Sleator–Tarjan 原论文](https://www.cs.cmu.edu/~sleator/papers/self-adjusting.pdf)：作者配套自顶向下实现、论文配对旋转与摊还保证。本章 C++ 例子是独立递归版本，不声称相同实现。
+- [Pat Morin《Open Data Structures》14.2](https://opendatastructures.org/ods-cpp/14_2_B_Trees.html)：外存模型、页占用、同深叶与分裂／合并；本章显式采用 t 的最小度数约定。
+- [作者 mapDemo.cpp](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/mapDemo.cpp)和 [C++17 工作草案 N4659](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4659.pdf)：`map[]` 的插入副作用，以及 §26.2.6、§26.4.4 对比较器、迭代器和复杂度的规定。N4659 是公开工作草案，不冒充购买版 ISO 标准。
+
+上述资料在本批次实际 GET 访问成功并保留正文与 SHA-256；代码为面向 C++17 的独立教学实现，和历史作者接口分开。图中展示的是有界小树与一次页分裂，不声称实现生产级容器、完整 B 树删除或原书全部工程细节。
+
+<Attribution
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  workTitle="Mark Allen Weiss — Data Structures and Algorithm Analysis in C++, Third Edition，Chapter 4: Trees"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

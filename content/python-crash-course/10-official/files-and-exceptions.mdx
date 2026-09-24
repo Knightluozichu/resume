@@ -1,221 +1,457 @@
 ---
-title: "第10章：Files and Exceptions"
+title: "第10章：文件与异常"
 type: C
 section: "Part I · Basics"
 order: 10
-description: "用pathlib读写文件，以窄异常边界处理失败，并通过JSON保存和恢复用户数据。"
+description: "追踪路径如何命中文件、字节如何成为字符串，以及读写和 JSON 解析失败时的执行路线。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceAccess: outline-only
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: "pcc3-10"
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccFilesExceptionsLab } from "@/components/mdx/python-crash-course/v2/files-and-exceptions";
+
+{/* 独立需求分析：读者已会字符串、字典、函数，现在要使数据跨运行保留，并能解释外部文件失败而非吞掉错误。范围严格映射 pcc3-10 七项：Reading from a File、Writing to a File、Exceptions、Failing Silently、Analyzing Text、Storing Data、Refactoring。五组知识点清单：①位置与读取：Path/pathlib、工作目录、相对与绝对路径、UTF-8、read_text、splitlines、rstrip、逐行累积、数字搜索/大文件边界→目录树+字节/字符格+读文件代码；②写入：write_text、字符数、覆盖、多行、父目录→临时目录断言；③异常：try/except/else、ZeroDivisionError、FileNotFoundError、解码错误、pass→时间线分支与除法循环/多文件样例；④文本分析：split/count、空白分隔与子串统计→实验片段数+断言对照；⑤保存与重构：JSON、dumps/loads、语法与字段验证、记住并确认用户、拆分函数→JSON错误路线+保存读取与问候代码。陌生术语均以Term首现并入Glossary，API在所属概念中解释。图形决策：位置是层级选择而非流程卡片，画固定POSIX目录树；内容是编码后的有序数据，画真实十六进制字节格及对应字符格；异常是控制流分叉，画读取失败绕过处理、解析失败分流与正常出口，useTeachingTimeline逐步显示。四输入（工作目录/路径/处理/故障）改变命中节点、格子数量及路线；完整重置回初始输入与第1步。不是06字典结构、08参数绑定或09对象身份的换皮。来源边界：2026-09-23出版社403，沿用只读清单的已核目录限定范围；Python 3.13官方pathlib/json/tutorial errors/built-in exceptions文档200核技术事实，不声称核过原书正文。 */}
 
 <Objectives>
 
-- 能解释Path、relative/absolute path与working directory，实现在UTF-8下read_text/write_text
-- 能设计窄`try/except/else`边界，区分FileNotFoundError、ZeroDivisionError与unexpected bug
-- 能实现JSON load/validate/save流程，分析missing、corrupt、schema drift并完成refactoring
+- 能预测同一路径在两个工作目录中命中的文件，用 UTF-8 读写、逐行处理并验证覆盖行为。
+- 能修改实验对应代码，把文件缺失、解码失败、JSON 损坏分开处理，并统计多个文件的内容。
+- 能实现保存与确认用户名字的函数；能回答：为什么文件读成功，仍可能没有可用的用户数据？
 
 </Objectives>
 
-## 为什么文件I/O必须同时处理位置、内容和失败
+## 把结果留到下一次运行
 
-内存中的变量在进程结束后消失，file让数据跨运行保存；但I/O引入三个新边界：路径解析到哪里，bytes如何解码为text，外部状态何时可能缺失或损坏。只写happy path会让一个working directory变化或半写文件破坏整个程序。
+把程序想成一条加工线：桌上的材料下班时会清走，想让下一班接着工作，就要存到有地址的仓库里。若只把名字放在程序里的变量中，退出后就无法凭这些变量找回它。
 
-第三版使用`pathlib.Path`代替手工open/close样板。Path object负责组合路径，`read_text()`、`write_text()`执行一次性text I/O。先预测同一relative path从两个cwd启动会读取同一文件吗，以及JSON语法正确是否等于业务字段完整。
+但“去仓库取材料”不保证成功：地址可能指向另一间仓库，东西可能被搬走，取到的包装也可能已经破损。本章把找位置、取内容和处理失败分开，避免把所有问题都说成“没有文件”。
 
-<Term def="用Path对象表示并组合filesystem位置，再通过明确方法执行I/O的边界。">path boundary</Term>
+## 1. 位置与读取：先找到哪份文件
 
-## Reading from a File with pathlib
+### 路径不是文件内容
 
-<Stepper>
-  <Step title="选择relative、script-relative、absolute或write场景">
-  </Step>
-  <Step title="分离path construction与I/O">
-    创建Path不会证明文件存在；read_text才访问filesystem并可能raise。
-  </Step>
-  <Step title="记录resolved path、encoding与权限">
-    错误消息输出实际路径，统一UTF-8，并区分not found、permission和decode失败。
-  </Step>
-</Stepper>
+<Term def="用目录和文件名表示一个位置；创建路径对象本身不读取也不创建文件。">路径</Term>可以用标准库 `pathlib` 的 `Path` 表示，`/` 运算符用于拼接各段。`Path("data") / "note.txt"` 与 `Path("data/note.txt")` 表达相同的位置关系。实际访问发生在 `read_text()` 或 `write_text()` 等操作时。
 
-<Term def="不以root开头、必须相对于进程working directory或显式base解析的路径。">relative path resolution</Term>
+<Term def="进程当前用来解释相对路径的目录，用 Path.cwd() 可以查看。">工作目录</Term>不是必然等于脚本所在目录。<Term def="没有从文件系统根位置写起、需要结合基准目录解释的路径。">相对路径</Term>如 `data/note.txt`，默认从工作目录出发；<Term def="包含根位置的完整路径，不依赖当前工作目录定位。">绝对路径</Term>在 POSIX 系统中形如 `/lesson/data/note.txt`，Windows 上可形如 `C:/lesson/data/note.txt`。
+
+在下方实验的目录树中，切换工作目录会让相对路径走向另一条分支；绝对路径保持目标不变。真实程序中先输出 `Path.cwd()` 与 `path.resolve()` 有助诊断；`resolve()` 会处理符号链接和 `..`，默认不要求目标存在，所以它也不是读写成功的保证。[依据：pathlib 官方文档](https://docs.python.org/3.13/library/pathlib.html#pathlib.Path.resolve)。
+
+### 从字节到字符串，再逐行处理
+
+文件里保存的是字节。<Term def="将字符表示为字节的编码；一个字符可能占多个字节，读取时必须按兼容编码解码。">UTF-8</Term>使“茶”占 3 个字节，而 `t` 占 1 个字节。`read_text(encoding="utf-8")` 一次读取并解码为 `str`，然后关闭文件。默认换行处理会将常见的 `\r\n`、`\r` 转为 `\n`；编码不匹配可能产生 `UnicodeDecodeError`，而不是空字符串。实验按格展示字节数与字符数的不同。
+
+下面整段可以直接运行，使用临时目录自动清理样例，不会覆盖自己的文件。`splitlines()` 返回不含行尾分隔符的行列表；`rstrip()` 默认去掉末尾所有空白，只宜在需要的地方使用，不会改变磁盘文件。
 
 ```python
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-path = Path("data/pi_digits.txt")
-contents = path.read_text(encoding="utf-8")
-print(contents.rstrip())
-
-for line in contents.splitlines():
-    print(line)
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "digits.txt"
+    path.write_text("3.14\n  159\n  265\n", encoding="utf-8")
+    contents = path.read_text(encoding="utf-8")
+    print(repr(contents))
+    lines = contents.splitlines()
+    digits = ""
+    for line in lines:
+        print(line.rstrip())
+        digits += line.strip()
+    assert digits == "3.14159265"
+    assert "159" in digits
+    assert len(contents.splitlines()) == 3
+    assert path.read_text(encoding="utf-8") == contents
 ```
 
-`read_text()`一次读取全部内容，适合本书小文件；大文件应stream lines，避免把全部bytes放进memory。`splitlines()`去掉line separators并兼容不同平台newline。`rstrip()`只用于展示时去掉末尾空白，不应无条件改写领域数据。
+`repr(contents)` 会显示末尾 `\n`。普通 `print(contents)` 还会自行增加换行，所以可能出现空行；`print(contents, end="")` 保留原布局，不额外加行。拼接数字前的 `strip()` 去掉每行两端空白，使跨行搜索成为字符串搜索，结果仍不是浮点数。
 
-### relative与absolute path选择
+这类一次性读取适合小文件。很大的文本宜用 `with path.open(encoding="utf-8") as file:` 后逐行迭代；大量行拼接宜用 `"".join(...)`，避免反复创建越来越长的字符串。随脚本存放的资源可显式选 `Path(__file__).resolve().parent` 为基准，但交互解释器和笔记本不一定有 `__file__`，也不要把自己的绝对路径硬编码给所有用户。
 
-relative path便于项目迁移，但依赖base。命令行输入通常相对cwd；随module分发的resource可相对`Path(__file__).resolve().parent`；用户配置目录应使用平台API；测试传入temporary path最可控。absolute path明确但不可移植，不能把开发机目录硬编码进源码。
+## 2. 写入：覆盖旧文件，不是追加
 
-打印Path前可用`resolve()`帮助诊断，但不存在路径的解析行为要按平台理解。真正读写前仍应由operation产生具体exception，不用先`exists()`再访问造成check-then-use race。
-
-## Writing to a File
-
-`path.write_text(text, encoding="utf-8")`创建或覆盖text file并返回写入字符数。parent directory必须存在；覆盖是否允许、失败后旧文件是否保留，都应写进contract。追加日志与替换配置是不同场景，不要用同一个helper隐藏mode。
+`write_text()` 接收字符串，创建或覆盖文件，返回写入的**字符数**，不是字节数；父目录必须已经存在。需要数字时先转字符串，需要多行时自己放入 `\n`。下例接续“磁盘格”的直觉：第二次写入会替换全部旧内容，而非接在后面。[依据：读写文件](https://docs.python.org/3.13/library/pathlib.html#reading-and-writing-files)。
 
 ```python
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-output = Path("output/guest.txt")
-output.parent.mkdir(parents=True, exist_ok=True)
-written = output.write_text("Ada Lovelace\n", encoding="utf-8")
-print(f"wrote {written} characters to {output.resolve()}")
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "data" / "note.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    written = path.write_text("茶 tea\ntea\n", encoding="utf-8")
+    assert written == 10
+    assert len(path.read_bytes()) == 12  # 此样例在 POSIX 上的字节数
+    path.write_text("new\n", encoding="utf-8")
+    assert path.read_text(encoding="utf-8") == "new\n"
+    with path.open("a", encoding="utf-8") as file:
+        file.write("next\n")
+    assert path.read_text(encoding="utf-8") == "new\nnext\n"
 ```
 
-持久配置更安全的策略是先写同目录temporary file，flush并成功关闭后原子replace目标；直接覆盖时进程中断可能留下truncated file。本书示例保持简单，但要知道“write_text返回”才是本次write完成的第一份证据。
+`"a"` 明确选择追加模式；`write_text()` 没有追加参数。Windows 默认文本写入可能把 `\n` 转为 `\r\n`，所以例中的字节数断言只针对实验采用的 POSIX 环境，字符数与回读结果不受这个差异影响。若需要跨平台固定字节数，可在 Python 3.10+ 的 `write_text` 中加 `newline="\n"`。
 
-<Term def="先完成新内容写入，再以原子replace切换目标，避免读者看到半写文件的提交策略。">atomic file replacement</Term>
+不要把“方法返回”误解为防断电承诺：直接覆盖并非事务写入，中断可能留下不完整文件。重要数据应先备份并采用更可靠的写入策略；本章只演示小型学习数据，不实现数据库式持久性保证。
 
-## Exceptions：把可恢复失败变成显式分支
+## 交互实验：路径、内容与异常路线
 
-exception沿call stack传播，直到匹配handler；无人处理则打印traceback并终止当前路径。`try`应只包预期可能失败的最小语句，`except SpecificError`处理能恢复的情况，`else`放依赖成功结果的逻辑，`finally`用于无论成功失败都必须清理的资源。
+**先预测**：默认 `data/note.txt` 换到 `/lesson/archive` 后，内存格数量与片段数怎样变？读取方式换为 `json.loads`，同一份茶文本会在哪一步失败？再试“非法 UTF-8”，它与 JSON 损坏是否走同一入口？
 
-<Stepper>
-  <Step title="切换成功、缺失、除零与unexpected bug">
-  </Step>
-  <Step title="识别exception owner">
-    filesystem负责FileNotFoundError，division负责ZeroDivisionError；handler只在能选择retry/skip/default时捕获。
-  </Step>
-  <Step title="保持unexpected traceback可见">
-    TypeError等programming error不应被bare except转成“文件不存在”，否则根因与line evidence丢失。
-  </Step>
-</Stepper>
+<PccFilesExceptionsLab />
 
-<Term def="只围绕一个明确可能失败operation，捕获具体exception并保留其他错误传播的处理边界。">narrow exception boundary</Term>
+动手路线：先单步到“处理”，看到 12 字节变成 10 字符和 3 个片段；切换工作目录，同一相对路径变成 `coffee` 与换行，共 7 字符和 1 个片段。再选择 `/lesson/data/user.json` 与 JSON 处理，正常时得到 `{"name":"林"}`；依次注入三种故障，观察内存格是否出现、异常是否绕过处理。“重置实验”恢复四个输入和第 1 步；播放、暂停、前后单步、进度拖动均可用。
+
+这是有限样本的浏览器模型，不是 Python 解释器。只支持选择器中的 POSIX 路径，没有符号链接、权限模拟或任意文件访问；故障只替换当前文件的模拟字节，不写真实磁盘。图中的回退重算历史状态，不撤销真实 Python 副作用。原生选择框支持键盘，减少动态效果时可用单步。
+
+## 3. 异常：让失败去正确的分支
+
+### 捕获的是操作抛出的错误，不是所有坏结果
+
+<Term def="执行某个操作时报告失败并改变控制流的对象；未处理时会沿调用链向外传播。">异常</Term>发生后，当前 `try` 剩余语句被跳过，匹配的 `except` 处理它；没有匹配则继续向外传播。`else` 仅在 `try` 正常结束时执行。它自己的异常**不由同一组 `except` 捕获**，因此适合放只依赖成功结果的后续工作。[依据：处理异常](https://docs.python.org/3.13/tutorial/errors.html#handling-exceptions)。
+
+除以零产生 `ZeroDivisionError`；读取不存在的文件产生 `FileNotFoundError`；字节不能按指定编码解释产生 `UnicodeDecodeError`。它们需要不同修法，不能都提示“文件不存在”。以下循环可以直接输入整数，输入 `q` 退出；先试分母 `0`，再试非数字字符串，观察程序继续等待下一次输入。
 
 ```python
-from pathlib import Path
-
-def count_words(path: Path) -> int:
+while True:
+    first = input("分子（q 退出）：")
+    if first == "q":
+        break
+    second = input("分母（q 退出）：")
+    if second == "q":
+        break
     try:
-        contents = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"cannot read book: {path.resolve()}")
+        answer = int(first) / int(second)
+    except ValueError:
+        print("请输入整数。")
+    except ZeroDivisionError:
+        print("分母不能为零。")
     else:
-        return len(contents.split())
+        print(answer)
 ```
 
-重新raise并增加context能保留原exception chain；简单CLI也可打印友好消息并continue处理其他files。选择取决于这一层是否拥有恢复策略。library通常不替application决定“静默跳过”。
+这里 `int` 与除法都在 `try` 中，因为我们有意处理这两种输入错误。文件处理中则应把读取和 JSON 解析分开：前者成功不代表后者成功。不要用裸 `except:` 掩盖拼错变量名等程序缺陷，也不要先用 `exists()` 代替错误处理——检查后文件仍可能被别的程序移走。
 
-### Failing Silently只适用于明确可选项
+### 与交互模型逐项对照的 Python
 
-`except FileNotFoundError: pass`会让失败无输出。只有“文件确实可选且缺失等同无操作”时合理，并最好通过return status或metric留下可观察性。required input被静默跳过会产生不完整结果，远比立即失败难诊断。
-
-捕获`Exception`也许适合最外层request boundary记录并隔离单个任务，但内部仍应分类、记录traceback并明确失败outcome；bare `except:`还会捕获KeyboardInterrupt/SystemExit，通常更危险。
-
-## Analyzing Text
-
-`contents.split()`按任意whitespace产生words，适合粗略count；真实语言分析要处理punctuation、Unicode normalization和tokenization。`text.lower().count("the")`会把`then`也计入，至少比较word tokens或使用regex boundary。
-
-分析pipeline应分为read、decode、normalize、tokenize、aggregate。每层接收和返回明确type，测试可用小string而不访问filesystem；I/O wrapper只负责Path与exceptions。这就是refactoring把外部边界与pure logic分开的价值。
-
-## Storing Data with JSON
-
-`json.dumps(value)`把Python基础结构编码为JSON string，`json.loads(text)`解码；第三版示例再用Path读写。JSON支持object、array、string、number、boolean、null，不会自动保存任意class instance、tuple identity或datetime。
-
-<Stepper>
-  <Step title="选择first run、valid、corrupt或schema drift">
-  </Step>
-  <Step title="分开处理read、decode与schema validation">
-    FileNotFoundError表示没有文件，JSONDecodeError表示语法损坏，missing field表示domain schema不满足。
-  </Step>
-  <Step title="只在明确decision后写回">
-    corrupt input先保留evidence，不自动用空dict覆盖；migration必须可测试并记录version。
-  </Step>
-</Stepper>
-
-<Term def="JSON语法解码后，对required fields、types、ranges与version再次验证的领域边界。">persistence schema</Term>
+以下两段**按顺序放在同一个脚本**。第一段定义读取与处理：读取失败直接返回，因此不会用未赋值的 `contents`；解析失败则已经有字符串。
 
 ```python
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-def load_profile(path: Path) -> dict | None:
+
+def inspect_file(path, operation):
     try:
-        raw = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return None
-    profile = json.loads(raw)
-    if not isinstance(profile, dict) or "username" not in profile:
-        raise ValueError("profile.username is required")
-    return profile
-
-def save_profile(path: Path, profile: dict) -> None:
-    payload = json.dumps(profile, ensure_ascii=False, indent=2)
-    path.write_text(payload, encoding="utf-8")
+        contents = path.read_text(encoding="utf-8")
+    except (FileNotFoundError, UnicodeDecodeError) as error:
+        return type(error).__name__, None, None
+    else:
+        if operation == "words":
+            return "ok", contents, len(contents.split())
+        try:
+            data = json.loads(contents)
+        except json.JSONDecodeError as error:
+            return type(error).__name__, contents, None
+        else:
+            return "ok", contents, data
 ```
 
-### Remembering generated data across runs
+第二段建立与图中相同的目录层级。临时目录充当图里的 `/`；把最后几行的文件和操作换掉即可复现选择器。此例的相对路径从显式 `cwd` 拼接，无须修改真实进程的工作目录。
 
-first run没有文件时询问用户并save，subsequent run load后确认是不是同一用户。若用户否认，不能直接展示旧数据；要重新采集或选择不同identity。文件名、record owner和privacy是persistence contract的一部分。
+```python
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    lesson = root / "lesson"
+    (lesson / "data").mkdir(parents=True)
+    (lesson / "archive" / "data").mkdir(parents=True)
+    fixtures = {
+        "data/note.txt": "茶 tea\ntea\n",
+        "data/user.json": '{"name":"林"}',
+        "archive/data/note.txt": "coffee\n",
+    }
+    for relative, contents in fixtures.items():
+        (lesson / relative).write_text(contents, encoding="utf-8")
+    cwd = lesson
+    assert inspect_file(cwd / "data/note.txt", "words")[2] == 3
+    cwd = lesson / "archive"
+    assert inspect_file(cwd / "data/note.txt", "words")[2] == 1
+    target = lesson / "data/user.json"
+    assert inspect_file(target, "json")[2] == {"name": "林"}
+    target.write_text('{"name":', encoding="utf-8")
+    assert inspect_file(target, "json")[0] == "JSONDecodeError"
+    target.write_bytes(b"\xff")
+    assert inspect_file(target, "json")[0] == "UnicodeDecodeError"
+    target.unlink()
+    assert inspect_file(target, "json")[0] == "FileNotFoundError"
+```
 
-并发写同一file会lost update或corruption。单用户练习可忽略，multi-process系统需要lock、database或atomic replace。JSON方便学习schema，不替代transactional storage。
+### 静默失败也必须是有意的策略
 
-## Refactoring：让职责可以单独验证
+`pass` 是“什么也不做”的语句，不会修好文件，也不会重新执行失败语句。如果某份可选文本缺失时允许跳过，可以在 `except FileNotFoundError:` 中用它；关键用户存档却不应静默丢弃。下面两份文件分别统计，第一份缺失不影响第二份；解码错误仍向外报告。
 
-初版常把prompt、load、decode、greet、save全写在一个function。refactor为`load_profile`、`validate_profile`、`save_profile`和application flow后，每个function有单一failure boundary。pure validation用dictionary unit tests，I/O用temporary directory integration tests。
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-重构前后behavior应由tests保护：missing file走first-run、valid profile欢迎用户、corrupt JSON不被覆盖、schema缺失给明确path、write后能round-trip。只把代码移动到functions而没有contract和tests，不算完成refactor。
+with TemporaryDirectory() as directory:
+    base = Path(directory)
+    (base / "present.txt").write_text("one two\n", encoding="utf-8")
+    counts = {}
+    for name in ("missing.txt", "present.txt"):
+        try:
+            contents = (base / name).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            pass  # 本任务约定：可选输入缺失时跳过
+        else:
+            counts[name] = len(contents.split())
+    assert counts == {"present.txt": 2}
+```
 
-<Callout type="trap" title="先exists再read就不会有FileNotFoundError">
-检查与读取之间文件仍可能被删除，且permission/decode失败依旧存在。直接执行read并处理具体exception，错误消息带resolved path；exists只用于UI提示，不是正确性保证。
+## 4. 文本分析：你统计的是哪种“出现”
+
+`split()` 不带参数时按连续空白分隔并去掉两端空片段；`len(contents.split())` 数的是这些片段，不是通用语言学“单词数”。`str.count()` 数不重叠的子串；对分词后的列表调用 `count()` 则数等于目标的元素。两者不应混用。下面的差异与实验的“片段数”形成对照。
+
+```python
+text = "Tea teacher tea\n"
+assert len(text.split()) == 3
+assert text.lower().count("tea") == 3  # teacher 也包含 tea
+assert text.lower().split().count("tea") == 2
+assert "茶和咖啡".split() == ["茶和咖啡"]
+assert "tea,".split().count("tea") == 0  # 标点仍在片段里
+assert "".split() == []
+```
+
+大小写可按需求用 `lower()` 统一，但标点、不同语言的分词仍要另订规则。逐行统计可以节省内存，不过如果要搜索跨越行边界的短语，就不能简单将每一行当作完全独立的文本。[依据：字符串方法](https://docs.python.org/3.13/library/stdtypes.html#string-methods)。
+
+## 5. 保存数据与重构：读成功后还要确认是谁
+
+### JSON 连接字符串与数据对象
+
+<Term def="用文本表示对象、数组、字符串、数字、布尔值和空值的数据交换格式，不是任意 Python 对象的保存方式。">JSON</Term>适合保存小型结构化数据。<Term def="把内存中的数据对象转成可保存或传输的表示；本章是用 json.dumps 转为 JSON 字符串。">序列化</Term>由 `json.dumps()` 完成，反向的 `json.loads()` 从字符串恢复对象。它们自己不读写文件；文件操作仍由 `Path` 执行。
+
+```python
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "numbers.json"
+    numbers = [2, 3, 5, 7]
+    serialized = json.dumps(numbers)
+    assert isinstance(serialized, str)
+    path.write_text(serialized, encoding="utf-8")
+    restored = json.loads(path.read_text(encoding="utf-8"))
+    assert restored == numbers
+    assert json.loads("null") is None
+```
+
+JSON 对象通常还原成 `dict`，数组变为 `list`，`true`、`false`、`null` 对应 Python 的 `True`、`False`、`None`。元组保存后会变为数组，再读回来成为列表；集合等对象默认不支持。不要把 JSON 当作 Python 源码，也不要用 `eval()` 读取。非法语法抛 `json.JSONDecodeError`，而合法 JSON 如 `[]` 或 `{"name": 7}` 仍不一定满足应用要求。[依据：json 官方文档](https://docs.python.org/3.13/library/json.html)。
+
+### 拆开读取、保存和交互
+
+<Term def="在保持已有对外行为的前提下调整程序内部组织，例如把读存档和问候拆成单一职责的函数。">重构</Term>让“记住用户”不再把读文件、询问名字、写文件混在一处。下面三段按顺序组成一个脚本：只把**缺失**视为首次使用；损坏或格式不对时报告失败，不自动覆盖原文件。
+
+```python
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+
+def load_name(path):
+    try:
+        contents = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    data = json.loads(contents)
+    if not isinstance(data, dict):
+        raise ValueError("存档应是对象")
+    name = data.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name 应为非空字符串")
+    return name
+```
+
+读取函数返回名字或 `None`，但坏 JSON、解码失败、权限错误不会冒充首次使用。保存函数统一检查名字；`ensure_ascii=False` 保留汉字，默认转成 `\u` 转义也能正确回读。问候函数先确认已存名字是否属于当前用户，否则重新询问并保存。
+
+```python
+def save_name(path, name):
+    cleaned = name.strip()
+    if not cleaned:
+        raise ValueError("名字不能为空")
+    text = json.dumps({"name": cleaned}, ensure_ascii=False)
+    path.write_text(text, encoding="utf-8")
+    return cleaned
+
+
+def greet_user(path, ask=input):
+    name = load_name(path)
+    if name is not None:
+        answer = ask(f"你是 {name} 吗？[y/N] ").strip().lower()
+        if answer == "y":
+            return f"欢迎回来，{name}！"
+    name = save_name(path, ask("你的名字："))
+    return f"下次会记住你，{name}。"
+```
+
+`ask=input` 让真实运行可以询问用户，也让验证时无需人工输入。下例覆盖首次使用、再次确认、换用户与损坏存档；真实应用可将临时 `path` 换成选定的持久目录，但要先确保父目录存在。
+
+```python
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "user.json"
+    assert greet_user(path, lambda prompt: "林") == "下次会记住你，林。"
+    assert greet_user(path, lambda prompt: "y") == "欢迎回来，林！"
+    replies = iter(["n", "周"])
+    assert greet_user(path, lambda prompt: next(replies)) == "下次会记住你，周。"
+    assert load_name(path) == "周"
+    path.write_text('{"name":', encoding="utf-8")
+    before = path.read_bytes()
+    try:
+        greet_user(path, lambda prompt: "不应询问")
+    except json.JSONDecodeError:
+        print("存档损坏，先备份并检查，不覆盖。")
+    else:
+        raise AssertionError("应拒绝损坏的存档")
+    assert path.read_bytes() == before
+```
+
+这比“任何失败都返回 `None`”保留更多信息。异常是否能恢复取决于任务：可选文章缺失能跳过，用户存档损坏则应暂停并修复；同一个 `pass` 不能解决两者。实验中的 JSON 成功只表示语法可解析，`load_name()` 额外验证字段，回答了“读成功却没有可用用户数据”的问题。
+
+## 常见误区
+
+<Callout type="trap" title="移动脚本后，相对路径突然失效">
+**现象 →** 文件明明在项目里，却报 `FileNotFoundError`。
+**原因 →** 相对路径从工作目录解释，不从脚本文件自动出发。
+**修法 →** 输出 `Path.cwd()`，明确基准目录；在实验中比较相对与绝对路径。
 </Callout>
 
-<Callout type="trap" title="JSON能loads就说明数据有效">
-loads只证明JSON syntax有效，不证明required fields、types、ranges和schema version。解码后仍需persistence schema validation，corrupt与schema drift要分开反馈。
+<Callout type="trap" title="想增加一行，却丢了原内容">
+**现象 →** 再次 `write_text()` 后只剩新字符串。
+**原因 →** 该方法覆盖目标，并非追加。
+**修法 →** 明确选择 `open("a")`，或先构造完整新内容；重要数据先备份。
 </Callout>
 
-## 本章回顾：外部状态的三层证据
+<Callout type="trap" title="坏存档被当作第一次使用">
+**现象 →** JSON 损坏后程序重新问名字，还覆盖旧文件。
+**原因 →** 将所有异常都处理为“没有文件”。
+**修法 →** 只对缺失返回 `None`；解码或 JSON 失败单独报告。用实验故障选择器对照分支。
+</Callout>
 
-1. Path boundary明确relative base、absolute location、encoding和I/O operation。
-2. write需决定parent、覆盖与atomic replacement，成功返回才是完成证据。
-3. narrow exception boundary只捕获能恢复的具体失败，unexpected traceback保持可见。
-4. JSON流程分read、decode、schema validation和save，missing/corrupt/drift不同。
-5. refactoring把I/O与pure logic分开，让失败路径可独立测试。
+<Callout type="trap" title="字节数、字符数和词数混成一个数">
+**现象 →** 默认实验出现 12、10、3 三个不同结果。
+**原因 →** 汉字占多个 UTF-8 字节，空格和换行也是字符，`split()` 又会去掉空白分隔符。
+**修法 →** 分别验证 `len(read_bytes())`、`len(contents)`、`len(contents.split())`。
+</Callout>
+
+## 小结与练习
+
+- 用明确基准定位，区分字节、字符与覆盖写入。
+- 捕获可处理的具体失败，成功后才分析文本。
+- JSON 解析后仍须验证字段并确认用户身份。
 
 <Exercises>
 
-**问题 1：同一relative Path在VS Code与终端读取不同文件，如何定位？**
+**问题 1：** 修改实验对应的 Python：同一相对路径分别从 `lesson` 与 `lesson / "archive"` 读取，断言片段数为 3 和 1；再固定绝对目标，证明更换工作目录不改变结果。若改读不存在的文件，`contents` 应是什么？
 
-<Answer>分别打印Path.cwd、script absolute path和target.resolve，确认relative path以cwd为base。若resource随代码分发，用`Path(__file__).resolve().parent / ...`；若由用户从CLI传入，记录cwd并保留其语义。不要硬编码开发机absolute path。</Answer>
+<Answer>
 
-**问题 2：为什么try应只包read_text，而word count放else？**
+前面的目录搭建代码已提供前两项断言。在同一个临时目录块末尾加入下面循环；这里 `lesson` 已是从临时目录得到的绝对位置，所以 `absolute` 不随 `cwd` 变动。缺失时 `inspect_file` 返回错误名及两个 `None`，不继续分词。
 
-<Answer>这样FileNotFoundError handler只拥有filesystem read失败；split/count中的TypeError等unexpected bug不会被误报成文件缺失。else只在read成功后运行依赖contents的逻辑，traceback保持准确。</Answer>
+```python
+absolute = lesson / "data/note.txt"
+for cwd in (lesson, lesson / "archive"):
+    assert inspect_file(absolute, "words")[2] == 3
+status, contents, count = inspect_file(lesson / "gone.txt", "words")
+assert (status, contents, count) == ("FileNotFoundError", None, None)
+```
 
-**问题 3：设计JSON profile load的四个测试。**
+</Answer>
 
-<Answer>missing file返回None并走first-run；valid JSON和完整schema返回dict；truncated JSON抛JSONDecodeError且文件不被覆盖；syntax valid但缺username抛带field path的ValueError。再做save/load round-trip并使用temporary directory隔离filesystem。</Answer>
+**问题 2：** 独立实现 `count_tea(paths)`：忽略缺失的可选文件，统计其余文本中按空白分隔、忽略大小写后恰好等于 `tea` 的片段总数；解码错误不能被静默跳过。用临时文件验证 `Tea teacher tea` 加一个缺失文件结果为 2。
+
+<Answer>
+
+不能直接用字符串的 `count("tea")`，否则 `teacher` 也算一次。仅捕获缺失，把统计放在 `else`。这个实现仍不去掉逗号等标点，这是题目的明确边界。
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+
+def count_tea(paths):
+    total = 0
+    for path in paths:
+        try:
+            contents = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            pass
+        else:
+            total += contents.lower().split().count("tea")
+    return total
+
+
+with TemporaryDirectory() as directory:
+    base = Path(directory)
+    path = base / "tea.txt"
+    path.write_text("Tea teacher tea", encoding="utf-8")
+    assert count_tea([path, base / "missing.txt"]) == 2
+```
+
+</Answer>
+
+**问题 3：** `load_name()` 分别遇到缺失文件、`{"name":`、`{"name": 7}` 和 `{"name": "林"}` 时应该返回或抛出什么？补一个断言，证明格式不对不会覆盖存档。为什么不能在捕获任何异常后都调用 `save_name()`？
+
+<Answer>
+
+依次为 `None`、`JSONDecodeError`、`ValueError`、字符串 `"林"`。第二个是语法失败，第三个是业务字段失败；若一律保存，会把损坏的数据甚至权限问题掩盖成“新用户”。在前面的函数定义之后执行以下代码：
+
+```python
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "user.json"
+    path.write_text('{"name": 7}', encoding="utf-8")
+    original = path.read_bytes()
+    try:
+        load_name(path)
+    except ValueError as error:
+        assert "name" in str(error)
+    else:
+        raise AssertionError("数字名字应被拒绝")
+    assert path.read_bytes() == original
+```
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="path boundary" definition="用Path构造位置并显式执行filesystem I/O的边界。" />
-  <GlossaryItem term="relative path resolution" definition="relative path依据cwd或显式base得到实际位置的过程。" />
-  <GlossaryItem term="atomic file replacement" definition="先完成临时写入再原子替换目标的提交策略。" />
-  <GlossaryItem term="narrow exception boundary" definition="只包明确operation并捕获具体可恢复exception的处理边界。" />
-  <GlossaryItem term="persistence schema" definition="JSON解码后对required fields、types与version的领域验证。" />
+  <GlossaryItem term="路径" definition="描述文件位置的目录和名字；路径对象不是文件内容，也不保证目标存在。" />
+  <GlossaryItem term="工作目录" definition="进程解释相对路径时默认站的位置，不一定是脚本所在目录。" />
+  <GlossaryItem term="相对路径" definition="从当前或指定基准目录出发的路径，换基准可能命中不同文件。" />
+  <GlossaryItem term="绝对路径" definition="从根位置完整描述目标的路径，不随当前工作目录改变。" />
+  <GlossaryItem term="UTF-8" definition="把字符编码为字节的一套规则；汉字与英文字母的字节长度可能不同。" />
+  <GlossaryItem term="异常" definition="操作失败时携带错误信息并改变执行路线的对象，需由匹配的处理分支接住。" />
+  <GlossaryItem term="JSON" definition="在文本中记录对象、数组等数据的格式；可解析不等于业务字段正确。" />
+  <GlossaryItem term="序列化" definition="把数据变成可保存的表示；json.dumps 的结果是字符串，并未写入文件。" />
+  <GlossaryItem term="重构" definition="保留对外行为、改善代码组织，让读取、保存、询问等职责可以分别验证。" />
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 10: Files and Exceptions" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 资料与核对边界
+
+- 范围依据：Eric Matthes，*Python Crash Course, Third Edition*，第 10 章 “Files and Exceptions”（No Starch Press，2022，ISBN 9781718502703）。本章采用已登记的出版社目录单元 `pcc3-10`；2026-09-23 再访问[出版社页面](https://nostarch.com/python-crash-course-3rd-edition)返回 HTTP 403，因此来源访问级别是 **outline-only**，未核读、未复现原书完整正文。
+- 事实依据：[Python 3.13 pathlib](https://docs.python.org/3.13/library/pathlib.html#reading-and-writing-files)核对路径、读取、覆盖与返回值；[json](https://docs.python.org/3.13/library/json.html#basic-usage)核对序列化、类型转换和解析失败；[异常教程](https://docs.python.org/3.13/tutorial/errors.html#handling-exceptions)核对 `try/except/else`；[内置异常](https://docs.python.org/3.13/library/exceptions.html#os-exceptions)核对文件与系统错误；[字符串方法](https://docs.python.org/3.13/library/stdtypes.html#string-methods)核对拆行、分词与计数。以上为独立技术事实来源，不表示获得原书改编授权。
+- 代码与文件树为本站独立编写的小样例。代码使用 Python 3.10+ 已有 API，以 Python 3.13 官方文档为核对基线；实验采用 POSIX 路径，不泛化为所有平台的文件系统实现。
+
+<Attribution mode="independent-rewrite" sourceBasis="outline-only" workTitle="Python Crash Course, Third Edition · Chapter 10: Files and Exceptions" sourceUrl="https://nostarch.com/python-crash-course-3rd-edition" />

@@ -1,104 +1,443 @@
 ---
-title: "策略模式"
-type: A
+title: "策略模式：同一张图，两种最优路线"
+type: D
 section: "行为型模式"
 order: 2
-description: "策略模式：把可互换的算法族封装为同一契约，使调用者能按情境选择行为"
+description: "在四点有向图上替换最少跳数与最小成本策略，用真实路径、累计值和反证检验共同契约。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
-draft: false
+officialUnitId: designpatterns-02
+draft: true
 ---
 
+import { StrategyRouteCostLab } from "@/components/mdx/design-patterns/strategy-route-cost-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+{/* 知识点与可视化：Strategy/ConcreteStrategy→切换目标改变选中边；Context→委托代码与职责表；前后置契约→非法图/断路/错误实现及断言；累计成本→加权图与等比例累加条。四个核心术语均进入Glossary。 */}
 
-把价格分支继续堆在结算函数里，会让每次营销变化都触碰主流程 因此，策略模式 的第一步不是画类图，而是写清 **结算服务要在不改订单流程的前提下切换普通、会员和大促定价** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+<Objectives>
 
-在实验前先预测：沿 提交订单 → 选择策略 → 执行报价 → 核对约束 → 返回金额 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+- 能解释谁选择目标、谁委托计算、谁保证路径契约，并用函数替换具体策略。
+- 能修改图的成本或连通性，用路径与累计值验证两种目标及共同失败规则。
+- 能回答：为什么返回成本 9 的直达路线，在“最少跳数”下正确，在“最小成本”下却失败？
 
+</Objectives>
 
-## 问题合同与术语
+## 直觉：少转弯不一定少花钱
 
-**意图。** 把可互换的算法族封装为同一契约，使调用者能按情境选择行为。**适用边界。** 算法会独立变化、调用合同稳定，而且运行时选择确实有业务含义。本页验收不变量是：**同一订单输入必须得到可解释且非负的报价**。
+从 S 去 T，直达只走一段，却收费 9；绕过 A、B 要走三段，每段只收费 1。想少换路的人和想省钱的人，应当得到不同答案。
 
-、、、、、
-## 官方目录结构的逐项解释
+如果每增加一种偏好，就改动整个导航页面，显示路线、处理失败和挑选路线会越缠越紧。本章把“怎样挑路”留成可替换的一处，同时要求每种挑法都报出真实路线和费用。
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+## 先预测，再看路径改变
 
-### 模式名称与分类
+猜一猜：保持所有边不变，把目标从“最少跳数”改成“最小成本”，高亮会从几条边变成几条？总费用会变大还是变小？
 
-“策略模式”归入行为型模式，名称只用于定位 把可互换的算法族封装为同一契约，使调用者能按情境选择行为，不能替代问题证据。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+<StrategyRouteCostLab />
 
-### 意图
+先切换目标：直达的 1 跳 / 9 应变成经过 A、B 的 3 跳 / 3。再将直达成本改为 2，两种目标都会选择直达，但理由不同。最后恢复基准图，在最小成本下打开错误实现：高亮回到直达，反证路线仍只需 3。
 
-“意图”回答模式想改变什么：把可互换的算法族封装为同一契约，使调用者能按情境选择行为。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+选择“封闭终点”会真正删去 T 的全部入边；选择“非法输入”则保留图，但禁止搜索。两者都不能显示成功路径。重置应恢复基准图、最少跳数、关闭错误实现，而不只是清空提示文字。
 
-### 别名
+## 模式名称与分类
 
-“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+**替换的是行为**
 
-### 动机
+<Term def="把可替换的求解行为放在共同调用契约之后，让使用方通过组合选择行为。">Strategy（策略）</Term>属于行为型模式。本例的变化是“用什么目标评价路线”，不是新增地点，也不是把图复制成两个类。可视化里只有一份输入边表；切换下拉框改变求解行为，图上的最优路径随之改变。
 
-“动机”从具体压力出发：把价格分支继续堆在结算函数里，会让每次营销变化都触碰主流程。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+它不是承诺所有实现给出相同答案，而是承诺同一种输入输出结构、相同失败语义，以及各自声明的优化目标。若把“最短路径”含糊地写进接口，就无法判断 1 跳 / 9 和 3 跳 / 3 谁对谁错。
 
-### 适用性
+## 意图
 
-“适用性”要求同时满足：算法会独立变化、调用合同稳定，而且运行时选择确实有业务含义。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+**共用出口，允许不同的最优**
 
-### 结构
+本例每次返回 `ok`、`unreachable` 或 `invalid`，成功时都含 `path`、`hops`、`cost`。最少跳数要求 `hops` 最小；最小成本要求 `cost` 最小。**目标不同是有意差异，虚报成本或接受非法权重则不是。**
 
-“结构”由 PricingContext、PricingStrategy、MemberPricing 以及它们之间的引用方向共同确定。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+这种可替换性建立在<Term def="执行前明确合法输入，执行后明确结果、失败与不可变约束的约定。">前后置契约</Term>上。下表是本页真正要测试的边界；实验中的断路与负权分别命中不同分支。
 
-### 参与者
+| 边界 | 两个策略共同遵守的约定 |
+| --- | --- |
+| 输入形状 | TypeScript 已约束请求结构；节点仅 S、A、B、T，边有方向，不允许同向平行边 |
+| 权重 | 每条边都必须是 0 到 1,000,000 的安全整数；拒绝负数、小数、NaN、无穷大 |
+| 检查顺序 | 先检查整张图，再搜索；不能因起终点相同或坏边不可达就跳过检查 |
+| 成功结果 | 路径从 start 到 goal，每段确实存在；hops 是边数，cost 是这些边权之和 |
+| 失败结果 | 合法但无路返回 unreachable；节点、权重或重复边非法返回 invalid，并说明原因 |
+| 不变量 | 不修改调用方输入；合法的同点请求返回单节点、0 跳、0 成本 |
 
-“参与者”逐一说明 PricingContext、PricingStrategy、MemberPricing 谁保存状态、谁发起调用以及谁承担变化。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+成功还必须满足**所选目标最优**。平局可以有多条正确路线，本实现采用稳定排序和输入边顺序保持确定性，不另承诺字母序最小。这里的整数上界避免浮点舍入或累加溢出；它是教学接口的取舍，不是所有路径问题的通用限制。
 
-### 协作
+## 别名
 
-“协作”的运行协议是：Context 只提供输入并委托 Strategy，具体策略独立计算且不反向控制流程。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+**Policy 不等于策略选择器**
 
-### 后果
+Strategy 也常称 Policy，可译作“政策”或“方针”。在此它指“按跳数或成本挑路”的规则，不是界面下拉框。下拉框负责**选择哪条规则**，规则负责**执行计算**。把两者都命名成 PolicyManager，反而会遮住需要测试的边界。
 
-“后果”必须连同收益和成本记录：新增算法变便宜，但客户端必须理解选择规则，策略数量也需要治理。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+## 动机
 
-### 实现
+**让规则变化不侵入展示流程**
 
-“实现”落地时遵守：用窄接口表达输入输出，把策略选择与策略执行拆成两个可测试步骤。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+最初只有直达导航时，一个函数足够。后来用户可选少换路或省钱，如果页面里散布 `if (cheap)`，图的绘制、错误提示与路线计算都可能出现同一判断。一处漏改，就可能显示“省钱”却继续走直达。
 
-### 示例代码
+本章让显示层只读 `Result`，把目标选择集中在实验控件，求解交给传入函数。错误开关刻意复现“标签已换、实现没换”的缺陷：类型完全通过，基准图的后置条件断言却失败。这比多画一个算法类方框更能说明动机。
 
-“示例代码”使用本页 TypeScript 最小切片验证“同一订单输入必须得到可解释且非负的报价”，代码是独立教学示例。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+## 适用性
 
-### 已知应用
+**先确认确实有两个独立目标**
 
-“已知应用”可在这些场景识别：排序器、压缩器、路由策略和定价引擎都常用这一变化轴，但名称相似不构成采用证据。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+适合引入的证据是：输入图与结果格式稳定，至少两种求解规则需独立维护，而且调用者知道当前想优化什么。未来若增加“避开收费边”，要先决定它是所有策略的共同输入过滤条件，还是一种新的优化目标；不要一看到开关就建一个策略类。
 
-### 相关模式
+若只有固定的“最低成本”需求，直接调用一个最短路函数更清楚。只有一处使用、两行便能表达且不会独立变化的条件分支，也未必值得增加 Context。若两个算法连输入含义、异常语义都不同，强行塞进同一接口只会制造假可替换性。
 
-“相关模式”用于比较边界：状态模式也委托行为，但切换通常由状态机推进；模板方法依赖继承固定骨架。 对“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”先保存基线，再改变一个条件；若出现“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”，就拒绝 策略模式 方案并回到更简单结构。
+## 结构
 
-## 常见误区与反例
+**持有函数，而不是继承页面**
 
+<Term def="保存当前策略引用，把同一份请求交给它执行的使用方。">Context（上下文）</Term>在代码里叫 `RouteContext`。它持有一个 `(Request) => Result` 函数；`plan` 只委托，不检测具体函数名字，也不在内部切换“便宜模式”。这是组合：更换引用就能更换行为，不必派生 `CheapRoutePage`。
 
-另一个易错点是把结构相似当作语义相同。状态模式也委托行为，但切换通常由状态机推进；模板方法依赖继承固定骨架；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+结构可直接从调用式读出：`调用方 → RouteContext.plan(q) → 当前 Strategy(q) → Result`。实验每次以当前选择建立 Context；下方可运行代码还演示同一个 Context 的 `setStrategy`，两种用法不改变职责。TypeScript 官方函数类型足以表达这个边界；无内部状态的策略不必包装成只有一个方法的类。
 
-## 术语表
+## 参与者
 
+**谁知道目标，谁知道图**
+
+<Term def="满足策略接口并落实某个具体求解目标的函数或对象。">ConcreteStrategy（具体策略）</Term>是本例的 `fewestHops` 与 `lowestCost`。它们共享搜索工具，却使用不同排序键；复用内部工具不妨碍对外构成两个可替换行为。
+
+| 角色 | 本章实例 | 应做 / 不应做 |
+| --- | --- | --- |
+| 选择者 | 下拉框事件与调用方配置 | 理解目标、传入策略；不改图上的累计数字冒充结果 |
+| Context | RouteContext | 持有并调用策略；不推测用户更在意费用还是换路次数 |
+| Strategy | Strategy 函数类型 | 约束调用形式；仅靠类型无法证明“全局最小” |
+| ConcreteStrategy | fewestHops / lowestCost | 校验输入并算出符合目标的路线；不反向改变 UI 选择 |
+
+## 协作
+
+**选择发生在调用边界**
+
+一次请求先由调用方选好函数，Context 再把 `Request` 原样委托给它。两个具体策略都经由 `search` 先验证整图，再生成路线；显示层只处理统一结果。实验没有在渲染时推进状态或异步改参数，所有高亮与累计条都由当前请求和真实结果派生。
+
+Context 并未神奇地验证任意第三方函数。若新策略绕过验证器，或者返回伪造结果，它仍可能满足 TypeScript 类型。接入新策略时要跑同一套契约测试，并针对其目标增加最优性测试；不能把“符合函数签名”当作“符合行为约定”。
+
+## 后果
+
+**少改页面，多管契约**
+
+收益是替换算法不必改显示路径、错误处理或请求结构；代价是选择者必须知道两种目标的差别，团队也要维护契约测试。策略模式不负责替用户决定何时应更省钱，更不负责证明算法正确。
+
+本页为四个节点采用每轮排序的数组，不是适用于大型路网的高性能实现。扩展规模时，可以让最少跳数改用队列、最小成本改用优先队列，只要保持共同契约。对这个小图，引入策略注册中心、工厂层级或插件发现系统都没有实际收益。
+
+## 实现
+
+**最优性来自出队顺序，不来自模式名字**
+
+搜索把候选路线放进待选表，取出当前排序键最小的一条；**取出时**才确认其末端节点，不是在第一次看见该节点时确认。以跳数排序时，每条边贡献 1，效果等价于逐层扩展；以成本排序时，这是非负权下 Dijkstra 的小规模写法。
+
+为何成本最小的候选可以确认？若还有一条更便宜的路线通往同一点，它在已确认区域之外的第一段前缀成本也不会更大，因为后续边权非负；这条前缀理应更早被取出，形成矛盾。负权会破坏这一步，因此即使最少跳数本身不需要非负权，本章也选择让两策略统一拒绝负权。
+
+零成本边不破坏证明。已确认节点不会重复展开，所以零成本环也不会使搜索无限进行。本例又禁止同向平行边，路径节点序列可唯一确定每一段权重。图中三条路线的枚举是小规模复核，不是把算法答案写死在 UI 中。
+
+## 示例代码
+
+**顺序拼接即可运行**
+
+下面所有 TypeScript 块（含练习答案）按出现顺序拼接到一个 `strategy-example.ts`，在装有 TypeScript 的环境中执行 `tsc strategy-example.ts --target ES2020 --module commonjs --outDir out`，然后执行 `node out/strategy-example.js`。代码为本页原创；实验模型使用相同类型、验证器、搜索和策略函数。
+
+第一段定义公共语言。`Request` 的结构合法性由类型约束；从外部 JSON 接入时，还需在边界做形状校验，这不是本例验证器声称覆盖的范围。
+
+```ts
+export const vertices = ["S", "A", "B", "T"] as const;
+export type Vertex = (typeof vertices)[number];
+export type Edge = Readonly<{ from: Vertex; to: Vertex; cost: number }>;
+export type Request = Readonly<{
+  edges: readonly Edge[];
+  start: Vertex;
+  goal: Vertex;
+}>;
+export type Route = { path: Vertex[]; hops: number; cost: number };
+export type Result =
+  | ({ status: "ok" } & Route)
+  | { status: "unreachable" }
+  | { status: "invalid"; reason: string };
+export type Strategy = (request: Request) => Result;
+export type Objective = "hops" | "cost";
+export type Scenario = "base" | "shortcut" | "closed" | "negative";
+```
+
+接着统一前置检查；错误不被伪装成“无路”。必须先验完整张图，后面的同点返回也不能绕过它。
+
+```ts
+export function validate(q: Request): string | undefined {
+  if (!vertices.includes(q.start) || !vertices.includes(q.goal)) {
+    return "invalid-node";
+  }
+  const pairs = new Set<string>();
+  for (const e of q.edges) {
+    if (!vertices.includes(e.from) || !vertices.includes(e.to)) {
+      return "invalid-node";
+    }
+    if (!Number.isSafeInteger(e.cost) || e.cost < 0 || e.cost > 1_000_000) {
+      return "invalid-weight";
+    }
+    const pair = `${e.from}:${e.to}`;
+    if (pairs.has(pair)) return "duplicate-edge";
+    pairs.add(pair);
+  }
+}
+```
+
+搜索只排序自己的候选数组，不排序输入边。确认节点时机、实际费用累加与失败出口都在此处，不能用“策略已经封装好了”跳过审查。
+
+```ts
+export function search(q: Request, objective: Objective): Result {
+  const reason = validate(q);
+  if (reason) return { status: "invalid", reason };
+  const frontier: Route[] = [{ path: [q.start], hops: 0, cost: 0 }];
+  const settled = new Set<Vertex>();
+  while (frontier.length) {
+    frontier.sort((a, b) => a[objective] - b[objective]);
+    const route = frontier.shift()!;
+    const last = route.path[route.path.length - 1];
+    if (settled.has(last)) continue;
+    settled.add(last);
+    if (last === q.goal) return { status: "ok", ...route };
+    for (const edge of q.edges) {
+      if (edge.from === last && !settled.has(edge.to)) {
+        frontier.push({
+          path: [...route.path, edge.to],
+          hops: route.hops + 1,
+          cost: route.cost + edge.cost,
+        });
+      }
+    }
+  }
+  return { status: "unreachable" };
+}
+```
+
+两个函数实现两个目标。Context 不需要知道排序细节；`brokenCost` 是刻意写错的最小成本实现，虽然签名正确，行为并不合格。
+
+```ts
+export const fewestHops: Strategy = (q) => search(q, "hops");
+export const lowestCost: Strategy = (q) => search(q, "cost");
+export const brokenCost: Strategy = (q) => fewestHops(q);
+export class RouteContext {
+  constructor(private strategy: Strategy) {}
+  setStrategy(strategy: Strategy) {
+    this.strategy = strategy;
+  }
+  plan(q: Request): Result {
+    return this.strategy(q);
+  }
+}
+```
+
+这是实验里的全部边表，边的顺序也是平局时确定性的一部分。封闭 T 是过滤入边，不是仅改变提示词。
+
+```ts
+export function makeRequest(scenario: Scenario): Request {
+  const direct = scenario === "shortcut" ? 2 : scenario === "negative" ? -1 : 9;
+  const edges: Edge[] = [
+    { from: "S", to: "T", cost: direct },
+    { from: "S", to: "A", cost: 1 },
+    { from: "A", to: "T", cost: 7 },
+    { from: "A", to: "B", cost: 1 },
+    { from: "B", to: "T", cost: 1 },
+  ];
+  return {
+    start: "S",
+    goal: "T",
+    edges: scenario === "closed" ? edges.filter((e) => e.to !== "T") : edges,
+  };
+}
+```
+
+基准图的手算对照如下。没有其他出边，也没有环，因此这确实列完了所有从 S 到 T 的路线。重点不是“三段比一段好”，而是选定目标下哪个数更小。
+
+| 路线 | 跳数 | 成本计算 | 哪个目标会选它 |
+| --- | --- | --- | --- |
+| S→T | 1 | 9 | 最少跳数 |
+| S→A→T | 2 | 1 + 7 = 8 | 两者都不选 |
+| S→A→B→T | 3 | 1 + 1 + 1 = 3 | 最小成本 |
+
+下面的断言检查替换前后同一个 Context 的输出，而不是直接改显示标签。
+
+```ts
+export function assert(ok: unknown, label: string): asserts ok {
+  if (!ok) throw new Error(label);
+}
+const q = makeRequest("base");
+const before = JSON.stringify(q);
+const context = new RouteContext(fewestHops);
+const short = context.plan(q);
+assert(short.status === "ok", "必须可达");
+assert(short.path.join("") === "ST" && short.hops === 1, "最少跳数");
+assert(short.cost === 9, "真实费用不能写成跳数");
+context.setStrategy(lowestCost);
+const cheap = context.plan(q);
+assert(cheap.status === "ok", "必须可达");
+assert(cheap.path.join("") === "SABT" && cheap.cost === 3, "最小成本");
+assert(cheap.hops === 3, "跳数仍需真实报告");
+assert(JSON.stringify(q) === before, "不修改输入");
+```
+
+错误实现返回一条真实存在的路径，费用也没造假，**但它破坏了最小成本后置条件**。这段测试必须确实抓到断言失败；如果坏实现被修好，下述负向测试就需要同步更新。
+
+```ts
+function requireBaseMinimum(strategy: Strategy) {
+  const result = strategy(makeRequest("base"));
+  assert(result.status === "ok" && result.cost === 3, "最小成本应为3");
+}
+requireBaseMinimum(lowestCost);
+let caught = false;
+try {
+  requireBaseMinimum(brokenCost);
+} catch (error) {
+  caught = error instanceof Error && error.message === "最小成本应为3";
+}
+assert(caught, "测试必须捕获错误实现，而非静默通过");
+```
+
+共同失败规则也必须同时运行在两个策略上。尤其要区分 `unreachable` 和 `invalid`，不能把它们压成同一个空数组。
+
+```ts
+for (const strategy of [fewestHops, lowestCost]) {
+  assert(strategy(makeRequest("closed")).status === "unreachable", "断路");
+  assert(strategy(makeRequest("negative")).status === "invalid", "负权拒绝");
+  for (const cost of [NaN, Infinity, 0.5, 1_000_001]) {
+    const edges: Edge[] = [{ from: "S", to: "T", cost }];
+    assert(strategy({ ...q, edges }).status === "invalid", "非法权重");
+  }
+  const same = strategy({ ...q, edges: [], goal: "S" });
+  assert(same.status === "ok" && same.cost === 0 && same.hops === 0, "同点");
+  assert(same.path.join("") === "S", "零段路径仍有起点");
+  const shortcut = strategy(makeRequest("shortcut"));
+  assert(shortcut.status === "ok" && shortcut.cost === 2, "降价后直达");
+  const badSame = { ...makeRequest("negative"), goal: "S" as const };
+  assert(strategy(badSame).status === "invalid", "先验整图，再判断同点");
+}
+```
+
+## 已知应用
+
+**比较器也是一种小型策略**
+
+JavaScript 的 `Array.prototype.sort(compareFn)` 接受比较函数来决定次序。本章待选表正是把 `hops` 或 `cost` 的比较函数交给排序；排序调用机制不需要知道“费用”的业务含义。MDN 文档要求比较器保持一致的排序关系，也说明现代 JavaScript 的稳定排序保证。这是可查证的函数策略式接口，不是声称它就是 GoF 书中的原例。
+
+这也给出一个尺度判断：如果需要替换的只是两数比较，传函数往往已经够了。只有当策略需要配置、资源或生命周期时，才考虑用对象保存这些东西，别为了画出经典类图增加空壳类。
+
+## 相关模式
+
+**相似结构，不同变化原因**
+
+如果产品要求行程开始后锁定路线，先把它看成生命周期约束，再决定是否需要状态建模；不要让“最小成本”策略顺手修改行程状态。练习三会让你决定哪种扩展值得保留策略边界。
+
+| 对照 | 在本章路线问题中的区别 |
+| --- | --- |
+| State（状态模式） | 关注对象处于什么状态以及合法迁移。本页“省钱”由调用者偏好选择，不是由“未出发→途中→到达”驱动迁移；具体策略也不自行切换下一个策略。状态迁移由谁触发可因实现而异，不能只按有没有 setter 判断模式。 |
+| Template Method（模板方法） | 通常用继承固定流程骨架，由子类覆盖步骤。本例把整次求解作为可替换函数组合进 Context，不要求页面继承算法父类。两策略共享 search 是普通函数复用，不因此变成模板方法。 |
+
+## 常见误区：图上能看到的失败
+
+<Callout type="trap" title="把更少边当成更低权重">
+
+**现象 →** 最小成本模式仍高亮 S→T，费用 9。 **原因 →** 错误实现实际调用了最少跳数函数，签名无法表达全局最优。 **修法 →** 恢复按累计成本排序，并保留 S→A→B→T 成本 3 的反证测试。
+
+</Callout>
+
+<Callout type="trap" title="第一次发现 T 就返回">
+
+**现象 →** 即使按成本排序，仍在读取第一条 S→T 边时返回 9。 **原因 →** 把“生成候选”误当成“确认最优”，成本 1 的 S→A 尚未展开。 **修法 →** 只在最小候选出队且未确认时检查终点；基准测试必须返回 3。
+
+</Callout>
+
+<Callout type="trap" title="便宜策略吞掉非法输入">
+
+**现象 →** 负权图上一个策略报错，另一个给出成功路线。 **原因 →** 各自悄悄改变前置条件。 **修法 →** 验证整图后才搜索；非法输入与合法但不可达分别返回，别用默认直达路线兜底。
+
+</Callout>
+
+## 小结
+
+- 调用方选择目标，Context 委托，策略负责计算。
+- 更换目标可以改路径，但不能改共同失败契约。
+- 1 跳 / 9 与 3 跳 / 3 分别优化不同的量。
+- 函数足以承担无状态策略；类型不能证明最优性。
 
 ## 练习与答案
 
+<Exercises>
 
-## 本章小结
+**问题 1：不运行先预测：直达降到 2 后，坏实现还会暴露吗？**
 
-策略模式 把“结算服务要在不改订单流程的前提下切换普通、会员和大促定价”收敛为 PricingContext、PricingStrategy、MemberPricing 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“只有一个算法或分支从不独立变化时，策略对象只是额外跳转”这一反例、重置实验，并根据 新增算法变便宜，但客户端必须理解选择规则，策略数量也需要治理 接受或拒绝方案。
+写出两种正确策略及错误最小成本策略的路径、跳数、成本。解释这个测试能否替代基准测试。
 
-## 前后导航
+<Answer>
 
-- [上一页：什么是设计模式](/learn/design-patterns/00-intro/intro)
-- [下一页：观察者模式](/learn/design-patterns/03-behavioral/observer)
+三者都返回 S→T，1 跳、成本 2。最小成本正确是因为 2 小于绕路的 3；最少跳数仍因为 1 小于 3。坏实现这次碰巧通过，不代表其满足所有输入。必须保留直达 9 的基准反例，它将两种目标的最优解分开。
 
+</Answer>
+
+**问题 2：改代码：允许成本为 0 的回边，如何验证不会死循环？**
+
+在基准请求中将 A→B 和 B→T 改为 0，并新增 B→A 成本 0。先写出最小成本结果，再增加两策略都能终止且保留真实费用的断言。不要把验证器改成“必须大于 0”。
+
+<Answer>
+
+最小成本为 S→A→B→T，累计值依次 0、1、1、1；零成本环不能改善答案。以下代码接在前面的测试后运行。节点在出队后只展开一次，因此不会沿 A↔B 无限扩展。最少跳数仍直达，真实费用仍为 9。
+
+```ts
+const zeroCycle: Request = {
+  ...q,
+  edges: [
+    ...q.edges.map((e) =>
+      (e.from === "A" && e.to === "B") || e.from === "B"
+        ? { ...e, cost: 0 } : e),
+    { from: "B", to: "A", cost: 0 },
+  ],
+};
+const zeroCheap = lowestCost(zeroCycle);
+assert(zeroCheap.status === "ok", "零权合法且可达");
+assert(zeroCheap.path.join("") === "SABT" && zeroCheap.cost === 1, "零环最优");
+const zeroShort = fewestHops(zeroCycle);
+assert(zeroShort.status === "ok" && zeroShort.cost === 9, "少跳不等于便宜");
+console.log("策略示例与练习断言全部通过；已捕获错误实现。");
+```
+
+</Answer>
+
+**问题 3：选型：所有用户只要最小成本，还需要 Context 吗？**
+
+假设不再有运行时偏好切换；但另有要求“行程出发后不能换目标”。分别说明直接函数、策略、状态约束各解决什么，并指出是否必须增加类层级。
+
+<Answer>
+
+只有一个固定目标时，直接调用 `lowestCost` 即可，Context 的间接层未必值得。仍有多个独立目标时，可保留策略函数边界；调用方在允许变更时选函数。“出发后禁止换目标”是行程生命周期约束，应在行程控制处验证，而非塞进最小成本搜索。只有迁移及状态行为足够复杂时才考虑 State；这三个判断都不要求为每个名称新建一个类。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Strategy（策略）">以共同契约承接不同求解规则；本章分别优化边数与费用，而非保证答案相同。</GlossaryItem>
+  <GlossaryItem term="前后置契约">先约定哪些图能计算，再约定成功、失败及最优性的判断办法；函数签名只是其中一部分。</GlossaryItem>
+  <GlossaryItem term="Context（上下文）">拿着当前策略并发起委托的使用方；它不必知道算法细节，也不替用户决定目标。</GlossaryItem>
+  <GlossaryItem term="ConcreteStrategy（具体策略）">落实某个目标的函数或对象；本章两个函数共用搜索工具，但排序目标不同。</GlossaryItem>
+</Glossary>
+
+## 资料与边界
+
+- [InformIT 官方书目与目录](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)：本次访问核对了书名、作者、出版信息和大章目录；Strategy 及十三项结构依照站内既有正式单元映射组织。书目中的其他模式授权样章不等于策略章全文授权；本页不声称本次获得策略章细目或读取、翻译其原文。
+- [TypeScript 官方：函数类型](https://www.typescriptlang.org/docs/handbook/2/functions.html)：核对函数表达式类型与回调参数，支持以函数承担策略的实现。
+- [MDN：Array.prototype.sort](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)：核对比较器、稳定排序和原地排序；代码只排序自己创建的 frontier。
+- [Boost Graph：Dijkstra shortest paths](https://www.boost.org/doc/libs/1_89_0/libs/graph/doc/dijkstra_shortest_paths.html)：核对非负权前提、最短距离的确认过程；本章使用原创 TypeScript 小规模实现，不复刻 Boost API。
+
+<Attribution
+  sourceUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+  workTitle="Design Patterns: Elements of Reusable Object-Oriented Software（Gamma、Helm、Johnson、Vlissides，Addison-Wesley，1994）"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

@@ -11,7 +11,7 @@ qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
 officialUnitId: designpatterns-19
-draft: false
+draft: true
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -27,7 +27,7 @@ import { IteratorCursorTraversalLab } from "@/components/mdx/design-patterns/ite
 <Objectives>
 
 - 能解释独立游标如何隐藏聚合的数组、树或堆表示，并区分 `hasNext`、`next` 和耗尽状态。
-- 能修改本章实验，切换深度优先与优先级遍历，逐项读取任务，注入集合修改反例并重置游标。
+- 能修复版本化游标的耗尽检查，用断言验证空集、独立游标与修改冲突，并在图中观察顺序和重建遍历。
 - 能回答：当遍历期间集合会变化时，应该选择快照、fail-fast 还是弱一致策略，并说明理由。
 
 </Objectives>
@@ -45,7 +45,7 @@ import { IteratorCursorTraversalLab } from "@/components/mdx/design-patterns/ite
 </Callout>
 
 <Callout type="trap" title="耗尽后继续返回最后一个元素">
-  **现象 →** 循环忘记检查结束状态，`next` 重复返回元素或越过边界。 **原因 →** 没有定义游标耗尽后的合同。 **修法 →** 让 `hasNext` 可重复查询，并让越界读取明确失败或返回结束结果。
+  **现象 →** 循环忘记检查结束状态，`next` 重复返回元素或越过边界。 **原因 →** 没有定义游标耗尽后的合同。 **修法 →** 本章让 `hasNext` 可重复查询，越界 `next` 固定抛出 `iterator exhausted`，不返回未声明的结束值。
 </Callout>
 
 <Callout type="trap" title="遍历时修改集合却不声明一致性">
@@ -54,7 +54,9 @@ import { IteratorCursorTraversalLab } from "@/components/mdx/design-patterns/ite
 
 ## 来源、版次与独立重写边界
 
-本章以 [InformIT 官方书目、目录与获授权样章页](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)核对 GoF 模式目录范围，并以 [Pearson/Addison-Wesley 官方书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)交叉核对版次信息。模式语言的历史语境参考 [GoF 作者十年回顾](https://www.informit.com/articles/article.aspx?p=1327762)，TypeScript 的类与接口表达参考 [TypeScript 官方类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)。
+本章以 [InformIT 官方书目、目录与获授权样章页](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)核对 GoF 模式目录范围，并以 [Pearson/Addison-Wesley 官方书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)交叉核对版次信息。模式语言的历史语境参考 [GoF 作者回顾（2009 年重刊 1994 年文章）](https://www.informit.com/articles/article.aspx?p=1327762)，TypeScript 的类与接口表达参考 [TypeScript 官方类手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)。
+
+上述书目页提供宏观目录与部分模式样章入口，并未提供 Iterator 正文；耗尽错误、版本检查优先级与数组复制策略是本章自定合同，不是原书或 JS 标准要求。TypeScript 手册只用于核对类、接口与 `readonly` 的语言表达。
 
 本文的任务聚合、独立游标、深度优先与优先级策略、TypeScript 切片、交互实验和练习均为独立教学重写，不声称复现原书正文、原书代码或任何生产集合库的完整实现。实验只用于观察遍历协议与修改一致性，不代表真实并发容器的完整保证。
 
@@ -114,13 +116,16 @@ Aggregate 保存任务并决定能创建哪些遍历策略；Iterator 声明 `ha
 
 ### 实现
 
-实现时明确游标的初始位置、耗尽行为和重复查询语义，并选择快照、fail-fast 或弱一致策略。若聚合有版本号，迭代器可以在 `next` 前检查版本；若底层资源昂贵，应在结束或异常时释放资源。不要让 `next` 静默重复最后一项。
+实现时明确游标的初始位置、耗尽行为和重复查询语义，并选择快照、fail-fast 或弱一致策略。本章版本化实现的 `hasNext` 与 `next` 都先检查版本、再判断耗尽；若底层资源昂贵，应在结束或异常时释放资源。不要让 `next` 静默重复最后一项。
 
 ### 示例代码
 
-下面的 TypeScript 切片展示一个最小的独立游标。调用者不需要知道数组索引，迭代器也能让结束状态可观察：
+**组装标签 A（文件起点）：** 本页所有 `ts` 块按 A → B → C → D → E → F 顺序（含问题 1 答案）保存到一个独立文件 `iterator-contract.ts`。A 的 `export {}` 将接口限制在本模块，不与 JavaScript 标准库同名接口合并；B、C 是续接定义，D–F 是续接断言。交互组件是独立示意，不参与这个文件的拼接。
+
+这里始终是自定义 `next(): T`，不是标准 JS 的 `IteratorResult<T>`，也不支持直接 `for...of`。成功读取推进一格；空集、耗尽与重复耗尽均抛出同一错误且不推进。`hasNext` 不消费元素。基础实现复制字符串数组，外部修改原数组不会改变它的遍历：
 
 ```ts
+export {};
 interface Iterator<T> {
   hasNext(): boolean;
   next(): T;
@@ -129,7 +134,10 @@ interface Iterator<T> {
 class TaskIterator implements Iterator<string> {
   private cursor = 0;
 
-  constructor(private readonly tasks: string[]) {}
+  private readonly tasks: readonly string[];
+  constructor(tasks: readonly string[]) {
+    this.tasks = [...tasks];
+  }
 
   hasNext() {
     return this.cursor < this.tasks.length;
@@ -152,17 +160,19 @@ class TaskIterator implements Iterator<string> {
 
 ## 章专属实验：沿游标观察遍历协议
 
-先预测：深度优先与优先级遍历的第一项分别是什么？读取最后一项后，`hasNext` 应该返回什么？再注入集合修改，判断旧游标是否应该继续。
+先预测：稳定顺序与优先级遍历的第一项分别是什么？读取最后一项后，`hasNext` 应该返回什么？图中 `hasNext` 提示的可读项就是下一次 `next` 返回的当前项，查询不会推进位置。
+
+**独立示意边界：** “深度优先”仅用预排的 A → B → C → D 示意一种稳定顺序，没有实现任意树的 DFS；优先级顺序为 B → A → C → D。切换策略、加入或移除 X 都会将两个位置清零，创建新遍历；集合变更还会递增图中版本号；加入 X 后稳定顺序为 A → X → B → C → D，优先级为 X → B → A → C → D。图中耗尽以拒绝提示代替抛错，**没有保留旧游标来演示 fail-fast；版本冲突用下方代码断言验证。** 序列槽图中 A、B 各有一支位置箭头和已消费圆点；`next()` 只推进 A，`next B` 只推进 B，两个游标都能到达不可读取的 END 槽。
 
 <Stepper>
   <Step title="1. 识别聚合与独立游标">
-    先观察任务集合、当前顺序和 cursor。不要点击读取，写下调用者为什么不应该知道任务是数组、树还是优先级队列。
+    先观察序列槽、A/B 箭头与 END。先推进 A 两次、再推进 B 一次，预测圆点位置；确认 B 不会从 A 的位置接着读。调用者不需要知道任务是数组、树还是优先级队列。
 
     <IteratorCursorTraversalLab />
 
   </Step>
   <Step title="2. 对比两种遍历顺序">
-    选择“优先级遍历”，预测第一项，再切换回“深度优先遍历”。确认策略变化只创建或选择另一个游标，不需要修改调用者的读取代码。
+    选择“优先级遍历”，预测第一项，再切换回“深度优先遍历”。确认策略变化会从位置零重建遍历，不需要修改调用者的读取代码。
 
     <IteratorCursorTraversalLab />
 
@@ -174,7 +184,7 @@ class TaskIterator implements Iterator<string> {
 
   </Step>
   <Step title="4. 注入集合修改并重置">
-    打开“遍历中加入任务”，观察顺序和一致性提示；最后点击“重置实验”，确认策略、任务集合、cursor 和轨迹回到初始状态。
+    点击“加入任务并重建遍历”，观察版本递增、新顺序与 A/B 位置归零；最后点击“重置实验”，确认策略、任务集合、cursor 和轨迹回到初始状态。
 
     <IteratorCursorTraversalLab />
 
@@ -183,32 +193,55 @@ class TaskIterator implements Iterator<string> {
 
 ## 把游标合同写进 TypeScript
 
-接口只说明如何读取，不会自动决定集合修改后的行为。下面的切片加入版本检查，让迭代器在聚合变化时快速失败，而不是返回含糊结果：
+**组装标签 B（续接 A）：** 版本化实现也复制数组以固定本次顺序，但选择更严格的 fail-fast 策略：`hasNext` 与 `next` 每次都先读版本；不匹配就抛出 `collection modified during iteration`，即使已经耗尽也优先报告冲突。版本相同才检查末尾。这样 `hasNext` 不会在冲突时用 `false` 隐藏失效；前一次查询为 `true` 也不保证修改后的 `next` 成功。
+
+版本号由聚合单调递增，不能改回旧值。此例是同步、无副作用的版本读取，不是线程安全保证；浅复制只固定元素引用，不冻结对象内部字段。
 
 ```ts
 class VersionedIterator<T> implements Iterator<T> {
   private cursor = 0;
-
+  private readonly snapshot: readonly T[];
   constructor(
-    private readonly snapshot: readonly T[],
+    snapshot: readonly T[],
     private readonly expectedVersion: number,
     private readonly readVersion: () => number,
-  ) {}
-
-  hasNext() {
-    return this.cursor < this.snapshot.length;
+  ) {
+    this.snapshot = [...snapshot];
   }
 
-  next() {
+  hasNext() {
     if (this.readVersion() !== this.expectedVersion) {
       throw new Error("collection modified during iteration");
     }
+    return this.cursor < this.snapshot.length;
+  }
+
+  next(): T {
+    if (!this.hasNext()) throw new Error("iterator exhausted");
     return this.snapshot[this.cursor++];
   }
 }
 ```
 
-如果业务需要读到一致快照，可以在创建迭代器时复制元素；如果允许弱一致，则应记录可能漏读或重复的边界。关键是把选择写成合同，而不是让调用者猜测底层容器行为。
+**组装标签 C（续接 B）：** 最小聚合只暴露添加操作；每次添加先完成数据变更并递增版本，再允许下一次读取。它创建的游标各有自己的位置，但共享版本来源：消费一个游标不影响另一个；修改聚合会让所有旧游标失效，新建游标才能读到新集合。其他删除、替换、重排操作若要加入，也必须同步递增版本；绕过聚合直接改数据不在合同内。
+
+```ts
+class VersionedTasks {
+  private tasks: string[] = [];
+  private version = 0;
+  add(task: string) {
+    this.tasks.push(task);
+    this.version++;
+  }
+  iterator(): Iterator<string> {
+    return new VersionedIterator(
+      this.tasks, this.version, () => this.version,
+    );
+  }
+}
+```
+
+如果业务需要不受后续添加影响的字符串快照，使用 A 的复制策略即可；B 虽复制数组，仍在版本变化时拒绝继续。对象元素还需另定深层状态策略。弱一致允许哪些漏读或重复也要另写合同，本章不实现弱一致容器。
 
 ## 练习、答案与 13 个节点验收
 
@@ -216,16 +249,87 @@ class VersionedIterator<T> implements Iterator<T> {
 
 本组练习覆盖：模式名称与分类；意图；别名；动机；适用性；结构；参与者；协作；后果；实现；示例代码；已知应用；相关模式。
 
-**问题 1：改 Demo 代码。** 为实验增加一个“只返回未完成任务”的过滤迭代器。它应复用已有的 `hasNext`/`next` 合同，还是把过滤逻辑交给调用者？请说明如何保持游标独立。
+**问题 1：改代码并运行。** 在独立的 `iterator-contract.ts` 中，把 B 的 `next` 暂改为只检查版本后执行 `return this.snapshot[this.cursor++]`（旧写法），运行下列断言，确认空集测试失败；再恢复 B 的边界检查。解释为什么冲突与末尾同时成立时必须先报冲突，以及为什么两个独立游标仍会一起失效。不要把旧写法作为新的代码块追加或改成标准 JS 协议。
 
 <Answer>
-  可以实现一个包装或专用迭代器，内部持有基础迭代器并在 `hasNext` 中寻找下一个未完成任务；调用者仍只依赖同一合同。每个过滤迭代器需要自己的当前位置和待返回项缓存，不能共享另一个调用者的游标。
+
+参考修复就是 B：`next` 复用 `hasNext` 的版本检查与末尾判断，失败不推进。每个实例独立保存 `cursor`，但共享同一个聚合版本；位置独立不等于隔离集合修改。
+
+**组装标签 D（续接 C）：** 无第三方测试库的断言助手。`equal` 验证值，`throws` 同时验证确实抛错和错误消息；正常返回 `undefined` 也会判失败。
+
+```ts
+function equal(actual: unknown, expected: unknown) {
+  if (actual !== expected) {
+    throw new Error(`expected ${expected}, got ${actual}`);
+  }
+}
+function throws(action: () => unknown, message: string) {
+  try { action(); } catch (error) {
+    if (error instanceof Error && error.message === message) return;
+    throw error;
+  }
+  throw new Error(`expected error: ${message}`);
+}
+const end = "iterator exhausted";
+const conflict = "collection modified during iteration";
+```
+
+**组装标签 E（续接 D）：** 对两种实现运行相同的空集、重复查询、末尾、重复越界、双游标与输入数组修改测试。这里只声明并测试按输入顺序向前读取，不宣称实现逆序遍历或树 DFS。
+
+```ts
+const factories = [
+  (xs: string[]): Iterator<string> => new TaskIterator(xs),
+  (xs: string[]): Iterator<string> => new VersionedIterator(xs, 0, () => 0),
+];
+for (const create of factories) {
+  const empty = create([]);
+  equal(empty.hasNext(), false);
+  throws(() => empty.next(), end);
+  throws(() => empty.next(), end);
+  const input = ["A", "B"];
+  const left = create(input), right = create(input);
+  input.push("X"); // 两个实现都复制数组；这里未修改聚合版本。
+  equal(left.hasNext(), true); equal(left.hasNext(), true);
+  equal(left.next(), "A"); equal(left.next(), "B");
+  equal(right.next(), "A"); equal(right.next(), "B");
+  for (const cursor of [left, right]) {
+    equal(cursor.hasNext(), false); equal(cursor.hasNext(), false);
+    throws(() => cursor.next(), end); throws(() => cursor.next(), end);
+    equal(cursor.hasNext(), false);
+  }
+}
+```
+
+**组装标签 F（续接 E）：** 聚合修改分别击中空集、已耗尽、仍有剩余项的游标；旧查询不能为修改后的读取背书，新游标可以读取新增项。用本机 TypeScript 编译器执行 `tsc --strict --skipLibCheck --target ES2020 --module commonjs --outDir out iterator-contract.ts`，再执行 `node out/iterator-contract.js`；应打印通过消息。命令不是待拼接的 TypeScript。
+
+```ts
+const tasks = new VersionedTasks();
+const beforeAdd = tasks.iterator();
+equal(beforeAdd.hasNext(), false);
+tasks.add("A");
+throws(() => beforeAdd.hasNext(), conflict);
+throws(() => beforeAdd.next(), conflict); // 空集 + 冲突：冲突优先。
+const finished = tasks.iterator(), pending = tasks.iterator();
+equal(finished.next(), "A"); equal(finished.hasNext(), false);
+equal(pending.hasNext(), true);
+tasks.add("B");
+for (const old of [finished, pending]) {
+  throws(() => old.hasNext(), conflict);
+  throws(() => old.next(), conflict);
+  throws(() => old.next(), conflict);
+}
+const fresh = tasks.iterator();
+equal(fresh.next(), "A"); equal(fresh.next(), "B");
+equal(fresh.hasNext(), false); throws(() => fresh.next(), end);
+console.log("iterator contract assertions passed");
+```
+
 </Answer>
 
 **问题 2：做一次拒绝决定。** 集合会在遍历期间被多个线程修改，而业务要求结果可重现。为什么不能默认使用弱一致迭代器？
 
 <Answer>
-  弱一致允许读到变化中的视图，可能漏读或重复，不能满足可重现要求。应选择快照或带版本的 fail-fast 策略，并在冲突时重试或明确返回错误。
+  弱一致允许读到变化中的视图，可能漏读或重复，不能满足可重现要求。应先定义一致快照的捕获方式；带版本的 fail-fast 只能检测受控修改并报错，必要时重新捕获、重试，不能独自保证多线程下的原子性或可重现性。
 </Answer>
 
 **问题 3：比较相邻模式。** 一个需求是遍历一棵整体与部分组成的树，另一个需求是在树结构稳定后增加导出和审计操作。分别优先评估什么模式？
@@ -242,7 +346,7 @@ class VersionedIterator<T> implements Iterator<T> {
 - `hasNext`、`next` 和耗尽状态共同构成读取合同。
 - 不同遍历策略可以拥有不同游标，而调用者保持不变。
 - 集合修改必须明确快照、fail-fast 或弱一致策略。
-- 通过实验能切换策略、逐项读取、触发耗尽并重置。
+- 图中可重建遍历，代码断言验证旧游标失效。
 
 ## 名词解释
 

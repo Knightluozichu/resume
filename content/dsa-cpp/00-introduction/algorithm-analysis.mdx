@@ -1,210 +1,536 @@
 ---
-title: "第2章 Algorithm Analysis：从代码结构推导增长率"
+title: "算法分析：先定义成本，再数循环"
 type: B
 section: "导论与分析"
 order: 1
-description: "按第3版原章建立渐近数学背景、RAM式计算模型、分析目标和运行时间计算规则，并用四版最大子序列和及三种对数算法核查推导。"
+description: "从输入模型和情形出发，用严格的渐近界、变量循环上界与真实操作计数核验运行时间推导。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: dsaa3-02
+draft: true
+qualityVersion: 2
 ---
 
+import { DsaAlgorithmAnalysisCostLab } from "@/components/mdx/dsa-cpp/dsa-algorithm-analysis-cost-lab";
 
-## 从“为什么不能只看一次计时”开始
+{/* 知识与图示决策：本官方大章不止五个概念，按五项范围组织而非伪装为五个新概念。算法分析/计数与计时→实验计数条及代码；数学背景（O、Ω、Θ、小o、求和、对数）→不等式见证、三角网格及参数轨迹；模型（输入规模、RAM、字长、辅助空间）→受限C++代码对照；分析目标（最好/最坏/平均/期望、契约）→查找逐位置计数表和程序B；运行时间计算（顺序、分支、依赖上界、最大子序列和、二分、欧几里得、快速幂）→实验及推导表。所有Term进入Glossary。 */}
 
-algorithm analysis（）不是 stopwatch ranking。一次运行时间混合了机器频率、编译器、缓存、输入分布和系统噪声；算法分析先隔离随 N 增长的结构成本，再由实验检查模型是否适合目标机器。
+## 学习目标
 
-先预测：算法 A 在 N=1000 时用1 ms，算法 B 用5 ms，能否断言 A 更好？若 A 是 quadratic、B 是 linear，当 N 扩大一千倍，A 的工作量大约扩大一百万倍，B 只扩大一千倍；常数优势会被增长阶反转。反过来，小 N 下也不能因为 B 渐近更优就忽略分配、递归和 cache 的固定成本。
+<Objectives>
 
-官方第3版第2章按四节推进：**Algorithm Analysis、Mathematical Background、Model、What to Analyze、Running Time Calculations**。顺序不能颠倒：先定义比较语言，再写计算模型，接着指定究竟分析什么，最后才从代码推导。
+- 能指定输入规模、计数事件与输入情形，并解释为什么操作次数不是一次运行的秒数。
+- 能推导三角循环和倍增循环的精确计数，用常数见证证明渐近界，并修改 C++17 循环核验新公式。
+- 能回答：两层循环一定执行平方次吗？参数减半就一定是对数时间吗？
 
+</Objectives>
 
-## 2.1 Mathematical Background
+## 直觉：工厂多来一批订单，会多做多少工作？
 
-数学背景（）从量词开始。对最终非负函数 T(N) 与 f(N)：
+同一工厂今天处理六件货，明天处理十二件。逐件贴标签只要做两倍工作；如果每件货都要和其他货逐一核对，工作就不止翻倍。我们要从工作安排推算增长，而非拿一次快慢作结论。
 
-$$
-T(N)=O(f(N))
-\iff
-\exists c>0,\exists N_0,\forall N\ge N_0:
-T(N)\le c f(N)
-$$
+只看今天的秒表，可能把机器快误认成办法好。先数到底做了哪些动作，再看机器花了多久，才知道应该换设备，还是换处理办法。
 
-O 是 asymptotic upper bound，不是“精确等于”。同一个 3N+2 同时属于 O(N)、O(N²) 和 O(2^N)，但通常选最紧且最简单的上界。lower bound 与 tight bound 分别是：
+## 一、算法分析：先写一份可检查的成本契约
 
-$$
-T(N)=\Omega(f(N))
-\iff
-\exists c>0,\exists N_0,\forall N\ge N_0:
-T(N)\ge c f(N)
-$$
+<Term def="研究算法消耗的时间、空间等资源如何随输入规模变化。">算法分析</Term>
+不是给代码贴一个“大
+O”标签。先明确：解决什么问题、哪些输入合法、用什么量表示大小、数哪种操作、讨论哪种情形。作者教材网站把数学成本拆成“每条语句的成本
+×
+执行频次”，再对所有语句求和；本章实验选择其中一个可观察事件。[事实依据：Sedgewick
+/ Wayne §1.4](https://algs4.cs.princeton.edu/14analysis/)。
 
-$$
-T(N)=\Theta(f(N))
-\iff
-T(N)=O(f(N))
-\land
-T(N)=\Omega(f(N))
-$$
+<Term def="选定一种基本事件，记录执行时该事件出现的次数。">操作计数</Term>
+例如“每进入一次循环体记
+1”。实验的一个格子就是一次事件，不计循环比较、递增和输出。这样的计数可检查公式，却不是完整指令数。若循环体和控制操作都为常数成本，非空大规模输入下二者通常同阶；空循环仍有进入函数和判断的成本。
 
-little-o 表示严格更慢的增长：
+<Term def="程序在指定机器与环境中从开始到结束经历的时间。">实际耗时</Term>
+还受编译优化、缓存、分支预测、内存分配和系统调度影响。要测它，应固定编译参数与输入分布，重复运行，记录波动，把输出移出被测区间并消费结果以防无用计算被优化掉。C++17
+的 `std::chrono::steady_clock`
+保证时间点不倒退，但不保证零噪声；本章**不把计数换算成毫秒，也不提供伪造的计时结果**。[标准工作草案
+N4659：`[time.clock.steady]`](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4659.pdf)。
 
-$$
-T(N)=o(f(N))
-\iff
-\lim_{N\to\infty}\frac{T(N)}{f(N)}=0
-$$
+## 二、数学背景：上界、下界与紧确界不是情形名称
 
-因此 N 是 o(N log N)，但 N log N 不是 o(N log N)。若极限不存在，不能只凭几张样本图宣称 little-o；第3版勘误也专门修正了对 oscillating ratio 的表述。
+### 2.1 符号与量词
 
-### 运算规则与支配项
+渐近符号的比较关系可核对 [Albert R. Meyer 的 MIT 6.042 渐近记号讲义](https://courses.csail.mit.edu/6.042/spring18/asymptotic-notation.pdf)；下文把它们展开为可直接检查的不等式量词，而不是依靠曲线长得像。
 
-若两段代码顺序执行，成本相加，最终由较快增长项支配：
+| 符号        | 本章含义                           |
+| ----------- | ---------------------------------- |
+| $n$         | 输入规模，非负整数                 |
+| $T(n)$      | 已经选定情形后的非负成本函数       |
+| $f(n)$      | 用来比较增长的函数，充分大时为正   |
+| $c,c_1,c_2$ | 正常数，不能随着 $n$ 改变          |
+| $n_0$       | 不等式从此对所有整数规模成立的门槛 |
+| $q$         | 循环体执行次数；不是时间单位       |
 
-$$
-O(f(N))+O(g(N))
-=
-O(\max(f(N),g(N)))
-$$
-
-若一段在另一段每次迭代中执行，成本相乘。常数因子和低次项在 asymptotic class 中省略，但精确计数仍可用来检查推导和解释 crossover。
-
-增长率的常见顺序是：
+<Term def="从某个规模起，成本不超过比较函数的某个固定常数倍。">大 O 上界</Term>
+的定义是：
 
 $$
-1 \prec \log N \prec N \prec N\log N \prec N^2 \prec N^3 \prec 2^N
+T\in O(f)\iff\exists c>0,\exists n_0,\forall n\ge n_0:\quad 0\le T(n)\le cf(n).
 $$
 
-这不是说前者在每个 N 都更小；它说比值在充分大 N 后趋向有利方向。工程报告应同时给 complexity class 和目标 N 区间。
+人话是：找出一条固定倍数的天花板，此后不能再越过。$3n+2\le5n$ 对 $n\ge1$ 成立，因此 $3n+2\in O(n)$；它也属于 $O(n^2)$，只是不够紧。
 
-## 2.2 Model
+<Term def="从某个规模起，成本不低于比较函数的某个固定正常数倍。">
+  大 Ω 下界
+</Term>
+的定义是：
 
-计算模型（）决定证明到底证明了什么。原章采用简化的 RAM-style model：assignment、comparison、简单 arithmetic 和一次 memory access 都按常数时间；程序顺序执行；整数大小足以容纳目标值。
+$$
+T\in\Omega(f)\iff\exists c>0,\exists n_0,\forall n\ge n_0:\quad T(n)\ge cf(n)>0.
+$$
 
+人话是：找出一条最终不会跌破的地板。$3n+2\ge3n$ 给出 $\Omega(n)$。这里界定的是选定函数；不能据此宣称“任何解决同一问题的算法都至少需要这么久”，那是另一种需要证明的问题下界。
 
-模型有意忽略 cache、branch prediction、allocation、I/O 和 parallelism，优点是能比较算法结构，缺点是结论不能直接替代 wall-clock prediction。若操作本身不是 constant，例如比较长度为 L 的 string，单次 comparison 可能要 O(L)；若整数有 N bits，大整数 multiplication 也不能再当 O(1)。
+<Term def="同一个增长函数同时给出最终的常数倍上界和下界。">大 Θ 紧确界</Term>
+把两者合并：
 
-input size 也必须选对。数组算法通常用元素个数 N；图算法用 vertices V 与 edges E；整数算法应考虑 bit length log value；矩阵算法常用 rows 与 columns。把多个独立维度强行压成 N，会隐藏 sparse/dense 差异。
+$$
+T\in\Theta(f)\iff\exists c_1,c_2>0,\exists n_0,\forall n\ge n_0:\quad c_1f(n)\le T(n)\le c_2f(n).
+$$
 
-## 2.3 What to Analyze
+人话是：把成本夹在两条同形曲线之间。取 $c_1=3,c_2=5,n_0=1$，得到 $3n+2\in\Theta(n)$。O 不等于“最坏”，Ω 不等于“最好”；最好成本和最坏成本各自都可以讨论上下界。下节查找实例会分别计算它们。
 
-分析什么（）至少包含四项：
+### 2.2 严格增长与运算规则
 
-1. **输入尺寸**：N、V/E、rows/cols 或 bit length。
-2. **资源**：time、extra space、comparisons、allocations 或 I/O。
-3. **case**：worst、average、best，必要时 amortized 或 expected。
-4. **operation contract**：search 成功/失败，sort 是否稳定，update 是否计入 rebuild。
+<Term def="对每一个正常数倍，成本最终都比这个倍数的比较函数小。">小 o 严格上界</Term>要求更强：对**每一个** $c>0$，都存在一个可依赖 $c$ 的门槛，使此后 $0\le T(n)<cf(n)$。在本章 $f$ 最终为正的约定下，这等价于 $T(n)/f(n)\to0$。因此 $n=o(n^2)$，但 $n\ne o(n)$。若比值极限不存在，不能说它等于零；也不能只凭没有极限就否定 O。[Weiss 第 3 版勘误](https://users.cis.fiu.edu/~weiss/dsaa_c++3/errata.html)明确修正了“所有正常数”和“极限不存在”的表述。
 
+顺序执行时相加：若两段分别为 $O(f)$、$O(g)$，总和为 $O(f+g)=O(\max(f,g))$。这是上界推理，不自动提供 Θ。固定执行次数的嵌套可相乘；**内层次数取决于外层变量时，必须先求和**，见第五节的三角网格。
 
-worst case 给所有同规模输入的上界，容易陈述也适合 SLA；average case 需要明确概率分布，不能把“看起来随机”当 uniform；best case 只能说明存在幸运输入，通常不足以做容量规划。expected time 是算法内部随机性上的期望，也要区分输入是否 adversarial。
+常用增长次序是 $1,\log n,n,n\log n,n^2,n^3,2^n$，它比较充分大规模，不保证每个小输入上的快慢。对固定底数 $a,b>1$，$\log_a n=\log_b n/\log_b a$，相差常数倍；精确数轮次时却必须保留底数和取整。
 
-空间分析要区分 input storage 与 auxiliary space。递归调用栈、临时 merge buffer、hash table slack 都是实际资源。返回新容器与原地修改语义不同，不能只比较循环次数。
+## 三、计算模型：输入的“大小”与一个动作的“价格”
 
+<Term def="表示输入占多少数据，而不是输入数值本身有多大。">输入规模</Term>
+必须明示。数组通常取元素个数；图要分别记录顶点数和边数；整数值 $v\ge1$
+用二进制表示需要 $\lfloor\log_2v\rfloor+1$ 位。枚举 $1$ 到 $v$
+相对数值是线性的，相对位数却可能是指数级。实验的 $n$
+是人为指定的循环上界，而非一个隐含的数组长度。
 
-## 2.4 Running Time Calculations
+<Term def="把一个机器字的读写、比较和简单算术视为常数成本的顺序计算抽象。">RAM 模型</Term>适合先比较算法结构，但必须说明字长足以容纳所需数值。长度为 $L$ 的字符串比较可能检查 $L$ 个字符；无限精度整数乘法也不能永远当一次常数成本。下文 C++ 程序约束 `n <= 4096`，计数不会超过 $4096^2$；UI 进一步限制到 12 以画出每次事件。有限实验只能核验这些样本，渐近结论来自可推广的数学算法，不来自把固定宽度整数推到无穷大。
 
-运行时间计算（）从代码结构入手。
+<Term def="不含原始输入占用、但包含临时变量、缓冲区和递归栈的额外存储。">
+  辅助空间
+</Term>
+是另一种资源：纯计数器只需固定几个变量，属于常数空间；可视化为了保存每次事件会用与计数成正比的空间。不能把展示器的整条轨迹数组说成被分析循环本身的空间开销。后文最大子序列和的分治方法还要计入递归栈。
 
-### 简单语句、循环与条件
+## 四、分析什么：同样大小的输入未必走同样的路
 
-连续语句相加；单循环是每次 body cost 的总和；完整嵌套相乘；依赖循环边界写 summation。条件语句的 worst-case cost 是 test 加两个分支中较大者，而不是把互斥分支相加。
+<Term def="对所有同规模合法输入分别取成本的最小值和最大值。">
+  最好与最坏情形
+</Term>
+必须建立在同一个问题契约上。假设顺序查找长度为
+$n\ge1$、元素互异的数组，数“目标与一个元素的相等比较”，找到即返回；命中第一个元素只比
+1 次，命中末尾或查找失败都比 $n$ 次。于是最好为 Θ(1)，最坏为 Θ(n)。空数组为 0
+次元素比较。
+
+<Term def="在明确给定的输入概率分布上，对成本求加权平均。">平均情形</Term>
+不是把最好与最坏机械平均。若保证成功且目标等概率位于任意位置，设位置 $r$ 从 1
+开始，则：
+
+$$
+\mathbb E[C]=\sum_{r=1}^{n}\frac1n r=\frac{1}{n}\frac{n(n+1)}2=\frac{n+1}{2}.
+$$
+
+这个式子在说：每个位置的比较次数按相同概率加权。若失败概率是 $p$，成功时仍均匀，则成本为 $pn+(1-p)(n+1)/2$。不知道 $p$ 或成功位置分布，就不能给唯一平均值。
+
+| 输入 `[4, 7, 9]`，目标 | 被比较的位置 | 比较数 |
+| ---------------------- | ------------ | -----: |
+| 4                      | 0            |      1 |
+| 7                      | 0 → 1        |      2 |
+| 9                      | 0 → 1 → 2    |      3 |
+| 8（不存在）            | 0 → 1 → 2    |      3 |
+
+<Term def="对算法内部随机选择求平均的成本，需要说明哪些输入固定。">
+  随机算法期望
+</Term>
+可以在固定输入上取随机种子的平均，区别于上面的输入分布平均。最坏输入、随机种子与成功/失败条件不能混为一谈。均摊分析则考察一串操作的总成本分配，不要求输入随机；本书另章展开。本章实验四个循环的成本只取决于
+$n$，并没有可调的“幸运输入”。练习三用真正的数据相关查找补上这个差别。
+
+## 五、运行时间计算：从执行次数推出增长阶
+
+### 5.1 顺序、分支和变量循环上界
+
+连续语句成本相加；一次 `if/else` 只走一条分支，所以最坏上界为测试成本加两个分支上界的较大者；若要称为紧确的最坏成本，还要有输入能实际走到该分支。不能把互斥分支当成连续执行。
+
+<Term def="循环内部的执行次数随着外部循环变量变化。">变量循环上界</Term>
+是本章的主要陷阱。外层 `i=0..n-1`，内层 `j=0..i-1`，第 $i$ 行正好 $i$
+个格子。把正序行长与倒序行长配对，每对都是 $n-1$，共 $n$ 对，再除以 2：
+
+$$
+C(n)=\sum_{i=0}^{n-1}i=\frac{n(n-1)}2.
+$$
+
+这个式子就是下方三角形的面积计数。$n=6$ 时为 $0+1+2+3+4+5=15$，不是 36。对 $n\ge2$，$n-1\ge n/2$，因此 $n^2/4\le C(n)\le n^2/2$，仍然是 Θ(n²)。误把 15 算成 36 会破坏精确预算，**不一定改变增长阶**。
+
+若内层始终 `j < n`，每行才都是 $n$，总计 $n^2$。反过来，两层并不必然平方：若第 $i$ 轮只运行固定三次，就只有 $3n$ 次。若每次内层事件本身还需扫描长为 $i$ 的数据，总成本要再把每次事件的价格写进求和。
+
+### 5.2 对数从哪里来，什么时候不成立？
+
+<Term def="使重复乘除固定比例的参数越过终止边界所需的次数。">对数轮次</Term>
+来自参数变化，而非循环语法。倍增循环从 $k=1$ 开始，只要 $k\le n$
+就访问一次，随后乘 2。对 $n\ge1$，最后一个访问值是 $2^{q - 1}$，下一值越界：
+
+$$
+2^{q-1}\le n<2^q\quad\Longrightarrow\quad q=\lfloor\log_2n\rfloor+1.
+$$
+
+这个式子说：数不超过 $n$ 的二次幂有几个。$n=8$ 访问 `1,2,4,8` 共四次；$n=0$ 一次都不进，不能去算 $\log 0$。
+
+从 $k=n$ 开始每次向下取整除 2、直到 0，正整数也有同样的轮次。两种轨迹顺序不同：$n=6$ 的倍增是 `1,2,4`，减半是 `6,3,1`。若每轮都只做固定工作，总成本才为 Θ(log n)。若减半后还扫描当前的 $k$ 个元素，成本变成 $n+\lfloor n/2\rfloor+\cdots$，介于 $n$ 与 $2n$ 之间，是 Θ(n)。若有 $n$ 个外层任务且每个都完整倍增，则是 Θ(n log n)。
+
+### 5.3 交互：把“我以为”与“实际执行”分开
+
+先预测：把 $n$ 从 6 调到 12，三角循环会从 15 变为多少？把算法切成减半，是每一轮减半，还是总操作数恰好减半？
+
+<DsaAlgorithmAnalysisCostLab />
+
+先拖动“轨迹进度”，观察第几次命中落在哪个 `(i,j)`；再打开“误把内层上界固定为 n”，虚线格就是从未执行却被计入的工作。$n=6$ 声称 36、实际 15，多算 21。切换方形循环，错误假设恰好变成真前提，此开关应不再造成差异——这是负对照，不是另一个预设失败故事。
+
+倍增与减半模式把**参数值**画在横轴，每圆点只算一次，横坐标不是操作数。进度只截取执行轨迹，不改完整成本；计数条展示整次运行。重置应准确返回“三角、6、15/15、故障关闭”。实验不模拟缓存，不证明排序前提，也不能从 12 个样本外推所有输入。
+
+### 5.4 同一问题的四种算法：最大连续子序列和
+
+<Term def="在数组中选一段连续元素，使它们的总和最大。">最大连续子序列和</Term>
+必须先定语义：本章允许选空段，其和为 0；因此空数组和全负数组都返回
+0。下表的规模是数组长度，基本事件是把一个元素加进部分和。四种思路可由 [Weiss
+作者公开的
+MaxSumTest.cpp](https://users.cis.fiu.edu/~weiss/dsaa_c++3/code/MaxSumTest.cpp)核对；下文代码独立编写并增加范围保护，不直接运行原例的空数组递归入口。
+
+| 方法     | 工作如何产生                                                                                         | 时间 / 辅助空间          |
+| -------- | ---------------------------------------------------------------------------------------------------- | ------------------------ |
+| 三层枚举 | 对每对左右端点重新求和，长度为 $l$ 的区间有 $n-l+1$ 个；总加法 $\sum_{l=1}^n l(n-l+1)=n(n+1)(n+2)/6$ | Θ(n³) / Θ(1)             |
+| 增量枚举 | 左端固定后右端每走一步，只补加一个元素；每行长为 $n,n-1,\ldots,1$                                    | Θ(n²) / Θ(1)             |
+| 分治     | 左边最优、右边最优、跨中点的左后缀加右前缀，三者取最大                                               | Θ(n log n) / Θ(log n) 栈 |
+| 一趟扫描 | 维护以当前位置结束的非负最佳和；负前缀无法改善后续任何区间，故可丢弃                                 | Θ(n) / Θ(1)              |
+
+三层枚举的公式可由 $\sum l(n-l+1)=(n+1)\sum l-\sum l^2$ 代入 $\sum l=n(n+1)/2$ 与 $\sum l^2=n(n+1)(2n+1)/6$ 得出。增量枚举只做 $n(n+1)/2$ 次加法，正好对应练习二增加对角线后的网格。
+
+分治以 $n=2^h$ 说明：在每个非叶层，各子问题长度之和都是 $n$，因此每层扫描 Θ(n)；拆到单元素共有 $h=\log_2n$ 层扫描，加上 Θ(n) 叶子成本，得到 Θ(n log n)。非二次幂只让两半相差一个元素，不改变阶。不能只写递推式而省去“每层多少工作”。
+
+例如输入 `[-2,3,-1,4,-8]`，一趟扫描的“以当前位置结束的非负和”依次为 `0,3,2,6,0`，全局最大值依次为 `0,3,3,6,6`。丢弃的是对后续有害的负前缀，不是见到负元素就全部清零。程序 B 用独立的增量枚举实现作对照。
+
+### 5.5 三个对数案例不能套同一个理由
+
+| 算法与前提                               | 缩小过程和工作价格                                          | 可以得出的结论                                                     |
+| ---------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| 二分查找：有序、可常数时间随机访问的数组 | 一次中点比较后，剩余候选数至多为原来的一半；每轮工作固定    | 最坏 Θ(log n)，首次命中最好 Θ(1)；排序成本不包含在查找中           |
+| 欧几里得：正整数求最大公约数             | 更新 `(a,b)` 为 `(b,a % b)`；余数严格小于 b，但未必每轮减半 | 固定字余数运算视为常数时，轮数 O(log b)，不是对任意输入都 Θ(log b) |
+| 快速幂：非负整数指数 e                   | 指数每轮除 2，底数平方；奇数位另乘进结果                    | 乘法次数为 O(log e)，e=0 为常数；大整数乘法价格需另算              |
+
+[Meyer 的欧几里得算法讲义](https://courses.csail.mit.edu/6.042/spring18/gcd-euclid.pdf)同时说明余数更新为何保留最大公约数、为何会终止。比例证明需要**两轮**：设余数 $r=a\bmod b$。若 $r\le b/2$ 已减半；若 $r>b/2$，下一余数 $b\bmod r=b-r<b/2$。因此至少每两轮让第二参数减半。快速幂若在固定 C++ 整数里无约束地不断平方，会溢出，不能拿错误数值谈正确性。它们体现“先证明进展，再给每轮定价”，不是“凡有除二或取模都对数”。
+
+## 六、C++17 实验：计数真实执行，不填公式冒充运行
+
+下面所有代码独立编写。**程序 A**由标为 `A1`、`A2`、`A3` 的三个代码块按顺序拼成 `counter.cpp`，其中 A3 在练习二答案里；不要把程序 B 混进同一文件。代码块第一行注释标出归属。各块均不超过 30 行，完整源码就是这些块的拼接，没有隐藏依赖。
+
+A1 的 `++count` 位于真实循环体；公式只留在断言作为独立预期。范围检查先于循环和乘法，拒绝负值及过大输入，不靠有符号溢出终止循环。[N4659 `[expr]`、`[expr.mul]`](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4659.pdf)规定不可表示的算术结果及整数除法语义；本例非负整数除 2 与向下取整一致。
 
 ```cpp
-for (int i = 0; i < n; ++i)          // N iterations
-    for (int j = 0; j <= i; ++j)     // i+1 iterations
-        ++count;
+// A1 — counter.cpp
+#include <cassert>
+#include <cstdint>
+#include <iostream>
+#include <stdexcept>
+enum class Kind { triangle, square, doubling, halving };
+void checkN(int n) {
+    if (n < 0 || n > 4096) throw std::out_of_range("n");
+}
+std::uint64_t countBody(int n, Kind kind) {
+    checkN(n);
+    std::uint64_t count = 0;
+    if (kind == Kind::triangle || kind == Kind::square) {
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < (kind == Kind::triangle ? i : n); ++j)
+                ++count;
+    } else if (kind == Kind::doubling) {
+        for (int k = 1; k <= n; k *= 2) ++count;
+    } else if (kind == Kind::halving) {
+        for (int k = n; k > 0; k /= 2) ++count;
+    } else throw std::invalid_argument("kind");
+    return count;
+}
+void exerciseCounter();
 ```
 
-精确 body count 是 N(N+1)/2，所以 Θ(N²)。若第二个循环不是从0到N，而是每次 `j *= 2`，就应计 log N 次。
-
-
-### 最大连续子序列和：同一规格的四种增长阶
-
-作者官方 `MaxSumTest.cpp` 在同一数组 `[4,-3,5,-2,-1,2,6,-2]` 上实现四版 maximum contiguous subsequence sum，答案都是11。
-
-1. cubic 版本枚举 left、right，并再扫描区间求和。
-2. quadratic 版本固定 left 后递增累加，消除第三重重复。
-3. divide-and-conquer 版本取左、右与跨中心最优，递推是 T(N)=2T(N/2)+O(N)。
-4. linear 版本保留当前非负 prefix；一旦 current sum 为负，任何未来区间带上它只会更差。
-
-
-linear 版本的核心实现是：
+A2 包括空输入、幂次边界、增长关系和拒绝输入；`0..128` 的三角与方形循环还逐项与公式比对。计数器本身也有运行成本，因此这里测试的是数值，不是基准性能。
 
 ```cpp
-int maxSubSum(const std::vector<int>& a) {
-    int maxSum = 0;
-    int thisSum = 0;
-    for (int value : a) {
-        thisSum += value;
-        if (thisSum > maxSum)
-            maxSum = thisSum;
-        else if (thisSum < 0)
-            thisSum = 0;
+// A2 — append to counter.cpp
+int main() {
+    for (int n = 0; n <= 128; ++n) {
+        const auto u = static_cast<std::uint64_t>(n);
+        assert(countBody(n, Kind::triangle) == (n == 0 ? 0 : u*(u-1)/2));
+        assert(countBody(n, Kind::square) == u*u);
     }
-    return maxSum;
+    assert(countBody(0, Kind::halving) == 0);
+    assert(countBody(7, Kind::doubling) == 3);
+    assert(countBody(8, Kind::doubling) == 4);
+    assert(countBody(9, Kind::halving) == 4);
+    assert(countBody(6, Kind::triangle) == 15);
+    assert(countBody(12, Kind::triangle) == 66);
+    for (int bad : {-1, 4097}) {
+        bool rejected = false;
+        try { (void)countBody(bad, Kind::square); }
+        catch (const std::out_of_range&) { rejected = true; }
+        assert(rejected);
+    }
+    exerciseCounter();
+    std::cout << "triangle(6)=15; triangle(12)=66; assertions OK\n";
 }
 ```
 
-这里采用“允许空区间，因此全负数组答案为0”的规格。若题目要求非空区间，initialization 和 reset semantics 都要改变；复杂度相同不代表语义相同。
-
-divide-and-conquer 版本每层处理 O(N) border sums，共 log N 层：
-
-$$
-T(N)=2T(N/2)+cN=\Theta(N\log N)
-$$
-
-### 运行时间里的对数
-
-binary search 每次保留至多一半区间。区间长度从 N 到1最多减半 k 次，满足 N/2^k 不大于1，所以 k 至少为 log2 N。代码还要保持 invariant：若 x 存在，它始终位于 closed interval `[low, high]`。
-
+**程序 B**由接下来的 B1、B2 与练习三答案中的 B3 拼成 `cases.cpp`。输入限制为最多 12 个、每个在 `[-100,100]` 的整数，保证所有部分和在普通 `int` 的最低保证范围内。`CostResult.work` 数加法，不包括检查输入合法性的扫描；若把检查也计入总时间，一趟算法仍是 Θ(n)。
 
 ```cpp
-while (low <= high) {
-    int mid = low + (high - low) / 2;
-    if (a[mid] < x)
-        low = mid + 1;
-    else if (a[mid] > x)
-        high = mid - 1;
-    else
-        return mid;
+// B1 — cases.cpp
+#include <algorithm>
+#include <cassert>
+#include <iostream>
+#include <stdexcept>
+#include <vector>
+struct CostResult { int answer; int work; };
+void checkArray(const std::vector<int>& a) {
+    if (a.size() > 12) throw std::out_of_range("size");
+    for (int x : a)
+        if (x < -100 || x > 100) throw std::out_of_range("value");
+}
+CostResult maxLinear(const std::vector<int>& a) {
+    checkArray(a);
+    int best = 0, suffix = 0, additions = 0;
+    for (int x : a) {
+        suffix = std::max(0, suffix + x);
+        ++additions;
+        best = std::max(best, suffix);
+    }
+    return {best, additions};
 }
 ```
 
-用 `low + (high-low)/2` 避免 `low+high` 溢出。sorted precondition 是算法契约；对未排序数组，循环仍会很快结束，却可能返回错误答案。
-
-Euclid GCD 每轮以 remainder 缩小第二个 operand；快速幂把 exponent 除以2，并在 odd exponent 时补乘一次。二者代码外形不同，但 logarithmic proof 都来自整数参数按固定比例缩小。
-
+B2 在每个左端重新开始累加，是不同结构的对照，不是拿同一个一趟公式自证。查找只返回比较次数，因为本题分析的是成本；目标存在与否由测试数据明确给定。
 
 ```cpp
-long fastPower(long x, int n) {
-    if (n == 0) return 1;
-    if (n == 1) return x;
-    long half = fastPower(x * x, n / 2);
-    return n % 2 == 0 ? half : half * x;
+// B2 — append to cases.cpp
+CostResult maxQuadratic(const std::vector<int>& a) {
+    checkArray(a);
+    int best = 0, additions = 0;
+    for (std::size_t left = 0; left < a.size(); ++left) {
+        int sum = 0;
+        for (std::size_t right = left; right < a.size(); ++right) {
+            sum += a[right];
+            ++additions;
+            best = std::max(best, sum);
+        }
+    }
+    return {best, additions};
+}
+int searchComparisons(const std::vector<int>& a, int target) {
+    checkArray(a);
+    int comparisons = 0;
+    for (int x : a) {
+        ++comparisons;
+        if (x == target) break;
+    }
+    return comparisons;
 }
 ```
 
-### 检查分析，而不是用实验替代分析
+拼接完练习答案后运行以下命令；不要加 `-DNDEBUG`，否则 `assert` 不会检查。正常输出分别为 `triangle(6)=15; triangle(12)=66; assertions OK` 和 `max=6; additions=5/15; search assertions OK`。这些输出是断言完成后的摘要，不是复杂度的证明。
 
-推导后可 instrument basic operation count。把 N 按2倍增长，linear count 约2倍，quadratic 约4倍，cubic 约8倍；wall time 若严重偏离，应检查 compiler optimization、cache transition、allocation、overflow 或输入分布。
+```sh
+clang++ -std=c++17 -Wall -Wextra -Werror -pedantic counter.cpp -o counter
+./counter
+clang++ -std=c++17 -Wall -Wextra -Werror -pedantic cases.cpp -o cases
+./cases
+```
 
+## 七、常见误区
 
-## 一套可复核的分析流程
+<Callout type="trap" title="两层循环就写 n² 次">
 
+**现象 →** 实验三角模式实际 15 次，报告却写 36。**原因 →** 把随 i 变化的上界当作固定 n。**修法 →** 写出逐行次数再求和；Θ(n²) 可以正确，但精确次数仍可能错。
 
-## 本章回顾
+</Callout>
 
-1. 渐近分析研究资源随输入规模增长的规律，不等于一次机器计时。
-2. O 给上界、Ω 给下界、Θ 给紧确阶，little-o 表示严格更慢增长。
-3. 复杂度结论必须附 input size、cost model、resource 和 case。
-4. 顺序成本相加，嵌套成本相乘，依赖边界写求和，分支取可执行路径。
-5. 最大连续子序列和展示同一语义可有 N³、N²、N log N 和 N 四种实现。
-6. binary search、Euclid GCD 与 fast power 的 logarithm 都来自参数反复缩小。
-7. worst case 不依赖输入分布；average case 必须显式给出概率模型。
-8. instrumentation 用于核查推导与模型，不取代不变量和渐近证明。
+<Callout type="trap" title="大 O 是最坏，大 Ω 是最好">
 
+**现象 →** 把查找的 Ω(n) 当成最好成本。**原因 →** 把函数的界与选输入的方式混在一起。**修法 →** 先定义最好、最坏或平均成本函数，再分别证明它们的上下界。
+
+</Callout>
+
+<Callout type="trap" title="每轮减半就一定是对数时间">
+
+**现象 →** 当前区间减半、每轮又全量扫描，却仍报告 Θ(log n)。**原因 →** 只数轮数，忘记每轮价格。**修法 →** 求和 n+n/2+… 得 Θ(n)；还要检查大整数运算是否常数。
+
+</Callout>
+
+<Callout type="trap" title="增长阶相同就可以直接比较计时">
+
+**现象 →** 用插桩计数程序的一次耗时为算法排位。**原因 →** 插桩、编译优化和计数事件不等于机器指令。**修法 →** 把数值验证与独立性能测量分开，并报告机器、优化参数、输入分布和波动。
+
+</Callout>
+
+## 八、小结与练习
+
+- 先约定输入、成本和情形，再比较增长。
+- 变量上界先求和；严格量词给出上下界。
+- 层数不等于成本，减半也可能总计线性。
+
+<Exercises>
+
+**问题 1：证明不是读图：同为平方，为什么不是同一个数？**
+
+对三角成本 $C(n)=n(n-1)/2$，给出 Θ(n²) 的三个常数见证；算出 $n=6,12$ 时的真实值与故障声称值。是否能用两个样本证明 Θ？增加一条反驳“翻倍就精确四倍”的程序断言。
+
+<Answer>
+
+取 $c_1=1/4,c_2=1/2,n_0=2$，由 $n/2\le n-1\le n$ 得双边界。真实值为 15、66，故障声称为 36、144；相应多算 21、78。翻倍比率为 66/15=4.4，而非 4，低次项在有限输入不能丢弃。两个样本只能发现反例，不能证明所有大规模输入。A2 已有两个真实计数断言；可在 `main` 中再加 `assert(countBody(12, Kind::triangle) != 4 * countBody(6, Kind::triangle));`。方形则精确四倍，是重要的对照。
+
+</Answer>
+
+**问题 2：改循环代码：让对角线也执行**
+
+动手把三角循环中的 `j < i` 改为 `j <= i`，不要只改报告公式。预测空输入、n=1、n=6 的结果；说明为什么这与增量求最大子序列和的加法次数一致。将下面参考函数接入 A1/A2 并执行断言。
+
+<Answer>
+
+每行多一个事件，成为 $1+2+\cdots+n=n(n+1)/2$，比原三角多 $n$ 次。空输入外层不进，所以仍为 0；n=1 为 1；n=6 为 21。最大子序列的增量枚举行长方向相反，但总和相同。下面是**真正改过循环条件**的 A3；`exerciseCounter` 由 A2 调用，断言会实际执行。
+
+```cpp
+// A3 — append to counter.cpp
+std::uint64_t triangleInclusive(int n) {
+    checkN(n);
+    std::uint64_t count = 0;
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j <= i; ++j) ++count;
+    return count;
+}
+void exerciseCounter() {
+    assert(triangleInclusive(0) == 0);
+    assert(triangleInclusive(1) == 1);
+    assert(triangleInclusive(6) == 21);
+    for (int n = 0; n <= 128; ++n) {
+        const auto u = static_cast<std::uint64_t>(n);
+        assert(triangleInclusive(n) == u*(u+1)/2);
+        assert(triangleInclusive(n) == countBody(n, Kind::triangle) + u);
+    }
+    assert(countBody(12, Kind::triangle) != 4*countBody(6, Kind::triangle));
+    assert(countBody(12, Kind::square) == 4*countBody(6, Kind::square));
+}
+```
+
+</Answer>
+
+**问题 3：分布与语义：平均数和正确答案都要有前提**
+
+数组 `[4,7,9]` 的成功查找等概率落在三个位置；若另有 1/4 概率失败，平均比较数是多少？然后检验程序 B：输入 `[-2,3,-1,4,-8]`，两种最大子序列和算法是否返回同一答案，为什么加法次数不同？再用全负输入检查“允许空段”的契约。
+
+<Answer>
+
+成功时平均 `(1+2+3)/3=2`；混入失败后为 `(1/4)×3+(3/4)×2=9/4`。同一数组长度不能唯一决定查找成本。最大和为 6，线性法加 5 次，增量枚举加 15 次；全负时返回 0 而非最大负元素，因为允许空段。下面 B3 用四个等概率结果 `{1,2,3,3}` 验证混合分布的总比较数为 9；这个构造让成功概率与位置概率都符合题设。
+
+```cpp
+// B3 — append to cases.cpp
+int main() {
+    const std::vector<int> a{-2, 3, -1, 4, -8};
+    const auto linear = maxLinear(a), quadratic = maxQuadratic(a);
+    assert(linear.answer == 6 && quadratic.answer == 6);
+    assert(linear.work == 5 && quadratic.work == 15);
+    assert(maxLinear({}).answer == 0 && maxQuadratic({}).work == 0);
+    assert(maxLinear({-4, -1}).answer == 0);
+    assert(maxQuadratic({-4, -1}).answer == 0);
+    const std::vector<int> values{4, 7, 9};
+    int successfulTotal = 0;
+    for (int target : values) successfulTotal += searchComparisons(values, target);
+    assert(successfulTotal == 6);
+    assert(searchComparisons(values, 8) == 3);
+    assert(successfulTotal + searchComparisons(values, 8) == 9);
+    assert(searchComparisons({}, 8) == 0);
+    for (const auto& bad : {std::vector<int>(13), std::vector<int>{101}}) {
+        bool rejected = false;
+        try { (void)maxLinear(bad); }
+        catch (const std::out_of_range&) { rejected = true; }
+        assert(rejected);
+    }
+    std::cout << "max=6; additions=5/15; search assertions OK\n";
+}
+```
+
+</Answer>
+
+</Exercises>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="算法分析">
+    研究算法的资源用量怎样随输入变大，不是一份机器速度排行榜。
+  </GlossaryItem>
+  <GlossaryItem term="操作计数">
+    给明确的一种事件记次数；换一种事件，精确数字也会改变。
+  </GlossaryItem>
+  <GlossaryItem term="实际耗时">
+    机器真正经过的时间，包含模型没有描述的各种影响。
+  </GlossaryItem>
+  <GlossaryItem term="大 O 上界">
+    从某规模起，总有一个固定倍数能盖住成本函数。
+  </GlossaryItem>
+  <GlossaryItem term="大 Ω 下界">
+    从某规模起，成本不会低于比较函数的一个固定正常数倍。
+  </GlossaryItem>
+  <GlossaryItem term="大 Θ 紧确界">
+    成本最终夹在同一增长函数的两个正常数倍之间。
+  </GlossaryItem>
+  <GlossaryItem term="小 o 严格上界">
+    无论固定倍数取得多小，成本最终都能低于它。
+  </GlossaryItem>
+  <GlossaryItem term="输入规模">
+    用数据量描述输入大小；整数的数值和位数不是同一种规模。
+  </GlossaryItem>
+  <GlossaryItem term="RAM 模型">
+    把一个机器字的简单操作当作固定成本的抽象，不是完整硬件模型。
+  </GlossaryItem>
+  <GlossaryItem term="辅助空间">
+    输入之外额外占用的存储，包括递归调用栈。
+  </GlossaryItem>
+  <GlossaryItem term="最好与最坏情形">
+    固定规模后，分别挑最省与最费资源的合法输入。
+  </GlossaryItem>
+  <GlossaryItem term="平均情形">
+    明确输入出现概率以后，对成本求加权平均。
+  </GlossaryItem>
+  <GlossaryItem term="随机算法期望">
+    对算法自己的随机选择求平均，不等于假定输入均匀。
+  </GlossaryItem>
+  <GlossaryItem term="变量循环上界">
+    内层执行次数受外层变量影响，通常要逐行求和。
+  </GlossaryItem>
+  <GlossaryItem term="对数轮次">
+    反复乘除固定比例时，到达边界需要的轮数；还不是总时间。
+  </GlossaryItem>
+  <GlossaryItem term="最大连续子序列和">
+    求连续一段元素能得到的最大总和；本章允许空段。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与核查边界
+
+- **范围**：[InformIT 第 3 版目录，ISBN 9780321441461](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)用于对应官方 `dsaa3-02`：Algorithm Analysis、Mathematical Background、Model、What to Analyze、Running Time Calculations。目录不是事实全文证据，也不是开放许可。
+- **成本模型和输入情形**：[Robert Sedgewick / Kevin Wayne 的作者教材网站 §1.4](https://algs4.cs.princeton.edu/14analysis/)核对执行频次、增长与输入模型；不把另一教材误当 Weiss 原章全文。
+- **数学定义与收缩证明**：[Albert R. Meyer 渐近记号讲义](https://courses.csail.mit.edu/6.042/spring18/asymptotic-notation.pdf)核对 O、Θ、小 o 的关系；Ω 是把 O 的上下关系反向写出。[渐近性质讲义](https://courses.csail.mit.edu/6.042/spring18/asymptotic-properties.pdf)核对幂、对数、指数的增长次序；[欧几里得算法讲义](https://courses.csail.mit.edu/6.042/spring18/gcd-euclid.pdf)核对余数不变量和两步缩小。
+- **原作者可见资料**：[Weiss 第 3 版勘误](https://users.cis.fiu.edu/~weiss/dsaa_c++3/errata.html)核对渐近定义用语；[作者公开最大子序列和示例](https://users.cis.fiu.edu/~weiss/dsaa_c++3/code/MaxSumTest.cpp)核对四种算法及允许空段的语义。公开访问不等于开放改编许可。
+- **语言事实**：[C++17 工作草案 N4659](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4659.pdf)的 `[expr]`、`[expr.mul]`、`[time.clock.steady]`用于算术边界、整数除法及单调时钟语义。它是标准工作草案，不是本书正文。
+
+本章为中文独立重写，公式推导、实验及受限 C++17 程序为本站独立编写。来源已于 2026-09-24（Asia/Shanghai）实际 GET 核验并保存状态和哈希；不宣称获取原书完整正文、不声明原作具有 CC 许可。有限程序断言不替代渐近证明；浏览器双视口、注册集成和全站构建仍需单独验收，因此保留草稿。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Mark Allen Weiss · Data Structures and Algorithm Analysis in C++（第 3 版，ISBN 9780321441461）"
+/>

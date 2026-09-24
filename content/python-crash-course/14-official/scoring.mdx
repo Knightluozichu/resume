@@ -1,257 +1,539 @@
 ---
-title: "第14章：Scoring"
+title: "第14章：计分与重新开始"
 type: C
-section: "Part II · Projects · Alien Invasion"
+section: "第二部分 · 项目 · 外星人入侵"
 order: 14
-description: "为Alien Invasion加入Play restart、动态难度、score/high score、level和ship lives显示。"
+description: "从 Play 命中区域到整局重置，按碰撞对象计分，让难度、最高分、关卡和生命显示一致。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+practiceMode: code
+officialUnitId: pcc3-14
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccScoringLab } from "@/components/mdx/python-crash-course/v2/scoring";
+
+{/* 知识点清单（先于正文）：1 Play Button/Button class/start game：真实按钮矩形与点的半开命中区域、活动门禁，术语命中测试，实验开始/边界样本、练习1。2 新局与重开：跨局和本局字段分界、输入/弹/舰队/位置/方向/速度一起提交，术语原子重置，实验重开故障与Python start断言、练习3。3 Leveling Up/speedup scale/difficulty：相同时间位移线、清队前后补队图，术语动态难度，1.1速度与1.5取整分值，实验最后一只与练习2。4 Scoring/score points：一弹两只真实矩形碰撞与移除，术语碰撞映射，实际对象数结算、故障和预期失败测试、练习2。5 Scoreboard/High Scores/Displaying the Level/Displaying the Number of Ships：HUD得分最高分关卡生命图标、撞船清零、跨局不落盘，术语记分板，实验最后生命/重开、Python HUD绘制、练习3。视觉采用340×430战场与四阶段事件回放，不用通用卡片；SVG字号16起，按钮44px起，点按坐标逆变换，键盘等价原生按钮，暂停/单步/拖动/完整重置。来源出版社403只作outline-only，作者第14章公开代码与Pygame文档200用于事实核验；自主实现不复现原书正文。浏览器、registry及共享集成由main验收。 */}
 
 <Objectives>
 
-- 能实现Play Button的hit testing与restart transaction，区分window event、inactive state和完整reset
-- 能计算speedup scale与score scale，实现每清空一支fleet后提升difficulty、level和alien points
-- 能设计Scoreboard的score、high score、level与ship lives刷新协议，并验证数值与画面始终一致
+- 能修改 Play 的命中区域，并验证活动中重复点击不会重置正在进行的一局。
+- 能运行无图片依赖的游戏，改出正确的多目标计分、升级和完整重开行为。
+- 能回答：最后一只应按旧关还是新关分值计分？最高分为什么可以跨局，却不能跨程序重启？
 
 </Objectives>
 
-## 为什么 Scoring 是状态一致性问题
+## 游戏结束以后，还能公平地再来一局吗？
 
-score只是一个integer，但可见计分系统横跨collision、difficulty、restart、font rendering和screen layout。若只在`stats.score`上加点而忘记`prep_score()`，内部值正确、画面过期；若新game只清零score而不重置alien speed，玩家从高难度开始；若high score跟着restart清零，它就失去跨局比较意义。
+想象在一张地图上反复安排挑战：第一轮通过以后，下一轮走得更快；失败了则从起点再来。没有清楚的开始和结束规则，玩家点一次按钮，可能还带着上一轮的速度和障碍。
 
-先预测：最后一个Alien被击中时应先加分还是先重建fleet；新一局开始时哪些值归零、哪些保留；score从9995变为10005时右对齐锚点是否移动。接下来把每个答案写成state transition和render invalidation规则。
+屏幕上的数字也必须有来由：消灭了多少敌人、剩几次机会、是否刷新纪录，都要从实际发生的事情计算出来，而不是为了“看起来在变化”不断加数。本章让挑战过程和显示结果对得上。
 
-<Term def="一次Play操作中原子地重置统计、动态参数、Groups、HUD和active状态的过程。">restart transaction</Term>
+## 五组机制，把一次事件接到整局状态
 
-第12–13章已形成world loop，第14章增加一层presentation state。原则是data先变化，再显式重建其rendered representation；draw阶段只组合当前surfaces，不偷偷修改score或level。
+### 1. Play：画出来，不等于能够点击
 
-## Play Button：inactive world中的输入入口
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center"><Term def="判断输入点是否落在按钮矩形内；对应 hit testing。">命中测试</Term></span>先问“点在哪”，再问“现在能不能开始”。`Button`
+保存矩形并绘制文字，游戏控制器才决定是否接受开始请求。条件必须是
+`button.rect.collidepoint(pos) and not active`，否则隐藏的 Play
+区域仍可能在游戏中触发重开。
 
-`Button`持有screen、rect、message image与message rect。它不启动game，只负责可见geometry和draw；mouse click由`AlienInvasion._check_play_button()`解释。使用`button.rect.collidepoint(mouse_pos)`完成hit testing，并同时要求`not stats.game_active`，避免active游戏中点击同一区域意外清空进度。
+Pygame 矩形的右边、下边不包含在区域内。实验按钮范围是横向 `[90, 250)`、纵向 `[244, 300)`：中心点通过，`(250, 272)` 不通过。这不是减去一个随意的容差，而是与矩形碰撞规则一致的边界定义。
+
+看下方“首次开始 / 边界命中”：点按战场会移动十字标记；键盘可以聚焦“测试 Play 中心”或“测试右边界”按钮按 Enter。最后一步才提交结果。浏览器将指针坐标逆变换到 SVG 坐标，不能直接拿屏幕像素和 `viewBox` 数字比较。
+
+### 2. 开始与重开：一次提交整套新局状态
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center"><Term def="一次事件处理结束前完成所有相关状态更新，不让渲染读到半新半旧的一局；对应 atomic reset。">原子重置</Term></span>在这里是单线程事件逻辑，不是数据库事务，也不表示 Python
+多条赋值具有线程安全保证。新局需要一起重置分数、关卡、生命、速度、敌人分值、方向、子弹、舰队、飞船位置和按键状态，最后才打开
+`active`。任一字段遗漏，都可能让上一局偷偷影响下一局。
+
+最高分是例外：它属于本次程序运行，不属于某一局。因此应初始化在 `reset_stats()` 外面；每次得分后取历史最高值。重开不清高分，但关闭程序后没有任何文件写入，下一次启动仍为 0。
+
+实验“高难度结束后重开”把旧局设为第3关、速度1.21、每只112分，留下旧子弹和偏离中心的飞船。正常提交一次性恢复；故障开关故意漏掉难度初始化。实验的“完整重置”则模拟重新加载整个教具，会连高分和故障一起清除。
+
+### 3. 升级：改变速度，也改变下一关的分值
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center"><Term def="随关卡推进调整移动速度和奖励等参数；对应 dynamic difficulty。">动态难度</Term></span>在作者配套代码中分为不变设置和可变设置。清空舰队后，飞船、子弹、外星人的速度各乘
+`1.1`；每只外星人的分值执行 `int(points *
+1.5)`。下降距离、子弹数量上限不随之改变，不能把所有设置都乘一个数。
+
+从50分开始，分值依次是50、75、112、168；112来自 `int(75 * 1.5)`，不是四舍五入成113，也不能总用初始50乘倍率后只在最后取整。初始外星人速度1.0，第三关变成1.21；下方横线直接表示相同时长内的位移，长度随倍率改变。
+
+必须先按旧关分值处理最后一次命中，再清弹、补队、加速、增加关卡。实验“命中最后一只并升级”从得分950、每只75开始，结果是1025分，第3关的新敌人才值112分。空队检查只能补一次，补队后队伍已非空。
+
+### 4. 得分：数外星人，不是数子弹键
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center"><Term def="groupcollide 返回的字典：键是发生碰撞的第一组对象，值是它碰到的第二组对象列表；对应 collision mapping。">碰撞映射</Term></span>连接几何事件和分数。`groupcollide(bullets, aliens, True, True)` 返回“子弹 →
+外星人列表”，同时移除命中的两组成员。得分增量应为 `points * sum(len(targets) for
+targets in hits.values())`；`len(hits)` 只数命中的子弹。
+
+实验“一弹命中两只”用加宽的诊断子弹跨过两个相邻矩形，并不是正常游戏默认弹宽。正常结算移除两只，加150分；错误模式仍移除两只，却只加75分。图上减少的对象数量直接揭穿错误，不靠自造的正确率或评分。
+
+同一只外星人不会因为两颗子弹都靠近而自然算两次：本例使用删除参数，先处理的命中会把目标移出组。若改用不删除的碰撞查询，就必须另外去重。不要把这种实现顺序推广为所有碰撞系统都必然如此。
+
+### 5. 显示：四种读数，来自同一个真实状态
+
+<span className="[&_button]:min-h-11 [&_button]:min-w-11 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center"><Term def="将游戏状态绘制为当前得分、最高分、关卡和生命提示的显示对象；对应 scoreboard。">记分板</Term></span>只负责读取，不应自行决定加分。作者的 `Scoreboard`
+将文字预先渲染为图像，在分数、最高分、关卡、生命改变时重新准备对应图像；当前分数在右上、最高分在上方中央、关卡在分数下面，生命用飞船图标表示。
+
+原例只在显示时用 `round(score, -1)` 取到十位并加千位分隔符，内部仍保存精确整数。例如75显示80；Python 的取整遇到正中间取偶数，85也显示80，不宜称为通常意义的“四舍五入”。本文程序和实验直接显示精确值，以便核对每一次命中；程序每帧重新渲染文字，避免缓存失效干扰本章重点。
+
+生命的边界也要声明：作者 `_ship_hit()` 先检查 `ships_left > 0` 再减1，所以变成0时仍重生，下一次受击才结束。本文明确采用“图标数包含当前飞船，3→2→1→0立即结束”，不是声称与原代码完全相同。看实验“最后一条生命被撞”，图标消失、活动关闭、Play出现，分数和最高分保留。
+
+## 实验：先预测，再看对象与读数同时改变
+
+猜一猜：把旧局速度提高到1.21后只清零分数，下一局真的回到第一关了吗？再预测：一颗子弹击中两只，字典长度是1还是2？
+
+<PccScoringLab />
+
+按下面顺序验证，不需要快速点击：
+
+1. 首次开始，测试右边界，拖到最后一步：仍等待；改点中心，再走到最后一步：完整开局。
+2. 选择重开样本，先开故障再提交：关卡回到1但速度仍1.21。关故障重放，对照速度、分值、飞船、子弹和高分。
+3. 选择一弹两只：第一步有两个相交目标，检测后都消失；正常加150，故障只加75。
+4. 选择最后一只：先出现1025分，再看到新舰队与第3关。选择最后生命：零生命时停止。
+5. 从正常开局结果点“保留结果再点 Play”：活动中即使点击中心也被拒绝。最后点“完整重置实验”，所有状态回到最初。
+
+这是一条可倒放的事件记录，不是完整动作游戏。阶段2/3为了讲解展示结算顺序；新局重置始终只在最后一步一次提交。关闭动画偏好时仍可单步，界面不依赖自动播放。
+
+## 实践：从空文件运行，而不是补齐上一章
+
+新建 `scoring.py`，将下面所有 Python 代码块按顺序拼成同一个文件，保留缩进。每块是这个完整程序的一段；不要把后面的类方法单独运行。只依赖 Pygame，不导入上一章的类，也不读取图片、字体文件或其他素材。
+
+已用 **Python 3.12.12、Pygame 2.6.1** 执行内置断言及额外测试。其他版本未在本次任务中验证。你自己的环境可先安装 `pygame==2.6.1`，然后运行 `python scoring.py`；左右键移动、空格射击、Enter或鼠标点击开始、Q退出。桌面示例仅给“开始”提供触控入口，完整触控演示在上方网页实验中完成。
+
+### A. 数据与界面对象
+
+`Session` 只包含一局的数据，不含最高分。测试模式在初始化 Pygame 前启用无窗口驱动；普通运行仍打开真实窗口。颜色仅是本地游戏的绘制参数。
 
 ```python
+import os
+import sys
+from dataclasses import dataclass
+
+if "--test" in sys.argv:
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+import pygame
+
+WIDTH, HEIGHT = 640, 480
+BG, FG, ACCENT = (20, 25, 34), (238, 242, 246), (95, 194, 179)
+
+@dataclass
+class Session:
+    score: int = 0
+    level: int = 1
+    lives: int = 3
+    speed: float = 1.0
+    points: int = 50
+    direction: int = 1
+```
+
+`Box` 用纯色表面充当精灵，给组提供 `image` 和 `rect`；浮点位置避免小速度被整数截掉。`Button` 只保存矩形、绘制文字，不修改游戏状态。
+
+```python
+class Box(pygame.sprite.Sprite):
+    def __init__(self, rect, color):
+        super().__init__()
+        self.rect = pygame.Rect(rect)
+        self.image = pygame.Surface(self.rect.size)
+        self.image.fill(color)
+        self.x, self.y = float(self.rect.x), float(self.rect.y)
+
 class Button:
-    def __init__(self, game, msg: str) -> None:
-        self.screen = game.screen
-        self.screen_rect = self.screen.get_rect()
-        self.width, self.height = 200, 50
-        self.button_color = (0, 135, 50)
-        self.text_color = (255, 255, 255)
-        self.font = pygame.font.SysFont(None, 48)
-        self.rect = pygame.Rect(0, 0, self.width, self.height)
-        self.rect.center = self.screen_rect.center
-        self._prep_msg(msg)
+    def __init__(self):
+        self.rect = pygame.Rect(200, 212, 240, 56)
+        self.font = pygame.font.Font(None, 36)
 
-    def _prep_msg(self, msg: str) -> None:
-        self.msg_image = self.font.render(msg, True, self.text_color,
-                                          self.button_color)
-        self.msg_image_rect = self.msg_image.get_rect(center=self.rect.center)
-
-    def draw_button(self) -> None:
-        self.screen.fill(self.button_color, self.rect)
-        self.screen.blit(self.msg_image, self.msg_image_rect)
+    def draw(self, screen):
+        pygame.draw.rect(screen, ACCENT, self.rect, border_radius=8)
+        image = self.font.render("Play / Enter", True, BG)
+        screen.blit(image, image.get_rect(center=self.rect.center))
 ```
 
-button只在inactive时draw，但event loop始终运行。`MOUSEBUTTONDOWN`取得`pygame.mouse.get_pos()`；更准确也可使用event.pos，避免读取到稍后的cursor位置。点击button外部不产生任何transition，这是重要negative case。
-
-<Term def="判断mouse point是否位于Button rect内，从而决定点击command是否命中。">hit testing</Term>
-
-## Starting a New Game：重启必须是完整事务
-
-restart不是把`game_active=True`放在click handler末尾就结束。它要重置GameStats、动态Settings、aliens/bullets、ship position与所有HUD caches；任何一步遗漏都会混入上一局状态。更新顺序应保证world尚未active时完成全部初始化。
+`Scoreboard` 同时读四类状态，图标数直接等于当前生命数。这里每帧重新渲染精确分数；正式项目可以像作者代码一样缓存文字，但改变数值时必须刷新缓存。
 
 ```python
-def _check_play_button(self, mouse_pos) -> None:
-    clicked = self.play_button.rect.collidepoint(mouse_pos)
-    if clicked and not self.stats.game_active:
-        self.settings.initialize_dynamic_settings()
-        self.stats.reset_stats()
-        self.sb.prep_score()
-        self.sb.prep_level()
-        self.sb.prep_ships()
+class Scoreboard:
+    def __init__(self):
+        self.font = pygame.font.Font(None, 28)
+
+    def draw(self, game):
+        screen, s = game.screen, game.session
+        def text(value, x, y, anchor="topleft"):
+            image = self.font.render(value, True, FG)
+            rect = image.get_rect(**{anchor: (x, y)})
+            screen.blit(image, rect)
+        text(f"High {game.high:,}", WIDTH // 2, 12, "midtop")
+        text(f"Score {s.score:,}", WIDTH - 12, 12, "topright")
+        text(f"Level {s.level}", WIDTH - 12, 42, "topright")
+        text(f"x{s.speed:.2f} | {s.points} pts", 12, 72)
+        for i in range(s.lives):
+            x = 16 + i * 26
+            pygame.draw.polygon(screen, ACCENT,
+                                [(x, 34), (x + 9, 18), (x + 18, 34)])
+```
+
+### B. 新局提交与事件结算
+
+控制器保留跨局的 `high` 和本局的 `session`。第一帧就有舰队和按钮，但 `active=False`，不会在玩家准备前移动。`new_fleet()` 每次先清空旧队，防止两队叠加。
+
+```python
+class Game:
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        pygame.display.set_caption("Scoring - arrows, Space, Enter, Q")
+        self.clock = pygame.time.Clock()
+        self.button, self.board = Button(), Scoreboard()
+        self.high, self.active = 0, False
+        self.session = Session()
+        self.ship = Box((302, 430, 36, 24), FG)
+        self.bullets, self.aliens = pygame.sprite.Group(), pygame.sprite.Group()
+        self.held = set()
+        self.new_fleet()
+
+    def new_fleet(self):
         self.aliens.empty()
+        for row in range(2):
+            for col in range(4):
+                self.aliens.add(Box((100 + col * 100, 120 + row * 52,
+                                     28, 22), ACCENT))
+```
+
+开始函数返回是否接受点击。只有条件成立才换掉整份 `Session`，清空按键和旧弹、重建队伍并居中；最后启用更新、隐藏鼠标。没有在这些赋值之间绘制半重置状态。射击也要检查活动门禁。
+
+```python
+    def start(self, pos):
+        if self.active or not self.button.rect.collidepoint(pos):
+            return False
+        # One event handler, no update/draw before the whole reset finishes.
+        self.session = Session()
+        self.held.clear()
         self.bullets.empty()
-        self._create_fleet()
-        self.ship.center_ship()
-        self.stats.game_active = True
+        self.new_fleet()
+        self.center_ship()
+        self.active = True
         pygame.mouse.set_visible(False)
+        return True
+
+    def center_ship(self):
+        self.ship.rect.midbottom = (WIDTH // 2, HEIGHT - 26)
+        self.ship.x = float(self.ship.rect.x)
+
+    def fire(self):
+        if self.active and len(self.bullets) < 3:
+            x, y = self.ship.rect.midtop
+            self.bullets.add(Box((x - 2, y - 12, 4, 12), FG))
 ```
 
-`high_score`通常不在`reset_stats()`内，因它需要跨本次process中的games保留；score、level与ships_left必须归初始值。若要求跨程序持久化high score，再用第10章JSON file明确load/save boundary，而不是把磁盘I/O塞进每帧draw。
-
-<Stepper>
-  <Step title="逐项检查restart transaction">
-  </Step>
-  <Step title="验证inactive与button geometry">
-    active时点击button center不重启；inactive时点击边界内重启；边界外保持inactive。
-  </Step>
-  <Step title="验证第二局没有上一局残留">
-    先把level、speed、score和Groups推到非初值，再restart，比较所有动态字段和HUD image。
-  </Step>
-</Stepper>
-
-## Leveling Up：清空一支fleet才提升难度
-
-level transition发生在collision resolution后：最后一个Alien被删掉，先清空剩余bullets，再调用`increase_speed()`、增加`stats.level`、`prep_level()`并创建新fleet。若每击中一只就增加速度，难度变化与level语义不一致；若先重建再判断empty，永远看不到empty state。
-
-<Term def="每完成一个level后按比例增加movement speeds的乘法因子。">speedup scale</Term>
+碰撞先移除对象，后按命中目标数和旧关分值加分，再检查最高分。舰队清空才升级、清弹和补队。受击最多扣一次生命；减到0立即结束，分数与难度不在受击时归零。
 
 ```python
-class Settings:
-    def __init__(self) -> None:
-        self.speedup_scale = 1.1
-        self.score_scale = 1.5
-        self.initialize_dynamic_settings()
+    def resolve_hits(self):
+        if not self.active:
+            return 0
+        hits = pygame.sprite.groupcollide(self.bullets, self.aliens, True, True)
+        count = sum(len(targets) for targets in hits.values())
+        self.session.score += count * self.session.points
+        self.high = max(self.high, self.session.score)
+        if not self.aliens:
+            self.bullets.empty()
+            self.session.level += 1
+            self.session.speed *= 1.1
+            self.session.points = int(self.session.points * 1.5)
+            self.new_fleet()
+        return count
 
-    def initialize_dynamic_settings(self) -> None:
-        self.ship_speed = 1.5
-        self.bullet_speed = 2.5
-        self.alien_speed = 1.0
-        self.fleet_direction = 1
-        self.alien_points = 50
-
-    def increase_speed(self) -> None:
-        self.ship_speed *= self.speedup_scale
-        self.bullet_speed *= self.speedup_scale
-        self.alien_speed *= self.speedup_scale
-        self.alien_points = int(self.alien_points * self.score_scale)
+    def lose_life(self):
+        if not self.active:
+            return
+        self.session.lives -= 1
+        self.bullets.empty()
+        self.held.clear()
+        if self.session.lives == 0:
+            self.active = False
+            pygame.mouse.set_visible(True)
+        else:
+            self.new_fleet()
+            self.center_ship()
 ```
 
-速度和points分别使用1.1与1.5，因为挑战和奖励不必按同一比例增长。乘法scale产生exponential progression：level越高，每一级absolute increase越大。用`int`会向下截断；若显示策略要round到最近整数，应全项目统一，避免内部与HUD不同。
+### C. 更新、输入、绘制
 
-<Term def="随level按比例提高Alien points、独立于movement speed的奖励倍率。">score scale</Term>
-
-<Stepper>
-  <Step title="比较difficulty与reward曲线">
-  </Step>
-  <Step title="区分initial与dynamic settings">
-    width、color、limit通常稳定；speed、direction、alien_points在新局重置并在level间增长。
-  </Step>
-  <Step title="验证level boundary只触发一次">
-    最后一次collision后level加1、increase_speed调用1次、fleet重建1次；下一帧不应再次升级。
-  </Step>
-</Stepper>
-
-## Scoring：collision返回值就是计分证据
-
-`groupcollide`返回dictionary，key是发生collision的bullet，value是被它命中的Aliens。不能只检查dictionary truthy就固定加一次points，因为宽bullet可能同帧击中多个Aliens。总分应按每个collision list的长度累加。
+更新以秒为单位接收 `dt`，乘60转换为参考帧数，再乘难度倍率。因此基础速度1.5/2.5/1.0仍可与作者设置对照，但本文增加了时间归一化与50ms上限。碰边聚合后只换向一次；撞船或触底共用一次扣生命。
 
 ```python
-collisions = pygame.sprite.groupcollide(
-    self.bullets, self.aliens, True, True
-)
-if collisions:
-    for aliens_hit in collisions.values():
-        self.stats.score += self.settings.alien_points * len(aliens_hit)
-    self.sb.prep_score()
-    self.sb.check_high_score()
+    def update(self, dt):
+        if not self.active:
+            return
+        s = self.session
+        scale = min(dt, 0.05) * 60 * s.speed
+        axis = int(pygame.K_RIGHT in self.held) - int(pygame.K_LEFT in self.held)
+        self.ship.x = max(0, min(WIDTH - 36, self.ship.x + axis * 1.5 * scale))
+        self.ship.rect.x = round(self.ship.x)
+        for bullet in self.bullets.copy():
+            bullet.y -= 2.5 * scale
+            bullet.rect.y = round(bullet.y)
+            if bullet.rect.bottom <= 0:
+                bullet.kill()
+        self.resolve_hits()
+        if any(a.rect.left <= 0 or a.rect.right >= WIDTH for a in self.aliens):
+            s.direction *= -1
+            for alien in self.aliens:
+                alien.rect.y += 10
+        for alien in self.aliens:
+            alien.x += s.direction * scale
+            alien.rect.x = round(alien.x)
+        hit = pygame.sprite.spritecollideany(self.ship, self.aliens)
+        bottom = any(a.rect.bottom >= HEIGHT for a in self.aliens)
+        if hit or bottom:
+            self.lose_life()
 ```
 
-把bullet宽度临时调大是本书用来暴露计分假设的实验。若一发击中两只，删除两只却只加一份points，world state与score diverge。计分使用实际deleted Aliens数量，rule才能与collision一致。
-
-显示score时可四舍五入到最近10并加千位分隔，例如`round(score, -1)`和`f"{rounded_score:,}"`。格式化只改变presentation，不应覆盖raw score；否则连续小分数会因反复round丢失。
-
-## High Scores：比较、刷新与持久化边界
-
-每次score变化后调用`check_high_score()`：若`stats.score > stats.high_score`，更新high score并`prep_high_score()`。相等是否算新纪录是product rule；通常只有严格大于才更新。high score置于screen top center，score在top right，让两者视觉角色不同。
+Enter走与点击相同的 `start()`，不能绕开活动检查。鼠标用事件位置而非稍后查询的新位置；触摸位置从0到1换算为窗口坐标。失焦清空按键，避免返回窗口后飞船继续跑。
 
 ```python
-def check_high_score(self) -> None:
-    if self.stats.score > self.stats.high_score:
-        self.stats.high_score = self.stats.score
-        self.prep_high_score()
+    def event(self, event):
+        if event.type == pygame.QUIT:
+            return False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_q:
+                return False
+            if event.key == pygame.K_RETURN:
+                self.start(self.button.rect.center)
+            elif event.key == pygame.K_SPACE:
+                self.fire()
+            elif self.active and event.key in (pygame.K_LEFT, pygame.K_RIGHT):
+                self.held.add(event.key)
+        elif event.type == pygame.KEYUP:
+            self.held.discard(event.key)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self.start(event.pos)
+        elif event.type == pygame.FINGERDOWN:
+            self.start((int(event.x * WIDTH), int(event.y * HEIGHT)))
+        elif event.type == pygame.WINDOWFOCUSLOST:
+            self.held.clear()
+        return True
 ```
 
-当前章节的high score只在process lifetime保留。若加入JSON persistence，load时验证type与nonnegative，save采用temporary file再replace可降低corruption风险；I/O失败不应让主loop每帧重复写日志。这个扩展复用第10章的schema和exception策略。
-
-## Displaying Score, Level, and Ships
-
-`Scoreboard`拥有font、text color、screen rect，以及score/high score/level的rendered images。`prep_*`把model值变成surface并计算rect；`show_score()`只blit。这个cache protocol避免每帧调用font render，但要求每次model变化后显式invalidate/rebuild。
-
-<Term def="model值改变后重建对应rendered surface，使下一次draw显示新状态的协议。">HUD refresh</Term>
-
-ship lives使用多个小Ship sprites，而非文字数字。让`Ship`继承Sprite后，`prep_ships()`创建`Group`，按index从screen左上排列；`show_score()`调用`ships.draw(screen)`。这里的icons表示remaining lives，不是world中可控制ship，二者虽然共用image class但属于不同Groups。
+绘制顺序是战场、飞船、四类读数，最后按活动状态决定是否画 Play。绘制本身不加分、不扣生命。即使等待开始，也继续处理退出和绘制，不能把整个循环都塞进活动条件。
 
 ```python
-def prep_ships(self) -> None:
-    self.ships = pygame.sprite.Group()
-    for ship_number in range(self.stats.ships_left):
-        ship = Ship(self.game)
-        ship.rect.x = 10 + ship_number * ship.rect.width
-        ship.rect.y = 10
-        self.ships.add(ship)
+    def draw(self):
+        self.screen.fill(BG)
+        self.aliens.draw(self.screen)
+        self.bullets.draw(self.screen)
+        self.screen.blit(self.ship.image, self.ship.rect)
+        self.board.draw(self)
+        if not self.active:
+            self.button.draw(self.screen)
+        pygame.display.flip()
+
+    def run(self):
+        running = True
+        while running:
+            dt = self.clock.tick(60) / 1000
+            for event in pygame.event.get():
+                if not self.event(event):
+                    running = False
+            if running:
+                self.update(dt)
+                self.draw()
+        pygame.quit()
 ```
 
-布局应依赖anchors：score的`rect.right = screen_rect.right - 20`，high score的`rect.centerx = screen_rect.centerx`，level靠右位于score下方，ships靠左。这样数字位数增加时向预期方向扩展，不互相挤压。
+### D. 自带可重复断言
 
-<Stepper>
-  <Step title="操作scoreboard四类状态">
-  </Step>
-  <Step title="追踪model change到surface rebuild">
-    collision改变score后prep_score；新纪录再prep_high_score；清fleet后prep_level；ship hit与restart后prep_ships。
-  </Step>
-  <Step title="验证draw阶段无业务副作用">
-    连续调用show_score不改变stats，也不重复加分；同一model应得到稳定位置与内容。
-  </Step>
-</Stepper>
+下面测试仍是同一个文件的一部分。它不靠截图猜测：实际构造 Pygame 对象，验证右边界排除、活动中拒绝重开、旧弹和旧按键清空、高分保留、飞船回中。
 
-## End-to-End Transition Table
+```python
+def self_test():
+    game = Game()
+    assert not game.start(game.button.rect.topright)
+    assert game.start(game.button.rect.center)
+    game.session.score = game.high = 900
+    assert not game.start(game.button.rect.center)
+    game.active = False
+    game.session.speed, game.session.points = 1.21, 112
+    game.session.level, game.session.lives = 3, 0
+    game.session.direction = -1
+    game.ship.x = game.ship.rect.x = 55
+    game.aliens.empty()
+    game.aliens.add(Box((10, 400, 28, 22), ACCENT))
+    game.held.add(pygame.K_RIGHT)
+    game.bullets.add(Box((10, 10, 4, 12), FG))
+    assert game.start(game.button.rect.center)
+    assert game.session == Session() and game.high == 900
+    assert not game.bullets and not game.held and len(game.aliens) == 8
+    assert game.ship.rect.centerx == WIDTH // 2
+```
 
-Alien collision：删除Sprites、按实际命中数加score、刷新score并检查high score。fleet empty：清bullets、加速、level加1、刷新level、重建fleet。ship hit且有life：life减1、刷新ships、清Groups并重建round。最后一条life：game_active false并显示mouse。Play：执行完整restart且保留process high score。
+宽8像素的诊断子弹跨过相邻两只外星人的公共边界，因此真实碰撞计数为2。清完这两只之后升级，但本次分数仍是 `2 * 50`。连续三次受击恰好结束；再受击不出现负生命。
 
-为每条transition记录before/after snapshot，比只看screen更可靠。典型snapshot含`score, high_score, level, ships_left, game_active, alien_count, bullet_count, alien_speed`。一次输入只允许产生表中一条主transition，防止同帧重复升级或重复扣life。
+```python
+    game.aliens.empty()
+    game.aliens.add(Box((100, 120, 28, 22), ACCENT),
+                    Box((128, 120, 28, 22), ACCENT))
+    game.bullets.add(Box((124, 128, 8, 12), FG))
+    assert game.resolve_hits() == 2
+    assert game.session.score == 100
+    assert game.session.level == 2 and game.session.points == 75
+    assert abs(game.session.speed - 1.1) < 1e-9
+    assert not game.bullets and len(game.aliens) == 8
+    for expected in (2, 1, 0):
+        game.lose_life()
+        assert game.session.lives == expected
+    assert not game.active
+    game.fire()
+    assert not game.bullets
+    game.lose_life()
+    assert game.session.lives == 0
+    game.draw()
+    pygame.quit()
+    print("PASS: half-open Play, atomic restart, multi-hit, level, lives, HUD")
+```
 
-<Callout type="trap" title="修改stats.score后HUD会自动读取新值">
-Scoreboard缓存的是rendered surface，不会自动观察model。每次score变化后调用prep_score，新纪录还需prep_high_score；draw只blit当前缓存。
+入口必须在函数和类定义之后。普通启动进入游戏，带 `--test` 只跑断言并退出。
+
+```python
+if __name__ == "__main__":
+    if "--test" in sys.argv:
+        self_test()
+    else:
+        Game().run()
+```
+
+运行 `python scoring.py --test`，成功会输出 `PASS: half-open Play, atomic restart, multi-hit, level, lives, HUD`。无窗口测试真实调用了分组碰撞和绘制，但它不等于已验证你桌面上的手感、系统字体或物理触控设备。
+
+### E. 故意失败一次，再修回来
+
+将 `count = sum(len(targets) for targets in hits.values())` 临时改成 `count = len(hits)`，再运行同一测试，应该在 `assert game.resolve_hits() == 2` 处失败：只有一个字典键，但确实删除了两个目标。本次已用单独的故障副本实际运行并得到该 `AssertionError`；恢复目标数求和后，原测试重新通过。不要把故障版本留在游戏中。
+
+另一个边界可以手算并断言：把一局末尾分值设成75，消灭最后一只应先加75，下一关分值才变112。只改一行的执行顺序就可能多给37分。窗口卡顿时本例会限制单次时间步；它仍是离散矩形检测，极高速度可能跨过目标，不宣称实现连续碰撞检测。
+
+## 常见误区：显示错了，先检查数据的来路
+
+<Callout type="trap">
+
+**现象 →** 重开后显示第1关，敌人却仍像第3关一样快。<br />
+**原因 →** 只重置统计数据，没重置动态速度和分值。<br />
+**修法 →** 让 `start()` 建立完整新局；实验开故障可直接看到速度线未缩短。
+
 </Callout>
 
-<Callout type="trap" title="新游戏只需把game_active设回true">
-这样会保留上一局speed、direction、score、level、lives、Groups和HUD。Play必须执行完整restart transaction，并在所有状态一致后才activate。
+<Callout type="trap">
+
+**现象 →** 一弹击落两只，只收到一只的分数。<br />
+**原因 →** `len(hits)` 数的是发生碰撞的子弹键。<br />
+**修法 →** 对各目标列表长度求和；同时保留真实删除，避免重复计分。
+
 </Callout>
 
-## 本章回顾：数据变化与画面刷新必须成对
+<Callout type="trap">
 
-1. Play button的rect只提供hit testing，restart由game统一协调。
-2. restart重置stats、dynamic settings、Groups、ship与HUD，但保留process high score。
-3. level完成后按speedup scale提高movement difficulty，按score scale提高reward。
-4. collision dictionary给出实际命中数量，score必须与删除对象数量一致。
-5. Scoreboard在model change时prep surfaces，draw阶段只显示score、high score、level和ships。
+**现象 →** 内部已经加分，界面还是旧数字；或者每次重开最高分消失。<br />
+**原因 →** 缓存文字未重新渲染，或把最高分塞进本局重置。<br />
+**修法 →** 更新对应记分板图像；最高分放在重置函数外，磁盘持久化则是另外的功能。
 
+</Callout>
+
+<Callout type="trap">
+
+**现象 →** 生命图标已空，玩家仍能继续一条命。<br />
+**原因 →** 混用了“备用飞船数”和“包含当前飞船的剩余生命数”。<br />
+**修法 →** 明确约定再写终止条件；本文减到0就停止，不把作者的先检查再扣减误说成同一语义。
+
+</Callout>
+
+## 小结与练习
+
+- 按钮命中与活动门禁必须同时成立。
+- 新局完整重置；最高分属于本次程序运行。
+- 先按旧分值计分，再清弹补队和升级。
+- 记分板展示状态，不替游戏逻辑作决定。
+
+<div className="[&_button]:min-h-11 [&_button]:min-w-11">
 <Exercises>
 
-**问题 1：如何证明Play restart没有残留上一局状态？**
+**问题 1：** 实验中点 `(250, 272)` 为什么不能开始？点中心成功开局后，再点中心应当发生什么？请写出两个条件，不要只写“点中按钮”。
 
-<Answer>先构造高level、非初始speed/direction、非零score、少量lives和非空Groups，再在inactive状态点击button。验证stats与dynamic settings归初值、Groups清理并只创建一支fleet、ship居中、HUD全部刷新、mouse隐藏且game_active最后才变true；high score按policy保留。</Answer>
+<Answer>
 
-**问题 2：一发宽bullet同时命中三只Aliens，应如何计分和升级？**
+按钮横向区间是 `[90, 250)`，右边界不属于矩形，故第一个点未命中。中心点在矩形内，但还要 `not active`。第一次通过后活动状态变为真，第二次中心点击必须被拒绝，不能清空正在进行的分数。Python 自测用 `topright` 验证同样的半开边界规则。
 
-<Answer>读取groupcollide返回dictionary中每个value list长度，按删除的三只Alien累计三份当前alien_points，再prep_score并check_high_score。只有碰撞后整个fleet为空才increase_speed、level加1并重建，不能按collision dictionary的key数量只加一份。</Answer>
+</Answer>
 
-**问题 3：为什么Scoreboard需要prep方法而不能每帧直接font.render？**
+**问题 2：** 修改 Demo 对应的结算代码，让一颗子弹命中两只、其中恰好清空舰队。当前得分950，每只75分。结算后的分数、下一关每只分值是多少？写出正确计数表达式，并说明为什么不是950加224。
 
-<Answer>font rendering相对昂贵，model多数帧不变化。prep_*在score、high score、level或lives改变时重建surface与rect，show_score每帧只blit。测试model变化后对应prep被调用，连续draw不改变stats，且位数变化仍保持锚点。</Answer>
+<Answer>
+
+应为1100分，下一关每只112分。计数用 `sum(len(targets) for targets in hits.values())`，本次增量是 `2 * 75 = 150`。112是在结算结束后由 `int(75 * 1.5)` 得到；不能提前使用下一关价格。若只有一只剩余，则是实验默认清关样本的1025分，不能混淆两种夹具。
+
+</Answer>
+
+**问题 3：** 独立实现“完整重开”测试：旧局第3关、生命0、速度1.21、每只112分、最高900分，留一颗子弹和一个按下的右键。目标画面是第1关、0分、3个生命图标、飞船居中、最高900分。哪些断言必不可少？关闭程序重开仍有900分吗？
+
+<Answer>
+
+调用合法中心点开始后，应检查 `session == Session()`、`high == 900`、子弹组为空、舰队是8只、按键集合为空、飞船中心等于窗口中心、`active` 为真。`Session()` 的相等比较还覆盖速度、分值、方向，不能只检查屏幕上“第1关”三个字。内置测试可作为实现，再追加 `assert game.active`。关闭程序后新建 `Game` 的最高分是0，因为没有保存和读取文件；持久化需要单独设计，不能从“跨局”推断为“跨进程”。
+
+</Answer>
 
 </Exercises>
-
-## 术语表
+</div>
 
 <Glossary>
-  <GlossaryItem term="restart transaction" definition="一次Play中完整重置stats、动态参数、Groups、HUD和active状态。" />
-  <GlossaryItem term="hit testing" definition="判断mouse point是否落在Button rect中的几何检查。" />
-  <GlossaryItem term="speedup scale" definition="每完成一个level后按比例增加movement speeds的因子。" />
-  <GlossaryItem term="HUD refresh" definition="model变化后重建rendered surface以供下一帧显示的协议。" />
-  <GlossaryItem term="score scale" definition="随level提高Alien points、独立于movement speed的奖励倍率。" />
+
+<GlossaryItem term="命中测试">
+  Hit
+  testing：检查输入坐标是否落在有效区域内。本章使用不含右、下边界的按钮矩形。
+</GlossaryItem>
+<GlossaryItem term="原子重置">
+  Atomic
+  reset：在下一次更新和绘制前完成整套新局初始化，避免混用新旧状态；不是多线程原子性承诺。
+</GlossaryItem>
+<GlossaryItem term="动态难度">
+  Dynamic
+  difficulty：随关卡改变速度与奖励；本章用倍率增长，重新开局时回到基准值。
+</GlossaryItem>
+<GlossaryItem term="碰撞映射">
+  Collision
+  mapping：以发生碰撞的子弹为键、命中的外星人列表为值的字典，键数与目标总数不同。
+</GlossaryItem>
+<GlossaryItem term="记分板">
+  Scoreboard：显示当前得分、最高分、关卡和生命的界面。High score 是最高分，level
+  是关卡，ships left 是剩余飞船计数，具体生命含义必须约定。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 14: Scoring" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+## 来源与实现边界
+
+本文依据 Eric Matthes《Python Crash Course》第3版第14章 **Scoring** 的目录范围独立撰写，不是逐段翻译，也不声称读到受限的书籍全文。2026-09-23 实际访问出版社页面得到 **HTTP 403**，因此书籍来源仅登记 **outline-only**；目录覆盖按项目只读 `pcc3-14` 清单核对，事实依据来自以下实际返回200的公开资料。出版社链接不代表开放改编许可。
+
+- [No Starch Press：第3版书籍页](https://nostarch.com/python-crash-course-3rd-edition)：版本与来源入口；本次正文不可访问，不作为全文核验记录。
+- [作者第14章最终示例 alien_invasion.py](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_14/scoring/alien_invasion.py)：核对按钮双条件、新局初始化、逐目标列表计分、先结算再升级、生命与鼠标显隐。
+- [button.py](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_14/scoring/button.py) 与 [settings.py](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_14/scoring/settings.py)：核对按钮矩形、速度1.1、分值1.5与逐次 `int()`。
+- [game_stats.py](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_14/scoring/game_stats.py) 与 [scoreboard.py](https://github.com/ehmatthes/pcc_3e/blob/main/chapter_14/scoring/scoreboard.py)：核对最高分在本局重置之外、四类显示、十位取整与图像刷新。
+- [Pygame Rect.collidepoint](https://www.pygame.org/docs/ref/rect.html#pygame.Rect.collidepoint) 与 [groupcollide](https://www.pygame.org/docs/ref/sprite.html#pygame.sprite.groupcollide)：核对半开边界、碰撞字典、删除参数。在线文档页版本标识与本次安装可能不同，本次执行结果明确来自 Pygame 2.6.1。
+
+本文自包含实现额外清理按键状态，使用时间步长、纯色精灵、精确分数和减到零立即结束；这些是明确的教学选择，不是把原版行为换一种说法。浏览器390px布局、真实键盘触控操作与组件共享注册仍需集成验收；无窗口 Python 测试不能替代它们。
+
+<Attribution
+  sourceUrl={frontmatter.sourceUrl}
+  workTitle="Python Crash Course，第3版，第14章：Scoring"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

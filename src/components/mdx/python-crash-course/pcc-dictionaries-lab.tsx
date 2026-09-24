@@ -1,449 +1,603 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { TimelineControls } from "@/components/mdx/anim/timeline-controls";
+import {
+  useTeachingTimeline,
+  type BuildTimeline,
+} from "@/components/mdx/anim/use-teaching-timeline";
 
 const C = {
   bg: "var(--bg)",
-  elevated: "var(--bg-elevated)",
   border: "var(--border)",
-  primary: "var(--text-primary)",
-  secondary: "var(--text-secondary)",
+  text: "var(--text-primary)",
+  muted: "var(--text-secondary)",
   accent: "var(--accent)",
-  danger: "var(--danger)",
-  success: "var(--success)",
-  warning: "var(--warning)",
-} as const;
+};
+const buttonClass =
+  "min-h-11 min-w-11 rounded-control border border-border px-3 py-2 text-sm aria-pressed:border-accent aria-pressed:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+// Local overrides keep the shared timeline's small step dots out of the focus
+// order and enlarge its remaining controls without changing shared components.
+const controlsClass =
+  "[&_ol]:hidden [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-accent [&_input]:min-h-11 [&_input]:focus-visible:outline-2 [&_input]:focus-visible:outline-accent [&_.flex]:flex-wrap";
 
-// 概念领域词汇：key / value / binding / key-space / hashable / CRUD
-//                / get / sentinel / view / items / keys / values
-//                / nested-shape / dict-of-dicts / list-of-dicts / dict-of-lists
-
-type CrudOp = "add" | "modify" | "remove" | "get";
-
-const CRUD_OPS: { id: CrudOp; label: string; desc: string }[] = [
-  { id: "add", label: "add", desc: "新 key 扩大 key-space；value 可为任意对象" },
-  { id: "modify", label: "modify", desc: "已有 key 更新 binding，不增加 key 数" },
-  { id: "remove", label: "remove", desc: "del / pop 缩小 key-space；pop 返回被删 value" },
-  { id: "get", label: "get", desc: "get 只读，不修改 key-space；[] 缺失抛 KeyError" },
+type Value = string | number | null;
+type Entry = [string, Value];
+const initialEntries: Entry[] = [
+  ["color", "green"],
+  ["points", 5],
+];
+const operations = [
+  {
+    label: "初始",
+    code: 'alien = {"color": "green", "points": 5}',
+    why: "两条绑定；图中序号表示插入顺序，不是整数键。",
+  },
+  {
+    label: "新增",
+    code: 'alien["x"] = 0',
+    why: "x 是新键，追加到末尾，长度从 2 变成 3。",
+  },
+  {
+    label: "修改",
+    code: 'alien["points"] = 10',
+    why: "points 已存在，只替换值；长度和位置都不变。",
+  },
+  {
+    label: "删除",
+    code: 'removed = alien.pop("color")',
+    why: '返回 "green"，同时删除 color 的绑定，长度变成 2。',
+  },
+  {
+    label: "重插",
+    code: 'alien["color"] = "yellow"',
+    why: "删除后重插算新插入，color 排到 x 后面，而非回到原位。",
+  },
+  {
+    label: "默认读取",
+    code: 'result = alien.get("speed", "medium")',
+    why: 'speed 缺失，返回 "medium"，但没有新增 speed。',
+  },
+  {
+    label: "缺失报错",
+    code: 'result = alien["speed"]',
+    why: "抛出 KeyError，字典不变。本模拟器展示异常后允许继续；普通脚本中未捕获异常会中止执行。",
+  },
+  {
+    label: "写入空值",
+    code: 'alien["speed"] = None',
+    why: "现在 speed 确实存在，值为 None；长度变成 4。",
+  },
+  {
+    label: "空值读取",
+    code: 'result = alien.get("speed", "medium")',
+    why: "键已存在，所以返回 None，而不是默认值。",
+  },
+] as const;
+const sequenceSteps = operations.map((op) => ({ label: op.label }));
+const pathSteps = [
+  { label: "完整结构" },
+  { label: "取外层" },
+  { label: "取内层" },
 ];
 
-type MissingPolicy = "bracket" | "get" | "sentinel";
+const buildSequence: BuildTimeline = (tl) => {
+  const clock = { beat: 0 };
+  sequenceSteps.forEach((step, i) => {
+    tl.label(step.label, i * 1600);
+    tl.add(clock, { beat: i + 1, duration: 1600, ease: "linear" }, i * 1600);
+  });
+};
+const buildPath: BuildTimeline = (tl) => {
+  const clock = { beat: 0 };
+  pathSteps.forEach((step, i) => {
+    tl.label(step.label, i * 1600);
+    tl.add(clock, { beat: i + 1, duration: 1600, ease: "linear" }, i * 1600);
+  });
+};
 
-const MISSING_POLICIES: { id: MissingPolicy; label: string; desc: string; result: string; color: string }[] = [
-  { id: "bracket", label: "d['x']", desc: "key 必须存在，缺失抛 KeyError", result: "KeyError", color: C.danger },
-  { id: "get", label: "d.get('x', 0)", desc: "缺失返回 default，不写入 mapping", result: "0 (未写入)", color: C.warning },
-  { id: "sentinel", label: "d.get('x', SENTINEL)", desc: "用唯一哨兵区分 missing 与 present-but-None", result: "SENTINEL (区分缺失)", color: C.success },
-];
+function python(value: Value) {
+  return value === null ? "None" : JSON.stringify(value);
+}
 
-type NestedShape = "lod" | "dol" | "dod";
+// Fixed string keys only: this models Python's observable mapping/order,
+// not hash buckets, memory addresses, or arbitrary Python key equality.
+function dictionaryAt(step: number): Entry[] {
+  const mapping = new Map<string, Value>(initialEntries);
+  if (step >= 1) mapping.set("x", 0);
+  if (step >= 2) mapping.set("points", 10);
+  if (step >= 3) mapping.delete("color");
+  if (step >= 4) mapping.set("color", "yellow");
+  if (step >= 7) mapping.set("speed", null);
+  return [...mapping];
+}
 
-const NESTED_SHAPES: { id: NestedShape; label: string; desc: string; access: string; useCase: string }[] = [
-  { id: "lod", label: "list of dicts", desc: "有顺序的 records", access: "users[0]['name']", useCase: "按位置遍历展示" },
-  { id: "dol", label: "dict of lists", desc: "一个 field 含多个值", access: "groups['team'][0]", useCase: "按 category 分组" },
-  { id: "dod", label: "dict of dicts", desc: "按 identity 查 record", access: "users['ada']['city']", useCase: "按唯一 key 查找" },
-];
-
-const VIEW_W = 860;
-const VIEW_H = 384;
-
-export function PccDictionariesLab() {
-  const [mode, setMode] = useState<"crud" | "missing" | "nested">("crud");
-  const [crudOp, setCrudOp] = useState<CrudOp>("add");
-  const [missingSel, setMissingSel] = useState<MissingPolicy>("bracket");
-  const [nestedSel, setNestedSel] = useState<NestedShape>("dod");
-  const [faultOn, setFaultOn] = useState(false);
-
-  const reset = useCallback(() => {
-    setCrudOp("add");
-    setMissingSel("bracket");
-    setNestedSel("dod");
-    setFaultOn(false);
-  }, []);
-
-  const crud = CRUD_OPS.find((c) => c.id === crudOp)!;
-  const missing = MISSING_POLICIES.find((m) => m.id === missingSel)!;
-  const nested = NESTED_SHAPES.find((n) => n.id === nestedSel)!;
-
+function SequenceLab({
+  views,
+  onReset,
+}: {
+  views: boolean;
+  onReset: () => void;
+}) {
+  const tl = useTeachingTimeline({
+    steps: sequenceSteps,
+    build: buildSequence,
+  });
+  const [projection, setProjection] = useState<
+    "items" | "keys" | "values" | "sorted"
+  >("items");
+  const step = tl.currentStep;
+  const entries = dictionaryAt(step);
+  const projected =
+    projection === "sorted"
+      ? [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      : entries;
+  const result =
+    step === 3
+      ? '返回 "green"'
+      : step === 5
+        ? '返回 "medium"'
+        : step === 6
+          ? 'KeyError: "speed"'
+          : step === 8
+            ? "返回 None"
+            : "赋值不产生返回值";
+  const output = projected.map(([key, value]) =>
+    projection === "items"
+      ? `(${python(key)}, ${python(value)})`
+      : projection === "values"
+        ? python(value)
+        : python(key),
+  );
+  const summary = entries
+    .map(([key, value]) => `${key} → ${python(value)}`)
+    .join("；");
   return (
-    <div className="not-prose overflow-hidden rounded-card border border-border bg-elevated">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="text-sm font-medium" style={{ color: C.primary }}>
-          ⚡ Dictionaries：key-space CRUD / missing-key policy / nested shape
-        </span>
-        <button
-          onClick={reset}
-          className="rounded-control border border-border px-3 py-1 text-xs transition-colors hover:border-accent"
-          style={{ color: C.secondary }}
-        >
-          重置
-        </button>
+    <>
+      <p className="text-sm leading-relaxed">
+        先预测：修改 points 会换位置吗？删除再插入 color 呢？get
+        缺失时会增加一行吗？用“下一步”验证，最后重置再预测。
+      </p>
+      {views && (
+        <fieldset className="mt-3 min-w-0">
+          <legend className="text-sm">选择遍历输出（不改变字典）</legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(["items", "keys", "values", "sorted"] as const).map((kind) => (
+              <button
+                type="button"
+                key={kind}
+                className={buttonClass}
+                aria-pressed={projection === kind}
+                onClick={() => setProjection(kind)}
+              >
+                {kind === "sorted" ? "sorted(alien)" : `${kind}()`}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <p className="mt-3 break-words font-mono text-sm">
+        {operations[step].code}
+      </p>
+      <svg
+        viewBox="0 0 340 360"
+        className="mx-auto mt-3 w-full max-w-[400px]"
+        role="img"
+        aria-label={`第 ${step + 1} 步，${operations[step].label}。字典长度 ${entries.length}。按插入顺序：${summary}。${views ? `遍历输出：${output.join("；")}` : result}`}
+      >
+        <text x="12" y="24" fill={C.text} fontSize="17">
+          alien：{entries.length} 条绑定
+        </text>
+        <text x="12" y="51" fill={C.muted} fontSize="16">
+          {views ? "键 → 值 → 本次遍历输出" : "插入顺序 ↓     键 → 值"}
+        </text>
+        <path
+          d="M 21 72 V 300 l -5 -8 m 5 8 l 5 -8"
+          fill="none"
+          stroke={C.muted}
+        />
+        {entries.map(([key, value], i) => {
+          const y = 74 + i * 55;
+          const changed =
+            (step === 1 && key === "x") ||
+            (step === 2 && key === "points") ||
+            (step === 4 && key === "color") ||
+            (step === 7 && key === "speed");
+          return (
+            <g key={key}>
+              <circle
+                cx="21"
+                cy={y + 21}
+                r="12"
+                fill={C.bg}
+                stroke={C.border}
+              />
+              <text
+                x="21"
+                y={y + 27}
+                textAnchor="middle"
+                fill={C.muted}
+                fontSize="16"
+              >
+                {i + 1}
+              </text>
+              <rect
+                x="42"
+                y={y}
+                width="280"
+                height="42"
+                rx="5"
+                fill={C.bg}
+                stroke={changed ? C.accent : C.border}
+                strokeWidth={changed ? 3 : 1}
+              />
+              <text x="53" y={y + 27} fill={C.text} fontSize="17">
+                {key}
+              </text>
+              <path
+                d={`M 129 ${y + 21} h 26 l -6 -5 m 6 5 l -6 5`}
+                fill="none"
+                stroke={C.accent}
+                strokeWidth="2"
+              />
+              <text x="166" y={y + 27} fill={C.text} fontSize="17">
+                {python(value)}
+              </text>
+              {changed && <circle cx="309" cy={y + 8} r="4" fill={C.accent} />}
+            </g>
+          );
+        })}
+        {(step === 5 || step === 6) && (
+          <g>
+            <path d="M 42 260 H 322" stroke={C.muted} strokeDasharray="5 4" />
+            <text x="53" y="287" fill={C.text} fontSize="17">
+              speed：无绑定（不是 None）
+            </text>
+          </g>
+        )}
+        <text x="12" y="335" fill={C.text} fontSize="17">
+          {step === 0 ? "尚未执行操作" : result}
+        </text>
+      </svg>
+      {views && (
+        <>
+          <svg
+            viewBox="0 0 340 330"
+            className="mx-auto w-full max-w-[400px]"
+            role="img"
+            aria-label={`${projection} 的当前输出为 ${output.join("；")}；初始 items 快照始终是 color green、points 5。`}
+          >
+            <text x="12" y="24" fill={C.text} fontSize="17">
+              {projection === "sorted"
+                ? "新排序列表（此刻重新计算）"
+                : `保存的 ${projection} 视图（此刻读取）`}
+            </text>
+            {output.map((item, i) => (
+              <g key={i}>
+                <circle
+                  cx="22"
+                  cy={49 + i * 42}
+                  r="12"
+                  fill={C.bg}
+                  stroke={C.accent}
+                />
+                <text
+                  x="22"
+                  y={55 + i * 42}
+                  textAnchor="middle"
+                  fill={C.text}
+                  fontSize="16"
+                >
+                  {entries.findIndex(([key]) => key === projected[i][0]) + 1}
+                </text>
+                <rect
+                  x="44"
+                  y={32 + i * 42}
+                  width="280"
+                  height="34"
+                  rx="4"
+                  fill={C.bg}
+                  stroke={C.border}
+                />
+                <text x="52" y={55 + i * 42} fill={C.text} fontSize="16">
+                  {item}
+                </text>
+              </g>
+            ))}
+            <path d="M 12 216 H 328" stroke={C.border} />
+            <text x="12" y="244" fill={C.muted} fontSize="16">
+              初始 list(alien.items()) 快照
+            </text>
+            <text x="12" y="274" fill={C.text} fontSize="16">
+              {'[("color", "green"),'}
+            </text>
+            <text x="24" y="301" fill={C.text} fontSize="16">
+              {'("points", 5)]（不变）'}
+            </text>
+          </svg>
+          <p className="text-sm">
+            输出左侧数字对应上图的插入序号，可观察排序如何重新排列键。前三项模拟在初始时保存的动态视图；每步重新读取会反映当前绑定。sorted
+            是每步新算的列表，不是动态视图。快照中的本例值不可变；它并非任意嵌套对象的深复制。
+          </p>
+        </>
+      )}
+      <p
+        role="status"
+        aria-live="polite"
+        className="mt-3 text-sm leading-relaxed"
+      >
+        第 {step + 1}/{operations.length} 步 · {operations[step].why}
+      </p>
+      <div className={controlsClass}>
+        <TimelineControls
+          timeline={tl}
+          caption={operations[step].label}
+          reset={{
+            label: "重置实验",
+            ariaLabel: "重置全部实验到增删与缺失的初始状态",
+            onClick: () => {
+              tl.goToStep(0);
+              setProjection("items");
+              onReset();
+            },
+          }}
+        />
       </div>
+    </>
+  );
+}
 
-      <div className="p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {(["crud", "missing", "nested"] as const).map((m) => (
+const shapes = {
+  records: {
+    label: "列表装字典",
+    source: 'users = [{"city": "London"}, {"city": "NYC"}]',
+    path: 'users[0]["city"]',
+    root: "users · list",
+    first: "[0]",
+    second: '["city"]',
+    middle: "dict",
+    leaf: '"London"',
+    sibling: "[1] → dict",
+  },
+  groups: {
+    label: "字典装列表",
+    source: 'groups = {"team": ["ada", "grace"]}',
+    path: 'groups["team"][0]',
+    root: "groups · dict",
+    first: '["team"]',
+    second: "[0]",
+    middle: "list",
+    leaf: '"ada"',
+    sibling: '[1] → "grace"',
+  },
+  users: {
+    label: "字典装字典",
+    source: 'users = {"ada": {"city": "London"}, "grace": {"city": "NYC"}}',
+    path: 'users["ada"]["city"]',
+    root: "users · dict",
+    first: '["ada"]',
+    second: '["city"]',
+    middle: "dict",
+    leaf: '"London"',
+    sibling: '"grace" → dict',
+  },
+} as const;
+type Shape = keyof typeof shapes;
+
+function NestedLab({ onReset }: { onReset: () => void }) {
+  const [shape, setShape] = useState<Shape>("users");
+  const [missing, setMissing] = useState(false);
+  const tl = useTeachingTimeline({ steps: pathSteps, build: buildPath });
+  const data = shapes[shape];
+  const stage = tl.currentStep;
+  const failed = missing && stage === 2;
+  const second = missing ? '["missing"]' : data.second;
+  const path = data.path.replace(/\[[^\]]+\]$/, second);
+  const explanation =
+    stage === 0
+      ? "先看容器类型，方括号里的 0 是位置；带引号的文字是键。"
+      : stage === 1
+        ? `第一层 ${data.first} 得到 ${data.middle}，还不是最终值。`
+        : failed
+          ? shape === "groups"
+            ? "内层是列表，却用字符串索引：TypeError；原结构未改变。"
+            : "内层字典没有 missing 键：KeyError；原结构未改变。"
+          : `第二层 ${data.second} 得到 ${data.leaf}。两次取值，没有复制或修改容器。`;
+  return (
+    <>
+      <fieldset className="min-w-0">
+        <legend className="text-sm">先预测：每次取出的对象是什么类型？</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(Object.keys(shapes) as Shape[]).map((key) => (
             <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded-control border px-3 py-1.5 text-xs font-medium transition-colors ${mode === m ? "border-accent bg-accent/10" : "border-border hover:border-accent"}`}
-              style={{ color: mode === m ? C.accent : C.secondary }}
+              type="button"
+              key={key}
+              className={buttonClass}
+              aria-pressed={shape === key}
+              onClick={() => {
+                tl.goToStep(0);
+                setShape(key);
+                setMissing(false);
+              }}
             >
-              {m === "crud" ? "key-space CRUD" : m === "missing" ? "missing-key policy" : "nested shape"}
+              {shapes[key].label}
             </button>
           ))}
         </div>
-
-        {mode === "crud" ? (
-          <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="w-full" role="img" aria-label="dictionary key-space CRUD 操作可视化">
-            <text x={VIEW_W / 2} y={26} textAnchor="middle" fontSize={15} fontWeight={600} fill={C.primary}>
-              key-space CRUD：add 扩大 / modify 更新 / remove 缩小 / get 只读
-            </text>
-            <text x={VIEW_W / 2} y={46} textAnchor="middle" fontSize={11} fill={C.secondary}>
-              方括号赋值既可 add 也可 modify，取决于 key 是否已存在
-            </text>
-
-            {/* key-space 格 */}
-            <g>
-              <rect x={60} y={70} width={140} height={56} rx={6} fill={C.elevated} stroke={C.border} strokeWidth={1.5} />
-              <text x={130} y={96} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>"color"</text>
-              <text x={130} y={114} textAnchor="middle" fontSize={11} fill={C.secondary}>"green"</text>
-            </g>
-            <g>
-              <rect x={210} y={70} width={140} height={56} rx={6}
-                fill={crudOp === "remove" ? C.border : crudOp === "modify" ? C.accent : C.elevated}
-                fillOpacity={crudOp === "modify" ? 0.14 : 1}
-                stroke={crudOp === "modify" || crudOp === "remove" ? C.danger : C.border}
-                strokeWidth={crudOp === "modify" || crudOp === "remove" ? 2 : 1.5} />
-              <text x={280} y={96} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>"points"</text>
-              <text x={280} y={114} textAnchor="middle" fontSize={11}
-                fill={crudOp === "modify" ? C.accent : C.secondary}>
-                {crudOp === "modify" ? "10 (已更新)" : "5"}
-              </text>
-            </g>
-            <g>
-              <rect x={360} y={70} width={140} height={56} rx={6}
-                fill={crudOp === "add" ? C.success : C.elevated}
-                fillOpacity={crudOp === "add" ? 0.14 : 1}
-                stroke={crudOp === "add" ? C.success : C.border}
-                strokeWidth={crudOp === "add" ? 2 : 1.5} />
-              <text x={430} y={96} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>
-                {crudOp === "add" ? '"x_position"' : crudOp === "remove" ? '(已删除)' : '"x_position"'}
-              </text>
-              <text x={430} y={114} textAnchor="middle" fontSize={11}
-                fill={crudOp === "add" ? C.success : C.secondary}>
-                {crudOp === "add" ? "0 (新增)" : crudOp === "remove" ? "—" : "0"}
-              </text>
-            </g>
-            <g>
-              <rect x={510} y={70} width={140} height={56} rx={6}
-                fill={crudOp === "remove" ? C.danger : C.elevated}
-                fillOpacity={crudOp === "remove" ? 0.14 : 1}
-                stroke={crudOp === "remove" ? C.danger : C.border}
-                strokeWidth={crudOp === "remove" ? 2 : 1.5} />
-              <text x={580} y={96} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>
-                {crudOp === "remove" ? '"speed" (将被删)' : '"speed"'}
-              </text>
-              <text x={580} y={114} textAnchor="middle" fontSize={11} fill={C.secondary}>
-                {crudOp === "remove" ? "—" : "\"medium\""}
-              </text>
-            </g>
-
-            {/* 箭头 */}
-            {crudOp === "add" && (
-              <g>
-                <line x1={430} y1={140} x2={430} y2={170} stroke={C.success} strokeWidth={2} markerEnd="url(#arrowS)" />
-                <text x={430} y={190} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.success}>
-                  alien["x_position"] = 0 → key-space 扩大
-                </text>
-              </g>
-            )}
-            {crudOp === "modify" && (
-              <g>
-                <line x1={280} y1={140} x2={280} y2={170} stroke={C.accent} strokeWidth={2} markerEnd="url(#arrowA)" />
-                <text x={280} y={190} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.accent}>
-                  alien["points"] = 10 → binding 更新
-                </text>
-              </g>
-            )}
-            {crudOp === "remove" && (
-              <g>
-                <line x1={580} y1={140} x2={580} y2={170} stroke={C.danger} strokeWidth={2} markerEnd="url(#arrowD)" />
-                <text x={580} y={190} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.danger}>
-                  del alien["speed"] → key-space 缩小
-                </text>
-              </g>
-            )}
-            {crudOp === "get" && (
-              <g>
-                <line x1={345} y1={98} x2={385} y2={98} stroke={C.secondary} strokeWidth={2} strokeDasharray="4 2" />
-                <text x={365} y={86} textAnchor="middle" fontSize={11} fill={C.secondary}>get / [] 读取</text>
-                <text x={365} y={130} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.secondary}>
-                  只读操作，key-space 不变
-                </text>
-              </g>
-            )}
-
-            <defs>
-              <marker id="arrowS" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill={C.success} />
-              </marker>
-              <marker id="arrowA" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill={C.accent} />
-              </marker>
-              <marker id="arrowD" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill={C.danger} />
-              </marker>
-            </defs>
-
-            {/* 信息面板 */}
-            <rect x={60} y={220} width={740} height={100} rx={8} fill={C.bg} stroke={C.border} />
-            <text x={VIEW_W / 2} y={252} textAnchor="middle" fontSize={14} fontWeight={700} fill={C.primary}>
-              {crudOp === "add" && "add：新 key → 新 binding → key-space 扩大"}
-              {crudOp === "modify" && "modify：已有 key → 更新 value → key-space 不变"}
-              {crudOp === "remove" && "remove：del / pop → key-space 缩小；pop 返回被删 value"}
-              {crudOp === "get" && "get：只读查询；[] 缺失抛 KeyError，get 返回 default"}
-            </text>
-            <text x={VIEW_W / 2} y={278} textAnchor="middle" fontSize={11} fill={C.secondary}>
-              {crudOp === "add" && "再次给同一 key 赋值不会增加第二个同名 key，而是替换 value"}
-              {crudOp === "modify" && "value 可以是 list、dict 或 class instance；多个 key 可引用同一 mutable 对象"}
-              {crudOp === "remove" && "先决定调用方是否需要被删 value，再选 del 或 pop"}
-              {crudOp === "get" && "先决定 missing key 策略：必填用 []，可选用 get，三态用 sentinel"}
-            </text>
-            <text x={VIEW_W / 2} y={302} textAnchor="middle" fontSize={11} fill={C.danger}>
-              {faultOn && crudOp === "add" && "故障：用 list 做 key → TypeError: unhashable type"}
-              {faultOn && crudOp === "modify" && "故障：直接改 value 的 mutable 对象影响所有引用路径"}
-              {faultOn && crudOp === "remove" && "故障：遍历中删除 key → RuntimeError: dict changed size"}
-              {faultOn && crudOp === "get" && "故障：get(key, []) 后 append 不写入 → 应显式赋值或 defaultdict"}
-            </text>
-          </svg>
-        ) : mode === "missing" ? (
-          <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="w-full" role="img" aria-label="missing-key policy 对比可视化">
-            <text x={VIEW_W / 2} y={26} textAnchor="middle" fontSize={15} fontWeight={600} fill={C.primary}>
-              missing-key policy：必填报错 vs 可选默认 vs 哨兵区分
-            </text>
-            <text x={VIEW_W / 2} y={46} textAnchor="middle" fontSize={11} fill={C.secondary}>
-              边界层先验证 required keys，核心逻辑再假定 invariant
-            </text>
-
-            {/* 三条路径 */}
-            <g>
-              <rect x={60} y={70} width={230} height={56} rx={6}
-                fill={missingSel === "bracket" ? C.danger : C.elevated}
-                fillOpacity={missingSel === "bracket" ? 0.14 : 1}
-                stroke={missingSel === "bracket" ? C.danger : C.border}
-                strokeWidth={missingSel === "bracket" ? 2 : 1.5} />
-              <text x={175} y={96} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>d["points"]</text>
-              <text x={175} y={114} textAnchor="middle" fontSize={11} fill={C.secondary}>必填字段</text>
-            </g>
-            <g>
-              <rect x={315} y={70} width={230} height={56} rx={6}
-                fill={missingSel === "get" ? C.warning : C.elevated}
-                fillOpacity={missingSel === "get" ? 0.14 : 1}
-                stroke={missingSel === "get" ? C.warning : C.border}
-                strokeWidth={missingSel === "get" ? 2 : 1.5} />
-              <text x={430} y={96} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>d.get("speed", "medium")</text>
-              <text x={430} y={114} textAnchor="middle" fontSize={11} fill={C.secondary}>可选字段</text>
-            </g>
-            <g>
-              <rect x={570} y={70} width={230} height={56} rx={6}
-                fill={missingSel === "sentinel" ? C.success : C.elevated}
-                fillOpacity={missingSel === "sentinel" ? 0.14 : 1}
-                stroke={missingSel === "sentinel" ? C.success : C.border}
-                strokeWidth={missingSel === "sentinel" ? 2 : 1.5} />
-              <text x={685} y={96} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>d.get("tz", SENTINEL)</text>
-              <text x={685} y={114} textAnchor="middle" fontSize={11} fill={C.secondary}>三态区分</text>
-            </g>
-
-            {/* 结果区 */}
-            <rect x={60} y={150} width={740} height={80} rx={8} fill={C.bg} stroke={C.border} />
-            <text x={VIEW_W / 2} y={180} textAnchor="middle" fontSize={14} fontWeight={700} fill={C.primary}>
-              key "points" 不存在时 →{" "}
-              <tspan fill={missing.color}>{missing.result}</tspan>
-            </text>
-            <text x={VIEW_W / 2} y={206} textAnchor="middle" fontSize={12} fill={C.secondary}>
-              {missing.desc}
-            </text>
-
-            {/* 决策树 */}
-            <text x={80} y={260} fontSize={12} fontWeight={700} fill={C.secondary}>决策路径</text>
-            <line x1={80} y1={270} x2={80} y2={350} stroke={C.border} strokeWidth={1.5} />
-            <circle cx={80} cy={290} r={5} fill={C.danger} />
-            <text x={100} y={294} fontSize={11} fill={C.primary}>字段是必填？→ 用 d["key"]（KeyError 可见）</text>
-            <circle cx={80} cy={320} r={5} fill={C.warning} />
-            <text x={100} y={324} fontSize={11} fill={C.primary}>字段是可选？→ 用 d.get(key, default)（不写入）</text>
-            <circle cx={80} cy={350} r={5} fill={C.success} />
-            <text x={100} y={354} fontSize={11} fill={C.primary}>需区分 missing / None？→ 用 sentinel 对象</text>
-
-            {faultOn && (
-              <text x={VIEW_W / 2} y={375} textAnchor="middle" fontSize={11} fill={C.danger}>
-                故障：所有读取都用空字符串/0 默认 → 数据损坏在更远处暴露
-              </text>
-            )}
-          </svg>
-        ) : (
-          <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="w-full" role="img" aria-label="nested data shape 分层结构可视化">
-            <text x={VIEW_W / 2} y={26} textAnchor="middle" fontSize={15} fontWeight={600} fill={C.primary}>
-              nested shape：每层 container 表达一种关系
-            </text>
-            <text x={VIEW_W / 2} y={46} textAnchor="middle" fontSize={11} fill={C.secondary}>
-              从访问问题出发：按位置遍历？按 ID 读取？字段是否多值？
-            </text>
-
-            {/* 三种 shape */}
-            {nestedSel === "lod" && (
-              <g>
-                {/* list of dicts */}
-                <text x={120} y={80} fontSize={12} fontWeight={700} fill={C.secondary}>list</text>
-                <rect x={60} y={90} width={80} height={200} rx={6} fill={C.elevated} stroke={C.border} strokeWidth={1.5} />
-                <text x={100} y={110} textAnchor="middle" fontSize={11} fill={C.secondary}>0</text>
-                <rect x={70} y={120} width={60} height={50} rx={4} fill={C.bg} stroke={C.border} />
-                <text x={100} y={142} textAnchor="middle" fontSize={10} fill={C.primary}>name: Ada</text>
-                <text x={100} y={158} textAnchor="middle" fontSize={10} fill={C.primary}>city: London</text>
-
-                <text x={100} y={185} textAnchor="middle" fontSize={11} fill={C.secondary}>1</text>
-                <rect x={70} y={195} width={60} height={50} rx={4} fill={C.bg} stroke={C.border} />
-                <text x={100} y={217} textAnchor="middle" fontSize={10} fill={C.primary}>name: Grace</text>
-                <text x={100} y={233} textAnchor="middle" fontSize={10} fill={C.primary}>city: NYC</text>
-
-                <text x={100} y={260} textAnchor="middle" fontSize={11} fill={C.secondary}>2</text>
-                <rect x={70} y={270} width={60} height={20} rx={4} fill={C.border} opacity={0.3} />
-                <text x={100} y={284} textAnchor="middle" fontSize={10} fill={C.secondary}>...</text>
-
-                {/* 访问路径 */}
-                <line x1={140} y1={145} x2={220} y2={145} stroke={C.accent} strokeWidth={2} />
-                <text x={240} y={150} fontSize={12} fill={C.accent}>users[0]["name"] → "Ada"</text>
-                <text x={240} y={170} fontSize={11} fill={C.secondary}>按位置遍历；有插入顺序</text>
-              </g>
-            )}
-
-            {nestedSel === "dol" && (
-              <g>
-                {/* dict of lists */}
-                <text x={120} y={80} fontSize={12} fontWeight={700} fill={C.secondary}>dict</text>
-                <rect x={60} y={90} width={200} height={120} rx={6} fill={C.elevated} stroke={C.border} strokeWidth={1.5} />
-                <text x={100} y={112} textAnchor="middle" fontSize={11} fill={C.primary}>"team"</text>
-                <rect x={70} y={120} width={160} height={30} rx={4} fill={C.bg} stroke={C.border} />
-                <text x={150} y={140} textAnchor="middle" fontSize={11} fill={C.secondary}>["ada", "grace"]</text>
-
-                <text x={100} y={172} textAnchor="middle" fontSize={11} fill={C.primary}>"guest"</text>
-                <rect x={70} y={180} width={160} height={20} rx={4} fill={C.bg} stroke={C.border} />
-                <text x={150} y={194} textAnchor="middle" fontSize={11} fill={C.secondary}>["guido"]</text>
-
-                {/* 访问路径 */}
-                <line x1={160} y1={135} x2={300} y2={135} stroke={C.accent} strokeWidth={2} />
-                <text x={320} y={140} fontSize={12} fill={C.accent}>groups["team"][0] → "ada"</text>
-                <text x={320} y={160} fontSize={11} fill={C.secondary}>按 category 分组；一个 field 多值</text>
-              </g>
-            )}
-
-            {nestedSel === "dod" && (
-              <g>
-                {/* dict of dicts */}
-                <text x={120} y={80} fontSize={12} fontWeight={700} fill={C.secondary}>dict (identity)</text>
-                <rect x={60} y={90} width={200} height={120} rx={6} fill={C.elevated} stroke={C.border} strokeWidth={1.5} />
-                <text x={100} y={112} textAnchor="middle" fontSize={11} fill={C.primary}>"ada"</text>
-                <rect x={70} y={120} width={80} height={50} rx={4} fill={C.bg} stroke={C.border} />
-                <text x={110} y={140} textAnchor="middle" fontSize={10} fill={C.primary}>first: ada</text>
-                <text x={110} y={156} textAnchor="middle" fontSize={10} fill={C.primary}>city: London</text>
-
-                <text x={170} y={112} textAnchor="middle" fontSize={11} fill={C.primary}>"grace"</text>
-                <rect x={150} y={120} width={80} height={50} rx={4} fill={C.bg} stroke={C.border} />
-                <text x={190} y={140} textAnchor="middle" fontSize={10} fill={C.primary}>first: grace</text>
-                <text x={190} y={156} textAnchor="middle" fontSize={10} fill={C.primary}>city: NYC</text>
-
-                {/* 访问路径 */}
-                <line x1={160} y1={145} x2={300} y2={145} stroke={C.accent} strokeWidth={2} />
-                <text x={320} y={140} fontSize={12} fill={C.accent}>users["ada"]["city"] → "London"</text>
-                <text x={320} y={160} fontSize={11} fill={C.secondary}>按唯一 key 查找；外层 identity，内层 fields</text>
-              </g>
-            )}
-
-            {/* 使用场景对比 */}
-            <rect x={60} y={230} width={740} height={110} rx={8} fill={C.bg} stroke={C.border} />
-            <text x={VIEW_W / 2} y={256} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.primary}>
-              {nested.label}：{nested.desc}
-            </text>
-            <text x={VIEW_W / 2} y={280} textAnchor="middle" fontSize={12} fill={C.secondary}>
-              典型访问：{nested.access}
-            </text>
-            <text x={VIEW_W / 2} y={304} textAnchor="middle" fontSize={11} fill={C.secondary}>
-              适用场景：{nested.useCase}
-            </text>
-            <text x={VIEW_W / 2} y={328} textAnchor="middle" fontSize={11} fill={C.danger}>
-              {faultOn ? "故障：三层以上混合 container 让访问路径和错误处理迅速复杂；先写 schema 说明" : ""}
-            </text>
-          </svg>
+      </fieldset>
+      <p className="mt-3 break-words font-mono text-sm">{data.source}</p>
+      <p className="mt-2 break-words font-mono text-sm">读取：{path}</p>
+      <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={missing}
+          onChange={(event) => {
+            tl.goToStep(0);
+            setMissing(event.target.checked);
+          }}
+        />
+        {'将第二层访问改成 ["missing"]（错误路径）'}
+      </label>
+      <svg
+        viewBox="0 0 340 400"
+        className="mx-auto w-full max-w-[400px]"
+        role="img"
+        aria-label={`${data.source}。访问路径 ${path}。${explanation}`}
+      >
+        <text x="12" y="26" fill={C.text} fontSize="17">
+          {data.root}
+        </text>
+        <rect
+          x="12"
+          y="42"
+          width="316"
+          height="340"
+          rx="8"
+          fill="none"
+          stroke={C.border}
+        />
+        <text x="26" y="71" fill={C.text} fontSize="17">
+          {data.first}
+        </text>
+        <path
+          d="M 52 83 V 111 l -5 -7 m 5 7 l 5 -7"
+          fill="none"
+          stroke={stage >= 1 ? C.accent : C.border}
+          strokeWidth="3"
+        />
+        <rect
+          x="34"
+          y="119"
+          width="272"
+          height="172"
+          rx="8"
+          fill={C.bg}
+          stroke={stage >= 1 ? C.accent : C.border}
+          strokeWidth="2"
+        />
+        <text x="48" y="146" fill={C.muted} fontSize="17">
+          {data.middle}
+        </text>
+        <text x="48" y="180" fill={C.text} fontSize="17">
+          {data.second}
+        </text>
+        <path
+          d="M 128 175 h 33 l -6 -5 m 6 5 l -6 5"
+          fill="none"
+          stroke={stage === 2 && !failed ? C.accent : C.border}
+          strokeWidth="2"
+        />
+        <ellipse
+          cx="228"
+          cy="175"
+          rx="61"
+          ry="23"
+          fill="none"
+          stroke={stage === 2 && !failed ? C.accent : C.border}
+          strokeWidth="2"
+        />
+        <text x="228" y="181" textAnchor="middle" fill={C.text} fontSize="16">
+          {data.leaf}
+        </text>
+        {shape === "groups" && (
+          <text x="48" y="228" fill={C.muted} fontSize="17">
+            {data.sibling}
+          </text>
         )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {mode === "crud"
-            ? CRUD_OPS.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setCrudOp(c.id)}
-                  className={`rounded-control border px-2.5 py-1 text-xs font-medium transition-colors ${crudOp === c.id ? "border-accent bg-accent/10" : "border-border hover:border-accent"}`}
-                  style={{ color: crudOp === c.id ? C.accent : C.secondary }}
-                >
-                  {c.label}
-                </button>
-              ))
-            : mode === "missing"
-              ? MISSING_POLICIES.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setMissingSel(m.id)}
-                    className={`rounded-control border px-2.5 py-1 text-xs font-medium transition-colors ${missingSel === m.id ? "border-accent bg-accent/10" : "border-border hover:border-accent"}`}
-                    style={{ color: missingSel === m.id ? C.accent : C.secondary }}
-                  >
-                    {m.label}
-                  </button>
-                ))
-              : NESTED_SHAPES.map((n) => (
-                  <button
-                    key={n.id}
-                    onClick={() => setNestedSel(n.id)}
-                    className={`rounded-control border px-2.5 py-1 text-xs font-medium transition-colors ${nestedSel === n.id ? "border-accent bg-accent/10" : "border-border hover:border-accent"}`}
-                    style={{ color: nestedSel === n.id ? C.accent : C.secondary }}
-                  >
-                    {n.label}
-                  </button>
-                ))}
-        </div>
-
-        <div className="mt-3 rounded-control border border-border p-3" style={{ background: C.bg }}>
-          <div className="text-xs font-semibold" style={{ color: C.primary }}>
-            {mode === "crud" && `CRUD：${crud.label}`}
-            {mode === "missing" && `missing policy：${missing.label}`}
-            {mode === "nested" && `nested shape：${nested.label}`}
-          </div>
-          <div className="mt-1 text-xs leading-relaxed" style={{ color: C.secondary }}>
-            {mode === "crud" && crud.desc}
-            {mode === "missing" && missing.desc}
-            {mode === "nested" && `${nested.desc}；访问路径 ${nested.access}；${nested.useCase}`}
-          </div>
-          {faultOn && (
-            <div className="mt-2 text-xs leading-relaxed" style={{ color: C.danger }}>
-              {mode === "crud" &&
-                (crudOp === "add"
-                  ? "故障：用 list 做 key → TypeError: unhashable type"
-                  : crudOp === "modify"
-                    ? "故障：直接改 value 的 mutable 对象影响所有引用路径"
-                    : crudOp === "remove"
-                      ? "故障：遍历中删除 key → RuntimeError: dict changed size"
-                      : "故障：get(key, []) 后 append 不写入 → 应显式赋值")}
-              {mode === "missing" && "故障：所有读取都用空字符串/0 默认 → 数据损坏在更远处暴露"}
-              {mode === "nested" && "故障：三层以上混合 container 让访问路径和错误处理迅速复杂"}
-            </div>
-          )}
-        </div>
-
-        <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-control border border-border p-3" style={{ background: C.bg }}>
-          <input type="checkbox" checked={faultOn} onChange={(e) => setFaultOn(e.target.checked)} className="h-4 w-4 cursor-pointer" />
-          <span className="text-xs" style={{ color: faultOn ? C.danger : C.secondary }}>
-            注入故障：unhashable key / mutable alias / 遍历中删除 / 默认掩盖损坏
-          </span>
-        </label>
+        {failed && (
+          <g>
+            <path d="M 49 244 h 220" stroke={C.accent} strokeDasharray="5 4" />
+            <path
+              d="M 266 235 l 16 18 m 0 -18 l -16 18"
+              stroke={C.accent}
+              strokeWidth="3"
+            />
+            <text x="48" y="276" fill={C.text} fontSize="16">
+              {shape === "groups"
+                ? "TypeError：索引类型错误"
+                : "KeyError：missing 无绑定"}
+            </text>
+          </g>
+        )}
+        {shape !== "groups" && (
+          <text x="26" y="329" fill={C.muted} fontSize="17">
+            {data.sibling}
+          </text>
+        )}
+        <text x="26" y="365" fill={C.text} fontSize="16">
+          {stage === 2
+            ? failed
+              ? "× 查找中断，结构未变"
+              : "✓ 到达值，结构未变"
+            : "按下一步，沿访问路径前进"}
+        </text>
+      </svg>
+      <p role="status" aria-live="polite" className="text-sm leading-relaxed">
+        {explanation}
+      </p>
+      <div className={controlsClass}>
+        <TimelineControls
+          timeline={tl}
+          caption={pathSteps[stage].label}
+          reset={{
+            label: "重置实验",
+            ariaLabel: "重置全部实验到增删与缺失的初始状态",
+            onClick: () => {
+              tl.goToStep(0);
+              setShape("users");
+              setMissing(false);
+              onReset();
+            },
+          }}
+        />
       </div>
-    </div>
+    </>
+  );
+}
+
+export function PccDictionariesLab() {
+  const [mode, setMode] = useState<"mapping" | "views" | "nested">("mapping");
+  return (
+    <section
+      aria-label="字典结构实验"
+      className="not-prose my-6 min-w-0 rounded-card border border-border bg-elevated p-3 text-primary sm:p-4"
+    >
+      <h3 className="text-base font-semibold">字典：绑定、顺序与访问路径</h3>
+      <p className="mt-2 text-sm text-secondary">
+        这是固定样本的 Python 语义模拟，不是 Python 运行器；图示是逻辑关系，不是
+        CPython
+        哈希槽布局。切换实验会从初始状态开始；重置会返回“增删与缺失”的初始状态。
+      </p>
+      <div
+        className="my-3 flex flex-wrap gap-2"
+        role="group"
+        aria-label="选择实验"
+      >
+        {(["mapping", "views", "nested"] as const).map((value) => (
+          <button
+            type="button"
+            key={value}
+            className={buttonClass}
+            aria-pressed={mode === value}
+            onClick={() => setMode(value)}
+          >
+            {value === "mapping"
+              ? "增删与缺失"
+              : value === "views"
+                ? "视图与快照"
+                : "嵌套路径"}
+          </button>
+        ))}
+      </div>
+      {mode === "nested" ? (
+        <NestedLab onReset={() => setMode("mapping")} />
+      ) : (
+        <SequenceLab
+          key={mode}
+          views={mode === "views"}
+          onReset={() => setMode("mapping")}
+        />
+      )}
+    </section>
   );
 }

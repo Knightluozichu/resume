@@ -3,200 +3,495 @@ title: "第1章 Introduction：从数学契约到 C++ 数据抽象"
 type: C
 section: "导论与分析"
 order: 0
-description: "按第3版原章依次建立数学复习、递归、C++类与所有权、模板契约和矩阵包装，为后续数据结构实现与分析统一语言。"
+description: "沿第3版导论的七组主题，以有界递归、模板条件和矩阵值复制建立可验证的 C++ 数据结构契约。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+draft: true
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dsaa3-01
 ---
 
+import {
+  DsaIntroductionContractLab,
+  DsaIntroductionMatrixLab,
+} from "@/components/mdx/dsa-cpp/dsa-introduction-contract-lab";
 
-## 从“数据结构为什么先讲 C++”开始
+{/* 知识/视觉决策：保留官方七组，不将广域导论伪称为五个概念。①本书目的/抽象数据类型→矩阵接口与存储图；②数学复习/指数、对数、级数、模运算、归纳法→推导+可运行核算；③递归/基例、进展、栈→实际逐步执行图；④类/构造、封装、const、explicit→Cell与Matrix代码；⑤细节/引用、生命周期、RAII、值语义→独立存储与错误共享图；⑥模板/操作契约→find_max代码及编译反例；⑦矩阵/形状、行主序、边界→二维格到连续序列。所有Term在词典闭合；一个主实验+一个辅助实验。 */}
 
-本书讨论什么（）？答案不是“复习语法”，也不是“背一份容器目录”。Mark Allen Weiss 把本书定位在基础数据结构课程和算法分析课程之间：每个结构都要同时回答接口语义、表示不变量、操作实现和运行时间。
+## 学习目标
 
-先预测两段都能输出正确答案的程序。一段把节点、指针和循环都写在 `main` 中；另一段把 `find`、`insert`、复制和销毁封装成 class。只看一次运行，两者没有区别；当元素类型改变、对象被复制、输入放大或实现从数组换成链表时，前者的隐含假设会一起泄漏。第1章因此先建立后续十二章共同使用的表达语言。
+<Objectives>
 
+- 能推导求和递归的结果与调用深度，并指出负输入、缺失基例和整数范围的防线。
+- 能修改 C++17 矩阵代码，实现保留空形状的转置，并验证值复制互不影响。
+- 能回答：模板代码通过编译、一次输出正确，是否足以证明其接口、生命周期和成本都正确？
 
-官方第3版目录的七个单元必须按原顺序读：**what's the book about、mathematics review、brief introduction to recursion、C++ classes、C++ details、templates、using matrices**。前两项规定怎样陈述成本，中间三项规定怎样陈述状态和所有权，最后两项让一个数据结构对多种元素类型和二维数据复用。
+</Objectives>
 
-## 1.1 What's the Book About?
+## 直觉：先规定工厂交付什么
 
-抽象数据类型把“能做什么”与“怎样存”分开。一个 Stack ADT 承诺 `push`、`pop`、`top`、`isEmpty`；它可以由连续数组或链表实现。调用者不应依赖节点地址，结构实现则必须证明每个操作保持不变量，并给出 cost。
+同一条生产线可以更换机器，但交给客户的成品不能偷偷变样。修好一个零件后，仓库里另一个成品也随之改变，说明“看起来能运行”还远远不够。
 
-这种分层带来三份契约：
+这章先把交付条件写清：哪些原料可以接收，哪些操作必须拒绝，复制品是否真正独立。没有这些约定，后面换更快的做法时，就难以分清提速和把问题藏起来。
 
-1. **语义契约**：空栈 `pop` 怎样处理，复制后两个栈是否独立。
-2. **表示契约**：`size` 是否等于有效元素数，链表尾部是否保持 null。
-3. **成本契约**：操作是 worst-case constant、amortized constant 还是 logarithmic。
+## 1.1 本书讨论什么：接口、表示与成本
 
-后续章节的 BST、hash table、heap 和 disjoint set 都沿用这三层。C++ 只是表达契约的工具；若语言细节让对象在 copy 或 destruction 时失效，那么算法即使正确也不能称为数据结构实现。
+<Term def="只规定可观察操作及结果，不把内部存储方法暴露给使用者的模型">
+  抽象数据类型
+</Term>
+让调用者依赖“做什么”，实现者负责“怎样存”。以矩阵为例，调用者需要行列数、读写元素和复制；它不应靠修改内部行数组的长度改变形状。后面的树、散列表和堆也需要这种分离。
 
-## 1.2 Mathematics Review
+<Term def="对象在每次公开操作完成后都必须满足的条件">表示不变量</Term>
+把实现约束变成可检查的等式。本章矩阵的条件是：行列非负，元素数等于行数乘列数，合法坐标只有半开区间内的整数。辅助实验画出二维格与实际元素序列：格子有几行，不由一次访问的结果猜测，而由对象保存的形状决定。
 
-数学复习（）只选后文反复出现的工具。
+还要说明成本。`at(r,c)` 不遍历矩阵，只做检查和一次偏移计算；复制则必须处理所有元素。这是结构操作的计数，不是承诺每种元素的复制都同样便宜。`Matrix<std::string>` 的元素数量相同，字符串内容越长，复制可能越贵。本书把数据结构与算法分析放在一起，正是要同时检查语义、表示和成本，而不是只背容器名称。
 
-### 指数、对数与级数
+## 1.2 数学复习：把“应该正确”变成可计算依据
 
-指数描述倍增。高度为 h 的满二叉树节点数是：
+数学复习在这里服务于两种判断：用指数、对数和级数数清工作量，用归纳法证明递推结果。两者不能互相替代；即使求和公式成立，程序仍要检查输入域、整数范围和调用深度，后面的有界递归会把这些区别落到代码上。
+
+### 指数、对数与逐层工作
+
+本节符号：`h` 是从 0 编号的最后一层，`N` 是正整数规模，`n` 是非负整数，`i` 是求和下标，`b` 是大于 1 的底数，`m` 是正模数，`a、q、r` 是整数。
+
+<Term def="把同一个底数反复相乘；这里用来数倍增后的规模">指数</Term>描述倍增：第
+0 层一个节点，每层翻倍，第 `h` 层有 `2^h` 个。
+<Term def="指数的逆运算；回答需要乘几次底数才能得到给定规模">对数</Term>
+反问需要翻倍几次：`log_b N` 是使 `b` 的相应次幂等于 `N`
+的数。整数过程必须考虑取整；如 8 反复整除 2 得到
+4、2、1，共缩小三次，而访问这四个状态要计四次。
+
+<Term def="把各项工作量相加；不能只看循环外观猜总次数">级数</Term>
+用于合并每层成本。令 `G=1+2+…+2^h`，把每项乘 2 得
+`2G=2+4+…+2^(h+1)`；相减后中间项消去，所以：
 
 $$
-1+2+\cdots+2^h=2^{h+1}-1
+G=2^{h+1}-1.
 $$
 
-反过来，容纳 N 个节点只需要约 log2 N 层，所以平衡树查找是 logarithmic。每轮把问题缩成一半的 binary search 同样最多执行：
+这个式子在说：满二叉树从第 0 层到第 `h` 层的全部节点数，比下一层的节点数少一个。
+
+若另一算法各轮分别做 `N、N/2、N/4…` 份工作，除以 `N` 后得到 `1、1/2、1/4…`；前 `h+1` 项是 `2-2^{-h}`，所以总和小于 `2N`。这不是“出现多层就一定乘一个对数”。实际整数轮次若使用向下取整，每项只会更小；向上取整则必须另外计入舍入成本。
+
+### 用归纳法连接数学和递归
+
+<Term def="先验证起点，再证明较小规模成立能推出下一规模成立的方法">
+  数学归纳法
+</Term>
+不是多试几个输入。设 `S(n)=0+1+…+n`。先有 `S(0)=0`；假设
+`S(k)=k(k+1)/2`，加入下一项得到 `(k(k+1)+2(k+1))/2=(k+1)(k+2)/2`。因此：
 
 $$
-\lfloor\log_2 N\rfloor+1
+S(n)=\frac{n(n+1)}{2},\qquad n\geq 0.
 $$
 
-级数把逐轮成本相加。两层循环不一定都是 quadratic；若内层次数依赖外层 i，则必须写出求和：
+这个式子在说：从 0 加到 `n`，可以配对计数；起点和递推步骤共同覆盖所有非负整数，而不是覆盖负数。
 
-$$
-\sum_{i=1}^{N} i = \frac{N(N+1)}{2}
-$$
+主实验用同一递推关系，但逐层调用：结果正确的归纳证明，不等于机器上无限大的输入都可执行。调用层数和整数范围仍要单独限制。这里的证明方法由数学资料独立核对；它不意味着机器上的所有整数输入都能完成计算。
 
-几何级数解释 divide-and-conquer 中不同层的总工作。若第 i 层工作是 N/2^i，则所有层之和小于2N，而不是 N log N。
+### 模运算与 C++ 余数不是同一输入约定
 
+<Term def="以正整数 m 为周期，将整数按相差 m 的倍数归为同类">模运算</Term>中，`a=qm+r` 且 `0≤r<m`；把 `a` 和另一个整数分别拆成“整倍数加余量”，两者相加时整倍数仍可丢弃，因此可以先取模再相加。模数不能为 0。
 
-### 模运算与 “P Word”
+C++17 的有符号整数除法向 0 截断，所以 `-7 % 5` 是 `-2`，并非数学上常取的代表元 3。对正的 `int m`，先算 `r=a%m`，若 `r<0` 再加 `m`，即可规范化。不能先算可能溢出的 `a+b` 再指望 `%m` 挽救它；即使两个余量各小于 `m`，相加仍可能超出 `int`。下方程序只测试有明确小界的值。
 
-模运算把整数映射到有限环形区间：
+## 1.3 递归简介：基例、进展和等待返回
 
-$$
-(a+b)\bmod m
-=
-\big((a\bmod m)+(b\bmod m)\big)\bmod m
-$$
+这份递归简介用求和说明<Term def="函数将问题交给同一函数处理更小输入，再组合返回结果">递归</Term>的两个方向：向下缩小问题，向上完成尚未做完的操作。`sum(n)` 调用 `sum(n-1)` 后，当前层仍要加上自己的 `n`。这些尚未完成的工作保存在<Term def="一次函数调用需要的局部状态和返回位置的记录">调用栈帧</Term>中。
 
-它会在 Chapter 5 的 hash address、Chapter 6 的 circular representation 和 randomized algorithms 中出现。等式允许先缩小中间值，但负数 `%`、overflow 和非素数 table size 都是实现层要另行处理的细节。
+<Term def="不再调用自身、可以直接给出结果的输入情况">基例</Term>是
+`sum(0)=0`。正输入每次减
+1，沿非负整数严格下降，所以必定到达基例。若允许负输入，`-1、-2…` 只会远离
+0；若删除基例，原先正确的下降也会越过合法域。实验的错误开关会显示下一次非法调用，并由监视器拦截，不真的消耗无限栈。
 
-“P Word”是 polynomial。输入规模 N 的多项式时间通常被视为可处理性的基础边界；指数时间在 N 增长后迅速失效。但 polynomial 并不自动等于实践可行：N^4 对亿级输入仍不可接受，而带良好局部性的 N log N 实现也可能比理论更优但常数巨大的方案可靠。
+设计递归时先假设较小调用遵守其契约，再证明本层组合正确；不要在脑中反复展开每一层来替代证明。每层只求一次子结果也很重要：把同一个递归调用写两遍，可能使工作量成倍扩散。这里一共 `n+1` 次调用、`n` 次加法、峰值 `n+1` 层；深度线性，不存在“用了递归就更快”的保证。
 
-## 1.3 A Brief Introduction to Recursion
+> 先预测：`n=3` 到达 0 时已有几层？第一次返回后留下哪几层？开启“缺失基例”，故障出现在输入开始时还是到达 0 后？逐步执行，再重置比较。
 
-递归简介（）的重点不是函数调用自身，而是证明 progress。作者官方示例定义：
+<DsaIntroductionContractLab />
 
-```cpp
-int f(int x) {
-    if (x == 0)
-        return 0;
-    return 2 * f(x - 1) + x * x;
+图中输入限制在 0…6 以便显示；下面 C++ 的允许域是 0…20。20 是教学上限，不是声称所有平台的栈都恰好能容纳某个固定大小。结果最大为 210，连标准保证的最小 `int` 范围也足够；负数和 21 都在递归开始前拒绝。
+
+## 1.4 C++类：把非法状态挡在接口外
+
+设计 C++类时，<Term def="把数据和操作封装在一个类型中，并控制外部能访问哪些成员">类</Term>的作用不只是给变量套一个名字。构造函数负责建立不变量，`private` 隐藏表示，公开函数保证操作后不变量仍成立。矩阵若直接暴露可调整大小的内部 `vector`，调用者便能破坏“元素数等于行乘列”的条件。
+
+作者第3版 `IntCell.h` 的接口包含 `explicit` 构造函数、`read() const` 与 `write(int)`。<Term def="阻止构造函数在不明确请求时承担隐式转换">explicit</Term>让“一个整数就是一个 Cell”不再自动成立；直接写 `Cell{7}` 仍可以。<Term def="成员函数承诺不通过当前对象修改其普通数据成员">const 成员函数</Term>使只读对象也能调用读取接口，并让编译器拒绝通过该接口执行普通写操作。
+
+这不代表整个系统绝对不可变：`const` 引用不能阻止另一个非 `const` 别名修改同一对象。下面独立编写的 `Cell` 与矩阵的两种 `at` 重载对照这一点；没有把现代代码包装成原书原样源码。
+
+## 1.5 C++细节：资源、复制与引用寿命
+
+### 谁拥有资源，谁只是借用
+
+理解 C++细节时，先分清“拥有资源”和“借用资源”。<Term def="把资源的获取与释放绑定到对象构造和析构的管理方式">RAII</Term>使 `vector` 在对象销毁时自动释放其元素存储。拥有裸指针的类则不能只复制地址：默认复制可能让两个对象声称拥有同一资源，随后重复释放。历史代码中要联动考虑析构、复制构造和复制赋值；本章通过标准容器管理资源，不执行重复释放来“演示”错误。
+
+<Term def="复制后得到内容相等但可以独立修改的值">值语义</Term>
+是辅助实验的关键。正常复制真的建立新数组，写入 B 不改变 A；故障模式让 B 指向 A
+的同一数组，图中的两条箭头会合并，写 B 后 A 也变为
+99。这是可安全执行的别名模型，不是把所有共享存储都判为错误：错误在于接口承诺独立值，却实现了共享修改。
+
+### 传参方式和返回值是一份寿命合同
+
+<Term def="给已有对象起别名，不创建该对象的副本">引用</Term>
+通常不拥有被引用对象。传值会创建一个值，传 `const T&`
+避免复制且不能通过它写入，传 `T&`
+允许修改；指针还可以表达空值及重新指向。选择方式不是只比字符多少，要问调用者是否愿意支付复制、允许修改，以及能保证对象活多久。
+
+<Term def="对象从创建完成到销毁的有效时间区间">生命周期</Term>
+决定引用能否使用。返回局部对象的引用会悬空；返回 `vector`
+元素引用，则依赖原容器仍存活且没有导致引用失效的操作，例如重新分配。本章矩阵不提供扩容，但赋值和销毁仍可能使旧引用失效。把
+`at()` 返回的引用长期保存，不会获得额外寿命。
+
+### 为什么矩阵赋值还要做一次完整交换
+
+容器的值复制可以节省手写内存管理，但默认逐成员赋值不自动保证跨成员不变量。若先更新行列，再复制元素时抛出异常，形状可能已变、存储却没变。示例先把右侧完整复制到临时参数，再交换存储和行列；复制失败时还未进入赋值函数，旧对象保持原样。这是<Term def="先构造完整副本，成功后用不抛异常的交换替换旧状态">复制交换</Term>，不是宣称所有类都必须手写复制函数。
+
+## 1.6 模板：需要的是操作契约，不只是一个 T
+
+<Term def="以类型等参数生成具体函数或类的语言机制">模板</Term>让一份逻辑适用于多种类型，但 `T` 不是“什么都能做”。下方 `find_max` 要求非空容器、元素可复制、`<` 的结果能用于条件判断。比较还应满足<Term def="一致地划分先后与等价关系的比较规则，不能自相矛盾">严格弱序</Term>：不能有 `a<a`，先后关系及“互不小于”的等价关系应当传递。对于带 NaN 的浮点数据，普通 `<` 不满足所需的整个域契约，不能用一次正常输出证明支持它。
+
+循环保持“当前位置之前已见元素的最大代表在 best”。每次只与一个新元素比较；遇到相等代表不更新，所以取最早的最大代表。比较次数为 `size-1`，最后还要复制结果。示例返回 `T` 而不是引用，因此从临时 `vector` 调用也不悬空，但这明确增加了可复制要求和一次返回值复制成本。
+
+`Cell` 没有定义 `<`，调用 `find_max(vector<Cell>)` 应在实例化时报错。编译器能发现表达式缺失，却不能替你证明比较传递性。模板定义通常放在调用者可见的头文件中；仅有声明又没有匹配的实例化安排，可能留下链接错误。附录的分离编译另讲，本章用单文件消除这一干扰。
+
+## 1.7 矩阵类：形状不是元素数量的别名
+
+作者第3版公开的 `matrix.h` 中，矩阵类使用嵌套 `vector`，每行分别调整长度，并返回行引用以支持两次下标访问。各行不保证位于同一块连续存储；它的 `numcols()` 在零行时返回 0，而且可变行引用允许调用者改变单行长度。这些是该历史接口的实际边界，不应悄悄补成不存在的保证。
+
+本章的 C++17 教学实现改用一个 `vector<T>` 和独立行列字段。<Term def="先放完第 0 行，再依次放后续行的连续布局">行主序</Term>把 `(r,c)` 映射成 `r*cols+c`：跳过前 `r` 行的 `r*cols` 个元素，再前进 `c` 个。这里讨论 C++ 数据结构，不套用图形 API 的列主序惯例。
+
+为什么一定先检查坐标？在 2×3 中，`(0,3)` 的偏移也是 3，单查扁平数组长度会错误读到下一行的 `(1,0)`。必须分别确认 `0≤r<rows`、`0≤c<cols`，再计算偏移。0×3、3×0 都有零个元素，却是不同形状；任何元素访问都应拒绝。
+
+大小同样先检查再乘。本例每维 0…64、总元素数不超过 1024；先拒绝负数和过大维度，再在行数非零时用 `cols > 1024/rows` 判断超限，最后才计算乘积。这样既没有除零，也没有为检查溢出而先触发溢出。教学配额不保证分配必定成功：内存不足或 `T` 的构造仍可能抛异常。
+
+> 猜一猜：2×3 改成 3×2，元素偏移顺序会变化吗？先复制 B，再写 B(0,0)，哪块存储变红？打开“错误共享”重复操作；最后试 0×3，并确认空形状不是非法构造。
+
+<DsaIntroductionMatrixLab />
+
+实验用 1…6 初始化元素便于追踪，C++ 构造则值初始化元素，再由测试写入。图中的存储编号表示独立序列的身份；空序列不承诺分配了内存。实验只显示最多六个元素，模型与 C++ 的大小上限相同；默认重置严格回到 2×3、正常复制、尚未复制的第 0 步。
+
+## 可执行对照：一份独立 C++17 程序
+
+以下 A—G 按顺序拼接成 `contract.cpp`，不包含练习答案 H。执行 `clang++ -std=c++17 -Wall -Wextra -Werror -pedantic contract.cpp -o contract && ./contract`。不使用原书自定义容器；不要把这些 C++17 写法当成第3版的逐行转录。每段都属于同一文件，而不是每段各自有一个 `main`。
+
+### A：包含文件、有界递归和规范余数
+
+公开入口先检查域，递归工作函数只在入口验证后调用。归纳证明和机器界限各负其责；`positive_mod` 在余数为负时才加正模数，此时结果必在 0…m-1 内。
+
+```cpp title="contract.cpp · A"
+#include <cassert>
+#include <iostream>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <vector>
+namespace detail {
+int sum_impl(int n) {
+    if (n == 0) return 0;
+    return n + sum_impl(n - 1);
+}
+}
+int bounded_sum(int n) {
+    if (n < 0 || n > 20) throw std::out_of_range("n");
+    return detail::sum_impl(n);
+}
+int positive_mod(int a, int m) {
+    if (m <= 0) throw std::invalid_argument("modulus");
+    int r = a % m;
+    return r < 0 ? r + m : r;
 }
 ```
 
-对非负 x，每次调用把参数减1，最终到0，因此会终止。对负数却永远远离 base case；“有 `if`”不等于递归正确。递归证明通常包含：
+### B：最小类与函数模板
 
-1. base case 直接正确；
-2. 假设规模更小的调用正确；
-3. 当前调用只依赖更小调用并正确组合结果；
-4. 规模度量严格下降且有下界。
+`Cell` 的写入与读取明确分开；这里不替它虚构一个“最大值”的业务顺序。`find_max` 在访问第一个元素前拒绝空输入；返回值从选中的元素复制，脱离输入容器的寿命。
 
-
-另一个官方示例 `printOut(1369)` 先递归处理 `n / 10`，返回时再输出 `n % 10`。它演示调用顺序与输出顺序相反，也说明递归栈保存了尚未完成的余数。递归深度是额外空间：深度 N 的链式递归即使总时间 linear，也可能 stack overflow；平衡树深度 logarithmic 则通常可控。
-
-
-## 1.4 C++ Classes
-
-C++类（）先由最小 `IntCell` 演示。public methods 是调用者可见的契约，private data member 是可替换的表示。
-
-```cpp
-class IntCell {
+```cpp title="contract.cpp · B"
+class Cell {
+    int value_;
 public:
-    explicit IntCell(int initialValue = 0);
-    IntCell(const IntCell& rhs);
-    ~IntCell();
-    const IntCell& operator=(const IntCell& rhs);
-
-    int read() const;
-    void write(int x);
-private:
-    int* storedValue;
+    explicit Cell(int value = 0) : value_(value) {}
+    int read() const { return value_; }
+    void write(int value) { value_ = value; }
 };
-```
-
-`explicit` 阻止整数悄悄转成 `IntCell`；`read() const` 承诺不修改对象可观察状态；private pointer 表示对象拥有动态分配的 `int`。一旦 class 拥有资源，默认 memberwise copy 就不再符合“值对象”语义。
-
-
-第3版使用 Big Three：destructor、copy constructor、copy assignment。三者分别负责释放现有资源、从新对象创建独立副本、以及让已存在对象改成右值副本。assignment 还要处理 self-assignment，并返回 `*this` 允许链式赋值。
-
-
-如果 a 与 b 浅复制同一 pointer，修改 a 会意外改变 b，两个 destructor 还会 double delete。深复制为 b 分配新 `int`，复制值而非地址。现代 C++ 可用值成员、`std::unique_ptr` 或 Rule of Zero 降低手工所有权风险，但读懂 Big Three 仍是分析旧代码和数据结构节点 ownership 的基础。
-
-## 1.5 C++ Details
-
-C++细节（）必须与算法语义一起看。
-
-### 指针、参数和返回值
-
-- pass by value 创建副本，成本依赖对象大小和复制实现；
-- pass by `const T&` 不复制且禁止通过该引用修改；
-- pass by `T&` 表示函数可修改调用者对象；
-- pointer 可以为空并支持重新指向，reference 一经绑定不能重绑；
-- 返回 reference 只在被引用对象比函数调用活得更久时有效。
-
-`findMax` 返回 `const Comparable&`，因为结果就是输入 vector 中的现有元素。只要调用者的 vector 仍存在且没有发生使引用失效的 reallocation，这能避免复制；若函数返回局部变量引用，则调用结束后立即 dangling。
-
-`vector` 提供 contiguous storage 和 random access，growth 可能重新分配；`string` 管理字符序列；二者都把手写 allocation 隐藏在值语义后。后续 Chapter 3 会重新实现 vector/list，正是为了把这些保证拆开观察。
-
-
-## 1.6 Templates
-
-模板（）让数据结构不绑定 `int`。第3版的 `findMax` 可以处理 `int`、`double` 和 `string`：
-
-```cpp
-template <typename Comparable>
-const Comparable& findMax(const std::vector<Comparable>& a) {
-    int maxIndex = 0;
-    for (int i = 1; i < static_cast<int>(a.size()); ++i)
-        if (a[maxIndex] < a[i])
-            maxIndex = i;
-    return a[maxIndex];
+template<class T>
+T find_max(const std::vector<T>& values) {
+    if (values.empty()) throw std::invalid_argument("empty");
+    std::size_t best = 0;
+    for (std::size_t i = 1; i < values.size(); ++i)
+        if (values[best] < values[i]) best = i;
+    return values[best];
 }
 ```
 
-它的隐式契约包括：vector 非空、Comparable 支持 `operator<`、元素引用在返回后仍有效。官方 `IntCell` 没定义 comparison，因而 `findMax(vector<IntCell>)` 无法实例化。这是有价值的编译错误：算法所需操作没有被类型满足。
+### C：矩阵的内部条件
 
+本模板的 `T` 要能默认构造、复制构造、复制赋值，析构不能抛异常；还须是适用于 `vector` 的非 const、非引用对象类型。布尔特化使用代理引用，不能兑现这里的 `T&`，因此显式排除。`size` 中的配额检查在任何分配之前完成。
 
-class template `MemoryCell<Object>` 把存储类型参数化。default value 用 `Object()` 构造，constructor 和 `write` 采用 const reference 避免不必要复制，`read` 返回 const reference。模板不是动态多态；每组实参在编译期形成 specialization，定义通常必须在实例化点可见，附录 A 会专门讨论分离编译。
-
-## 1.7 Using Matrices
-
-矩阵类（）是本章最后一个 glue abstraction。官方 `matrix.h` 用 `vector<vector<Object>>` 保存 rows，每行 resize 到相同 cols，并同时提供 const 与 non-const `operator[]`：
-
-```cpp
-template <class Object>
-class matrix {
-public:
-    matrix(int rows, int cols) : array(rows) {
-        for (int i = 0; i < rows; ++i)
-            array[i].resize(cols);
+```cpp title="contract.cpp · C"
+template<class T>
+class Matrix {
+    static_assert(!std::is_same_v<T, bool>, "no vector<bool>");
+    int rows_, cols_;
+    std::vector<T> data_;
+    static std::size_t size(int r, int c) {
+        if (r < 0 || c < 0) throw std::invalid_argument("shape");
+        if (r > 64 || c > 64 || (r != 0 && c > 1024 / r))
+            throw std::length_error("matrix limit");
+        return static_cast<std::size_t>(r) * c;
     }
-    const std::vector<Object>& operator[](int row) const { return array[row]; }
-    std::vector<Object>& operator[](int row) { return array[row]; }
-private:
-    std::vector<std::vector<Object>> array;
+    std::size_t index(int r, int c) const {
+        if (r < 0 || c < 0 || r >= rows_ || c >= cols_)
+            throw std::out_of_range("coordinate");
+        return static_cast<std::size_t>(r) * cols_ + c;
+    }
+```
+
+### D：二维接口与复制事务
+
+接在 C 的类体后。成员初始化顺序由声明顺序决定；存储构造失败时，整个矩阵未构造成功，调用者拿不到半成品。两种 `at` 共用相同检查。复制构造逐成员复制即可；赋值先复制参数，再用不抛异常的交换一次提交形状和存储。此简例没有另外设计移动接口。
+
+```cpp title="contract.cpp · D"
+public:
+    Matrix(int r, int c) : rows_(r), cols_(c), data_(size(r,c)) {}
+    Matrix(const Matrix&) = default;
+    Matrix& operator=(Matrix other) noexcept {
+        data_.swap(other.data_);
+        std::swap(rows_, other.rows_);
+        std::swap(cols_, other.cols_);
+        return *this;
+    }
+    int rows() const { return rows_; }
+    int cols() const { return cols_; }
+    T& at(int r, int c) { return data_[index(r,c)]; }
+    const T& at(int r, int c) const { return data_[index(r,c)]; }
 };
 ```
 
+### E：把拒绝也写成断言
 
-两次 `operator[]` 产生 `m[row][col]`。第一层返回 row vector，第二层由 vector 取 element。这个表示简单且 ownership 自动，但每行可能单独 allocation，并不保证整张矩阵一块连续；若矩阵乘法追求 cache locality，可改成单个 vector，以 `row * cols + col` 计算偏移。ADT 接口和 representation trade-off 再次分离。
+这个测试助手只把指定异常类型算作成功。意料之外的异常不吞掉；也不通过真的执行悬空引用、越界下标或整数溢出来制造示范输出。
 
-## 把第1章变成后续章节的检查表
+```cpp title="contract.cpp · E"
+template<class Error, class Action>
+void rejects(Action action) {
+    bool caught = false;
+    try { action(); }
+    catch (const Error&) { caught = true; }
+    assert(caught);
+}
+int main() {
+    for (int n = 0; n <= 20; ++n)
+        assert(bounded_sum(n) == n * (n + 1) / 2);
+    rejects<std::out_of_range>([] { bounded_sum(-1); });
+    rejects<std::out_of_range>([] { bounded_sum(21); });
+    assert(positive_mod(-7, 5) == 3);
+    rejects<std::invalid_argument>([] { positive_mod(7, 0); });
+    assert(find_max(std::vector<int>{3, 9, 9, 2}) == 9);
+    rejects<std::invalid_argument>([] { find_max(std::vector<int>{}); });
+    Cell cell{7}; cell.write(8);
+    assert(cell.read() == 8);
+```
 
+### F：复制、空形状和危险坐标
 
-## 本章回顾
+接在同一 `main` 内。`(0,3)` 特意测试“扁平地址仍在数组里，但二维坐标非法”的情况。最后两项大小测试分别检查总数配额和单维配额；空矩阵也不能绕过维度上限。
 
-1. 第1章的任务是统一数学、ADT 与 C++ 实现语言，而不是独立的语法速查。
-2. 指数描述倍增，对数描述反复缩小，级数累计循环成本，模运算映射有限地址。
-3. 递归必须具有正确 base case、严格进展和可接受的调用深度。
-4. class 以 public interface 隔离 private representation，并用 const/explicit 收紧契约。
-5. 拥有动态资源的值类型必须处理复制构造、复制赋值和析构的一致性。
-6. pointer/reference 的 lifetime 与 container invalidation 是正确性问题，不只是优化细节。
-7. template 的类型契约由实际表达式决定；缺少 comparison 的类型不能用于 `findMax`。
-8. matrix wrapper 展示了二维接口与嵌套 vector 表示可以独立演进。
+```cpp title="contract.cpp · F"
+    Matrix<int> a(2,3); a.at(0,0) = 7;
+    Matrix<int> b = a; b.at(0,0) = 99;
+    assert(a.at(0,0) == 7 && b.at(0,0) == 99);
+    Matrix<int> assigned(1,1); assigned = a;
+    assigned.at(0,0) = 42;
+    assert(a.at(0,0) == 7 && assigned.cols() == 3);
+    const Matrix<int>& read_only = a;
+    assert(read_only.at(0,0) == 7);
+    Matrix<int> empty(0,3), other_empty(3,0);
+    assert(empty.rows() == 0 && empty.cols() == 3);
+    assert(other_empty.rows() == 3 && other_empty.cols() == 0);
+    rejects<std::out_of_range>([&] { empty.at(0,0); });
+    rejects<std::out_of_range>([&] { other_empty.at(0,0); });
+    rejects<std::out_of_range>([&] { a.at(0,3); });
+    rejects<std::out_of_range>([&] { a.at(-1,0); });
+    rejects<std::invalid_argument>([] { Matrix<int> bad(-1,3); });
+    rejects<std::length_error>([] { Matrix<int> bad(33,33); });
+    rejects<std::length_error>([] { Matrix<int> bad(0,65); });
+```
 
+### G：可观察的终点
+
+仍接在 `main` 内。达到教学上限的合法矩阵能构造；该输出只在前面的断言全部通过后出现。运行测试时不要定义 `NDEBUG`，否则 `assert` 会被移除。
+
+```cpp title="contract.cpp · G"
+    Matrix<int> limit(32,32); limit.at(31,31) = 5;
+    assert(limit.at(31,31) == 5);
+    std::cout << "sum(20)=" << bounded_sum(20)
+              << "; copy=" << a.at(0,0) << "," << b.at(0,0)
+              << "; empty=" << empty.rows() << "x" << empty.cols()
+              << "; all contracts checked\n";
+}
+```
+
+预期输出为 `sum(20)=210; copy=7,99; empty=0x3; all contracts checked`。它证明的是这些测试执行过，不是对所有类型、资源条件和平台的完整形式证明。
+
+## 容易踩的坑
+
+<Callout type="trap" title="基例存在，却没有定义输入域">
+  **现象 →** 负输入越调用越小。**原因 →** 只有 n==0 的判断，不保证到达 0。**修法
+  →** 入口拒绝负值并限制深度；实验的缺失基例模式在越过 0 前拦截。
+</Callout>
+
+<Callout type="trap" title="复制的是地址，却承诺复制值">
+  **现象 →** 改 B 时 A 的格子也变成 99。**原因 →** 两个名字指向同一存储。**修法
+  →**
+  明确共享语义，或像本章正常模式一样复制拥有的序列；不要靠删除某次释放掩盖问题。
+</Callout>
+
+<Callout type="trap" title="只检查乘积或扁平偏移">
+  **现象 →** (0,3) 落到 2×3 的下一行，或检查容量前就已溢出。**原因 →**
+  二维条件与整数运算前置条件遗漏。**修法 →**
+  先分别检查坐标；尺寸先验证符号、上限和除法界，再乘。
+</Callout>
+
+<Callout type="trap" title="模板能编译就支持所有数据">
+  **现象 →** 缺少比较会编译失败，含 NaN 的比较可能编译成功却不符合约定。**原因
+  →** 语法条件与数学条件不同。**修法 →**
+  同时列出需要的表达式、顺序性质、空输入策略和返回值寿命。
+</Callout>
+
+## 小结与练习
+
+- 归纳证明结果；输入与深度界保护执行。
+- 矩阵的形状、存储和复制须共同守约。
+- 模板通过编译不替代语义及成本论证。
+
+<Exercises>
+
+**问题 1：递归与数学的两种边界**
+
+手算 `sum(4)` 的值、加法次数和最大活动调用数，写出归纳步骤。再说明 `positive_mod(-7,5)` 为什么不能直接返回 `%` 的结果，以及为什么不应把递归上限去掉后只测几个小数。
+
+<Answer>
+
+结果为 10，执行 4 次加法，峰值是 5 层（4、3、2、1、0）。起点 `S(0)=0`；假设 `S(k)=k(k+1)/2`，则 `S(k+1)=S(k)+(k+1)=(k+1)(k+2)/2`。这证明非负整数上的数学结果，不证明无限机器栈或无限整数范围。C++ 的 `-7%5=-2`，加一次正模数得到 3；输入域保证此加法不溢出。移除上限会把可验证的有限程序变成可能耗尽栈、可能整数溢出的程序。
+
+</Answer>
+
+**问题 2：真正改代码——转置并保留空形状**
+
+给 `Matrix<T>` 增加外部 `transpose` 函数，2×3 转成 3×2，`out(c,r)=in(r,c)`。不要公开 `data_`。先在辅助实验切换形状，注意只改形状和真正转置不是一件事：转置应让原偏移 3 的元素从 `(1,0)` 移到 `(0,1)`。要求测试 0×3 转成 3×0，转置两次恢复每个元素，并且结果写入不影响原矩阵。
+
+<Answer>
+
+把 H 插入 D 后、E 前，再在 `main` 中创建并填充输入、调用测试。这是新函数，不替换原来的 `Matrix`。输出形状交换，双循环显式搬运坐标；空维度使循环零次执行，但形状仍被保存。
+
+```cpp title="contract.cpp · H（练习答案，插在 D 后）"
+template<class T>
+Matrix<T> transpose(const Matrix<T>& in) {
+    Matrix<T> out(in.cols(), in.rows());
+    for (int r = 0; r < in.rows(); ++r)
+        for (int c = 0; c < in.cols(); ++c)
+            out.at(c,r) = in.at(r,c);
+    return out;
+}
+```
+
+填入 1…6 后，输出各行是 `[1,4]、[2,5]、[3,6]`；二次转置恢复 `[1,2,3]、[4,5,6]`。空输入 0×3 对应输出 3×0。输出重新拥有存储，因此改 `out.at(0,0)` 不会改输入。对于 `int`，元素搬运次数等于元素数；一般 `T` 还要计每次赋值的成本，返回时可能发生的复制也不能被当成语言必然消失的操作。
+
+</Answer>
+
+**问题 3：让负例拒绝，而不是执行未定义行为**
+
+分别尝试 `Cell c = 7;`、给 `const Matrix<int>` 的 `at(0,0)` 赋值、用 `find_max(std::vector<Cell>{Cell{1}})` 求最大值，以及构造 `Matrix<bool>`。各自应在哪个阶段失败？如果 `int` 换成很长的 `std::string`，复制矩阵仍能按“一步”计时吗？
+
+<Answer>
+
+四项都应编译失败：第一项违反 `explicit` 的隐式转换限制；第二项写入 const 引用；第三项实例化需要缺失的 `<`；第四项触发显式禁止布尔代理引用的断言。空 `vector<int>` 则不是编译错，而是运行时抛 `invalid_argument`。矩阵复制处理每个字符串，成本还取决于内容复制，不能把整个操作视为一步，也不能只用一次输出证明所有接口都正确。测试编译拒绝即可，不要改成悬空引用或裸指针重复释放来运行。
+
+</Answer>
+
+</Exercises>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="抽象数据类型">
+    规定对象能做什么，不把内部存储当成调用者的权利。
+  </GlossaryItem>
+  <GlossaryItem term="表示不变量">
+    每个有效对象一直应满足的条件，例如元素数等于行数乘列数。
+  </GlossaryItem>
+  <GlossaryItem term="指数">
+    反复乘同一个数；倍增层的规模用它表达。
+  </GlossaryItem>
+  <GlossaryItem term="对数">
+    反问需要乘几次底数；离散步骤通常还要取整。
+  </GlossaryItem>
+  <GlossaryItem term="级数">把多项相加，用来汇总各轮或各层工作。</GlossaryItem>
+  <GlossaryItem term="数学归纳法">
+    证明起点，再证明从较小规模到下一规模的推导。
+  </GlossaryItem>
+  <GlossaryItem term="模运算">
+    按与正模数相差整数倍的关系分类；数学代表元与 C++ 负余数要区分。
+  </GlossaryItem>
+  <GlossaryItem term="递归">
+    把小一号的问题交给自身，返回时完成剩下的工作。
+  </GlossaryItem>
+  <GlossaryItem term="调用栈帧">
+    保存某次调用尚未完成状态的记录；调用越深，需要的记录越多。
+  </GlossaryItem>
+  <GlossaryItem term="基例">不必继续递归就能回答的起点。</GlossaryItem>
+  <GlossaryItem term="类">
+    把状态、可用操作和访问限制放在一起的类型。
+  </GlossaryItem>
+  <GlossaryItem term="explicit">
+    要求调用者明确构造，不让构造函数暗中提供隐式转换。
+  </GlossaryItem>
+  <GlossaryItem term="const 成员函数">
+    不通过当前对象修改普通成员的函数，可供只读对象调用。
+  </GlossaryItem>
+  <GlossaryItem term="RAII">
+    让对象负责其资源，并在对象销毁时自动清理。
+  </GlossaryItem>
+  <GlossaryItem term="值语义">
+    复制后内容相同，但修改副本不会改变原值。
+  </GlossaryItem>
+  <GlossaryItem term="引用">
+    现有对象的别名；本身不替对象管理寿命。
+  </GlossaryItem>
+  <GlossaryItem term="生命周期">
+    对象有效存在的时间，过后不能再通过旧引用使用。
+  </GlossaryItem>
+  <GlossaryItem term="复制交换">
+    完整副本准备好后再交换，避免复制中途留下半新半旧的形状。
+  </GlossaryItem>
+  <GlossaryItem term="模板">
+    按类型等参数产生具体代码，实际使用的操作仍有条件。
+  </GlossaryItem>
+  <GlossaryItem term="严格弱序">
+    一致的先后与等价关系；编译器不会自动证明比较规则满足它。
+  </GlossaryItem>
+  <GlossaryItem term="行主序">
+    同一行的元素相邻，放完一行才放下一行。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与时代边界
+
+- 范围按[出版社第3版目录](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)的 Introduction 七组主题建立，对应 ISBN 9780321441461、`dsaa3-01`。目录只证明范围，不证明原书完整正文已可访问；不依据目录猜测 “P Word” 的展开。
+- 历史代码事实核对作者公开的 [`IntCell.h`](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/IntCell.h) 与 [`matrix.h`](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/matrix.h)：`explicit`/const 接口、嵌套 vector 表示及零行列数行为。它们不是本章现代实现的逐行来源，也不是开放改编许可证。
+- 数学事实参考 MIT 的 [Mathematics for Computer Science](https://courses.csail.mit.edu/6.042/spring18/mcs.pdf)，其中归纳法、数论与求和支持本章的证明、模运算和级数推导；并非借此声称还原了 Weiss 的讲解。
+- 语言规则核对公开 C++ 工作草案的[整数乘除与余数](https://eel.is/c++draft/expr.mul)、[复制构造](https://eel.is/c++draft/class.copy.ctor)、[vector](https://eel.is/c++draft/vector)、[布尔特化](https://eel.is/c++draft/vector.bool)、[模板实例化](https://eel.is/c++draft/temp.inst)与[对象生命周期](https://eel.is/c++draft/basic.life)。在线草案会更新，并非冻结的 C++17 原文；这里只采用 C++17 已有规则，示例用 C++17 模式实测，不使用后续标准的 concepts 等机制。
+
+以上来源访问核对日期为 2026-09-24。本文是独立重写；解释、实验模型和 C++17 教学实现独立编写，不宣称获得原书全文或翻译改编授权。草稿仍须完成站内集成和真实浏览器验收。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Mark Allen Weiss · Data Structures and Algorithm Analysis in C++, Third Edition"
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+/>

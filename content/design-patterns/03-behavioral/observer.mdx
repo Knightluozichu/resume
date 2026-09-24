@@ -1,104 +1,411 @@
 ---
 title: "观察者模式"
-type: A
+type: C
 section: "行为型模式"
 order: 3
-description: "观察者模式：建立一对多的订阅关系，让主题变化能通知所有仍有效的观察者"
+description: "用订阅对象拓扑和事件版本，验证通知中的增删、退订生命周期与异常隔离"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
-draft: false
+officialUnitId: designpatterns-03
+draft: true
 ---
 
+import { ObserverSubscriptionDeliveryLab } from "@/components/mdx/design-patterns/observer-subscription-delivery-lab";
 
-## 直觉：从变化压力出发，而不是从模式名称出发
+<Objectives>
+- 能沿订阅连线解释库存版本如何传播，并区分当前订阅者与本轮收件人。
+- 能修改通知循环与清理代码，验证幂等退订、通知中增删和抛错隔离。
+- 能回答：A 通知中退订 B、订阅 C 后，谁收到本轮事件；这能保证网络 exactly-once 吗？
+</Objectives>
 
-库存服务若直接调用所有下游，增加一个消费者就必须修改核心写入路径 因此，观察者模式 的第一步不是画类图，而是写清 **库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
+## 直觉：不是每块显示屏都一直开着
 
-在实验前先预测：沿 登记订阅 → 写入库存 → 生成事件 → 逐个通知 → 清理订阅 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
+仓库的数量变了，看板要刷新，补货程序要判断是否补货。把这两项工作直接写进库存更新函数，后来再接一个审计程序，更新函数又得改一次。
 
+更麻烦的是，看板关闭后可能还被更新，补货程序的一次失败也可能让审计完全收不到消息。我们需要的不只是“通知所有人”，还要说清楚通知谁、何时退出、有人失败后怎么办。
 
-## 问题合同与术语
+## 模式名称与分类
 
-**意图。** 建立一对多的订阅关系，让主题变化能通知所有仍有效的观察者。**适用边界。** 一个状态变化需要传播给数量可变的消费者，且发布者不应依赖具体消费者。本页验收不变量是：**一次库存提交只能让每个有效订阅者观察到一个同版本事件**。
+**组织变化传播的行为型模式**
 
-、、、、、
-## 官方目录结构的逐项解释
+这里把保存库存并管理接收者的对象称为 <Term def="保存被观察状态并管理通知关系的对象。">Subject</Term>，把提供统一更新入口的接收者称为 <Term def="通过约定的更新入口接收主题变化的对象。">Observer</Term>。观察者模式组织的是它们之间的一对多依赖，不负责创建对象或包装接口，所以属于行为型模式。
 
-下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
+下面的图只画三个具体对象，不画消息服务器。左边拥有库存，右边各自保存最近成功应用的版本；连线是注册表中的真实对象引用。先预测：A 处理 v1 时移除 B、加入 C，B 会不会仍然收到 v1？切换“活集合”再比较。
 
-### 模式名称与分类
+<ObserverSubscriptionDeliveryLab />
 
-“观察者模式”归入行为型模式，名称只用于定位 建立一对多的订阅关系，让主题变化能通知所有仍有效的观察者，不能替代问题证据。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+图中的“推进”只是把已经同步执行的调用拆成可检查的帧；中途拖动不会让生产代码变成异步。边上的版本圆点表示正在处理的事件，节点里的版本表示已应用的状态。空心点还没调用，叉号代表这次处理抛错。观察者可能落后于左边，但这不自动意味着需要重试。
 
-### 意图
+## 意图
 
-“意图”回答模式想改变什么：建立一对多的订阅关系，让主题变化能通知所有仍有效的观察者。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+**让库存不必点名所有消费者**
 
-### 别名
+Subject 只依赖 Observer 的 `update(event)` 约定，而不依赖看板、补货器、审计器的具体类。新增消费者时，组装代码负责订阅，库存提交路径不增加一条 `audit.refresh()`。图中增减 C 的连线，左边的提交方法保持不变，这才是解耦的收益。
 
-“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+“一对多依赖”不等于每个观察者永远收到每次变化。首次订阅是否补发旧值、通知时是否复制名单、回调失败是否继续，都不是模式名称能替你决定的。本页只证明后文列出的同步合同。
 
-### 动机
+## 别名
 
-“动机”从具体压力出发：库存服务若直接调用所有下游，增加一个消费者就必须修改核心写入路径。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+**不要被 Publish–Subscribe 一词误导**
 
-### 适用性
+观察者常见别名包括 Dependents（依赖者）和 Publish–Subscribe（发布—订阅）。这个历史用词强调“登记兴趣再接收变化”，并不要求有独立消息服务。这里沿用 Observer 作为主名，避免把直接对象回调与远程消息系统混为一谈。
 
-“适用性”要求同时满足：一个状态变化需要传播给数量可变的消费者，且发布者不应依赖具体消费者。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+后文比较的 <Term def="把发布者和订阅者隔开的消息中介，负责按通道或主题路由消息。">broker</Term> 是额外的基础设施。本图没有它；Subject 自己持有 Observer 并直接调用。不能凭借“发布订阅”四个字推断有持久化、重试或送达保证。
 
-### 结构
+## 动机
 
-“结构”由 InventorySubject、StockObserver、AuditSubscriber 以及它们之间的引用方向共同确定。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+**三个消费者有不同的寿命与失败方式**
 
-### 参与者
+看板 A 可能随页面关闭而消失，补货器 B 可能随功能开关被移除，审计器 C 可能稍后才安装。若库存只保存三个固定函数调用，这些变化就会侵入库存逻辑；若用随意增长的回调数组，又容易忘记删除旧对象。
 
-“参与者”逐一说明 InventorySubject、StockObserver、AuditSubscriber 谁保存状态、谁发起调用以及谁承担变化。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+实验故意让 A 在收到通知时移除 B 并安装 C。它模拟“处理变化时重新配置依赖”的真实压力，而不是建议让看板控制补货器。实际系统通常由组装层管理这种关系。用这个极小场景，可以直接检验名单到底是在提交时冻结，还是边走边变。
 
-### 协作
+## 适用性
 
-“协作”的运行协议是：Subject 管理订阅并发布快照，Observer 处理通知并负责显式取消订阅。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+**先问直接调用是否已经够用**
 
-### 后果
+当接收者的数量或寿命会独立变化时，订阅关系能让库存方法不必随消费者增删而修改。若处理函数固定且一起创建、一起销毁，直接调用通常更容易追踪；若还要求断线恢复或共同提交，仅有对象回调就不够了。
 
-“后果”必须连同收益和成本记录：发布者解耦了接收者，却引入通知顺序、重入、失败隔离和过期订阅问题。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+| 需求 | 选择与理由 | 对照实验 |
+| --- | --- | --- |
+| 固定两个处理函数，寿命相同 | 普通直接调用更易追踪，不必先造订阅框架 | 把 A 设成“仅应用版本”看简单路径 |
+| 接收者数量、寿命独立变化 | 观察者让安装与移除不改变库存方法 | 增加初始 C 订阅，只增加一条边 |
+| 跨进程消费、断线恢复、缓冲 | 评估消息 broker，另外设计消息标识与失败策略 | 本图的同步回调没有这些能力 |
+| 余额扣减与库存扣减必须共同成功 | 需要事务或显式协调，不能靠广播冒充原子提交 | 抛错后左边仍是新版本 |
 
-### 实现
+## 结构
 
-“实现”落地时遵守：返回取消函数，复制订阅集合后再通知，并定义异常与重复事件策略。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+**当前连线不等于本轮名单**
 
-### 示例代码
+本页使用 <Term def="在通知开始时复制收件人列表，本轮按这个固定列表调用。">快照通知</Term>。Subject 持有按对象身份登记的 Map；提交时复制其键，之后遍历副本。只复制引用，不克隆 Observer。这样 A 的回调可以改变未来订阅拓扑，却不能改掉已经决定的本轮收件人。
 
-“示例代码”使用本页 TypeScript 最小切片验证“一次库存提交只能让每个有效订阅者观察到一个同版本事件”，代码是独立教学示例。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+实验默认初始 A、B 订阅。A 处理 v1 后，实线从 B 转到 C；B 的虚线仍存在，因为本轮快照还引用 B。随后 B 更新到 v1，C 留在 v0。提交 v2 时名单才变为 A、C，C 直接到 v2，不会自动补发 v1。
 
-### 已知应用
+一个重要寿命细节是：退订删除 Map 的强引用，却不会删除本轮副本的引用；B 至少还会活到这轮调用结束。图上的虚线就是这种临时持有，不是一个隐藏 broker。
 
-“已知应用”可在这些场景识别：界面事件、领域事件、缓存失效与遥测分发都能看到这种结构，但名称相似不构成采用证据。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+## 参与者
 
-### 相关模式
+**谁拥有哪一份状态**
 
-“相关模式”用于比较边界：中介者集中协调多方协议；发布订阅通常再引入消息通道与异步投递语义。 对“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”先保存基线，再改变一个条件；若出现“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”，就拒绝 观察者模式 方案并回到更简单结构。
+库存状态和订阅名单归 Subject 管理；观察者只保存自己已应用的版本，并通过统一的更新入口接收事件。组装代码负责把具体对象连起来、保留取消函数，在对象退出时解除订阅，不能把这份寿命责任交给库存方法猜测。
+
+| 参与者 | 保存内容 | 有权做什么 | 不承担什么 |
+| --- | --- | --- | --- |
+| `InventorySubject` | 当前库存、递增版本、订阅 Map | 校验并提交库存、冻结名单、同步通知 | 不知道看板怎样渲染 |
+| `StockObserver` | `id` 与 `update` 入口 | 处理同一个不可变事件 | 不替主题提交库存 |
+| A / B / C | 最近成功应用的版本 | 分别显示、补货、审计 | 彼此不是继承关系 |
+| 组装与清理代码 | `subscribe` 返回的取消函数 | 决定订阅寿命 | 不应靠垃圾回收猜何时退订 |
+
+`id` 只用于诊断，真正去重的是对象身份。两个不同对象即使 `id` 相同也都是订阅者；需要全局唯一标识的业务必须自行校验。本页图中三个对象的 id 恰好互不相同。
+
+## 协作
+
+**冻结一份小而完整的合同**
+
+一次通知从合法库存提交开始：Subject 先保存新版本，再冻结收件人，随后同步调用各观察者。回调中的订阅变更只改变下一轮名单；取消函数负责退出关系，异常隔离则决定本轮是否继续尝试其他接收者。
+
+1. 初始库存 10、版本 0，订阅不补发当前值。相同对象重复订阅不增加一条边，返回同一取消函数。
+2. `publish(qty)` 只接收非负安全整数。非法输入不改版本、不通知；每次合法提交都加一版，库存值相等也算一次提交。
+3. 提交产生冻结的 `{ version, qty }`；先保存状态，再按插入顺序尝试每个快照成员一次。
+4. 通知中新增或移除者，从下轮起影响名单。重复移除无副作用；旧取消函数不能误删同一对象后来建立的新注册。
+5. 每个回调单独捕获异常，返回失败 id 列表。已提交的库存不回滚，其他接收者仍有机会处理。
+6. 不允许通知过程中再次 `publish`；此异常按当前观察者失败处理。只接受同步回调；不追踪 Promise 拒绝，不重试，不承诺持久化。
+
+第 4 条的取消行为称为 <Term def="同一个清理动作做一次或多次，最终订阅状态相同。">幂等退订</Term>。它不是“每个事件的业务副作用天然幂等”。类型签名里的 `void` 也不足以防止开发者传入异步函数，使用者必须遵守同步约定。
+
+## 后果
+
+**解耦有成本，隔离不是事务**
+
+图中左边 v1、A v0、B v1 的情况可以完全合法：A 失败了，B 成功了。捕获异常不撤销 A 抛错前已经写出的日志，也不会把库存恢复到 v0。若业务要求全有或全无，这个合同不够。
+
+### 版本传播和调用代价
+
+有 n 个快照成员时，一次提交复制 n 个引用并做 n 次尝试，额外列表空间为 O(n)。同步调用的延迟包含所有回调耗时；B 很慢，提交方和 C 都会等。示例为便于复现实验按插入顺序调用，但不要让正确性依赖“A 必须先帮 B 准备数据”。复杂顺序依赖通常需要更明确的协调者。
+
+### 强引用与泄漏
+
+只要长期存活的 Subject 仍持有 Observer，Observer 及其闭包捕获的页面对象就可能无法回收。把页面变量设为 `null` 并不会删除图中的边。安装时保留取消函数，卸载时调用它；若清理发生在通知中，还应允许当前快照完成。练习 1 检验完整寿命，而不是只检查一次回调。
+
+弱引用不能替代确定性清理：垃圾回收何时发生不是业务协议。React 的 Effect 清理函数适合配对订阅/退订，但依赖改变时也会先清理再安装，并非只在页面最终卸载时运行。
+
+### push / pull 的选择
+
+| 方式 | 事件里有什么 | 收益与代价 | 本页可检验的边界 |
+| --- | --- | --- | --- |
+| push（推送） | 版本和本次库存快照 | 接收者直接用同版本数据，但载荷大时复制/传递成本要考虑 | 本例推送两个数；所有本轮回调拿到同一个冻结对象 |
+| pull（拉取） | “发生变化”的提示或版本 | 接收者按需查询，但耦合到查询接口，读取时可能已是更新版本 | 保存 v1 事件后提交 v2，再 `read()` 得到 v2，旧事件仍是 v1 |
+
+本例禁止同步重入，因此回调当场读取通常与事件一致；一旦把读取推迟到以后，这个结论就不成立。版本只能帮助发现新旧，不能证明未漏事件；若只关心最新库存，跳过中间版可能可接受，若每次扣减都要审计，就需要另一份可靠记录。
+
+## 实现
+
+**三项决策比一个类名重要**
+
+首先用 Map 保存注册代际。取消闭包只有仍对应当前注册时才允许删除，避免“旧清理函数把新订阅删了”。其次，用数组副本冻结名单，不要边遍历活 Map 边允许任意增删。最后，把 `try/catch` 放到单个回调周围，把通知锁的恢复放进 `finally`。
+
+这些是本页选择，不是所有事件 API 的统一规则。Node.js EventEmitter 说明正在进行的 emit 不受期间 removeListener 的影响；DOM 分发则克隆监听器列表但还检查 removed 标记，期间移除的监听器可跳过。不能把其中一种机制直接套在另一种 API 上。[Node 文档](https://nodejs.org/api/events.html#emitterremovelistenereventname-listener)与 [DOM 分发算法](https://dom.spec.whatwg.org/#concept-event-listener-invoke)分别描述了自己的边界。
+
+## 示例代码
+
+**拼成一个可运行的 TypeScript 文件**
+
+将本节三个片段**按顺序拼接为 `observer.ts`**，片段 1、2 故意不关闭类/方法；后续断言也可接在该文件末尾。实验组件使用同一份类实现，只在具体观察者的入口和出口记录回放帧。编译可用 `tsc observer.ts --target ES2020 --module commonjs`，再运行 `node observer.js`。
+
+片段 1/3：类型、主题状态和订阅寿命。保存取消函数本身作为注册标记，既能去重，又能分辨同一对象的不同注册代际。
+
+```ts
+export type StockEvent = Readonly<{ version: number; qty: number }>;
+export type StockObserver = { id: string; update(e: StockEvent): void };
+export type DeliveryPolicy = "safe" | "live" | "abort";
+export class InventorySubject {
+  private members = new Map<StockObserver, () => void>();
+  private state: StockEvent = Object.freeze({ version: 0, qty: 10 });
+  private notifying = false;
+  constructor(private policy: DeliveryPolicy = "safe") {}
+  read() { return this.state; }
+  subscribers() { return [...this.members.keys()]; }
+  subscribe(observer: StockObserver): () => void {
+    const existing = this.members.get(observer);
+    if (existing) return existing;
+    const stop = () => {
+      if (this.members.get(observer) === stop) this.members.delete(observer);
+    };
+    this.members.set(observer, stop);
+    return stop;
+  }
+```
+
+片段 2/3：进入 `publish`，先校验，再提交。`live` 是故障对照：直接使用 Map 迭代器，后加的项可能在本轮被访问，尚未访问就删除的项可能被跳过。这里并不把“当前有效者”偷偷当作“提交时收件人”。
+
+```ts
+  publish(qty: number): string[] {
+    if (this.notifying) throw new Error("reentrant publish");
+    if (!Number.isSafeInteger(qty) || qty < 0) throw new Error("invalid qty");
+    this.state = Object.freeze({ version: this.state.version + 1, qty });
+    const event = this.state;
+    const targets = this.policy === "live"
+      ? this.members.keys() : [...this.members.keys()];
+    const errors: string[] = [];
+    this.notifying = true;
+```
+
+片段 3/3：完成方法与类。`abort` 分支故意取消单个回调的保护，错误将逃出 `publish`，其后的观察者没被调用；但库存已经提交，`finally` 仍会解锁。安全模式把失败收集成诊断返回值，不是假装所有消费者都成功了。
+
+```ts
+    try {
+      for (const observer of targets) {
+        if (this.policy === "abort") observer.update(event);
+        else {
+          try { observer.update(event); }
+          catch { errors.push(observer.id); }
+        }
+      }
+    } finally { this.notifying = false; }
+    return errors;
+  }
+}
+```
+
+下面的探针让 A 两次退订 B，再加入 C。把结果与图中的版本/边逐步对照：安全模式 v1 为 A、B，活集合模式为 A、C；v2 两者都是 A、C。
+
+```ts
+function equal(actual: unknown, expected: unknown) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+function mutationProbe(policy: DeliveryPolicy) {
+  const subject = new InventorySubject(policy), seen: string[] = [];
+  let stopB = () => {};
+  const c: StockObserver = { id: "C", update: e => { seen.push(`C${e.version}`); } };
+  subject.subscribe({ id: "A", update: e => {
+    seen.push(`A${e.version}`); stopB(); stopB(); subject.subscribe(c);
+  } });
+  stopB = subject.subscribe({ id: "B", update: e => { seen.push(`B${e.version}`); } });
+  subject.publish(9); subject.publish(8);
+  return seen;
+}
+equal(mutationProbe("safe"), ["A1", "B1", "A2", "C2"]);
+equal(mutationProbe("live"), ["A1", "C1", "A2", "C2"]);
+```
+
+接着让 A 直接抛错。安全模式会返回失败 id 并继续更新 B；坏分支会把错误交给提交者，但它不能借此声称提交回滚了。
+
+```ts
+function failureProbe(policy: DeliveryPolicy) {
+  const subject = new InventorySubject(policy);
+  let bVersion = 0, escaped = false, errors: string[] = [];
+  subject.subscribe({ id: "A", update: () => { throw new Error("offline"); } });
+  subject.subscribe({ id: "B", update: e => { bVersion = e.version; } });
+  try { errors = subject.publish(9); } catch { escaped = true; }
+  return { committed: subject.read().version, bVersion, escaped, errors };
+}
+equal(failureProbe("safe"), { committed: 1, bVersion: 1, escaped: false, errors: ["A"] });
+equal(failureProbe("abort"), { committed: 1, bVersion: 0, escaped: true, errors: [] });
+```
+
+## 已知应用
+
+**借成熟 API 检查差异**
+
+.NET 的 `IObservable<T>.Subscribe` 返回可用于取消的 `IDisposable`，官方观察者示例用行李状态通知多个显示端，直观说明提供者、观察者和清理责任。它不是本页 TypeScript 类的实现，也不意味着两者错误/完成语义相同。
+
+Node.js 的 EventEmitter 则提供事件名、同步监听器与移除方法，是可识别的同类结构；它允许同一个 listener 多次加入，区别于本页按对象去重。UI 外部数据源订阅也是常见应用，但“使用了事件”不自动证明需要一个自定义观察者框架。可复用平台 API 时，先读其通知与清理规则。
+
+## 相关模式
+
+**协调者、订阅中介和事务各司其职**
+
+观察者解决的是变化如何从一个对象传播给多个接收者，不负责安排接收者之间的业务顺序。需要集中协调多方规则时考虑中介者，需要跨进程路由时考虑 broker，需要多处修改共同成功时则需要事务；它们补足的是不同责任。
+
+| 对比对象 | 主要责任 | 与本页的决定性差别 |
+| --- | --- | --- |
+| 中介者 | 知道多方协作规则，集中安排谁影响谁 | 观察者只广播已发生的变化，不负责补货业务流程 |
+| broker 发布订阅 | 按主题/通道路由消息，通常跨进程异步消费 | 发布者不持有每个具体接收者；需另定重试、顺序、积压和去重 |
+| 事务 | 约束一组修改共同提交或失败 | 单个 Observer 失败不回滚 Subject 或其他回调副作用 |
+
+[Azure 的 Publisher–Subscriber 文档](https://learn.microsoft.com/en-us/azure/architecture/patterns/publisher-subscriber)讨论中介与投递保证。**本页只保证默认策略下每个快照成员至多被尝试一次，不宣称网络 exactly-once**。回调开始了、业务副作用成功了、远端确认了，是三个不同事实。
 
 ## 常见误区与反例
 
+<Callout type="trap" title="删掉连线，就绝不再调用？">
+**现象 →** A 已退订 B，图中 B 仍更新到 v1。
+**原因 →** 安全模式在提交时复制了名单，退订只改未来关系。
+**修法 →** 明确采用快照合同；若要求立即取消，需检查有效标记并重写对应测试，不能两种语义混用。
+</Callout>
 
-另一个易错点是把结构相似当作语义相同。中介者集中协调多方协议；发布订阅通常再引入消息通道与异步投递语义；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
+<Callout type="trap" title="活集合迭代等于最新、所以更正确？">
+**现象 →** 故障模式下 C 提前收到 v1，B 消失。
+**原因 →** Map 迭代器会观察期间增删；反复删后重加甚至可能拖延终止。
+**修法 →** 本合同使用数组快照；若采用实时成员策略，必须另定终止和变更规则。
+</Callout>
 
-## 术语表
+<Callout type="trap" title="捕获异常等于恢复一致？">
+**现象 →** A 报错，库存和 B 已是 v1，A 还是 v0。
+**原因 →** 隔离只保证后续调用继续，不会撤销已提交的数据。
+**修法 →** 记录失败并选择补偿或重建视图；共同成功需求改用事务/协调协议。
+</Callout>
 
+## 小结
+
+- 连线描述订阅，快照描述本轮收件人。
+- 幂等清理和逐回调隔离要靠代码验证。
+- A 的增删下轮生效；本地合同不是网络保证。
 
 ## 练习与答案
 
+<Exercises>
 
-## 本章小结
+**问题 1：改代码：安装函数也要提供退出路径**
 
-观察者模式 把“库存变化要同步看板、补货器和审计流，但三者生命周期与失败方式不同”收敛为 InventorySubject、StockObserver、AuditSubscriber 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“没有退订与失败边界的同步广播会制造内存泄漏和级联中断”这一反例、重置实验，并根据 发布者解耦了接收者，却引入通知顺序、重入、失败隔离和过期订阅问题 接受或拒绝方案。
+旧安装函数只做 `subject.subscribe(observer)`，丢掉返回值。改写它，允许调用者两次清理后重新安装；旧清理函数此时不能删掉新注册。补充断言：首次重复订阅不重复调用，退订后不调用，重新订阅后只调用一次。
 
-## 前后导航
+<Answer>
+返回取消函数，不要返回一个对 Observer 盲删的“通用删除器”。下面代码接在前面的 `observer.ts` 末尾即可执行；最后一个旧 stop 调用专门检查注册代际，而不是只检查 Set 删除的幂等性。
 
-- [上一页：策略模式](/learn/design-patterns/03-behavioral/strategy)
-- [下一页：装饰器模式](/learn/design-patterns/03-behavioral/decorator)
+```ts
+const lifetime = new InventorySubject();
+let calls = 0;
+const panel: StockObserver = { id: "panel", update: () => { calls++; } };
+function mount(subject: InventorySubject, observer: StockObserver) {
+  return subject.subscribe(observer);
+}
+const stopOld = mount(lifetime, panel);
+equal(stopOld === mount(lifetime, panel), true);
+lifetime.publish(9); equal(calls, 1);
+stopOld(); stopOld();
+lifetime.publish(8); equal(calls, 1);
+const stopNew = mount(lifetime, panel);
+stopOld();
+lifetime.publish(7); equal(calls, 2);
+stopNew(); equal(lifetime.subscribers().length, 0);
+```
 
+组件卸载时应调用当前安装得到的 stop。即使业务把 panel 变量丢掉，只要注册表仍持有对象，仍可能保留其闭包与视图资源。
+</Answer>
+
+**问题 2：预测并检查重入：A 在通知中再次提交会怎样？**
+
+在安全模式中让 A 的更新函数调用 `publish(0)`，B 正常记录版本。预测外层库存、B 的版本、错误列表；再解释为什么不能简单移除通知锁。
+
+<Answer>
+内层提交在改库存前抛错，外层捕获 A 的错误并继续 B，所以库存为 9、版本 1、B 为 1。去掉锁可能让内层 v2 先通知完，再返回外层继续送 v1，导致回退或递归失控。若需要重入，应另外设计队列顺序，不能悄悄放行。
+
+```ts
+const nested = new InventorySubject();
+let nestedB = 0;
+const stopNested = nested.subscribe({ id: "A", update: () => { nested.publish(0); } });
+nested.subscribe({ id: "B", update: e => { nestedB = e.version; } });
+equal(nested.publish(9), ["A"]);
+equal(nested.read(), { version: 1, qty: 9 });
+equal(nestedB, 1);
+stopNested();
+equal(nested.publish(8), []);
+equal(nestedB, 2);
+```
+
+第二次成功也证明 `finally` 释放了通知锁。
+</Answer>
+
+**问题 3：选型与边界：晚读的库存还是事件发生时的库存吗？**
+
+保存 v1 事件，不立即读取；提交 v2 后再 `read()`。两者应是什么？如果审计端断线，能不能凭该版本字段声称没有漏记？补上空订阅、非法数量与零库存断言。
+
+<Answer>
+事件保留 v1 的库存 9，查询返回 v2 的库存 8。只保存最后版本无法补出离线期间每次操作；可靠审计需要持久记录及清楚的恢复/重复处理策略。下面同时确认空名单可提交，非法输入不推进版本，零库存合法。
+
+```ts
+const history = new InventorySubject();
+history.publish(9);
+const pushed = history.read();
+history.publish(8);
+equal(pushed, { version: 1, qty: 9 });
+equal(history.read(), { version: 2, qty: 8 });
+equal(Object.isFrozen(pushed), true);
+for (const bad of [-1, 1.5, NaN, Infinity]) {
+  let rejected = false;
+  try { history.publish(bad); } catch { rejected = true; }
+  equal(rejected, true);
+}
+equal(history.read().version, 2);
+equal(history.publish(0), []);
+equal(history.read(), { version: 3, qty: 0 });
+```
+
+</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Subject">掌管被观察状态、保存接收者引用并发起通知的对象，本页是库存主题。</GlossaryItem>
+  <GlossaryItem term="Observer">登记接收变化的对象，本页每个对象有一个 update 方法和自己的已应用版本。</GlossaryItem>
+  <GlossaryItem term="broker">位于消息发送方与接收方之间的中介；本页的直接同步调用没有这一层。</GlossaryItem>
+  <GlossaryItem term="快照通知">通知开始时抄一份名单，本轮照单调用，期间增删影响下一轮。</GlossaryItem>
+  <GlossaryItem term="幂等退订">重复调用同一清理函数不会多删对象，也不会误删后来建立的新注册。</GlossaryItem>
+</Glossary>
+
+## 来源与独立重写边界
+
+本页对应正式单元 `designpatterns-03`，按模式描述的 13 个结构项组织独立教学。2026-09-24 实际 GET 访问了出版社书目页（HTTP 200），该页提供书目信息、总目录与部分试读入口；本次没有读取观察者原章全文，也不把其他模式的公开样章授权扩展到本章。GoF 原书受版权保护，本文中文解释、库存示例和交互代码均为独立重写，不是原书译文。
+
+事实核对使用以下已访问的官方文档（均 HTTP 200）；它们支持相应平台事实，不表示本页合同就是所有平台的默认行为：
+
+- [Microsoft：Observer design pattern](https://learn.microsoft.com/en-us/dotnet/standard/events/observer-design-pattern)：提供者、观察者、取消订阅的责任。
+- [Node.js：Events](https://nodejs.org/api/events.html)：同步调用、重复监听器与通知期间移除规则。
+- [ECMAScript：CreateMapIterator](https://tc39.es/ecma262/multipage/keyed-collections.html#sec-createmapiterator)：Map 迭代在暂停/恢复间观察集合变化，支持活集合反例。
+- [WHATWG DOM：事件调用算法](https://dom.spec.whatwg.org/#concept-event-listener-invoke)：克隆监听器名单与 removed 标记的组合语义。
+- [React：useEffect](https://react.dev/reference/react/useEffect)：安装与清理配对、依赖改变及开发检查时的清理。
+- [Azure：Publisher–Subscriber](https://learn.microsoft.com/en-us/azure/architecture/patterns/publisher-subscriber)：中介、异步消息和投递保证的额外边界。
+
+<Attribution
+  sourceUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+  workTitle="Design Patterns: Elements of Reusable Object-Oriented Software（GoF）"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

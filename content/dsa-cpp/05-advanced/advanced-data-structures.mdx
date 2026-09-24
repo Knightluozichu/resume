@@ -1,181 +1,623 @@
 ---
-title: "第12章 Advanced Data Structures：不变量、哨兵与实现边界"
-type: C
+title: "第12章 高级数据结构：七种机制，七组不变量"
+type: D
 section: "高级数据结构与附录"
 order: 11
-description: "按第3版七节完整重构自顶向下伸展树、红黑树、确定性跳表、AA树、树堆、k-d树与配对堆，并核查作者示例的实现边界。"
+description: "从自顶向下伸展到配对堆，比较最坏、期望和均摊保证；用真实 AA 插入实验和 C++17 核验器定位结构故障。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: dsaa3-12
+draft: true
+qualityVersion: 2
 ---
 
+import {
+  DsaAdvancedDataStructuresRepairLab,
+  DsaAdvancedAuxiliaryFigures,
+} from "@/components/mdx/dsa-cpp/dsa-advanced-data-structures-repair-lab";
 
-## 从“复杂结构必须能逐项验不变量”开始
+{/* 知识/视觉决策：overview→操作与保证对照表；top-down splay→分区树形及可执行拼接；red-black→反例树与黑高核验；deterministic skip list→层链提升图及间隙核验；AA→真实插入逐步树图及遗漏split故障；treap→键/优先级树及插入代码；kd→空间分割图及范围查询；pairing→两趟归并图及所有权代码。七种结构各有独立机制，按原章广度保留，不伪称只有五个概念。术语均在章末闭合；练习1覆盖伸展/红黑，练习2覆盖跳表/AA/treap，练习3覆盖总览/kd/pairing。 */}
 
-高级数据结构与实现（）不是“比基础结构更高级所以更快”。Red-black tree 给 worst-case ordered-map bound；treap 给 expected balance；k-d tree服务空间查询；pairing heap服务meld/decrease-key。需求不匹配时，复杂度只会增加故障面。
+<Objectives>
 
-先预测一个实现只通过 inorder sorted 测试，能否证明 red-black tree 正确。不能：连续 red nodes 或 black-height 不等仍可保持 BST order，却让 height bound失效。Advanced structure至少要同时验证semantic order与structure-specific invariants。
+- 能按操作负载比较七种结构，并区分最坏、期望和均摊保证。
+- 能修改 AA 插入代码，用结构检查证明为何少一次 split 会破坏层级约束。
+- 能回答：中序仍然递增，为何红黑树或树堆仍可能不合法？
 
-官方七节是 **Top-Down Splay Trees、Red-Black Trees、Deterministic Skip Lists、AA-Trees、Treaps、k-d Trees、Pairing Heaps**，总题为 **Advanced Data Structures and Implementation**。作者公开代码也明确说明是2005年的教学实现，部分 remove、copy 或 reclaim routines 留作练习。
+</Objectives>
 
+## 直觉：不是所有地图都该按同一种方式折叠
 
-## 12.1 Top-Down Splay Trees
+一张地图可以按街道名称索引，也可以按空间位置分区。想找某条街和想找某片区域里的所有街道，需要的组织方式不同。选错方式，即使每一步都做对，也可能走遍整张地图。
 
-自顶向下伸展树（）避免先保存整条 parent path。临时 header 的 left/right 分别构建大于与小于 target 的 fragments，current 保留尚未分类 subtree。
+本章要解决的是“每次改动后如何保持路线仍然好找”。只看最后找没找到不够；还要检查途中哪些关系被改变，以及什么条件保证未来不会越找越慢。
 
+## 总览：先选操作，再选承诺
 
-每轮可能先做 zig-zig rotation，再把 current 链接到对应 fragment。结束时把 current.left/right 与 fragments 余部拼回：
+本页覆盖原章 **Advanced Data Structures and Implementation** 的总览及七个技术节；总览来自章标题，不是出版社另列的第八个编号节。它是广章对比，不把这些不同机制压成一种旋转模板。
 
-```cpp
-leftTreeMax->right = current->left;
-rightTreeMin->left = current->right;
-current->left = header.right;
-current->right = header.left;
-root = current;
-```
+<Term def="每次完整操作之后必须仍然成立的结构关系。">不变量</Term>
+比“看起来平衡”更可检验。BST（按键排序的二叉搜索树）要求左子树所有键小于根、右边大于根，但这不限制树高；其他结构会再加颜色、层级、优先级或空间边界。
 
-无论 target found 与否，最后访问 node 被 splay 到 root。Assembly 必须保持所有 left keys smaller、right keys larger；header 只是临时哨兵，不能泄漏进真实 tree。
+| 结构           | 针对什么操作               | 保证的性质                                      | 不能据此承诺什么           |
+| -------------- | -------------------------- | ----------------------------------------------- | -------------------------- |
+| 自顶向下伸展树 | 有局部性的查找、更新       | 标准操作均摊 O(log n)，不存平衡字段             | 每次查找都只走 O(log n)    |
+| 红黑树         | 有序集合、延迟有硬上界     | 合法树高 O(log n)，查找/标准更新最坏 O(log n)   | 只要中序正确就平衡         |
+| 确定性跳表     | 分层有序查找               | 有界间隙给出最坏 O(log n) 查找/插入             | 与随机跳表相同的证明       |
+| AA 树          | 希望简化平衡规则的有序集合 | 层级约束，插入/查找最坏 O(log n)                | 插入的两步就足够处理删除   |
+| 树堆           | 易实现的随机化有序集合     | 独立随机优先级下期望 O(log n)                   | 任意固定优先级都平衡       |
+| k-d 树         | 多维范围报告               | 按空间边界排除无关子树                          | 任意输入、维数都有对数查询 |
+| 配对堆         | 最小值、合并、带句柄降键   | 常数时间根链接，标准两趟删除最小值均摊 O(log n) | 由此推出降键均摊 O(1)      |
 
-Top-down implementation仍继承第11章 amortized bound，不给每次 logarithmic height。连续 locality-heavy accesses是其优势，strict worst-case latency不是。
+<Term def="对整个操作序列计账，而不是要求每次操作都便宜。">均摊界</Term>
+不需要随机输入。<Term def="在规定的随机选择模型下对成本取平均。">期望界</Term>
+则必须说清随机性来自哪里。下面按“访问重排、显式平衡、随机平衡、空间/优先队列”阅读，但七种不变量仍分别核验。
 
-## 12.2 Red-Black Trees
+## 可运行片段的边界与装配
 
-红黑树（）通常要求：
+正文所有 `cpp` 块按出现顺序原样连接成一个 `advanced.cpp`，只连接 `cpp`，不连接树图的 `text` 块；最后一个块包含唯一的 `main`。使用 C++17：`clang++ -std=c++17 -Wall -Wextra -pedantic advanced.cpp -o advanced && ./advanced`。所有代码是本站独立编写的教学缩略版，**不是 Weiss 原文件的粘贴版或完整容器库**。
 
-1. 每个 node 是 red 或 black，root black；
-2. null leaves black；
-3. red node 的 children 都 black；
-4. 从任意 node 到 descendant null leaves 的 black count 相同。
-
-
-若 tree black height 为 bh，至少有 `2^bh-1` internal nodes；任何 path red/black 交替，最长最多是最短的两倍，因此：
-
-$$
-n(0)=0,\qquad n(bh)\ge 2n(bh-1)+1=2^{bh}-1
-$$
-
-再由最长 root-to-leaf path至多包含每个black node旁的一个red node，可得：
-
-$$
-h\le 2\log_2(N+1)
-$$
-
-第3版 `RedBlackTree.h` 的 top-down insertion 在下降时发现 current 有两个 red children就 color flip；若 parent也 red，再按 LL/LR/RL/RR rotation 修复。`header` 保存 negative-infinity sentinel，`nullNode` 作为所有 leaves，并把 search key 临时写入 sentinel element 终止 loop。
+前五种树的节点由 `Arena` 中的 `unique_ptr` 独占；裸指针只是稳定的观察链接，旋转不释放节点。Arena 活着时节点地址稳定，Arena 析构统一释放；不得把根带出 Arena 的生命周期。节点键在本章都是 `int`，界限使用更宽的 `long long`。下面的公共旋转只在对应孩子非空时调用。
 
 ```cpp
-current->color = RED;
-current->left->color = BLACK;
-current->right->color = BLACK;
-if (parent->color == RED)
-    rotateAndRecolor(item, great, grand, parent, current);
-header->right->color = BLACK;
-```
-
-忠实边界：官方第3版文件的 `remove` 明确只打印 unimplemented，不能把本章对 deletion cases 的概念说明伪装成该文件已经提供完整删除实现。Sentinel key还要求构造时给出不大于所有真实 keys 的 `negInf`。
-
-
-## 12.3 Deterministic Skip Lists
-
-确定性跳表（）用层级 linked lists 模拟 balanced search。与 randomized skip list按概率晋升不同，它在 gap size 达到3时提升 middle element，使每层相邻 promoted nodes间底层gap受控。
-
-
-Search 从 top header 开始：key较小就 down，key较大就 right，equal则 found。Bounded gaps让每下降一层只需常数 right moves，levels O(log N)，所以 search/insert logarithmic。
-
-第3版 `DSL.h` 使用 `header`、`tail(INFINITY)` 与可写 `bottom` sentinel消除 null checks；公开实现把 copy constructor、assignment、remove 和 reclaimMemory 留作未实现练习。直接析构该示例会打印泄漏提示，因此只能作为算法骨架，不能当 resource-safe container。
-
-## 12.4 AA-Trees
-
-AA树（）把 red nodes解释为与 parent 同 level 的 horizontal link，但只允许向右，且不能连续两个 right horizontal links。
-
-
-`skew` 在 left child level 等于 node level 时右旋，消除 left horizontal link；`split` 在 right-right grandchild同 level 时左旋并提升新 root level：
-
-```cpp
-void rebalance(Node*& node) {
-    skew(node);
-    split(node);
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <vector>
+struct Node {
+    int key, level = 1, priority = 0;
+    bool red = false;
+    Node *left = nullptr, *right = nullptr;
+    explicit Node(int k) : key(k) {}
+};
+struct Arena {
+    std::vector<std::unique_ptr<Node>> owned;
+    Node* make(int k) {
+        owned.push_back(std::make_unique<Node>(k));
+        return owned.back().get();
+    }
+};
+Node* turnRight(Node* t) {
+    Node* c = t->left; t->left = c->right; c->right = t;
+    return c;
+}
+Node* turnLeft(Node* t) {
+    Node* c = t->right; t->right = c->left; c->left = t;
+    return c;
 }
 ```
 
-Insert recursion返回时依次 skew/split。Delete 更复杂：下降并替换目标后降低不合法 levels，再对 node、right、right-right执行 skew，最后 split node和right。
+## 12.1 自顶向下伸展：边下降，边划分
 
-官方 `AATree.h` deletion使用 function-local static `lastNode/deletedNode`，这会影响 reentrancy、thread safety和exception reasoning。教学上展示算法状态，production实现应把状态放入operation context。
+<Term def="在向目标下降时建立小于和大于目标的两组树，最后把当前节点拼到根的伸展算法。">
+  自顶向下伸展
+</Term>
+不先保存整条父路径。临时头节点 `header` 的 **right 存小键组 L，left 存大键组
+R**；这是指针方向，不是笔误。L 的最右端 `small` 接收小于目标的节点，R 的最左端
+`large` 接收大于目标的节点。
 
-## 12.5 Treaps
+目标比当前键小，就把当前节点接入 R，继续向左；大则接入 L，继续向右。若连续两次朝同一方向，先旋转一次，避免只把很长路径逐点搬家。对称的两组仍各保留自己的旁支，不是把所有节点拍平成链。作者算法见 [SplayTree.h 的 splay](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/SplayTree.h)。
 
-树堆（）给每个 inserted key 一个随机 priority。Keys唯一时，key+priority集合基本唯一决定shape；priority ordering使shape像random BST。
+### 一次非平凡的拼接
 
+对左图查找 30：先把 50 右旋到 40 下，再将 40 链入 R；当前成为 20，链入 L 后找到 30。最后当前的左右余部接回 L/R 的末端，再把两组挂在 30 下。图中所有键都保留了。
 
-Insert先按 key递归，到达 leaf后若 child priority小于 parent，就 rotation把它上提。Expected height：
-
-$$
-\mathbb E[h]=O(\log N)
-$$
-
-Delete可把目标不断与较小-priority child rotation，直到 leaf后删除。Random priorities碰撞需要tie policy；untrusted可预测PRNG也可能被对抗。复现测试应记录seed/priorities，而不是只记录keys。
-
-Treap比red-black实现短，但保证是expected，不是deterministic worst-case。Official `Treap.h` 的注释摘要与实际remove body存在不一致，更说明验收应读真实实现而非只信header comment。
-
-## 12.6 k-d Trees
-
-k-d树（）把 multidimensional ordering分散到各 levels。第3版 `KdTree.cpp` 是二维教学实现：level 0比较 x，level 1比较 y，然后交替。
-
-
-Orthogonal range query若 node point在每个dimension都落入 low/high就输出；只有 query low不大于当前split value才访问 left，query high不小于split value才访问 right：
-
-```cpp
-if (low[axis] <= node->point[axis])
-    range(node->left, 1 - axis, low, high);
-if (high[axis] >= node->point[axis])
-    range(node->right, 1 - axis, low, high);
+```text
+输入                 拼接前分区                 输出
+    50               L: 20   t: 30   R: 40          30
+   /                                    \        /  \
+  40                                     50     20  40
+ /                                                   \
+20                                                    50
+  \
+   30
+header.right -> L；header.left -> R；header 本身不入树。
 ```
 
-Balanced且低维时剪枝有效；sorted insertion可退化，维度升高时curse of dimensionality让大量regions与query相交，接近linear scan。Nearest-neighbor还需按bounding-box distance决定远侧subtree是否可能改进best。
-
-对近似balanced的二维tree，典型axis-aligned range reporting可写成输出敏感界，其中K是实际返回的points数：
-
-$$
-T(N,K)=O(\sqrt N+K)
-$$
-
-这个界不是任意shape与任意dimension的保证；若插入顺序让tree退化，或dimension升高导致regions大量相交，查询仍可能访问线性数量的nodes。
-
-## 12.7 Pairing Heaps
-
-配对堆（）的 basic `compareAndLink` 比较两个 roots，把较大 root作为较小 root的leftmost child。Insert把singleton与root link，并返回 Position handle。
-
-
-DeleteMin移除root后，对children做 two-pass merge：left-to-right两两link，再right-to-left fold结果。单向连续link可能产生不理想shape，两遍策略是实现核心。
-
-Decrease-key通过 Position 找到 node，若key降低后不是root，就从sibling list cut并与root link。Handle必须仍属于该 heap且未删除；official code不做完整ownership validation，错误或stale Position会损坏prev/next links。
+下面使用 `nullptr` 和局部头节点，不使用作者的可写哨兵或静态 header。两种实现都必须遵守同一拼接方向。查找不存在的键也执行拼接，最后访问的非空节点成为根；空树直接返回空。
 
 ```cpp
-for (std::size_t i = 0; i + 1 < trees.size(); i += 2)
-    trees[i] = link(trees[i], trees[i + 1]);
-for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(lastPair); i >= 2; i -= 2)
-    trees[i - 2] = link(trees[i - 2], trees[i]);
+Node* splay(Node* t, int key) {
+    if (!t) return nullptr;
+    Node header(0); Node *small = &header, *large = &header;
+    for (;;) {
+        if (key < t->key) {
+            if (!t->left) break;
+            if (key < t->left->key) t = turnRight(t);
+            if (!t->left) break;
+            large->left = t; large = t; t = t->left;
+        } else if (key > t->key) {
+            if (!t->right) break;
+            if (key > t->right->key) t = turnLeft(t);
+            if (!t->right) break;
+            small->right = t; small = t; t = t->right;
+        } else break;
+    }
+    small->right = t->left; large->left = t->right;
+    t->left = header.right; t->right = header.left;
+    return t;
+}
+std::vector<int> inorder(Node* t) {
+    if (!t) return {};
+    auto a = inorder(t->left), b = inorder(t->right);
+    a.push_back(t->key); a.insert(a.end(), b.begin(), b.end());
+    return a;
+}
 ```
 
-理论上 pairing heap许多operations有优秀amortized bounds，且常数通常比 Fibonacci heap小；但具体 decrease-key bound和variant需精确陈述，不能笼统照搬另一种 heap的复杂度表。
+“只把最后访问节点置顶”并不是复杂度证明。伸展树依靠整串操作中深路径访问带来的结构改善得到均摊界；一次操作仍可能走过线性长链。频繁读也会写链接，需要考虑共享访问的同步，不能因为叫 `contains` 就当它只读。
 
+## 12.2 红黑树：次序之外还要数黑节点
 
-## 统一验收：每个mutation后验证专属不变量
+<Term def="以节点颜色限制连续红节点并统一所有向下路径的黑节点数的搜索树。">
+  红黑树
+</Term>
+要求根黑、空叶黑、红节点的孩子黑，并且每个节点到所有空叶的黑节点数相等。
+<Term def="从某节点出发的一条向下路径所含黑节点的计数；本页检查器把空叶也计作一个黑节点。">
+  黑高
+</Term>
+必须先统一计数约定，否则两个正确实现也可能给出相差一的数值。
 
+下面中序都是 10、20、30、40，但右图多出一对相邻红节点。若只把最底部 40 改黑，又会增加右侧黑高，仍不合法。核验不能只选一个条件。
 
-## 本章回顾
+```text
+合法（B黑，R红）             非法
+       20B                       20B
+      /   \                     /   \
+    10B   30B                 10B   30R
+             \                         \
+             40R                       40R
+空指针都视为黑叶；图中省略，不是“没有叶子”。
+```
 
-1. Advanced structure必须由具体operation mix和可验证invariants支撑。
-2. Top-down splay在下降时拆smaller/larger fragments并最后assemble。
-3. Red-black通过color与equal black-height给worst-case logarithmic height。
-4. Deterministic skip list用bounded gaps取代random promotion。
-5. AA-tree把平衡规范成skew与split，但deletion/reentrancy仍需谨慎。
-6. Treap同时保持BST key order和random-priority heap order，给expected balance。
-7. k-d tree轮换dimensions并按region intersection剪枝，可能因shape或高维退化。
-8. Pairing heap用constant-time link与two-pass deleteMin，Position带来lifetime contract。
-9. 第3版官方代码包含明确未实现练习，不能直接标为production complete。
+### 为什么黑高能限制高度
 
+令 b 为从根向下计数的黑色内部节点数（此处不计空叶）。有 b 层黑节点的最小内部节点数满足：
+
+$$
+N(0)=0,\qquad N(b)\ge 1+2N(b-1)=2^b-1.
+$$
+
+这表示每下降一个黑层，必须在左右两侧都容得下同样多的剩余黑层，不能只长一条细链。没有连续红节点，因此以内部节点数计的最长路径 h 至多为 2b；再由上式得到：
+
+$$
+h\le 2b\le 2\log_2(n+1).
+$$
+
+这表示高度的最坏上界来自“同黑高”和“不连红”两个条件共同作用，而非颜色标签本身。检查器返回含空叶的黑高，失败返回 −1；外层另检查根黑。
+
+```cpp
+int blackHeight(Node* t, long long lo, long long hi) {
+    if (!t) return 1;
+    if (!(lo < t->key && t->key < hi)) return -1;
+    if (t->red && ((t->left && t->left->red) ||
+                   (t->right && t->right->red))) return -1;
+    int a = blackHeight(t->left, lo, t->key);
+    int b = blackHeight(t->right, t->key, hi);
+    return a < 0 || a != b ? -1 : a + !t->red;
+}
+bool redBlackOK(Node* t) {
+    return (!t || !t->red) && blackHeight(t,
+        std::numeric_limits<long long>::lowest(),
+        std::numeric_limits<long long>::max()) >= 0;
+}
+```
+
+### 插入修复不等于检查器
+
+作者 [RedBlackTree.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/RedBlackTree.h) 在下降时遇到两个红孩子就变色；若父亲也红，按直线或折线路径做一次或两次旋转，并重新着色，最后把根置黑。例如 10B 的右孩子 20R 再插入 30R，左旋 10 并让 20B、10R、30R，才同时恢复次序、黑高和不连红。**本页 C++ 只实现检查器，不实现红黑插入。**
+
+作者的 header 带负无穷界限，必须覆盖真实键域，不能把等于保留边界的值当普通键塞入；其 `remove` 明示未实现。本页检查器不依赖保留键，也不把作者未实现的删除包装成可用接口。
+
+## 12.3 确定性跳表：间隙不是掷硬币决定的
+
+<Term def="通过限定相邻高层节点之间的低层节点数来维持高度的有序多层链。">
+  确定性跳表
+</Term>
+用右移和下移代替树的左右孩子。查找从顶层出发，先向右定位覆盖目标的边界，再下降。它并不依赖随机抛硬币。常见的
+1–2–3 间隙约束把相邻较高节点之间、恰处下一层的节点数限制在 1 到 3。
+
+当已有间隙含 10、20、30 时，提升中间的 20，把它分成各含一个节点的两段。向下插入之前先拆开满间隙，给后续改动留位置。作者 [DSL.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/DSL.h) 用 `down->right->right` 与当前分隔键比较来识别需要提升的情形；实现复制分隔键并重接 right/down，不是这里概念图的一根“塔”对象。
+
+<DsaAdvancedAuxiliaryFigures kind="skip" />
+
+每下降一层，间隙有上界，所以横走步数有常数上界；每提高一层，节点数量按常数比例减少，所以层数 O(log n)。二者合起来才是最坏对数查找保证，不是“层数少，看起来快”。下面核验**单层对**的间隙，非完整跳表插入；边界采用两端虚拟无穷节点，空输入单独处理。每层都满足这种受控收缩，才能组成全局证明。
+
+```cpp
+bool gapsOK(const std::vector<int>& base,
+            const std::vector<int>& upper) {
+    auto strict = [](const auto& v) {
+        return std::adjacent_find(v.begin(), v.end(),
+            [](int a, int b) { return a >= b; }) == v.end();
+    };
+    if (!strict(base) || !strict(upper)) return false;
+    if (base.empty()) return upper.empty();
+    std::size_t start = 0;
+    for (int boundary : upper) {
+        auto p = std::lower_bound(base.begin(), base.end(), boundary);
+        if (p == base.end() || *p != boundary) return false;
+        auto index = static_cast<std::size_t>(p - base.begin());
+        if (index < start || index - start < 1 || index - start > 3)
+            return false;
+        start = index + 1;
+    }
+    return base.size() - start >= 1 && base.size() - start <= 3;
+}
+```
+
+本段核验的是图中间隙定义，不逐字段等同于作者的哨兵编码。作者 DSL 的删除、复制/赋值和内存回收仍含练习占位；公开可读不等于生产可用。不能直接带着未完成的回收例程宣称“无泄漏容器”。
+
+## 12.4 AA 树：把允许的水平边限制到右边
+
+<Term def="用整数层级表示平衡关系，只允许向右的单条同层边的搜索树。">
+  AA 树
+</Term>
+把红黑关系换成层级（level）：空孩子为 0，叶子为
+1；左孩子恰低一层，右孩子同层或低一层；右孙子必须低于当前层；高于 1
+的节点必须有两个孩子。层级不是节点在屏幕上的纵坐标，也不是根到节点的深度。
+
+<Term def="AA 树中父子层级相等的链接。">水平边</Term>
+最多只能连续一条，并且只能向右。`skew` 发现左水平边时右旋，不改层级；`split`
+发现连续两条右水平边时左旋，把新根层级加一。插入先递归到叶子，再在返回路径上依次
+skew、split。[AATree.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/AATree.h)
+的修复条件与此对应。
+
+### 先预测，再操作
+
+起始是 `10(L1) → 20(L1)`。先预测插入 30 后，哪条约束先失败？点击“插入”看到实际挂叶子的中间态，再“下一步”观察 split 将 20 提到 L2；最后完成态应通过核验。
+
+重置，打开“跳过 split”，重复操作。中序依然是 10、20、30，但完成态仍有连续右水平边。再重置，输入 5：这次会先发生 skew，随后仍可能 split。**实验只实现 AA 插入；两个辅助 SVG 是固定图，不是假装运行的其他结构。**
+
+<DsaAdvancedDataStructuresRepairLab />
+
+C++ 对照执行相同修复规则；`omitSplit` 是真实故障开关，不是仅让显示变红。重复键按集合忽略。下面仍使用 Arena 管理生命周期。
+
+```cpp
+int lev(Node* t) { return t ? t->level : 0; }
+Node* aaInsert(Arena& arena, Node* t, int k, bool omitSplit = false) {
+    if (!t) return arena.make(k);
+    if (k < t->key) t->left = aaInsert(arena, t->left, k, omitSplit);
+    else if (k > t->key)
+        t->right = aaInsert(arena, t->right, k, omitSplit);
+    else return t;
+    if (lev(t->left) == t->level) t = turnRight(t); // skew
+    if (!omitSplit && t->right && lev(t->right->right) == t->level) {
+        t = turnLeft(t); ++t->level; // split
+    }
+    return t;
+}
+bool aaOK(Node* t) {
+    if (!t) return true;
+    bool order = (!t->left || inorder(t->left).back() < t->key) &&
+                 (!t->right || inorder(t->right).front() > t->key);
+    return order && t->level >= 1 && lev(t->left) == t->level - 1 &&
+        (lev(t->right) == t->level || lev(t->right) == t->level - 1) &&
+        lev(t->right ? t->right->right : nullptr) < t->level &&
+        (t->level == 1 || (t->left && t->right)) &&
+        aaOK(t->left) && aaOK(t->right);
+}
+```
+
+`aaOK` 为便于阅读反复取中序，**不是线性时间检查器**；规模很大时应改成传上下界的单遍遍历。实验模型直接用上下界。AA 删除会降低层级，还要在右边相关节点重复 skew/split，不能把上面的插入返回路径原封不动充作删除实现。
+
+## 12.5 树堆：键和优先级是两套次序
+
+<Term def="键满足搜索树次序、优先级同时满足堆次序的树。">树堆</Term>
+（treap）先按键插入，再用旋转恢复优先级的最小堆次序。旋转保持中序，因此不会破坏键的排序。下图
+`键:优先级` 中插入 20:10 后，它先成为 30 的左孩子，再右旋 30、左旋
+10，最终升到根。
+
+```text
+原树                  挂入                 旋转后
+10:40                 10:40                 20:10
+    \                     \                /     \
+    30:60                 30:60          10:40   30:60
+                         /
+                       20:10
+```
+
+作者 [Treap.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/Treap.h) 为新节点生成随机整数优先级，比较用严格小于，重复键忽略。此处为了确定性测试由调用者给优先级，并以 `(priority,key)` 字典序打破相等优先级；键唯一，因此排序总能确定。这个 tie 规则是本页的选择，不冒充作者同款实现。
+
+```cpp
+bool above(Node* a, Node* b) {
+    return a->priority < b->priority ||
+        (a->priority == b->priority && a->key < b->key);
+}
+Node* treapInsert(Arena& arena, Node* t, int k, int priority) {
+    if (!t) { t = arena.make(k); t->priority = priority; return t; }
+    if (k < t->key) {
+        t->left = treapInsert(arena, t->left, k, priority);
+        if (above(t->left, t)) t = turnRight(t);
+    } else if (k > t->key) {
+        t->right = treapInsert(arena, t->right, k, priority);
+        if (above(t->right, t)) t = turnLeft(t);
+    }
+    return t;
+}
+bool treapOK(Node* t) {
+    if (!t) return true;
+    const auto v = inorder(t);
+    return std::adjacent_find(v.begin(), v.end(),
+        [](int a, int b) { return a >= b; }) == v.end() &&
+        (!t->left || !above(t->left, t)) &&
+        (!t->right || !above(t->right, t)) &&
+        treapOK(t->left) && treapOK(t->right);
+}
+```
+
+若优先级形成独立于键的随机排列（例如独立连续取样，几乎必然互异），树形对应随机搜索树，得到期望对数高度。这个随机排列论证也见 Pat Morin 的 [Open Data Structures §7.2](https://opendatastructures.org/ods-cpp/7_2_Randomized_Binary_Searc.html)。若给递增键也配递增优先级，就形成右链，最坏仍是线性。稳定处理碰撞保证语义明确，却**不能**把全部相等的优先级变成随机平衡；有限随机数域也要考虑碰撞分布。
+
+## 12.6 k-d 树：比较维度轮换，剪枝按区域
+
+<Term def="每层按一个坐标维度切分点集、维度循环轮换的空间搜索树。">k-d 树</Term>
+在深度 d 使用轴 `d % k`。本页 k=2，轮流比较 x 和
+y；左边小于切分值，右边大于等于。一个点要落入闭矩形
+Q，必须同时满足两个坐标的上下界，不能只检查当前比较轴。
+
+<DsaAdvancedAuxiliaryFigures kind="kd" />
+
+图中的根按 x=5 切分。查询 Q 的最大 x=4，小于 5，因此整个右子树可以剪掉。左子树 B 按 y=4 切分，Q 的 y 范围跨过 4，所以它的两边都可能需要走。剪枝依据是**子区域与 Q 是否相交**，不是“当前节点是否命中”；B 即使不命中，也不能直接扔掉它的孩子。
+
+作者 [KdTree.cpp](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/KdTree.cpp) 是二维插入/范围报告示例，不是 k 任意变化的完整空间库。这里用 `array<int,2>` 在类型层固定维数，以 `unique_ptr` 管理子树。相同坐标点按集合忽略。
+
+```cpp
+using Point = std::array<int, 2>;
+struct KD {
+    Point p;
+    std::unique_ptr<KD> left, right;
+    explicit KD(Point q) : p(q) {}
+};
+void kdInsert(std::unique_ptr<KD>& t, Point p, int depth = 0) {
+    if (!t) { t = std::make_unique<KD>(p); return; }
+    if (t->p == p) return;
+    int axis = depth % 2;
+    kdInsert(p[axis] < t->p[axis] ? t->left : t->right, p, depth + 1);
+}
+void rangeQuery(const KD* t, Point low, Point high,
+                std::vector<Point>& out, int& visited, int depth = 0) {
+    if (!t || low[0] > high[0] || low[1] > high[1]) return;
+    ++visited;
+    if (low[0] <= t->p[0] && t->p[0] <= high[0] &&
+        low[1] <= t->p[1] && t->p[1] <= high[1]) out.push_back(t->p);
+    int axis = depth % 2;
+    if (low[axis] <= t->p[axis])
+        rangeQuery(t->left.get(), low, high, out, visited, depth + 1);
+    if (high[axis] >= t->p[axis])
+        rangeQuery(t->right.get(), low, high, out, visited, depth + 1);
+}
+```
+
+闭区间比较中的等号避免漏掉边界。此处左侧判断保守地允许相等时也访问，虽可能多走，但不漏解。维度轮换本身不保证平衡：按偏斜顺序插入会退化，覆盖全域的查询也必须输出所有点，因此最坏 O(n)。固定低维、平衡树与特定分布下可以得到更强范围查询界，但不能把它套到这段无重建插入上；高维时剪枝通常也会减弱。
+
+## 12.7 配对堆：删除根后的两趟归并
+
+<Term def="通过比较根并把较大根挂成孩子来合并的多叉最小堆。">配对堆</Term>
+把最小值放在根，父键不大于孩子键。`meld(a,b)`
+只比较根，把较大根挂为较小根的孩子；不强制平衡高度。删除最小根后，其所有孩子成为森林，需要重新合并，而不是任取一个孩子作根。
+
+标准<Term def="先从左到右把相邻根成对合并，再从右到左把成对结果累积合并。">两趟归并</Term>保留了特定操作顺序。以下是删除旧根后的孩子顺序，五棵树中最后一棵首趟落单。括号代表真实的根链接，并不表示重新排序。
+
+```text
+孩子次序：        7    3    9    4    6
+第一趟 左→右：   (7,3)     (9,4)     6
+结果根：           3         4       6
+第二趟 右→左：             meld(4,6) -> 4
+                  meld(3,4) -> 3
+最终根 3 的孩子包含原 7 子树和刚归并的 4 子树；没有丢掉 9、6。
+```
+
+作者 [PairingHeap.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/PairingHeap.h) 的 `combineSiblings` 就是左到右配对、右到左累积，并特别处理奇数尾项。下面独立实现用首孩子/下兄弟的独占指针；`meld` 的前提是两棵互不相交、无外部兄弟的独立堆。它只转移所有权，不复制节点。
+
+```cpp
+struct HeapNode;
+using Heap = std::unique_ptr<HeapNode>;
+struct HeapNode {
+    int key;
+    Heap child, next;
+    explicit HeapNode(int k) : key(k) {}
+};
+Heap meld(Heap a, Heap b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (b->key < a->key) std::swap(a, b);
+    b->next = std::move(a->child); a->child = std::move(b);
+    return a;
+}
+Heap deleteMin(Heap h) {
+    if (!h) return nullptr;
+    std::vector<Heap> pairs;
+    auto rest = std::move(h->child);
+    while (rest) {
+        auto a = std::move(rest); rest = std::move(a->next);
+        Heap b;
+        if (rest) { b = std::move(rest); rest = std::move(b->next); }
+        pairs.push_back(meld(std::move(a), std::move(b)));
+    }
+    Heap result;
+    for (std::size_t i = pairs.size(); i > 0; --i)
+        result = meld(std::move(pairs[i - 1]), std::move(result));
+    return result;
+}
+```
+
+### 降键的接口与理论边界
+
+已知节点位置时，减小键后若破坏父子堆序，可以把该子树切下再与根链接。作者的 `Position` 和 `prev` 帮助定位要断开的链接；`prev` 可能指父亲，也可能指前一个兄弟，不能一律当 parent。句柄必须来自当前堆且仍存活，删除后继续用会悬空。
+
+Fredman、Sedgewick、Sleator、Tarjan 的 [配对堆原论文](https://www.cs.cmu.edu/~sleator/papers/pairing-heaps.pdf) 第 111–113 页区分了已知的 O(log n) 均摊分析与当时希望达到的 Fibonacci 堆界；不能把研究目标当定理。这里引用它作分析边界的依据，不声称它概括了此后的全部研究。
+
+本页不实现句柄或 decrease-key，也不声称可从这段代码推出其均摊上界。根链接的局部常数工作量不代表整个操作序列的成本已结清；**标准配对堆的降键不能直接套用 Fibonacci 堆的均摊 O(1) 定理**。若业务需要某个精确界，应同时固定变体与所用分析。这里承诺的可执行范围只有 meld 和两趟 deleteMin；单次 deleteMin 遇到线性多个孩子时仍会做线性工作。
+
+## 三个容易“测绿但做错”的地方
+
+<Callout type="trap" title="排序正确，不代表平衡正确">
+
+**现象 →** AA 故障模式的中序仍递增，但最终校验失败。
+
+**原因 →** 跳过 split 留下连续右水平边；同样，红黑树还可能出现红父红子或黑高不等。
+
+**修法 →** 把排序与结构约束分别断言，等待完整修复结束后再判断最终合法性。
+
+</Callout>
+
+<Callout type="trap" title="期望很快，不等于最坏很快">
+
+**现象 →** 按递增键和递增优先级构建的树堆查找很慢。
+
+**原因 →** 优先级与键相关，得到长链，随机平衡的前提不存在。
+
+**修法 →** 需要硬延迟界时选择维护最坏高度的结构；用树堆时说明随机模型与碰撞策略。
+
+</Callout>
+
+<Callout type="trap" title="当前点没命中，不等于整片区域没命中">
+
+**现象 →** 查询框里明明有点，k-d 查询却漏报。
+
+**原因 →** 代码按当前点是否命中决定递归，而非按切分区域是否相交。
+
+**修法 →** 命中测试看全部维度；递归剪枝看当前轴上下界，闭区间保留等号。
+
+</Callout>
+
+## 把断言接到程序结尾
+
+下面是唯一的 `main`，连接在前面所有 C++ 块之后。先用正确 AA 插入当正例，再用真正遗漏 split 的插入作反例；反例只是合法 C++ 产生错误结构，没有释放后访问或其他未定义行为。检查器都假定输入链接为有限无环结构；它们不是任意损坏内存的安全扫描器。
+
+```cpp
+int main() {
+    Arena a, broken, tArena; Node *root = nullptr, *bad = nullptr;
+    for (int x : {10, 20, 30}) {
+        root = aaInsert(a, root, x);
+        bad = aaInsert(broken, bad, x, true);
+    }
+    assert(aaOK(root) && !aaOK(bad));
+    assert(inorder(root) == inorder(bad));
+    root = splay(root, 10); assert(root->key == 10);
+    assert(inorder(root) == std::vector<int>({10,20,30}));
+    assert(!redBlackOK(bad)); // 全黑的长链黑高不等
+    assert(gapsOK({10,20,30}, {}) && gapsOK({10,20,30}, {20}));
+    assert(!gapsOK({10,20,30,40}, {}));
+    Node* tr = nullptr;
+    for (int x : {30,10,20}) tr = treapInsert(tArena, tr, x, 7);
+    assert(tr->key == 10 && treapOK(tr)); // tie 按键打破
+    std::unique_ptr<KD> kd;
+    for (Point p : {Point{5,5}, {3,4}, {2,6}, {8,3}}) kdInsert(kd,p);
+    std::vector<Point> hits; int visited = 0;
+    rangeQuery(kd.get(), {1,3}, {4,7}, hits, visited);
+    std::sort(hits.begin(), hits.end());
+    assert(hits == std::vector<Point>({{2,6},{3,4}}) && visited == 3);
+    Heap heap;
+    for (int x : {7,3,9,4,6}) heap = meld(std::move(heap), std::make_unique<HeapNode>(x));
+    for (int x : {3,4,6,7,9}) { assert(heap->key == x); heap = deleteMin(std::move(heap)); }
+    assert(!heap); std::cout << "invariants and negative cases passed\n";
+    return 0;
+}
+```
+
+预期仅输出 `invariants and negative cases passed`；断言失败会终止程序，而不是“自动修好”。注意：把 AA 树交给 splay 后，节点的旧 level 不再有 AA 语义，所以这里只核验伸展后的键集合与根，**不**假装所有结构的不变量可以混用。规模只用于教学；无界递归深度、分配异常的强保证和并发访问都没有在缩略版中工程化处理。
+
+## 小结与练习
+
+- 先按操作选结构，再区分最坏、期望、均摊界。
+- AA 插入用实际 skew/split 恢复层级，不靠手动摆图。
+- 排序只是底线；颜色、层级、优先级还要分别核验。
+
+<div className="[&_button]:min-h-11">
+
+<Exercises>
+
+**问题 1：分区拼接与颜色反例。** 对 12.1 的输入树查找不存在的 35，分别写出最终根与中序；解释为什么不能交换 `header.left` 和 `header.right`。再对 12.2 的合法树把 10B 改成 10R：排序改变了吗？哪条校验先拒绝？若只把根改红呢？
+
+<Answer>
+
+查找 35 时先右旋 50，40 被链入 R；20 被链入 L，30 因无右孩子而结束，最终根是 30，中序仍为 20、30、40、50。未命中不是“不做伸展”。交换两组会把大键挂到左边、小键挂到右边，直接破坏 BST。10 改红不改变排序，也不产生红父红子，但左侧少一个黑节点，`blackHeight` 返回 −1。只把原合法树的根改红，会由 `redBlackOK` 的根黑规则拒绝；不能把这个条件省略。
+
+</Answer>
+
+**问题 2：修改代码并交叉检查三种平衡规则。** 把 `aaInsert` 中 split 条件的 `!omitSplit` 临时改为 `false`，运行 10、20、30；预测哪些断言失败，再恢复代码。用实验复现这次故障。接着对跳表间隙 10、20、30 提升 20，计算新间隙；若底层再含 40、50、60、70 而上层仍只有 20，哪里需要继续修复？最后解释树堆把同一批键都赋优先级 7 是否保证平衡。
+
+<Answer>
+
+AA 挂叶子后是 L1 的三节点右链，`aaOK(root)` 失败，但 `inorder(root)==inorder(bad)` 仍成立。恢复 split 后，20 升到 L2，10、30 均为 L1。界面重置→故障开→插入→逐步到完成，会拒绝连续右水平边；再重置用正常模式对照，不能只关闭故障期待旧树自行修复。
+
+跳表提升 20 后两段间隙都是 1；加入至 70 后，20 与正无穷之间有 30、40、50、60、70 共 5 个未提升节点，超出 3，必须继续按插入路径维护高层，不能只修最左段。`gapsOK({10,20,30,40,50,60,70},{20})` 应为 false。树堆 tie 按键比较使所有键确定排序，但相等优先级时最小键总在上方，可能形成右链；tie 正确性与随机高度是两个问题。
+
+</Answer>
+
+**问题 3：空间边界、归并方向与选型。** 把查询改为 Q=[5,5]×[5,5]，应报告什么？能把递归右侧条件的 `>=` 改成 `>` 吗？按图手算配对堆五棵子树的两趟链接。最后分别给“必须保证单次有序查找延迟”“地图矩形查询”“频繁合并最小优先队列”选择结构，并写一条不能承诺的性质。
+
+<Answer>
+
+只报告 A=(5,5)，相等边界必须保留。若另外插入 E=(5,4)，它沿根的相等 x 分支进入右边；Q=[5,5]×[4,5] 应返回 A、E，改成 `>` 就漏掉 E。当前根是否命中不能代替递归边界测试。
+
+第一趟链接 (7,3) 得 3、(9,4) 得 4、尾项 6 保留；第二趟先链接 4 与 6，再链接 3 与结果 4，最终最小根 3，所有五个原根还在。红黑树/AA 树适合第一项，k-d 树适合第二项，配对堆适合第三项；分别不能省略平衡维护、不能承诺任意分布都对数查询、不能把降键照抄为 Fibonacci 堆的均摊 O(1)。热点伸展与随机树堆也可能很好用，但不是第一项硬上界的替代证明。
+
+</Answer>
+
+</Exercises>
+
+</div>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="不变量">
+    完整操作后仍要成立的规则；例如键次序正确还不够，AA 树还要满足层级规则。
+  </GlossaryItem>
+  <GlossaryItem term="均摊界">
+    把整串操作的总工作量分摊到每步，允许某一次很贵，不依赖随机输入。
+  </GlossaryItem>
+  <GlossaryItem term="期望界">
+    按指定随机模型算平均成本；改变随机来源或让它与键相关，结论可能失效。
+  </GlossaryItem>
+  <GlossaryItem term="自顶向下伸展">
+    向目标下降时分出小键组和大键组，最后把当前节点拼到根。
+  </GlossaryItem>
+  <GlossaryItem term="红黑树">
+    以颜色约束路径形状的搜索树，根黑、不连红且所有下降路径同黑高。
+  </GlossaryItem>
+  <GlossaryItem term="黑高">
+    一条向下路径中黑节点的个数。本页检查器包含空叶，推导另显式扣去空叶。
+  </GlossaryItem>
+  <GlossaryItem term="确定性跳表">
+    靠有界间隙维护层数的有序多层链，而非靠随机晋升。
+  </GlossaryItem>
+  <GlossaryItem term="AA 树">
+    只准一条向右同层链接的层级搜索树，用 skew 和 split 修复插入。
+  </GlossaryItem>
+  <GlossaryItem term="水平边">
+    AA 树里两端层级相等的边，不是 SVG 的几何水平方向。
+  </GlossaryItem>
+  <GlossaryItem term="树堆">
+    同时按键维持搜索次序、按优先级维持堆次序的树。
+  </GlossaryItem>
+  <GlossaryItem term="k-d 树">
+    轮换坐标轴切分空间的树；子区域不相交时才可安全剪枝。
+  </GlossaryItem>
+  <GlossaryItem term="配对堆">
+    通过比较根并链接孩子来合并的多叉最小堆。
+  </GlossaryItem>
+  <GlossaryItem term="两趟归并">
+    先左到右相邻配对，再右到左累积；奇数尾项不能丢。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与实现范围
+
+范围来自 [出版社第 3 版目录](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461) 的 Chapter 12。事实核对来自 Weiss 的 [第 3 版配套代码目录](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/) 和正文逐节链接的七份实现文件。此次实际访问中 `KdTree.h` 返回 404，按作者目录取到的是 `KdTree.cpp`；不能把不存在的头文件列成证据。目录网页的旧 HTML title 写着 Second Edition，但 H1、正文与路径明确为 Third Edition；本页未混用第 4 版代码。
+
+目录只证明范围，不证明已读原书正文。作者代码页明确保留版权，并提示旧代码对现代编译器可能需修正；公开可访问不是开放许可。这里没有原书完整正文访问或逐句忠实翻译的声明。C++17 节选独立编写，AA 交互和辅助图由本站实现；复杂度结论的前提在对应节明确说明，未把静态例图或检查器冒充完整容器。
+
+<Attribution
+  sourceUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  workTitle="Mark Allen Weiss, Data Structures and Algorithm Analysis in C++, Third Edition，第12章"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

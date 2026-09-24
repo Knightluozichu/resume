@@ -1,167 +1,414 @@
 ---
-title: "第8章 Disjoint Sets：动态等价与近常数合并查询"
+title: "第8章 并查集：让合并改根，让查找压缩路径"
 type: C
 section: "排序、并查集与图"
 order: 7
-description: "按第3版七节完整重构等价关系、动态等价问题、并查集树表示、按秩合并、路径压缩、最坏界与Kruskal类应用。"
+description: "从等价关系到父指针森林，执行按秩合并、路径压缩与错误连边，区分单次最坏路径和序列均摊界。"
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: dsaa3-08
+draft: true
+qualityVersion: 2
 ---
 
+import { DsaDisjointSetClassForestLab } from "@/components/mdx/dsa-cpp/dsa-disjoint-set-class-forest-lab";
 
-## 从“只合并，不拆分”的动态分区开始
+{/* 知识与视觉决策：本章是 C 型、代码实践，按官方第8章七节保留范围，不将七节伪称为五个概念。等价关系/等价类→森林分组及三性质算例；动态等价→实际 union/find；基本表示/根→父边与节点；按大小/按秩→根的大小、秩、实高并列与代码；路径压缩→真实前后父边；组合最坏界/均摊→实际路径计数和倍增推导；应用/生成森林→候选通路处理与练习3。所有 Term 均在 Glossary 回收。静态离散操作，不使用自动播放或文字 Stepper。 */}
 
-等价关系（）描述“属于同一组”。对所有元素 a、b、c：
+<Objectives>
+
+- 能从三个关系性质解释分组，并指出只合并的结构为何不能直接支持断边。
+- 能修改并运行有编号检查的 C++17 实现，让查找缩短真实路径而不把秩当作集合大小。
+- 能回答：合并两组时为什么只能连接根？两种优化并用后，一次查找是否必定只花常数时间？
+
+</Objectives>
+
+## 先想一张只能增加通路的地图
+
+地图有八个房间。每打通一道门，就想知道两个房间现在能否互相走到。不必每次重走所有通道：只要记住哪些房间已属于同一片可达区域。
+
+难点是“区域会合并”。门一旦关闭，原先能走到的房间却可能分开。本章只处理开门，不处理关门；否则沿用旧的分组答案会出错。
+
+## 8.1 等价关系：我们保存的到底是什么
+
+<Term def="同时满足自反、对称、传递三个性质的二元关系">等价关系</Term>
+把“同组”变成明确的约定。自反：每个元素和自己同组；对称：若 a 与 b 同组，b 也与 a
+同组；传递：若 a 与 b、b 与 c 同组，a 与 c
+必须同组。无向通路的可达性满足三条；“直接有一扇门”却不满足传递性，不能混为一谈。
+
+一个元素所在的整组称为<Term def="所有与某元素等价的元素组成的集合">等价类</Term>。所有等价类不重叠、合起来覆盖全部元素：这就是一个<Term def="把全集分成互不相交且覆盖全集的若干组">划分</Term>。例如只确认 0 与 1、1 与 2 可达，也已确定 0 与 2 同组，无须保存三对关系。
+
+实验中的每棵树表示一个等价类。树上的边不是地图的门，而是内部索引；改变这些边，只要不改变分组，等价关系就没变。练习 3 将检验这种区别。
+
+## 8.2 动态等价问题：只合并，不拆组
+
+<Term def="在连续合并过程中查询两个元素是否属于同一等价类">动态等价问题</Term>
+需要两个操作：`find(x)` 给出当前组的代表；`unite(a,b)` 把两个组变成一个。用
+`find(a)==find(b)` 判断同组，不比较某个永久固定的代表编号。
+
+解决这一问题的<Term def="用若干互不相交的集合维护合并和代表查询的数据结构">并查集</Term>从每元素单独一组开始。合并必须保持旧的所有同组关系，并让两组间也全部同组。冗余合并返回 `false`，不能凭空创造新组或增加秩；但其内部查找仍可整理路径。实验的 union 模式会实际执行这两个查找。
+
+“动态”不等于任意增删图边。关门后，另一路通道可能仍在；从内部树上剪一条边既不能代表关闭那扇门，也不能判断真实可达性。这里不实现删边、历史版本或回滚。
+
+## 8.3 并查集基本数据结构：父指针组成森林
+
+并查集基本数据结构不必存储组内所有元素对，而是用树的归属表达分组。这里的<Term def="每个节点指向一个父节点，根指向自身的树集合">父指针森林</Term>用数组
+`parent` 表示。满足 `parent[x]==x` 的节点是
+
+<Term def="父节点为自身、用于代表一整组的节点">根</Term>。初始
+`parent[i]=i`；查找沿父指针走到根。合并应让一个根指向另一个根，而不是把任意元素改挂到别组。
+
+实验初始由六次真实合并构造：`(0,1)、(2,3)、(0,2)、(4,5)、(6,7)、(4,6)`。于是 7 的路径是 `7→6→4`，3 的路径是 `3→2→0`。每个根各含四个元素，实际高度都是 2。下图箭头方向是“子→父”，根的自环省略。
+
+如果每次随意把旧根挂到新单点，可以形成长为 n−1 的链；一次查找要走线性数量的边。这个表示本身没有效率保证，接下来才用合并策略限制高度。公开作者代码以负数编码根和秩；本站为便于检查，独立实现成两个数组，不复刻其正文或接口。
+
+## 8.4 智能合并算法：大小与秩是不同的量
+
+智能合并算法通过选择根的连接方向限制树高，而不改变同组的定义。<Term def="把元素较少的整棵树接到元素较多的树根上">按大小合并</Term>
+比较的是根所代表的元素数。小树的节点每增加一层，所在集合至少翻倍。因此同一节点不可能反复增加任意多层。大小只在根上维护才有意义，非根的旧计数不能直接拿来比较。
+
+<Term def="优先把秩较小的根接到秩较大的根；相同才使新根秩加一">按秩合并</Term>
+则保存一个历史指标：
+<Term def="从零开始、仅在相同秩的两个根合并时递增的高度上界">秩</Term>
+。无压缩时它等于该树高度；有压缩后只保留上界意义。秩相等时本实现固定较小编号为新根，便于复现实验；这不是算法必需条件。
+
+看实验的根统计：初始大小 4、秩 2。合并另一个单点时，大小会增加而秩可以不变；把所有叶子压到根时，实高会减小而秩仍不变。三个量必须分开读，不能把 `rank=2` 解释成“两个元素”。练习 2 将真正给实现增加大小查询。
+
+### 为什么单次路径至多是对数级
+
+符号：n 表示初始元素数，r 表示一个根的秩，h 表示当前树高（边数）；本节非空时 n≥1。
+
+秩为 0 时至少有 1 个元素。若秩从 r 增至 r+1，必定合并了两个秩都为 r 的不同集合；按归纳假设，两者各至少有 2 的 r 次方个元素。所以：
 
 $$
-a\sim a,\qquad
-a\sim b\Rightarrow b\sim a,\qquad
-a\sim b\land b\sim c\Rightarrow a\sim c
+\mathrm{size}(\text{root of rank }r)\ge 2^r
 $$
 
-先预测已知0与1等价、1与2等价后，是否还要显式存储0与2的边。Transitivity 已经要求答案为 true；并查集不保存完整 relation matrix，只维护每个 equivalence class 的 representative。
+这个式子说，取得更大的秩必须有足够多的元素，不能靠冗余合并刷出秩。
 
-官方七节依次为 **Equivalence Relations、The Dynamic Equivalence Problem、Basic Data Structure、Smart Union Algorithms、Path Compression、Worst Case for Union-by-Rank and Path Compression、An Application**。本章保持从数学 contract 到实现 heuristic，再到严格复杂度和应用的顺序。
-
-
-## 8.1 Equivalence Relations
-
-一个 equivalence relation 唯一诱导 partition：每个 element 恰属于一个 class，不同 classes 不相交。反过来，任何 partition 也定义 relation：两元素等价当且仅当处于同一 block。
-
-元素 x 的 equivalence class 定义为：
+集合大小不会超过 n，压缩又只会降低高度，于是：
 
 $$
-[x]=\{y\mid y\sim x\}
+h\le r\le\lfloor\log_2 n\rfloor
 $$
 
-这解释了 API 为什么只需 `find(x)` 返回 representative，和 `union(a,b)` 合并两个 classes。Representative 的具体编号没有业务意义；不同 union order 可选择不同 root，但 `find(a)==find(b)` 的 partition semantics 应一致。
+这个式子说，按秩合并限制了最坏查找路径的长度；它并没有说每次查找都只走一条边。两种智能合并任选一种即可；本章可执行实现选择按秩，不把按大小规则混入其中。
 
-## 8.2 The Dynamic Equivalence Problem
+## 8.5 路径压缩：改边，不改分组
 
-动态等价问题（）包含两个 operations：
+<Term def="查找根后，把此次访问路径上的节点直接连到这个根">路径压缩</Term>
+复用刚刚找到的答案。两遍实现先保存根，再沿旧路径前进；每次改写前先保存旧父节点，避免失去下一步。压缩不跨越集合边界，不改变根和秩。
 
-- `union(a,b)`：把包含 a、b 的两个 classes 合并；
-- `find(x)`：返回 x 当前 class 的 name/root，据此判断两元素是否 connected。
+先预测：初始执行 `find(7)`，会把 `parent[7]` 从 6 改成 4；6 本来就指向 4，无须改变。路径从两条边缩成一条边，但 4 的秩还是 2。再查询 5、6、7 都是直接到根，此时根 4 实高为 1。这正是“秩不等于压缩后实高”的可见反例。
 
+<DsaDisjointSetClassForestLab />
 
-它不是完全动态 connectivity：不支持删除 relation 或 split class。若业务需要断边、回滚或历史版本，需要 rollback DSU、offline divide-and-conquer 或 dynamic graph data structure，不能从 parent tree 中随意剪边。
+动手试：保留默认 A=7 执行两次 find，比较原路径的边数；重置后选 union、B=1，观察两组真正接到根 0。再重置选错误模式：它直接写 `parent[7]=1`，把 7 从原组剥离，丢掉 7 与 4、5、6 的三对关系。这不是慢一点的 union，而是答案错误。成环的故障请求会被拦截，已注入故障的状态必须重置才可继续。
 
-## 8.3 Basic Data Structure
+界面只有五个控件，编号限定 0–7。内部可测模型支持 0–16 个元素，状态只由构造器和操作产生；不声称可以校验或修复任意不可信图文件。文字路径、根统计与 SVG 同源，可用于核对图形。
 
-并查集基本数据结构（）初始化 N 棵 singleton trees。最直白版本令 `parent[i]=i`；第3版 `DisjSets` 用负值表示 root，并把负值幅度用于 rank：
+## 8.6 按秩合并与路径压缩最坏情形：单次路径与序列总成本
+
+分析按秩合并与路径压缩最坏情形时，必须先问限制的是一次调用，还是任意一串调用的总工作。
+
+<Term def="对任意合法操作序列约束总成本，再分配到每次操作的分析方法">
+  均摊分析
+</Term>
+讨论整串操作，不是随机输入下的平均，也不是每次操作的时限承诺。令 q
+为初始化后合法 `find/unite` 调用次数，n 为元素数，m=n+q；n≥1
+时，标准组合算法有序列上界：
+
+$$
+O\bigl((n+q)\,\alpha(n)\bigr)=O\bigl(m\,\alpha(n)\bigr)
+$$
+
+这个式子说，把初始化也计入后，整串操作的总工作很小；这里的 α 是增长极慢的<Term def="增长极慢、用于描述并查集序列成本界的数学函数">逆阿克曼函数</Term>，不是程序中的常量函数。
+
+这是一项引用的经典分析结果，不由前面的倍增论证直接推出。本章只推导对数路径界，不假装用一个小实验证明逆阿克曼界。Princeton 的算法课程实现说明同时列出单次最坏 Θ(log n) 与组合序列界，可交叉核对。它使用路径减半；作者公开 C++ 实现与本章使用完整路径压缩，两者不要逐行等同。
+
+平衡地合并 n 个单点后，有的深叶尚未被查询。第一次查询该叶仍可走 Θ(log n) 条边，然后才压缩。因此“每次最坏 O(α(n))”是错误结论。实验显示的是具体路径边数；TypeScript 演示另有复制状态、计算布局和故障对比的成本，不拿界面运行时间冒充核心算法复杂度。n=0 只允许构造，不存在合法编号可查。
+
+## 8.7 并查集应用：逐步开门与生成森林
+
+一个并查集应用是构造<Term def="在每个连通区域内连通全部顶点且不含环的边集合">生成森林</Term>：按候选门的顺序尝试
+`unite(a,b)`；成功才开门，失败就拒绝，因为两房间已连通，再开会形成环。若候选图连通，最终得到一棵树；若候选图不连通，就只得到多棵树，不能谎称全部房间可达。
+
+这可用于随机迷宫的通路选择（先打乱候选门），也能给增量无向连通查询提供分组。若还想求最小总权重的连接方案，才需先按边权排序、再应用同样的接受规则；仅有并查集而没有排序不能保证最小权重。本章例子固定候选顺序，不声称随机或最优。
+
+内部的 `parent` 边未必是选中的门，例如 `unite(7,1)` 接的是两个根。若要输出通路，必须另存被接受的原始端点。练习 3 会保存这些端点并测试含环、重复和不连通输入。
+
+## C++17：五段按顺序拼成一个文件
+
+以下是本站独立编写的完整有界实现，不是作者代码的转录。将**片段 1–5 按顺序**复制到 `dsu.cpp`（不要复制练习的替换片段），用 `clang++ -std=c++17 -Wall -Wextra -Werror dsu.cpp -o dsu && ./dsu` 编译运行。它不依赖省略的头文件或外部库；练习代码另有明确插入位置。
+
+### 片段 1：先验证容量，再分配
+
+元素个数只能是 0–16，编号必须在 `[0,n)`。两个输入的合并要在任何压缩之前验证两个编号，保证坏的第二编号也不会留下半次修改。数组是私有状态，不支持导入外部父指针。
 
 ```cpp
-explicit DisjSets(int count) : parent(count, -1) {}
+#include <cassert>
+#include <iostream>
+#include <numeric>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+class Dsu {
+    std::vector<int> parent_, rank_;
+    void check(int x) const {
+        if (x < 0 || x >= static_cast<int>(parent_.size()))
+            throw std::out_of_range("id");
+    }
+public:
+    explicit Dsu(int n) {
+        if (n < 0 || n > 16) throw std::invalid_argument("count");
+        parent_.resize(n);
+        rank_.assign(n, 0);
+        std::iota(parent_.begin(), parent_.end(), 0);
+    }
+```
 
-int find(int x) const {
-    if (parent[x] < 0) return x;
-    return find(parent[x]);
+### 片段 2：两遍查找，不靠递归栈
+
+第一遍只沿边找根。第二遍必须先保存 `next`，再改父指针；否则继续读取被改写的父指针会直接跳到根，漏掉原路径中间节点。根和单点自然不会进入循环。
+
+```cpp
+    int find(int x) {
+        check(x);
+        int root = x;
+        while (parent_[root] != root) root = parent_[root];
+        while (parent_[x] != x) {
+            int next = parent_[x];
+            parent_[x] = root;
+            x = next;
+        }
+        return root;
+    }
+```
+
+### 片段 3：只连接不同的根
+
+`a==b` 的早返回要在增秩之前。不同秩时选择高秩根；相同秩时用编号打破平局并把新根秩加一。返回值区分“发生了合并”和“本来就在一起”，应用层可以据此决定是否开门。
+
+```cpp
+    bool unite(int a, int b) {
+        check(a); check(b);
+        a = find(a); b = find(b);
+        if (a == b) return false;
+        if (rank_[a] < rank_[b] ||
+            (rank_[a] == rank_[b] && a > b)) std::swap(a, b);
+        parent_[b] = a;
+        if (rank_[a] == rank_[b]) ++rank_[a];
+        return true;
+    }
+```
+
+### 片段 4：只读观测口
+
+测试和图形要能区分“逻辑同组”与“具体树形”。这里返回只读引用用于断言，没有写入外部数组或恢复任意图的接口。
+
+```cpp
+    const std::vector<int>& parents() const { return parent_; }
+    const std::vector<int>& ranks() const { return rank_; }
+};
+```
+
+### 片段 5：主程序确实改变一条父边
+
+初始树由合法操作构造。第二次连接 7 与 1 是冗余合并；断言它不能再增加秩。输出来自这份程序，不是预先录制的示意结果。
+
+```cpp
+int main() {
+    Dsu d(8);
+    for (auto [a, b] : std::vector<std::pair<int, int>>{
+             {0,1}, {2,3}, {0,2}, {4,5}, {6,7}, {4,6}})
+        assert(d.unite(a, b));
+    assert(d.parents()[7] == 6 && d.ranks()[4] == 2);
+    assert(d.find(7) == 4);
+    assert(d.parents()[7] == 4 && d.ranks()[4] == 2);
+    assert(d.unite(7, 1));
+    const auto ranks = d.ranks();
+    assert(!d.unite(7, 1) && d.ranks() == ranks);
+    assert(d.find(7) == 0);
+    std::cout << "root=" << d.find(7)
+              << " rank=" << d.ranks()[0] << '\n';
 }
 ```
 
+结果应为 `root=0 rank=3`。`find(7)` 的第一次返回值是 4；合并后代表变成 0，是合法变化，不是编号损坏。不要用 `-DNDEBUG` 编译这个断言驱动的小程序，否则断言中的演示操作会被移除。实际库接口本身不依赖断言执行。
 
-不带 heuristic 时，`union(root1,root2)` 可简单让一个 root 指向另一个。N-1 次精心安排的 union 能造出 height N-1 chain，使 find O(N)。Array representation 紧凑，但性能完全取决于 tree shape。
+## 常见误区：看见树变了，还要检查关系是否变了
 
-官方实现明确假设 `unionSets` 收到两个 distinct roots，并省略 bounds/error checks。现代安全 wrapper 常先调用 find：
+<Callout type="trap" title="任意改 parent 就算合并？">
+  **现象 →** 错误模式把 7 接到 1 后，看似出现了跨组连边。**原因 →** 7
+  不是根，原组被拆散；7 与 4、5、6 不再同组。**修法 →** 分别 find
+  后连接两个不同根；先重置再与正确 union 比较。
+</Callout>
+
+<Callout type="trap" title="rank 等于大小或压缩后的实高？">
+  **现象 →** 压缩后树只有一层，根仍显示 r2。**原因 →** 秩记录合并历史；大小为
+  4，实高为 1，三者并不相同。**修法 →**
+  保留秩；需要大小就另行查询或维护根的大小，不把秩改小。
+</Callout>
+
+<Callout type="trap" title="近常数意味着任何一次都不会慢？">
+  **现象 →** 第一次查找深叶仍遍历多条边。**原因 →**
+  序列均摊界不是每次最坏界，路径要被访问后才会压缩。**修法 →**
+  分别报告单次对数级最坏路径、整串逆阿克曼均摊成本。
+</Callout>
+
+## 小结与练习
+
+- 同组关系必须自反、对称、传递；这里只支持合并。
+- 合并改根，查找压路径；秩、大小、实高分开看。
+- 单次可走对数路径，组合序列才有极低均摊界。
+
+<Exercises>
+
+**问题 1：让两棵树都变矮，而不改秩**
+
+先预测初始 `find(3)` 与 `find(7)` 各改变谁的父指针；在实验里分别执行。再把片段 5 的 `main` **整体替换**为下面答案，验证两棵树压缩后都为一层、根秩不变、原分组不变。为什么只压缩 7 并不证明任意树已全部变平？
+
+<Answer>
+
+3 原本经 2 到 0，7 原本经 6 到 4；只改变 `parent[3]` 和 `parent[7]`。这里恰好每棵树只有一个深叶，所以各访问一次就变平；更大的树可能还有从未访问的深分支。替换程序实际验证了本例所有节点的父指针和秩，而不是只检查返回值。
 
 ```cpp
-bool unite(int a, int b) {
-    int rootA = find(a);
-    int rootB = find(b);
-    if (rootA == rootB) return false;
-    unionRoots(rootA, rootB);
-    return true;
+int main() {
+    Dsu d(8);
+    for (auto [a, b] : std::vector<std::pair<int, int>>{
+             {0,1}, {2,3}, {0,2}, {4,5}, {6,7}, {4,6}})
+        d.unite(a, b);
+    const auto ranks = d.ranks();
+    assert(d.find(3) == 0 && d.find(7) == 4);
+    assert(d.ranks() == ranks);
+    assert((d.parents() == std::vector<int>{0,0,0,0,4,4,4,4}));
+    assert(d.ranks()[0] == 2 && d.ranks()[4] == 2);
 }
 ```
 
+</Answer>
 
-## 8.4 Smart Union Algorithms
+**问题 2：真正增加“集合大小”查询**
 
-智能合并算法（）有两种常见策略：
+给类增加 `componentSize(x)`，不要返回 `rank_[find(x)]`。本练习不增加缓存，而是遍历所有编号判断是否同组。说明其代价，并用 4 个元素验证：大小相同不表示秩等于大小。
 
-- union-by-size：smaller tree root 指向 larger tree root；
-- union-by-rank：lower rank root 指向 higher rank root，rank 相等时任选新 root 并把 rank 加1。
+<Answer>
 
-
-若 rank 从0开始，rank 为 r 的 root 至少包含：
-
-$$
-2^r\ \text{elements}
-$$
-
-因为 rank 只在两棵相同 rank trees 合并时增加。因此 rank 至多 floor(log2 N)，单独使用 union-by-rank 就给出 O(log N) find。
-
-第3版用 `s[root]` 的负数编码 rank：更负表示更深；相等时把新 root 再减1。这个值在加入 path compression 后不再等于真实 height，只是 monotonic upper-bound rank，不能在压缩后重新解释成精确树高。
-
-## 8.5 Path Compression
-
-路径压缩（）把一次昂贵 find 的路径改短：
+把下面成员函数插在片段 4 的 `};` **之前**，仍属于 `public`。这是实际实现修改。每个 `find` 可能压缩路径，因而该查询不是只读操作；它需要 n 次查询，按单次最坏界给出 O(n log n) 上界，不是常数时间大小接口。生产用途可在根另存大小并于成功合并时更新，但不要因此偷换本章的秩。
 
 ```cpp
-int find(int x) {
-    if (parent[x] < 0) return x;
-    return parent[x] = find(parent[x]);
+    int componentSize(int x) {
+        const int root = find(x);
+        int count = 0;
+        for (int i = 0; i < static_cast<int>(parent_.size()); ++i)
+            if (find(i) == root) ++count;
+        return count;
+    }
+```
+
+再把片段 5 **替换**为以下测试；四个点先组成两棵秩 1 的树，再合并出秩 2，大小为 4。冗余合并不会增大集合或秩。
+
+```cpp
+int main() {
+    Dsu d(4);
+    assert(d.componentSize(0) == 1);
+    d.unite(0, 1); d.unite(2, 3); d.unite(0, 2);
+    assert(d.componentSize(3) == 4);
+    assert(d.ranks()[d.find(3)] == 2);
+    assert(!d.unite(1, 3));
+    assert(d.componentSize(0) == 4 && d.ranks()[0] == 2);
 }
 ```
 
+</Answer>
 
-Assignment 必须接收 recursive find 的 root，而不是只改成 grandparent 后错误终止。Compression 不改变 partition，也不要求更新 rank：rank 用于未来 root-to-root union 决策，不是实时 height。
+**问题 3：开门算法为什么必须保存原始端点**
 
-可以用 iterative two-pass 避免深递归：第一遍找 root，第二遍沿原路径改 parent。若输入可能来自不可信 serialized state，还应检测 out-of-range parent 和 cycles，否则 find 可能无限循环。
+把片段 5 改成一个开门实验：4 个房间，候选门依次为 `(0,1)、(1,2)、(2,0)、(0,1)`。哪些门被接受？房间 3 会怎样？若输入是有方向的通道，还能用这个规则判断有向可达性吗？
 
-## 8.6 Worst Case for Union-by-Rank and Path Compression
+<Answer>
 
-按秩合并与路径压缩最坏情形（）不是简单把两个 O(log N) 相加。对 N 个 elements、m 次 make/find/union operations，经典 bound 为：
-
-$$
-O\bigl(m\,\alpha(N)\bigr)
-$$
-
-其中 alpha 是 inverse Ackermann function，增长极慢，在任何可实际存储的 N 上都小于很小常数。严格说它不是字面 O(1) worst-case per operation；这是 sequence-level amortized result。
-
-
-只用 path compression 而任意 union，或只用 union-by-rank 而不 compression，bound 和常数都不同。测试要分别关闭 heuristics，构造 chain、balanced merges 和重复 find，证明优化真正生效。
-
-## 8.7 An Application
-
-并查集应用（）的代表是 Kruskal minimum spanning tree：
-
-1. 把 edges 按 weight 升序；
-2. 若 `find(u)!=find(v)`，接受 edge 并 unite；
-3. 若 roots 相同，拒绝 edge，因为它会在当前 forest 中成环；
-4. 接受 V-1 条 edges 后结束。
-
+只接受前两扇门；第三扇闭成环，第四扇重复。房间 3 孤立，因此结果是生成森林而非一棵覆盖所有房间的树。第二次合并可能产生内部 `parent[2]=0`，却不代表打开了 0 到 2 的门，故下面代码保存的是原始 `(1,2)`。有向可达不满足对称性，不能直接用并查集代替。
 
 ```cpp
-for (const Edge& edge : edgesByWeight) {
-    if (sets.find(edge.u) == sets.find(edge.v))
-        continue;
-    tree.push_back(edge);
-    sets.unite(edge.u, edge.v);
+int main() {
+    Dsu rooms(4);
+    std::vector<std::pair<int, int>> opened;
+    for (auto edge : std::vector<std::pair<int, int>>{
+             {0,1}, {1,2}, {2,0}, {0,1}})
+        if (rooms.unite(edge.first, edge.second))
+            opened.push_back(edge);
+    assert((opened == std::vector<std::pair<int, int>>{{0,1},{1,2}}));
+    assert(rooms.find(0) == rooms.find(2));
+    assert(rooms.find(0) != rooms.find(3));
+    assert(rooms.parents()[2] == 0);
 }
 ```
 
-Sorting 成本 O(E log E)，DSU 部分约 O(E alpha(V))。若 graph 不连通，输出是 minimum spanning forest；不能在不足 V-1 条 edges 时仍宣称得到 spanning tree。
-
-Randomized maze generation 也可把 cells 初始化为 singleton sets，随机选相邻墙；若两侧 roots 不同就拆墙并 union，直到全连通。DSU 保证不形成 cycle，从而生成 spanning tree maze。
-
-## 统一验证：partition正确性优先于速度
-
-
-## 本章回顾
-
-1. Equivalence relation与partition互相定义，representative编号本身不属于业务语义。
-2. Dynamic equivalence只支持classes合并和find，不支持split/delete。
-3. Parent array把classes表示成rooted trees；naive union可退化成linear chain。
-4. Union-by-size/rank把较小较浅tree挂到较大较深root，限制height。
-5. Path compression在find返回时重写整条路径，不改变partition。
-6. Rank在压缩后不是精确height。
-7. 两种heuristics组合给出O(m alpha(N)) amortized sequence bound。
-8. Kruskal用find拒绝成环edge，用union维护forest components。
-
+</Answer>
+</Exercises>
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="等价关系">
+    同时满足自己与自己有关、关系可反向、关系可传递的“同组”规则。
+  </GlossaryItem>
+  <GlossaryItem term="等价类">
+    在同组规则下，与某元素归入一起的全部元素。
+  </GlossaryItem>
+  <GlossaryItem term="划分">
+    把全部元素分到互不重叠的组，每个元素恰有一个归属。
+  </GlossaryItem>
+  <GlossaryItem term="动态等价问题">
+    不断合并组，并查询元素当前所属的组；这里不包括拆组。
+  </GlossaryItem>
+  <GlossaryItem term="并查集">专门维护合并和组代表查询的结构。</GlossaryItem>
+  <GlossaryItem term="父指针森林">
+    用每个节点的父编号连接起来的一组树。
+  </GlossaryItem>
+  <GlossaryItem term="根">
+    父编号等于自身、作为当前整组代表的节点。
+  </GlossaryItem>
+  <GlossaryItem term="按大小合并">
+    让元素少的组的根接到元素多的组的根。
+  </GlossaryItem>
+  <GlossaryItem term="按秩合并">
+    小秩根接向大秩根；相同秩合并才把新根的秩增加一。
+  </GlossaryItem>
+  <GlossaryItem term="秩">
+    合并历史留下的高度上界，不是元素数，压缩后也不一定是实高。
+  </GlossaryItem>
+  <GlossaryItem term="路径压缩">
+    查找后，把所访问路径上的节点直接接到根。
+  </GlossaryItem>
+  <GlossaryItem term="均摊分析">
+    为任意一整串合法操作计算成本保证，而非承诺每次都一样快。
+  </GlossaryItem>
+  <GlossaryItem term="逆阿克曼函数">
+    增长极慢的数学函数，描述两种并查集优化结合后的序列成本。
+  </GlossaryItem>
+  <GlossaryItem term="生成森林">
+    保留各连通区域内部连通性而去掉所有环的边集合。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与可访问范围
+
+- **目录范围**：[InformIT 出版社第 3 版目录](https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461)，ISBN 9780321441461，第 8 章七节依次覆盖等价关系、动态等价、基本结构、智能合并、路径压缩、组合最坏界和应用。目录不是原书完整正文证据。
+- **作者公开代码**：[Mark Allen Weiss 的 DisjSets.h](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/DisjSets.h) 与 [DisjSets.cpp](https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/DisjSets.cpp)，核对零起始编号、根的负数表示、按秩合并、完整压缩，以及作者示例明确省略检查、要求不同根的前提。本站实现另加边界检查和任意元素包装接口。
+- **算法课程正文**：[Princeton Algorithms §1.5 Union-Find](https://algs4.cs.princeton.edu/15uf/) 核对等价性质、动态连通、加权合并和路径优化；[配套 UF 源码与分析说明](https://algs4.cs.princeton.edu/15uf/UF.java.html) 核对按秩规则、单次最坏对数界与序列均摊界。其路径减半实现不是本章完整压缩的逐行来源。
+
+- **应用交叉核对**：[Princeton KruskalMST 课程实现](https://algs4.cs.princeton.edu/43mst/KruskalMST.java.html) 展示先排序、再检测两端是否同组、成功才保存原始边的步骤，并明确不连通时返回生成森林。开门算例是本站对此接受规则的无权重改写。
+
+以上链接于 2026-09-24（北京时间）实际 GET 返回 200，已留存响应正文、访问时间及 SHA-256 作为工作证据。本文仅以权威目录界定原书范围，再以可访问作者资料和算法课程独立核对事实；不宣称拿到原书全文或开放改编授权。代码、算例与教学组织为本站独立编写。完整可运行程序就是上方片段 1–5 的顺序拼接，不包含任何未展示的库实现。
+
+<Attribution
+  mode="independent-rewrite"
+  adaptedFrom="Mark Allen Weiss，《Data Structures and Algorithm Analysis in C++》第3版，第8章 The Disjoint Set Class"
+  adaptedUrl="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  sourceBasis="outline-only"
+/>

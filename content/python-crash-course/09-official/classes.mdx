@@ -1,249 +1,474 @@
 ---
-title: "第9章：Classes"
+title: "第9章：类与实例（Classes）"
 type: C
 section: "Part I · Basics"
 order: 9
-description: "用class和instance组织state与behavior，比较inheritance、composition、module和标准库边界。"
+description: "追踪实例状态与方法绑定，用可视化辨认共享引用，再实现属性更新、继承、组合和模块导入。"
 demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
-draft: false
+sourceMode: independent-rewrite
+practiceMode: code
+officialUnitId: "pcc3-09"
+draft: true
+qualityVersion: 2
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
-import { Step, Stepper } from "@/components/mdx/stepper";
 import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccClassesLab } from "@/components/mdx/python-crash-course/v2/classes";
+
+{/* 知识点清单与可视化决策：①类/实例/__init__/self/属性/方法绑定→对象引用图+里程仪表+代码，练习1；②默认值/直接修改/方法更新/递增/类属性共享→双仪表+列表引用分叉+错误开关，练习1、2；③继承/super/重写→调用代码对照，练习3；④组合/实例作属性→Battery持有关系代码，练习3；⑤模块/单类与多类导入/别名/整个模块/标准库random/编码风格→三文件代码对照，练习3。陌生术语全部进入Term与Glossary；五组知识点，异构度高，独立组件PccClassesLab，文件pcc-classes-lab.tsx。 */}
+
+<div className="min-w-0 [&_button]:min-h-11 [&_button]:min-w-11">
 
 <Objectives>
 
-- 能描述class、`__init__`、self、attributes和methods如何为多个instances建立独立状态
-- 能实现有invariant的attribute updates，比较direct assignment、update method与increment method
-- 能分析inheritance、composition、class imports和standard library依赖，设计可测试对象边界
+- 能解释两个独立对象与两个名字指向同一对象的区别，并指出一次调用中的 `self`。
+- 能改出拒绝里程倒退、互不串改维修记录的车辆程序，并拆到可导入的文件中。
+- 能回答：电动车应继承汽车还是电池？为什么调用 `super()` 后，里程和电池容量仍属于不同的对象？
 
 </Objectives>
 
-## 为什么class把state与behavior放在同一owner下
+## 为什么要把记录和操作放在一起
 
-dictionary能保存record，function能处理输入；class进一步让一组attributes与维护它们的methods共享明确owner。`Dog`描述构造和行为，`my_dog`、`your_dog`是不同instances，各自有name、age，却复用同一method implementation。
+工厂里两辆车使用相同的生产图纸，但出厂后各有自己的里程和维修记录。给甲车登记一次保养，不应该把乙车的记录一起改掉。
 
-先预测两个Dog实例中修改一个age是否影响另一个；method调用时self来自哪里；class body里的mutable list会不会被所有instances共享。理解instance identity后，inheritance与composition才不会变成只背语法。
+若每次都分开保存车名、里程和更新规则，很容易把规则用到错误的车上。本章把这些记录和操作放在一起，同时看清哪些东西各车独有，哪些东西确实共用。
 
-<Term def="由class构造、拥有独立identity与instance attributes，并通过methods接收self的运行时对象。">class instance</Term>
+## 1. 创建和使用类：一次调用究竟作用于谁
 
-## Creating and Using a Class
+### 图纸与实际对象
 
-`class Dog:`执行class body并创建class object。`__init__`在构造后初始化instance，首个parameter按约定叫self；调用`Dog("Willie", 6)`时Python自动把新instance绑定给self，再绑定其余arguments。
+用来定义一类对象的数据和行为的代码叫 <Term def="描述一类对象具有哪些数据和行为的定义。">类</Term>（class）。调用类得到一个 <Term def="由类创建的具体对象，拥有自己的身份和状态。">实例</Term>（instance）。创建两次 `Car("A")`，即使名字相等，也不是同一辆车。实验里的两个圆圈表示两个对象，不是两个变量。
 
-<Stepper>
-  <Step title="切换两个Dog instances">
-  </Step>
-  <Step title="区分class definition与instance state">
-    method code位于class，`self.name`和`self.age`位于每个instance；调用使用当前receiver。
-  </Step>
-  <Step title="用identity与state测试独立性">
-    修改my_dog.age后断言your_dog.age不变；若共享，检查是否误用了class-level mutable attribute。
-  </Step>
-</Stepper>
+Python 创建实例后调用 <Term def="新实例创建之后执行的初始化方法，不负责返回新对象。">初始化方法</Term> `__init__` 初始化数据；它不是普通的“返回新车”函数，不应返回非 `None` 的值。下方完整的 `Car` 定义可保存为 `car.py`，在任何使用它的代码之前执行。
 
-<Term def="保存在具体instance上的命名状态，通过self.attribute读取和更新。">instance attribute</Term>
+### 属性、方法和接收者
+
+对象上以名字访问的数据叫 <Term def="通过对象点号访问的命名数据，例如每辆车自己的里程。">属性</Term>。`self.odometer = 0` 每初始化一次就给当前车设置默认里程；`self.services = []` 每次创建新的列表。不要把“每次都是零”和“所有车共用一份记录”混为一谈。
+
+定义在类中、通过实例调用的函数称为 <Term def="通过实例调用时，自动接收该实例的函数行为。">方法</Term>。普通实例方法的首个参数按约定写作 <Term def="普通实例方法的第一个参数，指向这次调用的接收对象。">self</Term>，不是 Python 关键字。在后面的引用图第 3、4 步，调用路线会分别落到 A、B，仪表随之改变。
 
 ```python
-class Dog:
-    """A simple model of a dog."""
-
-    def __init__(self, name: str, age: int) -> None:
-        self.name = name
-        self.age = age
-
-    def sit(self) -> str:
-        return f"{self.name} is now sitting."
-
-    def roll_over(self) -> str:
-        return f"{self.name} rolled over!"
-
-my_dog = Dog("Willie", 6)
-your_dog = Dog("Lucy", 3)
-print(my_dog.sit())
-print(your_dog.roll_over())
-```
-
-### `__init__`建立合法初始状态
-
-constructor不应只机械赋值。若age必须非负、name不能为空，应在创建时验证，避免系统中出现半合法instance。复杂I/O如network fetch通常不放在`__init__`，否则构造难测试且可能部分失败；可用classmethod factory或单独load function。
-
-`__init__`不返回domain value，必须返回None。需要创建不同配置时提供清晰factory methods，而不是用许多bool parameters控制构造路径。
-
-## Working with Classes and Instances
-
-instance attribute可直接赋值，也可通过method更新。direct assignment最短，但任何caller都能绕过规则；method可验证transition、记录原因并保持失败原子性。是否封装取决于state是否有invariant，不是所有attribute都必须写getter/setter。
-
-<Stepper>
-  <Step title="切换四种odometer更新">
-  </Step>
-  <Step title="先验证candidate，再commit state">
-    倒退里程应raise且原value不变；不要先赋值再发现非法。
-  </Step>
-  <Step title="让method name表达transition">
-    update设置absolute value，increment增加delta；调用者能从name读出语义。
-  </Step>
-</Stepper>
-
-<Term def="对象在任何public operation前后都必须保持的合法状态条件。">object invariant</Term>
-
-```python
+# car.py
 class Car:
-    def __init__(self, make: str, model: str, year: int) -> None:
-        self.make = make
-        self.model = model
-        self.year = year
-        self.odometer_reading = 0
+    """A car with nondecreasing recorded mileage."""
 
-    def update_odometer(self, mileage: int) -> None:
-        if mileage < self.odometer_reading:
-            raise ValueError("odometer cannot roll back")
-        self.odometer_reading = mileage
+    kind = "road vehicle"
 
-    def increment_odometer(self, miles: int) -> None:
-        if miles < 0:
-            raise ValueError("increment must be non-negative")
-        self.odometer_reading += miles
+    def __init__(self, name):
+        self.name = name
+        self.odometer = 0
+        self.services = []
+
+    def update_odometer(self, mileage):
+        if mileage < self.odometer:
+            raise ValueError("mileage cannot go backwards")
+        self.odometer = mileage
+
+    def increment_odometer(self, distance):
+        if distance < 0:
+            raise ValueError("distance must be nonnegative")
+        self.update_odometer(self.odometer + distance)
+
+    def fill_gas_tank(self):
+        return "gas tank filled"
 ```
 
-### class attribute与instance attribute
+这里先检查再赋值，所以拒绝更新不会留下半改的里程；`increment_odometer` 把增量转换成总里程，再复用更新规则。示例假设输入是普通非负整数，未实现字符串、浮点特殊值等完整输入校验。
 
-在class body定义的name由class共享；通过self赋值通常创建instance attribute并遮蔽class value。共享immutable constant常合理，共享mutable list/dict容易让一个instance修改所有对象可见状态。每个instance需要独立collection时在`__init__`创建。
-
-查看`obj.__dict__`可帮助学习instance state，但业务代码不应绕过public methods直接依赖内部布局。下划线前缀表达internal，不提供强制privacy；真正边界来自API与团队约定。
-
-## Inheritance：只在真正is-a时扩展
-
-`class ElectricCar(Car)`继承base methods。subclass `__init__`先用`super().__init__`建立Car部分，再添加battery state；override可替换不适用behavior。subclass仍应能在期待Car的地方保持base contract，不能把参数、return或invariant改得互不兼容。
-
-<Term def="subclass复用并扩展base class，同时应维持其公开behavior contract的is-a关系。">inheritance contract</Term>
+通过 `a.update_odometer` 取出方法时，Python 会记住接收对象，这叫 <Term def="把类中的函数和本次接收实例配成可调用的方法对象。">方法绑定</Term>。对这里的普通方法，`a.update_odometer(40)` 相当于 `Car.update_odometer(a, 40)`。取出方法暂存起来也不会丢失接收者。
 
 ```python
-class ElectricCar(Car):
-    def __init__(self, make: str, model: str, year: int) -> None:
-        super().__init__(make, model, year)
-        self.battery = Battery(75)
-
-    def fill_gas_tank(self) -> None:
-        raise RuntimeError("electric cars do not have gas tanks")
+# 在 Car 定义之后执行
+a, b = Car("A"), Car("B")
+alias = a
+update = alias.update_odometer
+assert update.__self__ is a
+update(40)
+b.increment_odometer(20)
+assert alias is a and a is not b
+assert (a.odometer, b.odometer) == (40, 20)
 ```
 
-这个override暴露一个设计问题：如果所有Car API都假定有油箱，ElectricCar也许不是真正substitutable。可把能源行为拆成composition，或把共同base缩小到确实共享的移动/描述行为。继承层级不是复用代码的默认工具。
+`alias = a` 只增加一个指向 A 的名字，没有运行 `Car(...)`。这种指向关系叫 <Term def="名字或属性指向某个对象的关系；赋值不意味着复制对象。">引用</Term>。`is` 检查是不是同一个对象；值相同不是身份相同。
 
-### super不是“调用父类所有东西”
+## 2. 修改属性：独立状态与共享状态
 
-`super()`按method resolution order查找下一个实现，支持multiple inheritance的协作调用。初学单继承中它通常调用base `__init__`，但不要把它理解为固定父对象。每层constructor使用兼容signature并恰好一次交接。
+### 直接赋值、更新总值、增加差量
 
-## Composition：has-a关系让职责更聚焦
-
-Battery有独立state和behavior，把它作为ElectricCar attribute比继续把所有methods堆进ElectricCar更清楚。composition允许替换不同battery实现，测试也能单独验证range计算；owner负责创建或接收dependency。
-
-<Stepper>
-  <Step title="切换inheritance、composition、module或stdlib">
-  </Step>
-  <Step title="先描述is-a还是has-a">
-    只有consumer真正把subclass当base使用时继承才有价值；独立能力优先composition。
-  </Step>
-  <Step title="检查依赖如何进入与如何替换">
-    constructor创建简单value object；外部I/O、random等不确定依赖可注入以便测试。
-  </Step>
-</Stepper>
-
-<Term def="一个object通过attribute持有并委托另一个object，表达has-a而非is-a关系。">object composition</Term>
+修改属性有三种常见写法。直接赋值简单，却绕过你写在方法里的检查；更新方法接收新总值；递增方法接收差量。Python 不会因为类里存在更新方法，就禁止别人直接给属性赋值。
 
 ```python
+# 接着上一段执行：A=40，B=20
+b.odometer = 30                 # 直接写总值
+b.update_odometer(50)           # 检查后写总值
+b.increment_odometer(5)         # 在原值上加5
+assert b.odometer == 55
+for invalid in (54, -1):
+    before = b.odometer
+    try:
+        b.update_odometer(invalid)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("rollback was accepted")
+    assert b.odometer == before
+b.update_odometer(55)           # 相等合法；没有倒退
+assert a.odometer == 40
+```
+
+图中最后一步拒绝把 A 从 40 改回 10：指针不回退，并出现拒绝标记。这不是 Python 自动提供的保护，而是 `if` 和 `raise` 实现的规则。
+
+### 为什么两辆不同的车也可能共用列表
+
+定义在类体里的数据是 <Term def="定义在类对象上的属性；实例没有同名属性时可以从类中查到它。">类属性</Term>。`Car.kind` 适合表达共同分类。列表若放在类体里，则也只有一份；新建两个实例不会自动复制这份列表。看下面的错误模式，再在实验中对比指向列表的连线。
+
+```python
+class SharedCar:
+    services = []              # 错误：每辆车的维修记录不应共用
+
+x, y = SharedCar(), SharedCar()
+x.services.append("check")
+assert x is not y
+assert x.services is y.services
+assert y.services == ["check"]
+x.services = ["private"]       # 在x上建立同名属性，不是改类属性
+assert x.services == ["private"]
+assert y.services == SharedCar.services == ["check"]
+```
+
+对这里的普通数据属性，读取先找实例上的同名属性，没有才找类；`append` 修改已经找到的列表，而 `x.services = ...` 给实例设置同名属性。修复本例应在 `__init__` 中使用 `self.services = []`，不要在类体或可变默认参数里共用列表。
+
+## 对象引用实验：先预测，再单步验证
+
+**先预测**：第 3 步通过 `alias` 把里程改成 40，几个仪表会动？第 5 步向 A 的维修列表追加记录，B 能看到吗？打开“共享列表错误模式”后，再做同一预测。
+
+<PccClassesLab />
+
+操作路线：先保留“每辆车独立列表”，逐步走到追加记录；再切换错误模式，观察两条线是否汇合到同一个列表。指针显示里程，列表格显示记录数量；这些都不是评分。切换模式会保留当前步骤，以同一组操作重算另一种定义的结果。播放、暂停、前后单步和拖进度都可用；“重置实验”恢复初始状态与独立列表。
+
+这是一段固定 Python 操作的浏览器示意，不是 Python 解释器。A、B 是教学用对象编号，不是实际内存地址；回退步骤是重新展示历史快照，不是在 Python 中撤销副作用。键盘可操作所有按钮与进度条；减少动态效果时用单步查看。
+
+## 3. 继承：沿用父类能力，但不要漏掉初始化
+
+当电动车仍应具备汽车的里程操作时，可以使用 <Term def="子类沿用并扩展父类行为的关系，表示一种更具体的同类对象。">继承</Term>。`ElectricCar(Car)` 声明电动车是汽车的一种；子类没定义的普通方法可沿父类查找。它不是把父类对象塞进子类对象，里程仍在同一辆电动车实例上。
+
+子类定义自己的 `__init__` 后，不会自动再执行父类的版本。用 <Term def="按方法查找顺序从当前类之后继续查找实现的代理。">super()</Term> 调用下一份初始化实现。本章单继承情形中就是 `Car.__init__`，传入的仍是同一个 `self`。不要把它泛化成“永远直接找父类”，多继承的查找顺序更复杂。
+
+子类也能提供同名方法来 <Term def="子类提供同名方法，使普通实例调用采用子类的行为。">重写</Term> 父类行为。电动车的加油操作返回“不需要油箱”，而普通车保持原行为。下面同一段代码同时展示继承调用与电池持有关系。
+
+## 4. 组合：电池是车的部件，不是一种车
+
+将另一个实例保存在属性中叫 <Term def="让对象持有另一个对象并使用其能力，表示拥有部件的关系。">组合</Term>。`ElectricCar` 继承 `Car`，却通过 `self.battery` 持有 `Battery`；读取容量要经过 `ev.battery.capacity_kwh`。电池的容量归电池对象，汽车的里程归汽车对象。两者都可以独立修改，不必塞进庞大的车辆类。
+
+```python
+# electric_car.py（与car.py放在同一目录）
+from car import Car
+
+
 class Battery:
-    def __init__(self, size_kwh: int = 40) -> None:
-        self.size_kwh = size_kwh
+    """An independently replaceable battery."""
 
-    def estimated_range(self) -> int:
-        return 260 if self.size_kwh <= 40 else 315
+    def __init__(self, capacity_kwh=60):
+        self.capacity_kwh = capacity_kwh
+
+    def describe(self):
+        return f"{self.capacity_kwh} kWh"
+
 
 class ElectricCar(Car):
-    def __init__(self, make: str, model: str, year: int, battery: Battery) -> None:
-        super().__init__(make, model, year)
-        self.battery = battery
+    """A car that owns a battery instead of using a gas tank."""
+
+    def __init__(self, name):
+        super().__init__(name)
+        self.battery = Battery()
+
+    def fill_gas_tank(self):
+        return "no gas tank"
 ```
 
-### dependency injection不等于复杂framework
-
-把Battery通过constructor传入就是最小dependency injection。测试可传fake/stub，production传真实object；ElectricCar不负责从配置或网络构造所有依赖。只有生命周期简单且实现固定的value object才适合内部创建。
-
-## Importing Classes与Modules
-
-一个module可存多个相关classes，`from car import Car, ElectricCar`导入具体names；`import car`保留`car.Car`namespace，来源更明显。随着项目增长，让module围绕一致职责，不必机械“一类一文件”，也不要把不相关classes塞进通用models.py。
-
-import应无交互side effect。演示代码放进main guard，公共class module只定义types和helpers。循环imports通常说明两个modules同时拥有彼此职责，应提取共同contract或调整dependency direction。
-
-## The Python Standard Library
-
-standard library提供random、pathlib、datetime等可靠模块。本章用`random.choice`或`randint`可做骰子和彩票，但random output使测试不稳定。把chooser作为dependency注入，或在测试固定seed并避免依赖具体全局调用顺序。
+按调用关系读代码：`ElectricCar("E")` → 子类初始化 → `super().__init__` 设置同一实例的名字和里程 → `Battery()` 创建第二个对象 → `self.battery` 指向它。`fill_gas_tank` 的普通调用命中子类版本；里程更新则沿用父类版本。以断言验证比仅看类名更可靠：
 
 ```python
-from random import choice
-from collections.abc import Callable, Sequence
-
-def draw_ticket(pool: Sequence[str], choose: Callable = choice) -> str:
-    if not pool:
-        raise ValueError("pool must not be empty")
-    return choose(pool)
+# 在前述定义可用后执行
+ev, other_ev = ElectricCar("E"), ElectricCar("F")
+ev.increment_odometer(12)
+ev.battery.capacity_kwh = 80
+assert isinstance(ev, Car)
+assert ev.odometer == 12
+assert other_ev.odometer == 0
+assert other_ev.battery.capacity_kwh == 60
+assert ev.battery is not other_ev.battery
+assert ev.fill_gas_tank() == "no gas tank"
+assert Car("G").fill_gas_tank() == "gas tank filled"
 ```
 
-不要因为standard library可用就跳过边界：choice空sequence会IndexError，random不适合security token，时间与filesystem同样需要失败策略。工具来源可靠不等于调用永远成功。
+## 5. 导入类、使用标准库与编码风格
 
-## Styling Classes
+### 把定义与使用分开
 
-class names用CapWords，instance和module用lowercase_with_underscores；class定义前后留blank lines。每个class写说明purpose的docstring，method按public到internal或生命周期顺序组织。composition attribute名字应表达role，不只表达concrete type。
+一个可导入的 Python 文件是 <Term def="可由import加载的Python代码单元；本章用.py文件组织类定义。">模块</Term>。先保存前面的 `car.py` 和 `electric_car.py`，再在同一目录创建 `main.py`，从该目录运行 `python3 main.py`。不要把测试过程散落在类定义文件的顶层，否则首次导入时也会执行它们。
 
-review class时先看invariant、state owner、public methods、failure atomicity，再看inheritance是否可替换、composition dependency是否可测试、imports是否单向。getter/setter数量不是封装质量指标，清晰contract才是。
+下列程序覆盖导入单个类、同模块多个类、整个模块以及别名；它们是展示语法的对照，实际项目只选清楚一致的一种，不必重复导入。
 
-<Callout type="trap" title="在class body放空list可让每个instance拥有自己的列表">
-class-level mutable attribute被所有instances共享。每个对象需要独立list时在`__init__`中执行`self.items = []`，并用两个instances测试mutation隔离。
+```python
+# main.py
+from car import Car
+from electric_car import Battery, ElectricCar
+import electric_car
+from electric_car import ElectricCar as EV
+
+fleet = [Car("A"), ElectricCar("E"), EV("F")]
+spare = Battery(80)
+other = electric_car.ElectricCar("G")
+assert isinstance(fleet[1], Car)
+assert isinstance(other.battery, Battery)
+assert spare.describe() == "80 kWh"
+assert fleet[1].fill_gas_tank() == "no gas tank"
+print([car.name for car in fleet])  # ['A', 'E', 'F']
+```
+
+`import electric_car` 绑定模块名，之后写 `electric_car.ElectricCar`；`from ... import ...` 直接绑定类名；`as EV` 只是换一个本地名字，不会生成新类。不要用 `from ... import *`，它隐藏名称来源并可能覆盖已有名字。当前依赖方向是 `main.py` → `electric_car.py` → `car.py`，不要让 `car.py` 反过来导入 `main.py`。
+
+### 标准库 random 也是现成能力
+
+随 Python 安装提供的模块构成 <Term def="随Python提供的模块集合，不必为这些模块另装第三方包。">标准库</Term>。例如 `random` 提供 `randint` 和 `choice`，也提供能拥有独立随机状态的 `Random` 类。本章使用后者，避免修改整个模块共用的随机状态。
+
+```python
+from random import Random
+
+rng = Random(9)
+roll = rng.randint(1, 6)          # 包含1与6两个端点
+picked = rng.choice(["A", "B"])  # 序列必须非空
+assert 1 <= roll <= 6
+assert picked in {"A", "B"}
+replay = Random(9)
+assert (roll, picked) == (
+    replay.randint(1, 6), replay.choice(["A", "B"])
+)
+```
+
+相同种子、相同版本和相同调用顺序便于重现实验；不要把某个随机输出硬编码成跨版本承诺。`choice([])` 会报错，`random` 也不应用来生成密码或安全令牌。本段体现“导入已有能力，再创建并使用对象”，而非每次都自己重写类。
+
+### 风格让对象关系容易读
+
+按 PEP 8，类名采用 `ElectricCar` 这样的 CapWords，方法、属性和模块用 `update_odometer`、`capacity_kwh`、`electric_car.py` 这样的下划线命名。实例方法首参数写 `self`；模块级类之间通常空两行，类内方法之间空一行，简短文档字符串说明职责。前面的三个文件就是对照，不要命名为 `random.py` 遮住标准库。
+
+## 常见误区：观察现象，定位原因
+
+<Callout type="trap" title="两个名字不是两辆车">
+
+**现象 →** 改 `alias.odometer`，`a.odometer` 也变了。<br />
+**原因 →** `alias = a` 只增加引用，二者指向同一对象。<br />
+**修法 →** 需要独立车就再次调用 `Car(...)`；实验中看名字连线是否汇合。
+
 </Callout>
 
-<Callout type="trap" title="为了复用几个methods就应该使用inheritance">
-inheritance声明is-a与substitutability，不只是代码复用。独立职责优先composition或helper function；subclass若频繁禁用base behavior，说明关系可能错误。
+<Callout type="trap" title="不同实例仍可能共享维修记录">
+
+**现象 →** 给 A 追加记录，B 的记录也增加。<br />
+**原因 →** 类体中的 `services = []` 只创建一个列表。<br />
+**修法 →** 在 `__init__` 中写 `self.services = []`；打开实验错误模式看两条列表引用汇合。
+
 </Callout>
 
-## 本章回顾：identity、invariant与关系
+<Callout type="trap" title="有检查方法不代表属性不可直接改">
 
-1. class创建instances，每个instance通过self拥有独立attributes并调用共享methods。
-2. `__init__`建立合法初始state，object invariant应在public transitions前后成立。
-3. inheritance表达is-a并维持base contract，composition表达has-a并聚焦职责。
-4. class imports建立module namespace，standard library依赖仍需失败与测试边界。
-5. 设计质量由state owner、failure atomicity和可替换dependency决定，而非类层级深度。
+**现象 →** `a.odometer = -1` 依然能成功。<br />
+**原因 →** 直接赋值没有调用 `update_odometer` 的检查。<br />
+**修法 →** 约定更新入口，并测试倒退、相等、增长与负增量；不要宣称普通公开属性已强制受保护。
+
+</Callout>
+
+<Callout type="trap" title="子类初始化不会自动叠加">
+
+**现象 →** 电动车更新里程时报属性不存在。<br />
+**原因 →** 子类写了自己的 `__init__`，却漏调父类初始化。<br />
+**修法 →** 本例先 `super().__init__(name)` 再创建电池；不要让电池继承汽车来补里程。
+
+</Callout>
+
+## 小结
+
+- 名字引用对象，普通方法绑定本次接收实例。
+- 每实例初始化列表，方法检查通过后再更新里程。
+- 电动车继承汽车、组合电池；模块组织这些定义。
+
+## 练习：用断言回收预测
 
 <Exercises>
 
-**问题 1：为什么class-level `items = []`会让instances互相污染？**
+**问题 1：预测引用与共享，然后解释图形。** 实验第 5 步中，`alias is a`、`a is b`、`a.services is b.services` 各是什么？切换错误模式后哪一个改变？不要把类属性共享误判成两辆车是同一实例。
 
-<Answer>该list属于class object，未在instance上遮蔽时所有instances通过同一引用访问。任一instance append都会修改共享list。把`self.items = []`放进`__init__`，创建两个对象，向一个append并断言另一个仍为空。</Answer>
+<Answer>
 
-**问题 2：如何让odometer更新在失败时保持atomic？**
+独立模式分别为 `True`、`False`、`False`；错误模式仅第三个变为 `True`。别名连线始终指向 A；变化的是两辆车到底连到两份列表还是一份列表。可以执行下列断言验证修复后的定义：
 
-<Answer>先验证candidate mileage不小于当前值，非法则raise且不赋值；全部检查通过后一次commit `self.odometer_reading = mileage`。测试倒退、相等、增加和负increment，并断言异常后state仍为before。</Answer>
+```python
+left, right = Car("same"), Car("same")
+alias = left
+left.services.append("check")
+assert alias is left and left is not right
+assert left.services is not right.services
+assert right.services == []
+```
 
-**问题 3：ElectricCar的Battery应继承还是composition？为什么？**
+</Answer>
 
-<Answer>Battery不是一种Car，而是ElectricCar拥有的部件，应composition。Battery独立维护size和range behavior，ElectricCar通过attribute委托；constructor可注入Battery让不同容量与测试double可替换。Car/ElectricCar只有在subclass维持共同contract时适合inheritance。</Answer>
+**问题 2：改 Demo 对应的 Python 代码。** 将 `Car.increment_odometer` 的规则改成“只接收正增量”。保留 `update_odometer` 允许相等的规则。实现修改，并证明零、负数失败后里程不变，正数正常增加。实验显示的是旧规则，改 Python 不会自动改浏览器示意。
+
+<Answer>
+
+将原来的 `if distance < 0` 改成 `if distance <= 0`，错误提示同步改为 `distance must be positive`；其他两行保持不变。修改后运行：
+
+```python
+trip = Car("T")
+for distance in (0, -3):
+    before = trip.odometer
+    try:
+        trip.increment_odometer(distance)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("nonpositive distance was accepted")
+    assert trip.odometer == before
+trip.increment_odometer(12)
+trip.update_odometer(12)
+assert trip.odometer == 12
+```
+
+测试必须放在修改之后执行。只看抛错还不够，错误之后状态不变也是要求。
+
+</Answer>
+
+**问题 3：独立实现可换电池的配送车。** 目标状态是两辆车里程各为 10 和 0；只把第一辆的电池从 60 换成 80 kWh，第二辆仍为 60，第一辆里程不清零。将新类保存为 `delivery_car.py`，通过导入实现，不复制汽车的方法。
+
+**小分问：代码审查。** 有人把下面的类存成 `random.py`，紧贴上一模块级类，类内新增方法也不留空行。逐项指出应改的名字与间隔：哪些只是风格问题，哪一项可能让同目录新进程中的 `import random` 导入错误模块？
+
+```python
+class delivery_car(ElectricCar):
+    def ReplaceBattery(self, battery): self.battery = battery
+```
+
+<Answer>
+
+继承保留里程行为，组合允许替换电池。这里只接受一个已经构造好的电池，调用者决定是否共用它。
+
+```python
+# delivery_car.py
+from electric_car import ElectricCar
+
+
+class DeliveryCar(ElectricCar):
+    """An electric car with a replaceable battery."""
+
+    def replace_battery(self, battery):
+        self.battery = battery
+```
+
+在同一目录运行以下测试。若给两辆车传同一块电池，它们会共享电池；此处显式创建新电池验证独立状态。
+
+```python
+from delivery_car import DeliveryCar
+from electric_car import Battery
+
+first, second = DeliveryCar("D1"), DeliveryCar("D2")
+first.increment_odometer(10)
+first.replace_battery(Battery(80))
+assert (first.odometer, second.odometer) == (10, 0)
+assert first.battery.capacity_kwh == 80
+assert second.battery.capacity_kwh == 60
+assert first.battery is not second.battery
+assert first.fill_gas_tank() == "no gas tank"
+```
+
+小分问的修正就是上面的 `DeliveryCar.replace_battery`：`delivery_car` 是合法标识符，但类应采用 CapWords，改为 `DeliveryCar`；`ReplaceBattery` 改为下划线命名 `replace_battery`，调用处也要同步改名。方法体另起缩进行；两个模块级类之间通常留两行空行，类内两个方法之间留一行。这些改善可读性，不应误判成 Python 一定无法解析。
+
+文件名应为 `delivery_car.py`，不能因为 `random.py` 也是小写就判合格。在该目录运行新脚本时，本地同名模块可能先于标准库被找到；若它只定义配送车，`random.Random` 就不存在。用新进程运行下列探针：错误文件名下先看到本地路径，再得到 `AttributeError`；改名后重新启动进程，路径应指向标准库，断言通过。仅在旧进程里再 `import` 一次可能仍用缓存，不能作为修复证据。
+
+```python
+import random
+
+print(random.__file__)
+rng = random.Random(9)
+assert 1 <= rng.randint(1, 6) <= 6
+```
+
+</Answer>
 
 </Exercises>
 
-## 术语表
+## 可运行源码与事实核查
+
+本章代码无需第三方依赖。完整运行入口由正文的 [`car.py`](#1-创建和使用类一次调用究竟作用于谁)、[`electric_car.py`](#4-组合电池是车的部件不是一种车) 和 [`main.py`](#5-导入类使用标准库与编码风格) 三个完整代码块组成；复制到同一目录运行 `python3 main.py`。其余片段按注释标出的前置定义执行；练习 2 刻意要求先修改代码，练习 3 另加 `delivery_car.py`。
+
+本章以第三版第 9 章官方目录限定范围，目录映射为 `pcc3-09`；不宣称已取得或复现原书完整正文。事实以以下公开技术文档核查，代码是本站独立编写的教学示例：
+
+- [Python 教程：实例、方法绑定与类属性](https://docs.python.org/3/tutorial/classes.html#instance-objects)：对应对象、方法及共享列表实验；继续阅读同页的 Method Objects 与 Class and Instance Variables。
+- [Python 教程：继承](https://docs.python.org/3/tutorial/classes.html#inheritance) 与 [内置函数 super](https://docs.python.org/3/library/functions.html#super)：对应子类查找、重写和初始化调用。
+- [Python 教程：模块](https://docs.python.org/3/tutorial/modules.html#more-on-modules)：对应导入形式、模块顶层执行和名称来源。
+- [标准库 random](https://docs.python.org/3/library/random.html)：对应独立随机实例、`randint` 端点与 `choice` 非空要求。
+- [PEP 8 类命名](https://peps.python.org/pep-0008/#class-names) 与 [函数和变量命名](https://peps.python.org/pep-0008/#function-and-variable-names)：对应本章代码风格。
 
 <Glossary>
-  <GlossaryItem term="class instance" definition="由class构造、拥有独立identity和attributes的运行时对象。" />
-  <GlossaryItem term="instance attribute" definition="保存在具体instance上并通过self访问的命名状态。" />
-  <GlossaryItem term="object invariant" definition="所有public operations前后都必须成立的合法状态条件。" />
-  <GlossaryItem term="inheritance contract" definition="subclass扩展base class并维持其公开行为的is-a约定。" />
-  <GlossaryItem term="object composition" definition="object通过attribute持有并委托另一object的has-a关系。" />
+  <GlossaryItem term="类">
+    定义一组对象的数据和行为的代码；本章的 Car 描述车辆。
+  </GlossaryItem>
+  <GlossaryItem term="实例">
+    按类创建的具体对象；两次创建可以值相同但身份不同。
+  </GlossaryItem>
+  <GlossaryItem term="初始化方法">
+    对象创建之后设置初始状态的方法，不返回新对象。
+  </GlossaryItem>
+  <GlossaryItem term="属性">
+    通过点号访问的命名数据，例如 a.odometer。
+  </GlossaryItem>
+  <GlossaryItem term="方法">
+    通过实例调用时自动接收该实例的函数行为。
+  </GlossaryItem>
+  <GlossaryItem term="self">
+    当前普通实例方法接收的对象；只是约定的参数名。
+  </GlossaryItem>
+  <GlossaryItem term="方法绑定">
+    把函数与接收对象配对，稍后调用也知道作用于谁。
+  </GlossaryItem>
+  <GlossaryItem term="引用">
+    名字或属性指向对象的关系；赋值通常不会复制对象。
+  </GlossaryItem>
+  <GlossaryItem term="类属性">
+    定义在类对象上的数据；本例的实例没有同名属性时从类中读取。
+  </GlossaryItem>
+  <GlossaryItem term="继承">
+    让更具体的类沿用、扩展已有类的行为，表示“是一种”。
+  </GlossaryItem>
+  <GlossaryItem term="super()">
+    从当前类之后按方法查找顺序寻找实现的代理；本例用于调用 Car 的初始化。
+  </GlossaryItem>
+  <GlossaryItem term="重写">
+    子类定义同名方法，让实例调用采用新的行为。
+  </GlossaryItem>
+  <GlossaryItem term="组合">
+    对象持有另一个对象，表示“有一个部件”，例如车有电池。
+  </GlossaryItem>
+  <GlossaryItem term="模块">
+    可以导入的代码单元；本章以 Python 文件保存类定义。
+  </GlossaryItem>
+  <GlossaryItem term="标准库">
+    Python 自带的模块集合，例如提供随机功能的 random。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 9: Classes" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Python Crash Course, Third Edition · Chapter 9: Classes（Eric Matthes，No Starch Press）"
+  sourceUrl="https://nostarch.com/python-crash-course-3rd-edition"
+  sourceBasis="outline-only"
+/>
+
+</div>
