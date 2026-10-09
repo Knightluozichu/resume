@@ -17,12 +17,12 @@
 
 ## 批次 1：基础语法（完成并已清理）
 
-| 章节 | 施工范围 | 状态 |
-|---|---|---|
-| 06 dictionaries | 正文及字典专属组件 | 审计通过：92；双视口通过 |
+| 章节                          | 施工范围           | 状态                                                      |
+| ----------------------------- | ------------------ | --------------------------------------------------------- |
+| 06 dictionaries               | 正文及字典专属组件 | 审计通过：92；双视口通过                                  |
 | 07 user-input-and-while-loops | 正文及循环专属组件 | 审计通过：94；双视口通过；补齐列表搬运/问卷边界及术语对应 |
-| 08 functions | 正文及函数专属组件 | 审计通过：97；双视口通过 |
-| 09 classes | 正文及类专属组件 | 审计通过：92；双视口通过 |
+| 08 functions                  | 正文及函数专属组件 | 审计通过：97；双视口通过                                  |
+| 09 classes                    | 正文及类专属组件   | 审计通过：92；双视口通过                                  |
 
 ### 已执行验收
 
@@ -46,15 +46,14 @@
 - 既有 `.next`、`tmp`、依赖缓存、用户未提交修改均未清理。
 - 清理确认后才开始批次2。
 
-
 ## 批次 2：文件、测试与游戏基础（完成并已清理）
 
-| 章节 | 施工范围 | 状态 |
-|---|---|---|
-| 10 files-and-exceptions | 正文及文件/异常专属组件 | 审计通过：93；双视口通过 |
-| 11 testing-your-code | 正文及pytest专属组件 | 审计通过：92；双视口通过 |
+| 章节                         | 施工范围                | 状态                                               |
+| ---------------------------- | ----------------------- | -------------------------------------------------- |
+| 10 files-and-exceptions      | 正文及文件/异常专属组件 | 审计通过：93；双视口通过                           |
+| 11 testing-your-code         | 正文及pytest专属组件    | 审计通过：92；双视口通过                           |
 | 12 a-ship-that-fires-bullets | 正文及飞船/子弹专属组件 | 审计通过：94；双视口通过；补齐类职责与输入阶段观测 |
-| 13 aliens | 正文及外星舰队专属组件 | 审计通过：91；双视口通过 |
+| 13 aliens                    | 正文及外星舰队专属组件  | 审计通过：91；双视口通过                           |
 
 主任务只在施工结束后串行更新注册表及质量文件，双视口验收和清理完成前不启动批次3。
 
@@ -80,12 +79,12 @@
 
 ## 批次 3：计分与数据可视化（完成并已清理）
 
-| 章节 | 施工范围 | 状态 |
-|---|---|---|
-| 14 scoring | 正文及计分/重开专属组件 | 审计通过：93；双视口通过 |
-| 15 generating-data | 正文及随机游走/骰子分布专属组件 | 审计通过：96；双视口通过 |
-| 16 downloading-data | 正文及天气/地震数据专属组件 | 审计通过：97；双视口通过 |
-| 17 working-with-apis | 正文及API数据处理专属组件 | 审计通过：96；双视口通过 |
+| 章节                 | 施工范围                        | 状态                     |
+| -------------------- | ------------------------------- | ------------------------ |
+| 14 scoring           | 正文及计分/重开专属组件         | 审计通过：93；双视口通过 |
+| 15 generating-data   | 正文及随机游走/骰子分布专属组件 | 审计通过：96；双视口通过 |
+| 16 downloading-data  | 正文及天气/地震数据专属组件     | 审计通过：97；双视口通过 |
+| 17 working-with-apis | 正文及API数据处理专属组件       | 审计通过：96；双视口通过 |
 
 主任务维护共享注册表和质量文件；第三批验收与清理完成前不启动第四批。
 
@@ -101,12 +100,12 @@
 
 ## 批次 4：Django收尾与整书覆盖核查（完成并已清理）
 
-| 任务 | 写集合 | 状态 |
-|---|---|---|
-| 18 getting-started-with-django | 正文及Django请求/数据关系专属组件 | 97分；双视口通过 |
-| 19 user-accounts | 正文及身份/所有权专属组件 | 94分；双视口通过 |
-| 20 styling-and-deploying-an-app | 正文及样式/部署边界专属组件 | 96分；双视口通过 |
-| 整书覆盖核查 | 只读项目；报告已归档 | 完成；后续补实质缺口和漏检映射 |
+| 任务                            | 写集合                            | 状态                           |
+| ------------------------------- | --------------------------------- | ------------------------------ |
+| 18 getting-started-with-django  | 正文及Django请求/数据关系专属组件 | 97分；双视口通过               |
+| 19 user-accounts                | 正文及身份/所有权专属组件         | 94分；双视口通过               |
+| 20 styling-and-deploying-an-app | 正文及样式/部署边界专属组件       | 96分；双视口通过               |
+| 整书覆盖核查                    | 只读项目；报告已归档              | 完成；后续补实质缺口和漏检映射 |
 
 最多4任务，第四项不改质量台账或章节。主任务负责运行环境、共享集成与最终验收。批末先关闭任务和清理，再继续下一批。
 
@@ -124,15 +123,14 @@
 
 第四批已关闭/归档/清理后才启动。最多4并发，写集合不重叠：
 
-| 任务 | 写集合 | 目标 |
-|---|---|---|
-| 启动与入门范围 | 01、学习地图、复习页 | 官方安装前置链、A/B/C支持路径、修正自动高分即知识齐全措辞 |
-| 针对性练习 | 07、09、15正文 | 补少量缺失检验，保留已验收实现 |
-| 概念证据别名 | manifest仅本书 | 逐项核实20漏检，添加精准中文/API同义映射，不改门槛/计数/评分逻辑 |
-| Git及附录范围 | 20正文、专属范围文档 | 独立临时Git保存比较恢复实践、A–E明确合并/边界，不冒称原书全文 |
+| 任务           | 写集合               | 目标                                                             |
+| -------------- | -------------------- | ---------------------------------------------------------------- |
+| 启动与入门范围 | 01、学习地图、复习页 | 官方安装前置链、A/B/C支持路径、修正自动高分即知识齐全措辞        |
+| 针对性练习     | 07、09、15正文       | 补少量缺失检验，保留已验收实现                                   |
+| 概念证据别名   | manifest仅本书       | 逐项核实20漏检，添加精准中文/API同义映射，不改门槛/计数/评分逻辑 |
+| Git及附录范围  | 20正文、专属范围文档 | 独立临时Git保存比较恢复实践、A–E明确合并/边界，不冒称原书全文    |
 
 主任务负责共享集成/真实复验/最终质量文件；本批结束清理前不开下一批。
-
 
 ### 第五批验收与清理
 
@@ -148,15 +146,14 @@
 
 第五批tmp已移除、worker关闭、Next退出和3100空后启动。当前重跑基线确认27页中7章失败（不是沿用旧分数宣布完成）。
 
-| 任务 | 写集合 | 正式单元 |
-|---|---|---|
-| observer / Maxwell | observer.mdx + observer-subscription-delivery-lab.tsx | designpatterns-03 |
-| state / Volta | state.mdx + state-transition-ownership-lab.tsx | designpatterns-06 |
-| strategy / Meitner | strategy.mdx + strategy-route-cost-lab.tsx | designpatterns-02 |
+| 任务                    | 写集合                                                        | 正式单元          |
+| ----------------------- | ------------------------------------------------------------- | ----------------- |
+| observer / Maxwell      | observer.mdx + observer-subscription-delivery-lab.tsx         | designpatterns-03 |
+| state / Volta           | state.mdx + state-transition-ownership-lab.tsx                | designpatterns-06 |
+| strategy / Meitner      | strategy.mdx + strategy-route-cost-lab.tsx                    | designpatterns-02 |
 | template-method / James | template-method.mdx + template-method-import-pipeline-lab.tsx | designpatterns-22 |
 
 最多4并行；MDX均在`content/design-patterns/03-behavioral/`，独立组件在`src/components/mdx/design-patterns/`。Main负责book范围核对、registry、全库工程检查、真浏览器、质量记录及批末清理；其他visitor/compound/final-review留后批，不并发开启第五任务。证据临时目录`/tmp/remuse-quality-batch6-20260924/`。
-
 
 ### 第六批验收与清理
 
@@ -177,12 +174,12 @@
 
 第六批已归档、进程退出、tmp移除且归档后TypeScript通过后才启动；最多4并发。
 
-| 任务 | 写集合 | 本批结果 |
-| --- | --- | --- |
-| 访问者 | visitor.mdx + visitor-double-dispatch-ast-lab.tsx | 95 / passed |
-| 复合模式 | compound-patterns.mdx + compound-patterns-order-notification-lab.tsx | 96 / passed |
-| 全书复习 | final-review.mdx + final-review-contract-lab.tsx | 99 / passed |
-| 独立范围审查 | docs/design-patterns-scope.md | 24旧页清单、3可复现合同问题、1实践缺口；非整书验收 |
+| 任务         | 写集合                                                               | 本批结果                                           |
+| ------------ | -------------------------------------------------------------------- | -------------------------------------------------- |
+| 访问者       | visitor.mdx + visitor-double-dispatch-ast-lab.tsx                    | 95 / passed                                        |
+| 复合模式     | compound-patterns.mdx + compound-patterns-order-notification-lab.tsx | 96 / passed                                        |
+| 全书复习     | final-review.mdx + final-review-contract-lab.tsx                     | 99 / passed                                        |
+| 独立范围审查 | docs/design-patterns-scope.md                                        | 24旧页清单、3可复现合同问题、1实践缺口；非整书验收 |
 
 - 三页draft:true；来源14次真实GET均200。Scope复用B6的12份真实来源并校验body hash，新增GET为0，不冒称全文访问。
 - Visitor最终15代码块编译执行、18配置/122内部帧/514边界运行；Main真实浏览器18配置、每视口86可访问帧，AST结构、双分派、漏右/重复左与严格双SVGreset通过。
@@ -198,12 +195,12 @@
 
 B7归档后TypeScript通过、四worker关闭、3100空且tmp移除后才开始；四并发写集合互斥：
 
-| 任务 | 写集合 | 必须修复 |
-| --- | --- | --- |
-| Memento / Mencius | memento.mdx + memento-snapshot-canvas-lab.tsx | G1快照readonly/运行时不可变合同、实际改代码断言 |
-| Iterator / Russell | iterator.mdx + iterator-cursor-traversal-lab.tsx | G2自定义next耗尽/版本一致、独立游标与实践 |
-| Chain / Anscombe | chain-of-responsibility.mdx + chain-of-responsibility-request-pipeline-lab.tsx | G3组装说明及by/handler返回合同、真实三终态与短路 |
-| Mediator / Confucius | mediator.mdx + mediator-communication-hub-lab.tsx | G4可执行路由修改练习与真实收件人断言 |
+| 任务                 | 写集合                                                                         | 必须修复                                         |
+| -------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------ |
+| Memento / Mencius    | memento.mdx + memento-snapshot-canvas-lab.tsx                                  | G1快照readonly/运行时不可变合同、实际改代码断言  |
+| Iterator / Russell   | iterator.mdx + iterator-cursor-traversal-lab.tsx                               | G2自定义next耗尽/版本一致、独立游标与实践        |
+| Chain / Anscombe     | chain-of-responsibility.mdx + chain-of-responsibility-request-pipeline-lab.tsx | G3组装说明及by/handler返回合同、真实三终态与短路 |
+| Mediator / Confucius | mediator.mdx + mediator-communication-hub-lab.tsx                              | G4可执行路由修改练习与真实收件人断言             |
 
 Main重读发现这四个旧组件均只有HTML状态卡、没有概念结构图；责任链还依赖预写scenario结果而非执行Handler，中介者旁路只是文案。已要求在原控件/布局内补最小真实领域模型与图形（画布历史、序列游标、短路请求路径、hub/spoke投递），不把历史自动passed当人工合格。迭代器旧peek显示cursor+1、next却返回cursor；备忘录故障在React updater原地修改还需检查重放副作用。
 
@@ -218,8 +215,8 @@ Main重读发现这四个旧组件均只有HTML状态卡、没有概念结构图
 
 B8四worker关闭、服务停止、tmp移除、归档后TS通过后启动；最大四并发。导论(dsaa3-01)、算法分析(dsaa3-02)、并查集(dsaa3-08)、类模板分离编译(dsaa3-a)。各写一章MDX与独立领域组件，Main负责注册、最终浏览器/正式视觉/选择性台账与归档清理。启动基线1845failed/196queued/1723passed/845published，本书11failed/2passed。证据临时目录`/tmp/remuse-quality-batch9-20260924/`。尚未验收，不代表通过或发布。
 
-
 ### B9 最终验收
+
 - 导论/算法分析/并查集/类模板分离编译：97/97/95/97，四章failed→passed，均draft:true、qualityVersion:2；原书全文未取得，按权威目录+实际作者/标准/编译器资料独立重写，不冒称忠实复现或开放授权。出版社版权2007与冻结manifest2006差异保留，不改manifest。
 - 45来源记录，39个保存body经hash验证：35次200、3次404、1次403；另6条无body错误明确未验证。目录只证明范围，未证实P Word扩写已删除。
 - 实际最终MDX代码提取/编译/运行与负对照通过。导论10用例；分析19531数组；并查集22620穷举、2048分区、2133 C++/TS对照；模板24多TU情形（11运行成功/13链接失败），7个C++文件块+4个shell文件块。主独立oracle含19200DSU操作、1795200成对分区断言。
@@ -235,8 +232,8 @@ B9清理确认：四worker关闭；本批PID [14568, 14572, 14599]全部退出�
 
 B9四worker关闭、PID退出/3100空/tmp移除且归档后TS0后开始。四并发写集合互斥：dsaa3-03表/栈/队列，dsaa3-04树，dsaa3-05散列，dsaa3-06优先队列/堆；各自一章MDX+独立组件模块。Main负责原始基线、来源复核、实际浏览器/正式视觉/选择性台账和清理。启动1841failed/196queued/1727passed/845published，本书6passed/7failed。临时证据`/tmp/remuse-quality-batch10-20260924/`；未验收，不表示通过或发布。
 
-
 ### B10 最终验收
+
 - 表/栈/队列、树、散列、优先队列/堆：94/95/94/94，4章failed→passed；均draft:true、qualityVersion:2。原书全文未取得，实际目录、作者代码、C++17草案与研究论文用于独立重写；43来源记录/43保存body全SHA256核对，诚实保留403及复用记录，不冒称原书授权或全文忠实。
 - 主提取最终40个C++代码块，9个程序严格C++17编译与ASan/UBSan运行通过；独立27200表/栈/环形队列、14000树旋转、10200散列表+7200目录、3078堆结构/多重集合检查通过。worker额外oracle/负对照单独记录。
 - 390/1440真浏览器：完整操作、真实故障、精确全状态/SVG重置、堆26用例逐帧对照，全部8阅读视图/答案/图形Stepper/目标列表/语义误区通过。44px控件、13px SVG阅读目标（原11px门禁未改），无水平溢出/运行错误。最终内容hash匹配正式视觉，4章各checked1/failed0。
@@ -252,12 +249,12 @@ B10全部关闭/服务退出/tmp清理/归档后TS0完成后开始。四个互�
 
 ### B11 最终验收
 
-| 章节 | 内容评分 | 最终状态 |
-|---|---:|---|
-| sorting | 94 | passed；draft:true |
-| graph-algorithms | 97 | passed；draft:true |
-| advanced-data-structures | 95 | passed；draft:true |
-| eex19-official-learning-map | 99 | passed；draft:true |
+| 章节                        | 内容评分 | 最终状态           |
+| --------------------------- | -------: | ------------------ |
+| sorting                     |       94 | passed；draft:true |
+| graph-algorithms            |       97 | passed；draft:true |
+| advanced-data-structures    |       95 | passed；draft:true |
+| eex19-official-learning-map |       99 | passed；draft:true |
 
 - DSA C++13/13章通过；有效管理1章通过、其余13章未通过，不宣称整书完成。
 - 主控独立TS模型4372排序/4496图/7000AA操作及地图36合法+4非法状态；最终MDX实际26段C++组成3程序，严格编译和ASan/UBSan执行通过。另有独立9837排序、4096图×4源、5040AA排列/4000kd查询/100配对堆测试。
@@ -277,3 +274,47 @@ B11清理确认：四worker已关闭，所属PID91440/91441/91469退出，3100�
 - push后在该已测提交快照实际执行 `bash deploy.sh --book dsa-cpp` 与 `bash deploy.sh --book effective-executive`，均exit1，停于1/5发布资格。DSA C++除未批准发布外，整书官方概念覆盖率86.8%低于90%；有效管理其余13章失败且未批准发布。章节passed并不等于整书发布门禁通过。
 - 未开始生产构建，未上传release/切换服务器，线上版本本任务未改动。没有添加白名单、设置draft:false或使用allow-incomplete/skip-visual。完整门禁日志随提交验收日志保存于本批本地归档。
 - **第11批已验收、已清理、代码已push；服务器更新被既有门禁阻止。按用户命令暂停，等待新指令，未开启第12批。**
+
+## 批次 12：卓有成效的管理者第 1–4 章（完成）
+
+四个互斥章节写集合并发修复；仅处理 effective-executive 第1–4章。页面均保持 `draft: true`、`sourceMode: independent-rewrite`、`sourceBasis: outline-only`，没有将目录/书目记录表述成取得整本原文，也未改发布门槛、manifest或批准上架。
+
+| 章节                       | 评分 | 状态   |
+| -------------------------- | ---: | ------ |
+| 第1章 卓有成效是可以学会的 |   95 | passed |
+| 第2章 掌握自己的时间       |   94 | passed |
+| 第3章 我能贡献什么         |   92 | passed |
+| 第4章 如何发挥人的长处     |   94 | passed |
+
+- 最终视觉证据均 PASS，四页各8张双视口图像；视觉 contentHash 与验收时章节 hash 匹配。质量维度均达标，无 hard blocker。
+- 全库 MDX 检查4609文件、0错误；TypeScript、5个目标组件 ESLint、9个目标文件 Prettier、组件注册表检查（2649 routes/2707 lazy modules）通过。
+- `audit-content-quality-v2 --book effective-executive` 如预期 exit 1：全书仍有9个未修页面失败（3个推荐页、序言、第5–8章、官方复习），而本批4页均通过；全书仍未获发布批准。
+- 全局发布不变量脚本仍报76项旧失败，集中在其他书籍的缺失视觉证据/UX；B12目标不在这些失败中。没有借此降低门槛或声称整库门禁通过。
+- 工作区在B12启动前已有20个 Python 章节相关未提交改动及对应质量结果变更；保留原状且未混入B12章节成果。本批记录、章节摘要与质量待办已更新。
+- 四个 worker 已关闭，3012 开发服务器已停止，来源/交接/基线和验收快照归档至 `quality/artifacts/repair-batches/2026-10-08-12/session/`；对应 `/tmp` 批次目录已清理。
+- **B12仅本地验收与归档；没有提交、push或部署。**
+
+## 批次 13：卓有成效的管理者第 5–8 章（完成）
+
+本批在四个互斥章节工作集并发修复/验收第5–8章。四章均保持 `draft: true`、`qualityVersion: 2`、`sourceMode: independent-rewrite`，来源范围限定为公开目录（`outline-only`）；未声称取得或复述原书正文，也未更改发布白名单、门槛或 manifest。
+
+| 章节                           | 评分 | 状态   |
+| ------------------------------ | ---: | ------ |
+| 第5章 要事优先                 |   92 | passed |
+| 第6章 决策的要素               |   91 | passed |
+| 第7章 有效的决策               |   93 | passed |
+| 第8章 结论：管理者必须卓有成效 |   92 | passed |
+
+- 四章质量维度均达到底线且总分≥90，无 hard blocker；四章视觉审计均 PASS，当前内容 hash 匹配，每章保存桌面/移动各4张证据图。
+- 全库 MDX 检查4609文件、0错误；TypeScript `tsc --noEmit`、四个目标组件 ESLint、目标文件 Prettier 和组件注册表检查通过（2653 routes / 2711 lazy modules）。
+- 有效管理者全书仍有5个选中失败页（3个推荐页、序言、官方复习），故全书审计仍按预期exit 1，书籍未获发布批准。全库质量台账当前为1825 failed、196 queued、1743 passed、845 published；本批四章failed→passed。
+- B13交接、任务清单、修改前章节快照和审计日志归档于 `quality/artifacts/repair-batches/2026-10-08-13/session/`；验收详情见 `quality/repair-reports/batch-13.json`。开发服务器及B13临时目录在清理完成后移除。
+- 本批仅本地验收；未提交、push或部署。**不自动开启B14，等待用户指令。**
+
+## 批次 14：三本书内容复核与部署准备（完成门禁修复，待部署）
+
+- 有效管理者全书14页质量审计通过（分数93/94/94/93及第1–8章95/94/92/94/92/91/93/92，官方导读地图99、复习页92），视觉14/14通过；Python Advanced质量审计16/16通过，视觉16/16通过；Python Crash Course质量审计22/22通过，视觉22/22通过。详细章节结果和哈希见`quality/repair-reports/batch-14.json`。
+- 三书资格检查通过；通过正式审批脚本将`effective-executive`与`python-crash-course`加入发布白名单，`python-advanced`原已批准。页面草稿/来源属性不为部署而改写。
+- 最终检查：4609 MDX文件0错误、组件注册表2658 routes/2716 lazy modules、全库 TypeScript、目标组件 ESLint、目标书籍文件 Prettier 均通过。
+- 首次并发视觉巡检因测试服务器未运行及并发超时未放行；启动本地服务后，将巡检并发降为1并重跑所有页面，三书全部通过，没有跳过视觉门禁。
+- **本记录写入时尚未提交、push或更新服务器；需部署门禁全部通过后再将状态更新为已部署。**

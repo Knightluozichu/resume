@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pcc3-05"
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,9 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccIfStatementsLab } from "@/components/mdx/python-crash-course/v2/if-statements";
+
+{/* 知识点清单：conditional test equality membership(交互tests)/short-circuit and or(交互tests)/first-match branch(交互branch链)/guard else(交互branch链)/三列表 requested available banned(交互decision table)/empty list truthiness(交互decision table) */}
 
 <Objectives>
 
@@ -32,13 +39,14 @@ import { Attribution } from "@/components/mdx/attribution";
 
 先预测`age=18`在`18 <= age < 65`中是否通过，`"Ada" == "ada"`为何失败，以及空列表放进if会得到什么。Python最终需要bool，但得到bool之前的比较语义才是业务契约。
 
-<Term def="对明确输入执行比较、membership或逻辑组合并产生True/False的可解释表达式。">conditional test</Term>
+<Term def="对明确输入执行比较、membership或逻辑组合并产生True/False的可解释表达式。">
+  conditional test
+</Term>
 
 ## Conditional Tests：值、类型与规范化
 
 <Stepper>
-  <Step title="选择一种条件测试">
-  </Step>
+  <Step title="选择一种条件测试"></Step>
   <Step title="列出operands和比较规则">
     字符串比较区分大小写；数值链式比较共享中间operand；membership使用元素相等性。
   </Step>
@@ -47,7 +55,16 @@ import { Attribution } from "@/components/mdx/attribution";
   </Step>
 </Stepper>
 
-<Term def="条件表达式求值得到的True或False；它不是字符串'true'，也不应和错误消息混为一体。">boolean result</Term>
+<Term def="条件表达式求值得到的True或False；它不是字符串'true'，也不应和错误消息混为一体。">
+  boolean result
+</Term>
+
+> 猜一猜：`score=-5` 会走进 if-elif-else 的哪条分支？`bacon` 同时出现在 available 和 banned 时谁优先？切到「branch 链」和「三列表决策」看 first-match 与安全优先级。
+
+<PccIfStatementsLab />
+
+<CodeTabs>
+  <Tab label="conditional tests">
 
 ```python
 name = "Ada Lovelace"
@@ -60,6 +77,22 @@ print("python" in skills)
 print("cobol" not in skills)
 ```
 
+  </Tab>
+  <Tab label="== vs is">
+
+```python
+a = [1, 2, 3]
+b = [1, 2, 3]
+print(a == b)   # True：值相等
+print(a is b)   # False：不同对象
+
+flag = None
+print(flag is None)   # True：判断 None 用 is
+```
+
+  </Tab>
+</CodeTabs>
+
 字符串若来自用户输入，应先决定是否大小写敏感。`lower()`或`casefold()`返回规范化值，但展示时仍可保留原始拼写。数值比较要确认operand类型；字符串`"18"`与整数18不能直接按大小比较，输入边界应先解析并处理失败。
 
 ### equality与identity不是一回事
@@ -70,7 +103,9 @@ print("cobol" not in skills)
 
 `and`要求两侧都truthy，`or`只需一侧truthy。Python从左到右短路：`and`左侧falsy时不再计算右侧，`or`左侧truthy时停止。短路可安全写出`items and items[0]`，但返回值可能是operand本身而非严格bool；API需要bool时可显式`bool(...)`。
 
-<Term def="and/or在结果已确定时停止计算剩余operand的求值规则。">short-circuit evaluation</Term>
+<Term def="and/or在结果已确定时停止计算剩余operand的求值规则。">
+  short-circuit evaluation
+</Term>
 
 不要把有副作用的函数藏在逻辑表达式右侧，否则它是否执行依赖左侧值，trace难读。权限判断可组合纯bool predicates，数据写入、日志和网络调用放在明确branch body中。
 
@@ -93,7 +128,14 @@ print("cobol" not in skills)
   </Step>
 </Stepper>
 
-<Term def="if-elif-else从上到下检查并只执行第一个True分支，后续分支不会再求值的规则。">first-match branch</Term>
+<Term def="if-elif-else从上到下检查并只执行第一个True分支，后续分支不会再求值的规则。">
+  first-match branch
+</Term>
+
+这里先guard非法范围，再按从高到低分类。`elif`前一个分支已经证明score小于90，因此第二个条件无需重复`score < 90`。减少重复不是为了短，而是让每个branch对应互斥区间。边界表可直接转成参数化测试：
+
+<CodeTabs>
+  <Tab label="classify_score 实现">
 
 ```python
 def classify_score(score: int) -> str:
@@ -107,7 +149,25 @@ def classify_score(score: int) -> str:
         return "retry"
 ```
 
-这里先guard非法范围，再按从高到低分类。`elif`前一个分支已经证明score小于90，因此第二个条件无需重复`score < 90`。减少重复不是为了短，而是让每个branch对应互斥区间。
+  </Tab>
+  <Tab label="边界表转 pytest">
+
+```python
+import pytest
+
+CASES = [
+    (-1, "invalid"), (0, "retry"), (74, "retry"),
+    (75, "pass"), (89, "pass"),
+    (90, "excellent"), (100, "excellent"), (101, "invalid"),
+]
+
+@pytest.mark.parametrize("score,expected", CASES)
+def test_classify(score, expected):
+    assert classify_score(score) == expected
+```
+
+  </Tab>
+</CodeTabs>
 
 ### 边界表比自然语言更可靠
 
@@ -117,7 +177,9 @@ def classify_score(score: int) -> str:
 
 `item in collection`对list检查是否存在相等元素，对dictionary默认检查key，对string检查substring。相同语法的membership单位不同，读代码时必须知道collection类型。用户名检查常先统一case，再比较normalized set，避免`Alice`绕过已有`alice`。
 
-<Term def="判断一个候选是否存在于collection定义的成员空间；list按元素、dict默认按key、string按substring。">membership test</Term>
+<Term def="判断一个候选是否存在于collection定义的成员空间；list按元素、dict默认按key、string按substring。">
+  membership test
+</Term>
 
 若available choices频繁查找且不关心顺序，可使用set提高意图与效率；若要保持展示顺序，仍保留list并额外构建set用于查询。不要过早优化小列表，但要让数据结构表达“顺序”还是“集合”。
 
@@ -126,15 +188,18 @@ def classify_score(score: int) -> str:
 空list在bool上下文中为False，所以`if requested:`可以区分“至少一个请求”与empty case。迭代列表时可对special item单独分支，也可把requested与available两个list做membership检查；每个元素的结果应独立，不让一个不可用项阻止后续合法项。
 
 <Stepper>
-  <Step title="选择空列表、混合可用性或特殊项">
-  </Step>
+  <Step title="选择空列表、混合可用性或特殊项"></Step>
   <Step title="先处理collection级别empty case">
     没有元素时for body不会执行，因此需要在循环前给用户明确反馈。
   </Step>
   <Step title="再处理每个item的membership与special rule">
-    requested order控制输出顺序，available collection决定是否接受；两者职责不同。
+    requested order控制输出顺序，available
+    collection决定是否接受；两者职责不同。
   </Step>
 </Stepper>
+
+<CodeTabs>
+  <Tab label="available/requested 判断">
 
 ```python
 available = {"mushrooms", "olives", "green peppers"}
@@ -151,6 +216,26 @@ else:
         else:
             print(f"Sorry, {topping} is unavailable.")
 ```
+
+  </Tab>
+  <Tab label="加 banned 策略列">
+
+```python
+banned = {"bacon"}   # 安全策略，优先级高于 available
+
+for topping in requested:
+    if topping in banned:
+        print(f"Banned: {topping}")
+    elif topping == "green peppers":
+        print("Skipping green peppers.")
+    elif topping in available:
+        print(f"Adding {topping}.")
+    else:
+        print(f"Sorry, {topping} is unavailable.")
+```
+
+  </Tab>
+</CodeTabs>
 
 ### 多列表判断要保留来源语义
 
@@ -175,20 +260,30 @@ empty list也可能表示“没有提供筛选条件”或“明确选择零项�
 修改条件时先改decision table，再观察哪些旧测试应该改变。若只是为了让新case通过而把一个`and`改成`or`，必须重新审计所有组合，因为允许空间可能扩大数倍。条件逻辑真正的维护成本来自状态空间，清晰predicate、优先级和表格证据比压缩行数更重要。
 
 <Callout type="trap" title="所有条件都用一条 if-elif-else 链">
-链只执行首个匹配。如果规则可同时成立，例如给用户添加多个标签，应使用独立if；只有结果互斥时才用ordered first-match branch。
+  链只执行首个匹配。如果规则可同时成立，例如给用户添加多个标签，应使用独立if；只有结果互斥时才用ordered
+  first-match branch。
 </Callout>
 
 <Callout type="trap" title="else 自动代表所有合法剩余值">
-else也会接收负数、None或其他未验证输入。先guard合法域，再让else表达合法域内的最后区间；测试越界值证明非法输入不会被误分类。
+  else也会接收负数、None或其他未验证输入。先guard合法域，再让else表达合法域内的最后区间；测试越界值证明非法输入不会被误分类。
+</Callout>
+
+<Callout type="trap" title="if active == True 是更安全的写法">
+  **现象 →** 想“显式”检查布尔值就写 `if active == True`，或反过来用 `if active
+  is True`。 **原因 →** `== True` 依赖布尔比较，遇到 `1`、`"yes"` 或 `None` 时
+  truthiness 可能与你预期不同；`is True` 对 `1` 恒
+  False，还会误导读者以为这里需要对象身份。 **修法 →** 二态布尔直接 `if
+  active:`；只有三态（True/False/None）才显式 `is True`、`is False`、`is None`
+  并逐一解释。
 </Callout>
 
 ## 本章回顾：条件、顺序与证据
 
-1. conditional test需要明确operands、规范化和比较规则。
-2. and/or短路，复杂条件先命名，副作用留在branch body。
-3. if-elif-else执行first-match branch，独立if允许多个结果同时发生。
-4. membership test随collection类型改变单位，empty list要先处理。
-5. 边界表、非法输入guard和分支优先级共同构成可测试决策。
+- conditional test 明确 operand、规范化与比较规则，返回 boolean
+- and/or 短路；复杂条件先命名，副作用留在 branch body
+- if-elif-else 是 first-match，独立 if 允许结果同时发生
+- membership 随 collection 类型换单位；empty list 先处理
+- guard 非法域 + 边界表 + 优先级 = 可测试决策
 
 <Exercises>
 
@@ -198,22 +293,71 @@ else也会接收负数、None或其他未验证输入。先guard合法域，再�
 
 **问题 2：何时用独立if，何时用if-elif-else？**
 
-<Answer>结果可同时发生时用独立if，例如用户同时获得多个权限标签；结果互斥且只选一个时用if-elif-else，例如分数等级。先写业务互斥关系，再选择语法；不能为了少写几行把可叠加规则塞进首匹配链。</Answer>
+<Answer>
+  结果可同时发生时用独立if，例如用户同时获得多个权限标签；结果互斥且只选一个时用if-elif-else，例如分数等级。先写业务互斥关系，再选择语法；不能为了少写几行把可叠加规则塞进首匹配链。
+</Answer>
 
 **问题 3：实现requested/available/banned三列表规则，优先级如何证明？**
 
-<Answer>先处理empty requested；逐项先检查`topping in banned`并拒绝，再检查`topping in available`并接受，否则报告unavailable。用同一项同时出现在available与banned的测试证明ban优先，再覆盖仅available、两边都无和重复requested；保留requested order决定输出顺序。</Answer>
+<Answer>
+  先处理empty requested；逐项先检查`topping in banned`并拒绝，再检查`topping in
+  available`并接受，否则报告unavailable。用同一项同时出现在available与banned的测试证明ban优先，再覆盖仅available、两边都无和重复requested；保留requested
+  order决定输出顺序。
+</Answer>
+
+**问题 4：独立实现 `decision_for()` —— 输入 score 与三个规则函数（guard/narrow/broad），输出命中的规则名与原因（独立实现）**
+
+<Answer>
+
+```python
+def decision_for(score: int) -> tuple[str, str]:
+    if not (0 <= score <= 100):
+        return ("invalid", "guard: 越界")
+    if score >= 90:
+        return ("excellent", "narrow: >=90")
+    if score >= 75:
+        return ("pass", "narrow: >=75")
+    return ("retry", "else: 其余合法域")
+
+CASES = [-1, 0, 74, 75, 89, 90, 95, 100, 101]
+for s in CASES:
+    print(s, decision_for(s))
+# -1 ('invalid', ...) 0 ('retry', ...) 74 ('retry', ...)
+# 75 ('pass', ...) 89 ('pass', ...) 90 ('excellent', ...)
+```
+
+关键：guard 优先；narrow 从高到低；返回值带 rule 原因，测试不仅断言 label 还能断言 decision reason，避免两个错误分支恰好返回相同文本。
+
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="conditional test" definition="对明确输入执行比较或逻辑组合并产生True/False的表达式。" />
-  <GlossaryItem term="boolean result" definition="条件求值得到的True或False结果。" />
-  <GlossaryItem term="short-circuit evaluation" definition="and/or在结果确定后停止计算剩余operand。" />
-  <GlossaryItem term="first-match branch" definition="if-elif-else只执行从上到下首个True分支。" />
-  <GlossaryItem term="membership test" definition="判断候选是否存在于collection定义的成员空间。" />
+  <GlossaryItem
+    term="conditional test"
+    definition="对明确输入执行比较或逻辑组合并产生True/False的表达式。"
+  />
+  <GlossaryItem
+    term="boolean result"
+    definition="条件求值得到的True或False结果。"
+  />
+  <GlossaryItem
+    term="short-circuit evaluation"
+    definition="and/or在结果确定后停止计算剩余operand。"
+  />
+  <GlossaryItem
+    term="first-match branch"
+    definition="if-elif-else只执行从上到下首个True分支。"
+  />
+  <GlossaryItem
+    term="membership test"
+    definition="判断候选是否存在于collection定义的成员空间。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 5: if Statements" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+<Attribution
+  adaptedFrom="Python Crash Course, Third Edition, Chapter 5: if Statements"
+  adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition"
+/>

@@ -143,7 +143,6 @@ const NODE_W = 98;
 const NODE_H = 38;
 const GAP = 8;
 const START_X = 116;
-const ROW_GAP = 62;
 const ROW_Y = [96, 158, 220, 282, 344]; // 五阶段行的中心 Y。
 const VIEW_W = 860;
 const VIEW_H = 384;
@@ -169,7 +168,11 @@ function nodeTopLeft(num: number): { x: number; y: number } {
 }
 
 // 沿「中心→目标」方向，求射线穿出节点矩形的边界点（箭头起止贴边）。
-function boundaryPoint(num: number, tx: number, ty: number): { x: number; y: number } {
+function boundaryPoint(
+  num: number,
+  tx: number,
+  ty: number,
+): { x: number; y: number } {
   const { cx, cy } = nodeCenter(num);
   const dx = tx - cx;
   const dy = ty - cy;
@@ -182,7 +185,13 @@ function boundaryPoint(num: number, tx: number, ty: number): { x: number; y: num
   return { x: cx + dx * s, y: cy + dy * s };
 }
 
-type Arrow = { path: string; endX: number; endY: number; tanX: number; tanY: number };
+type Arrow = {
+  path: string;
+  endX: number;
+  endY: number;
+  tanX: number;
+  tanY: number;
+};
 
 // 两章之间的回退箭头：二次贝塞尔曲线，控制点垂直偏移产生柔和弧度。
 function arrowBetween(fromNum: number, toNum: number): Arrow {
@@ -198,10 +207,28 @@ function arrowBetween(fromNum: number, toNum: number): Arrow {
   const cpx = midX + perpX;
   const cpy = midY + perpY;
   const path = `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${cpx.toFixed(1)} ${cpy.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
-  return { path, endX: end.x, endY: end.y, tanX: end.x - cpx, tanY: end.y - cpy };
+  return {
+    path,
+    endX: end.x,
+    endY: end.y,
+    tanX: end.x - cpx,
+    tanY: end.y - cpy,
+  };
 }
 
-function ArrowHead({ ex, ey, tanX, tanY, color }: { ex: number; ey: number; tanX: number; tanY: number; color: string }) {
+function ArrowHead({
+  ex,
+  ey,
+  tanX,
+  tanY,
+  color,
+}: {
+  ex: number;
+  ey: number;
+  tanX: number;
+  tanY: number;
+  color: string;
+}) {
   const len = Math.hypot(tanX, tanY) || 1;
   const ux = tanX / len;
   const uy = tanY / len;
@@ -307,10 +334,24 @@ export function PccLearningMapLab() {
           aria-label="Python Crash Course 第三版 20 章五阶段依赖地图，点击阶段高亮或选择症状查看回退路径"
         >
           {/* 标题 */}
-          <text x={VIEW_W / 2} y={26} textAnchor="middle" fontSize={15} fontWeight={600} fill={C.primary}>
-            五阶段分层索引 · foundation → contract → realtime → pipeline → release
+          <text
+            x={VIEW_W / 2}
+            y={26}
+            textAnchor="middle"
+            fontSize={15}
+            fontWeight={600}
+            fill={C.primary}
+          >
+            五阶段分层索引 · foundation → contract → realtime → pipeline →
+            release
           </text>
-          <text x={VIEW_W / 2} y={46} textAnchor="middle" fontSize={11} fill={C.secondary}>
+          <text
+            x={VIEW_W / 2}
+            y={46}
+            textAnchor="middle"
+            fontSize={11}
+            fill={C.secondary}
+          >
             左侧点阶段高亮该阶段章节；下方选症状看最小回退路径
           </text>
 
@@ -324,11 +365,28 @@ export function PccLearningMapLab() {
                 onClick={() => selectPhase(p.id)}
                 style={{ cursor: "pointer" }}
               >
-                <rect x={6} y={cy - 20} width={104} height={40} fill="transparent" />
-                <text x={14} y={cy - 4} fontSize={12} fontWeight={700} fill={active ? C.accent : C.primary}>
+                <rect
+                  x={6}
+                  y={cy - 20}
+                  width={104}
+                  height={40}
+                  fill="transparent"
+                />
+                <text
+                  x={14}
+                  y={cy - 4}
+                  fontSize={12}
+                  fontWeight={700}
+                  fill={active ? C.accent : C.primary}
+                >
                   {p.label}
                 </text>
-                <text x={14} y={cy + 11} fontSize={11} fill={active ? C.accent : C.secondary}>
+                <text
+                  x={14}
+                  y={cy + 11}
+                  fontSize={11}
+                  fill={active ? C.accent : C.secondary}
+                >
                   {p.range} {p.name}
                 </text>
               </g>
@@ -359,7 +417,14 @@ export function PccLearningMapLab() {
                   stroke={borderColor}
                   strokeWidth={strokeW}
                 />
-                <text x={cx} y={cy - 3} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.primary}>
+                <text
+                  x={cx}
+                  y={cy - 3}
+                  textAnchor="middle"
+                  fontSize={12}
+                  fontWeight={700}
+                  fill={C.primary}
+                >
                   Ch{ch.num}
                 </text>
                 <text
@@ -391,7 +456,13 @@ export function PccLearningMapLab() {
                       strokeWidth={2}
                       strokeDasharray={wrongPath ? "5 3" : "none"}
                     />
-                    <ArrowHead ex={a.endX} ey={a.endY} tanX={a.tanX} tanY={a.tanY} color={color} />
+                    <ArrowHead
+                      ex={a.endX}
+                      ey={a.endY}
+                      tanX={a.tanX}
+                      tanY={a.tanY}
+                      color={color}
+                    />
                   </g>
                 );
               })}
@@ -408,7 +479,9 @@ export function PccLearningMapLab() {
                 key={p.id}
                 onClick={() => selectPhase(p.id)}
                 className={`rounded-control border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  active ? "border-accent bg-accent/10" : "border-border hover:border-accent"
+                  active
+                    ? "border-accent bg-accent/10"
+                    : "border-border hover:border-accent"
                 }`}
                 style={{ color: active ? C.accent : C.secondary }}
               >
@@ -432,7 +505,13 @@ export function PccLearningMapLab() {
                       : "border-accent bg-accent/10"
                     : "border-border hover:border-accent"
                 }`}
-                style={{ color: active ? (wrongPath ? C.danger : C.accent) : C.secondary }}
+                style={{
+                  color: active
+                    ? wrongPath
+                      ? C.danger
+                      : C.accent
+                    : C.secondary,
+                }}
               >
                 {s.label}
               </button>
@@ -441,11 +520,20 @@ export function PccLearningMapLab() {
         </div>
 
         {/* 信息面板 */}
-        <div className="mt-3 rounded-control border border-border p-3" style={{ background: C.bg }}>
-          <div className="text-xs font-semibold" style={{ color: wrongPath ? C.danger : C.primary }}>
+        <div
+          className="mt-3 rounded-control border border-border p-3"
+          style={{ background: C.bg }}
+        >
+          <div
+            className="text-xs font-semibold"
+            style={{ color: wrongPath ? C.danger : C.primary }}
+          >
             {infoTitle}
           </div>
-          <div className="mt-1 text-xs leading-relaxed" style={{ color: C.secondary }}>
+          <div
+            className="mt-1 text-xs leading-relaxed"
+            style={{ color: C.secondary }}
+          >
             {infoBody}
           </div>
         </div>
@@ -461,7 +549,10 @@ export function PccLearningMapLab() {
             onChange={(e) => setFaultOn(e.target.checked)}
             className="h-4 w-4 cursor-pointer"
           />
-          <span className="text-xs" style={{ color: faultOn ? C.danger : C.secondary }}>
+          <span
+            className="text-xs"
+            style={{ color: faultOn ? C.danger : C.secondary }}
+          >
             注入故障：显示错误回退路径（红色虚线）
           </span>
         </label>

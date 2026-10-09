@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-09-24T02:28:24.293Z
+> 生成时间：2026-10-08T11:33:19.154Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,11 +13,11 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 476 |
-| failed | 1833 |
-| queued | 200 |
-| passed | 1747 |
-| published | 829 |
+| manifest 证据不完整 unit | 477 |
+| failed | 1829 |
+| queued | 196 |
+| passed | 1739 |
+| published | 845 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
 
@@ -4954,9 +4954,9 @@
 - [ ] 🔴 P1 **[正式 unit ecs-04] Chapter 4: Working with LINQ (Items 29-44)** — evidence 不完整；explained=15/16
     - 关联路径：`content/effective-csharp/04-official/working-with-linq.mdx`
 
-## effective-executive（14 个内容页面 · failed:13 passed:1 · 🚫 门禁阻断 14 项）
+## effective-executive（14 个内容页面 · failed:9 passed:5 · 🚫 门禁阻断 10 项）
 
-- 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
+- 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=97.1%；未映射 unit=0；证据不完整 unit=1。
 - 其他门禁阻断：effective-executive: publication-policy-not-approved。
 
 - [x] ✅ **00-official-learning-map/eex19-official-learning-map** — passed；score 99
@@ -4974,16 +4974,16 @@
 - [ ] ❌ P1 **04-preface/eex19-preface** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
     - 路径：`content/effective-executive/04-preface/eex19-preface.mdx`
     - 正式 unit：`eex19-preface` explained=1/1
-- [ ] ❌ P1 **05-chapter-01/eex19-chapter-01** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **05-chapter-01/eex19-chapter-01** — passed；score 95
     - 路径：`content/effective-executive/05-chapter-01/eex19-chapter-01.mdx`
     - 正式 unit：`eex19-chapter-01` explained=6/6
-- [ ] ❌ P1 **06-chapter-02/eex19-chapter-02** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **06-chapter-02/eex19-chapter-02** — passed；score 94
     - 路径：`content/effective-executive/06-chapter-02/eex19-chapter-02.mdx`
     - 正式 unit：`eex19-chapter-02` explained=5/5
-- [ ] ❌ P1 **07-chapter-03/eex19-chapter-03** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] ✅ **07-chapter-03/eex19-chapter-03** — passed；score 92
     - 路径：`content/effective-executive/07-chapter-03/eex19-chapter-03.mdx`
-    - 正式 unit：`eex19-chapter-03` explained=5/5
-- [ ] ❌ P1 **08-chapter-04/eex19-chapter-04** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+    - 正式 unit：`eex19-chapter-03` explained=4/5
+- [x] ✅ **08-chapter-04/eex19-chapter-04** — passed；score 94
     - 路径：`content/effective-executive/08-chapter-04/eex19-chapter-04.mdx`
     - 正式 unit：`eex19-chapter-04` explained=4/4
 - [ ] ❌ P1 **09-chapter-05/eex19-chapter-05** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
@@ -5001,6 +5001,8 @@
 - [ ] ❌ P1 **13-official-final-review/eex19-official-final-review** — failed；score 41；门禁阻断: status=failed、score=41<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
     - 路径：`content/effective-executive/13-official-final-review/eex19-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
+- [ ] 🔴 P1 **[正式 unit eex19-chapter-03] 第3章 我能贡献什么** — evidence 不完整；explained=4/5
+    - 关联路径：`content/effective-executive/07-chapter-03/eex19-chapter-03.mdx`
 
 ## effective-java（17 个内容页面 · failed:17 · 🚫 门禁阻断 18 项）
 
@@ -12362,62 +12364,62 @@
 - [ ] 🔴 P1 **[正式 unit pp2-13] Column 13 · Searching** — evidence 不完整；explained=4/6
     - 关联路径：`content/programming-pearls/03-product/13-searching.mdx`
 
-## python-advanced（16 个内容页面 · passed:16 · ✅ 书级门禁条件满足）
+## python-advanced（16 个内容页面 · published:16 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=14；正式概念覆盖率=98.6%；未映射 unit=0；证据不完整 unit=1。
 
-- [x] ✅ **00-guide/pya-learning-map** — passed；score 95
+- [x] 🚀 **00-guide/pya-learning-map** — published（已发布）；score 95
     - 路径：`content/python-advanced/00-guide/pya-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [x] ✅ **01-language-api/pya-choosing-good-names** — passed；score 98
+- [x] 🚀 **01-language-api/pya-choosing-good-names** — published（已发布）；score 98
     - 路径：`content/python-advanced/01-language-api/pya-choosing-good-names.mdx`
     - 正式 unit：`pya-04` explained=5/5
-- [x] ✅ **01-language-api/pya-getting-started** — passed；score 98
+- [x] 🚀 **01-language-api/pya-getting-started** — published（已发布）；score 98
     - 路径：`content/python-advanced/01-language-api/pya-getting-started.mdx`
     - 正式 unit：`pya-01` explained=5/5
-- [x] ✅ **01-language-api/pya-syntax-above-class** — passed；score 96
+- [x] 🚀 **01-language-api/pya-syntax-above-class** — published（已发布）；score 96
     - 路径：`content/python-advanced/01-language-api/pya-syntax-above-class.mdx`
     - 正式 unit：`pya-03` explained=5/5
-- [x] ✅ **01-language-api/pya-syntax-below-class** — passed；score 93
+- [x] 🚀 **01-language-api/pya-syntax-below-class** — published（已发布）；score 93
     - 路径：`content/python-advanced/01-language-api/pya-syntax-below-class.mdx`
     - 正式 unit：`pya-02` explained=4/5
-- [x] ✅ **02-packages-apps/pya-writing-application** — passed；score 97
+- [x] 🚀 **02-packages-apps/pya-writing-application** — published（已发布）；score 97
     - 路径：`content/python-advanced/02-packages-apps/pya-writing-application.mdx`
     - 正式 unit：`pya-06` explained=5/5
-- [x] ✅ **02-packages-apps/pya-writing-package** — passed；score 95
+- [x] 🚀 **02-packages-apps/pya-writing-package** — published（已发布）；score 95
     - 路径：`content/python-advanced/02-packages-apps/pya-writing-package.mdx`
     - 正式 unit：`pya-05` explained=5/5
-- [x] ✅ **02-packages-apps/pya-zc-buildout** — passed；score 95
+- [x] 🚀 **02-packages-apps/pya-zc-buildout** — published（已发布）；score 95
     - 路径：`content/python-advanced/02-packages-apps/pya-zc-buildout.mdx`
     - 正式 unit：`pya-07` explained=5/5
-- [x] ✅ **03-lifecycle/pya-documenting-project** — passed；score 98
+- [x] 🚀 **03-lifecycle/pya-documenting-project** — published（已发布）；score 98
     - 路径：`content/python-advanced/03-lifecycle/pya-documenting-project.mdx`
     - 正式 unit：`pya-10` explained=5/5
-- [x] ✅ **03-lifecycle/pya-managing-code** — passed；score 96
+- [x] 🚀 **03-lifecycle/pya-managing-code** — published（已发布）；score 96
     - 路径：`content/python-advanced/03-lifecycle/pya-managing-code.mdx`
     - 正式 unit：`pya-08` explained=5/5
-- [x] ✅ **03-lifecycle/pya-managing-life-cycle** — passed；score 98
+- [x] 🚀 **03-lifecycle/pya-managing-life-cycle** — published（已发布）；score 98
     - 路径：`content/python-advanced/03-lifecycle/pya-managing-life-cycle.mdx`
     - 正式 unit：`pya-09` explained=5/5
-- [x] ✅ **03-lifecycle/pya-test-driven-development** — passed；score 98
+- [x] 🚀 **03-lifecycle/pya-test-driven-development** — published（已发布）；score 98
     - 路径：`content/python-advanced/03-lifecycle/pya-test-driven-development.mdx`
     - 正式 unit：`pya-11` explained=5/5
-- [x] ✅ **04-performance-design/pya-optimization-profiling** — passed；score 98
+- [x] 🚀 **04-performance-design/pya-optimization-profiling** — published（已发布）；score 98
     - 路径：`content/python-advanced/04-performance-design/pya-optimization-profiling.mdx`
     - 正式 unit：`pya-12` explained=5/5
-- [x] ✅ **04-performance-design/pya-optimization-solutions** — passed；score 98
+- [x] 🚀 **04-performance-design/pya-optimization-solutions** — published（已发布）；score 98
     - 路径：`content/python-advanced/04-performance-design/pya-optimization-solutions.mdx`
     - 正式 unit：`pya-13` explained=5/5
-- [x] ✅ **04-performance-design/pya-useful-design-patterns** — passed；score 98
+- [x] 🚀 **04-performance-design/pya-useful-design-patterns** — published（已发布）；score 98
     - 路径：`content/python-advanced/04-performance-design/pya-useful-design-patterns.mdx`
     - 正式 unit：`pya-14` explained=5/5
-- [x] ✅ **05-review/pya-final-review** — passed；score 99
+- [x] 🚀 **05-review/pya-final-review** — published（已发布）；score 99
     - 路径：`content/python-advanced/05-review/pya-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [ ] 🔴 P1 **[正式 unit pya-02] Chapter 2 · Syntax Best Practices—Below the Class Level** — evidence 不完整；explained=4/5
     - 关联路径：`content/python-advanced/01-language-api/pya-syntax-below-class.mdx`
 
-## python-crash-course（22 个内容页面 · queued:4 passed:18 · 🚫 门禁阻断 5 项）
+## python-crash-course（22 个内容页面 · passed:22 · 🚫 门禁阻断 1 项）
 
 - 门禁摘要：目录=未登记，manifest=20；正式概念覆盖率=97.6%；未映射 unit=0；证据不完整 unit=3。
 - 其他门禁阻断：python-crash-course: publication-policy-not-approved。
@@ -12428,21 +12430,21 @@
 - [x] ✅ **01-official/getting-started** — passed；score 95
     - 路径：`content/python-crash-course/01-official/getting-started.mdx`
     - 正式 unit：`pcc3-01` explained=5/5
-- [ ] ⚠️ P1 **02-official/variables-and-simple-data-types** — queued（待发布）；score 61；门禁阻断: status=queued、score=61<90、dimensionFailures=source,knowledge,visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: source、knowledge、visual、ux
+- [x] ✅ **02-official/variables-and-simple-data-types** — passed；score 95
     - 路径：`content/python-crash-course/02-official/variables-and-simple-data-types.mdx`
-    - 正式 unit：`pcc3-02` explained=7/7、`pcc3-03` explained=2/5、`pcc3-04` explained=0/6、`pcc3-05` explained=2/5、`pcc3-06` explained=1/5、`pcc3-07` explained=1/5、`pcc3-08` explained=1/7、`pcc3-09` explained=2/8、`pcc3-10` explained=1/7、`pcc3-15` explained=1/6、`pcc3-16` explained=1/7、`pcc3-17` explained=1/6、`pcc3-18` explained=1/8
-- [ ] ⚠️ P1 **03-official/introducing-lists** — queued（待发布）；score 62；门禁阻断: status=queued、score=62<90、dimensionFailures=source,knowledge,visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: source、knowledge、visual、ux
+    - 正式 unit：`pcc3-02` explained=7/7
+- [x] ✅ **03-official/introducing-lists** — passed；score 96
     - 路径：`content/python-crash-course/03-official/introducing-lists.mdx`
-    - 正式 unit：`pcc3-03` explained=5/5、`pcc3-04` explained=2/6、`pcc3-05` explained=2/5、`pcc3-06` explained=3/5、`pcc3-07` explained=0/5、`pcc3-08` explained=2/7、`pcc3-09` explained=2/8、`pcc3-10` explained=1/7、`pcc3-18` explained=2/8、`pcc3-19` explained=1/6
+    - 正式 unit：`pcc3-03` explained=5/5
 - [x] ✅ **03-projects/pcc-final-review** — passed；score 97
     - 路径：`content/python-crash-course/03-projects/pcc-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] ⚠️ P1 **04-official/working-with-lists** — queued（待发布）；score 62；门禁阻断: status=queued、score=62<90、dimensionFailures=source,knowledge,visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: source、knowledge、visual、ux
+- [x] ✅ **04-official/working-with-lists** — passed；score 97
     - 路径：`content/python-crash-course/04-official/working-with-lists.mdx`
-    - 正式 unit：`pcc3-02` explained=0/7、`pcc3-03` explained=4/5、`pcc3-04` explained=6/6、`pcc3-05` explained=2/5、`pcc3-06` explained=2/5、`pcc3-07` explained=1/5、`pcc3-08` explained=1/7、`pcc3-09` explained=1/8、`pcc3-15` explained=0/6、`pcc3-18` explained=2/8、`pcc3-19` explained=1/6
-- [ ] ⚠️ P1 **05-official/if-statements** — queued（待发布）；score 61；门禁阻断: status=queued、score=61<90、dimensionFailures=source,knowledge,visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: source、knowledge、visual、ux
+    - 正式 unit：`pcc3-04` explained=6/6
+- [x] ✅ **05-official/if-statements** — passed；score 95
     - 路径：`content/python-crash-course/05-official/if-statements.mdx`
-    - 正式 unit：`pcc3-01` explained=1/5、`pcc3-03` explained=2/5、`pcc3-04` explained=1/6、`pcc3-05` explained=5/5、`pcc3-06` explained=2/5、`pcc3-07` explained=1/5、`pcc3-08` explained=0/7、`pcc3-09` explained=1/8、`pcc3-10` explained=2/7、`pcc3-11` explained=1/6、`pcc3-18` explained=3/8、`pcc3-19` explained=1/6
+    - 正式 unit：`pcc3-05` explained=5/5
 - [x] ✅ **06-official/dictionaries** — passed；score 98
     - 路径：`content/python-crash-course/06-official/dictionaries.mdx`
     - 正式 unit：`pcc3-06` explained=5/5
@@ -12489,11 +12491,11 @@
     - 路径：`content/python-crash-course/20-official/styling-and-deploying-an-app.mdx`
     - 正式 unit：`pcc3-20` explained=8/8
 - [ ] 🔴 P1 **[正式 unit pcc3-07] 7. User Input and while Loops** — evidence 不完整；explained=4/5
-    - 关联路径：`content/python-crash-course/02-official/variables-and-simple-data-types.mdx`、`content/python-crash-course/03-official/introducing-lists.mdx`、`content/python-crash-course/04-official/working-with-lists.mdx`、`content/python-crash-course/05-official/if-statements.mdx`、`content/python-crash-course/07-official/user-input-and-while-loops.mdx`
+    - 关联路径：`content/python-crash-course/07-official/user-input-and-while-loops.mdx`
 - [ ] 🔴 P1 **[正式 unit pcc3-09] 9. Classes** — evidence 不完整；explained=7/8
-    - 关联路径：`content/python-crash-course/02-official/variables-and-simple-data-types.mdx`、`content/python-crash-course/03-official/introducing-lists.mdx`、`content/python-crash-course/04-official/working-with-lists.mdx`、`content/python-crash-course/05-official/if-statements.mdx`、`content/python-crash-course/09-official/classes.mdx`
+    - 关联路径：`content/python-crash-course/09-official/classes.mdx`
 - [ ] 🔴 P1 **[正式 unit pcc3-15] 15. Generating Data** — evidence 不完整；explained=5/6
-    - 关联路径：`content/python-crash-course/02-official/variables-and-simple-data-types.mdx`、`content/python-crash-course/04-official/working-with-lists.mdx`、`content/python-crash-course/15-official/generating-data.mdx`
+    - 关联路径：`content/python-crash-course/15-official/generating-data.mdx`
 
 ## python-ops（18 个内容页面 · failed:18 · 🚫 门禁阻断 19 项）
 

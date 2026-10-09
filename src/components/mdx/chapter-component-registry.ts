@@ -14632,6 +14632,108 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EexLearningMapWorkEvidenceLab: module0.EexLearningMapWorkEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "effective-executive/01-recommendation-01/eex19-recommendation-01":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-executive/eex19-recommendation-01-reading-boundary-lab");
+      return {
+        Eex19Recommendation01ReadingBoundaryLab:
+          module0.Eex19Recommendation01ReadingBoundaryLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-executive/02-recommendation-02/eex19-recommendation-02":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-executive/eex19-recommendation-02-reading-map");
+      return {
+        Eex19Recommendation02ReadingMap:
+          module0.Eex19Recommendation02ReadingMap,
+      } as ChapterMdxComponents;
+    },
+  "effective-executive/03-recommendation-03/eex19-recommendation-03":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-executive/eex19-recommendation-03-transfer-map");
+      return {
+        Eex19Recommendation03TransferMap:
+          module0.Eex19Recommendation03TransferMap,
+      } as ChapterMdxComponents;
+    },
+  "effective-executive/04-preface/eex19-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-preface-reading-map");
+    return {
+      Eex19PrefaceReadingMap: module0.Eex19PrefaceReadingMap,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/05-chapter-01/eex19-chapter-01": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-01-effectiveness-boundary-lab");
+    return {
+      EexEffectivenessBoundaryLab: module0.EexEffectivenessBoundaryLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/06-chapter-02/eex19-chapter-02": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-02-time-use-lab");
+    return {
+      EexTimeUseLab: module0.EexTimeUseLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/07-chapter-03/eex19-chapter-03": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-03-contribution-contract-lab");
+    return {
+      EexChapter03ContributionContractLab:
+        module0.EexChapter03ContributionContractLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/08-chapter-04/eex19-chapter-04": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-04-role-fit-lab");
+    return {
+      EexChapter04RoleFitLab: module0.EexChapter04RoleFitLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/09-chapter-05/eex19-chapter-05": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-05-priority-choice-lab");
+    return {
+      EexChapter05PriorityChoiceLab: module0.EexChapter05PriorityChoiceLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/10-chapter-06/eex19-chapter-06": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-06-decision-clinic");
+    return {
+      EexChapter06DecisionLab: module0.EexChapter06DecisionLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/11-chapter-07/eex19-chapter-07": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-07-decision-evidence-lab");
+    return {
+      Eex19Chapter07DecisionEvidenceLab:
+        module0.Eex19Chapter07DecisionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/12-chapter-08/eex19-chapter-08": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-executive/eex19-chapter-08-effectiveness-transfer-lab");
+    return {
+      Eex19Chapter08EffectivenessTransferLab:
+        module0.Eex19Chapter08EffectivenessTransferLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-executive/13-official-final-review/eex19-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-executive/eex19-final-review-evidence-board");
+      return {
+        Eex19FinalReviewEvidenceFlow: module0.Eex19FinalReviewEvidenceFlow,
+        Eex19FinalReviewOutcomeMap: module0.Eex19FinalReviewOutcomeMap,
+      } as ChapterMdxComponents;
+    },
   "effective-modern-cpp/00-deducing-types/item-01-template-type-deduction":
     async () => {
       const module0 =
@@ -24000,11 +24102,40 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       PccGettingStartedLab: module0.PccGettingStartedLab,
     } as ChapterMdxComponents;
   },
+  "python-crash-course/02-official/variables-and-simple-data-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/python-crash-course/v2/variables-and-simple-data-types");
+      return {
+        PccVariablesLabelsLab: module0.PccVariablesLabelsLab,
+      } as ChapterMdxComponents;
+    },
+  "python-crash-course/03-official/introducing-lists": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/introducing-lists");
+    return {
+      PccIntroducingListsLab: module0.PccIntroducingListsLab,
+    } as ChapterMdxComponents;
+  },
   "python-crash-course/03-projects/pcc-final-review": async () => {
     const module0 =
       await import("@/components/mdx/python-crash-course/v2/pcc-final-review");
     return {
       PccFinalReviewLab: module0.PccFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/04-official/working-with-lists": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/working-with-lists");
+    return {
+      PccWorkingWithListsLab: module0.PccWorkingWithListsLab,
+    } as ChapterMdxComponents;
+  },
+  "python-crash-course/05-official/if-statements": async () => {
+    const module0 =
+      await import("@/components/mdx/python-crash-course/v2/if-statements");
+    return {
+      PccIfStatementsLab: module0.PccIfStatementsLab,
     } as ChapterMdxComponents;
   },
   "python-crash-course/06-official/dictionaries": async () => {

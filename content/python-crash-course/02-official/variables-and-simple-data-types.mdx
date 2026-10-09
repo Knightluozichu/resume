@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: "pcc3-02"
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,9 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { PccVariablesLabelsLab } from "@/components/mdx/python-crash-course/v2/variables-and-simple-data-types";
+
+{/* 知识点清单：name binding label模型(交互绑定图)/string method immutable(交互规范化链)/f-string(代码对照)/strip vs removeprefix(交互规范化链)/floating-point approximation(比喻)/multiple assignment constants(代码对照)/comment Zen of Python(比喻) */}
 
 <Objectives>
 
@@ -32,11 +39,16 @@ import { Attribution } from "@/components/mdx/attribution";
 
 先预测三步赋值后两个名字各打印什么，再操作下图。这个模型会在第3–4章解释list alias与copy，在第8章解释参数传递，在第9章解释instance attribute；若现在仍把名字当盒子，后续可变对象行为会显得随机。
 
-<Term def="赋值让name引用object；重新赋值改变该name的指向，不会自动修改其他name或旧object。">name binding</Term>
+<Term def="赋值让name引用object；重新赋值改变该name的指向，不会自动修改其他name或旧object。">
+  name binding
+</Term>
+
+> 猜一猜：执行 `snapshot = status; status = "ready"` 后，`snapshot` 还会打印 `"draft"` 吗？点步进看两个 name 的箭头变化，再开故障注入对比"盒子模型"。
+
+<PccVariablesLabelsLab />
 
 <Stepper>
-  <Step title="逐步执行三个赋值语句">
-  </Step>
+  <Step title="逐步执行三个赋值语句"></Step>
   <Step title="画出 name 到 object 的箭头">
     每一步只更新受赋值影响的名字；字符串不可变，因此所谓“修改字符串”实际会产生新字符串并重绑定。
   </Step>
@@ -44,6 +56,11 @@ import { Attribution } from "@/components/mdx/attribution";
     `id()`只用于观察当前进程内对象身份，不应写入业务判断；真正契约仍是两个名字打印的值。
   </Step>
 </Stepper>
+
+name binding 的核心：赋值复制 reference 而非值，重绑定只改一个 name：
+
+<CodeTabs>
+  <Tab label="绑定与重绑定">
 
 ```python
 message = "draft"
@@ -54,24 +71,46 @@ message = "published"
 print(message, backup)  # published draft
 ```
 
+  </Tab>
+  <Tab label="用 id() 验证身份">
+
+```python
+message = "draft"
+backup = message
+print(id(message) == id(backup))  # True 同一 object
+
+message = "published"
+print(id(message) == id(backup))  # False rebind 后分离
+```
+
+  </Tab>
+</CodeTabs>
+
 变量名只能包含字母、数字和下划线，不能以数字开头，也不能使用Python关键字。选择能表达意图的名字，例如`unread_messages`而不是`um`；NameError常来自拼写不一致或在绑定前读取名字。第三版改进了错误提示，但仍要从异常类型、行号和候选拼写理解根因。
 
 ## Strings：转换返回新值，原对象不变
 
 string既能保存单引号，也能保存双引号；选择外层引号以减少转义。`title()`、`upper()`、`lower()`、`strip()`等string methods都返回新字符串。若没有赋值或传给下一个函数，结果会被丢弃：`name.strip()`不会原地改变`name`。
 
-<Term def="在字符串对象上调用并返回新字符串的操作；因为string immutable，调用本身不会原地修改旧值。">string method</Term>
+<Term def="在字符串对象上调用并返回新字符串的操作；因为string immutable，调用本身不会原地修改旧值。">
+  string method
+</Term>
 
 <Stepper>
-  <Step title="选择一个字符串转换">
-  </Step>
+  <Step title="选择一个字符串转换"></Step>
   <Step title="区分 input 与 returned value">
     `strip`只清理两端whitespace，`removeprefix`只匹配开头，`removesuffix`只匹配结尾；它们都不做模糊替换。
   </Step>
   <Step title="组合成单向规范化链">
-    对外部输入先保留raw value，再按明确顺序产生normalized value，避免日志里失去原始证据。
+    对外部输入先保留raw value，再按明确顺序产生normalized
+    value，避免日志里失去原始证据。
   </Step>
 </Stepper>
+
+string methods 返回新值，未赋值的结果会被丢弃。规范化链保留 raw、逐步生成 normalized：
+
+<CodeTabs>
+  <Tab label="正确：规范化链">
 
 ```python
 raw_url = "  https://example.com/report.txt  "
@@ -83,6 +122,20 @@ print(f"raw={raw_url!r}")
 print(f"normalized={stem!r}")
 ```
 
+  </Tab>
+  <Tab label="错误：strip 误用为前缀删除">
+
+```python
+raw_url = "  https://example.com/report.txt  "
+# strip("https://") 把参数当字符集合，误删 h/t/p/s/: 任意字符
+wrong = raw_url.strip("https://")
+print(f"wrong={wrong!r}")
+# 可能输出 'example.com/report.tx' —— 误删了末尾的 t
+```
+
+  </Tab>
+</CodeTabs>
+
 f-string在运行时求值花括号内的表达式，适合把变量组成可读消息。`!r`使用repr形式，能让tab、newline和边界whitespace显形；这比直接print更适合排查清洗错误。`	`插入tab，`\n`插入newline，但展示格式不应和领域数据混为一体。
 
 `removeprefix()`与`removesuffix()`不是`strip()`的替代品。`strip("https://")`把参数视为“可从两端移除的字符集合”，并不要求完整前缀匹配，可能误删合法字符。需要精确协议或扩展名时使用专用方法，且先判断大小写、空值与重复前缀策略。
@@ -93,15 +146,16 @@ f-string在运行时求值花括号内的表达式，适合把变量组成可读
 
 清洗与验证也不是同一动作。`strip()`可以规范边界whitespace，却不能证明URL、用户名或文件扩展名合法。保留raw value用于错误反馈，生成normalized value用于后续比较，再由独立validation返回具体失败原因。这样日志能回答用户实际输入了什么，测试也能分别覆盖转换规则和拒绝规则。
 
-<Term def="以f前缀定义、在花括号中求值表达式并组成新字符串的格式化机制。">f-string</Term>
+<Term def="以f前缀定义、在花括号中求值表达式并组成新字符串的格式化机制。">
+  f-string
+</Term>
 
 ## Numbers：先判断运算语义，再看显示结果
 
 Python的integer可以按可用内存增长，不受固定32位范围限制；float通常采用二进制浮点，像0.1这样的十进制小数无法精确表示。`+ - * /`含义直观，但`/`总返回float，`//`执行floor division，`**`表示幂。运算优先级不确定时使用括号表达意图。
 
 <Stepper>
-  <Step title="选择一个数值表达式并先预测">
-  </Step>
+  <Step title="选择一个数值表达式并先预测"></Step>
   <Step title="同时记录 value 与 type">
     `7 / 2`和`7 // 2`数值及类型都不同；只看打印文本不足以解释后续API行为。
   </Step>
@@ -110,7 +164,14 @@ Python的integer可以按可用内存增长，不受固定32位范围限制；fl
   </Step>
 </Stepper>
 
-<Term def="用二进制近似保存实数的数值类型；许多十进制小数不能被有限位二进制精确表示。">floating-point approximation</Term>
+<Term def="用二进制近似保存实数的数值类型；许多十进制小数不能被有限位二进制精确表示。">
+  floating-point approximation
+</Term>
+
+数值表达式中 value 和 type 都需关注；`/` 总返回 float，`//` 是 floor division：
+
+<CodeTabs>
+  <Tab label="整数、多赋值与常量">
 
 ```python
 universe_age = 14_000_000_000
@@ -119,9 +180,19 @@ MAX_WORKERS = 8
 
 print(universe_age)
 print(x, y, z)
-print(0.1 + 0.2)
-print(7 / 2, 7 // 2, 2 ** 8)
 ```
+
+  </Tab>
+  <Tab label="float 近似与除法语义">
+
+```python
+print(0.1 + 0.2)        # 0.30000000000000004
+print(7 / 2, 7 // 2)   # 3.5 3  —— / 返回 float，// 返回 int
+print(2 ** 8)           # 256
+```
+
+  </Tab>
+</CodeTabs>
 
 numeric underscores只提高源码可读性，`14_000_000_000`与不加下划线的整数值相同。Multiple Assignment要求右侧提供相同数量的值，适合一起初始化相关名字，但不要为了短而把无关状态挤在一行。Python没有阻止重新绑定的真正常量关键字，Constants使用全大写命名约定表达“不要修改”，代码评审和测试负责维护这项约定。
 
@@ -131,7 +202,9 @@ numeric underscores只提高源码可读性，`14_000_000_000`与不加下划线
 
 边界输入需要同时检查值域和类型语义：worker数量必须是正integer，百分比可能允许float，金额应选择Decimal或整数最小单位。把这些决定写在靠近输入边界的位置，并在输出处明确舍入策略。一个看似简单的`print`若隐藏了单位、精度或舍入规则，下一章放进list批量处理后会放大成系统性错误。
 
-<Term def="用全大写名字表达模块级不应重绑定配置的约定；Python运行时并不会自动禁止修改。">constant convention</Term>
+<Term def="用全大写名字表达模块级不应重绑定配置的约定；Python运行时并不会自动禁止修改。">
+  constant convention
+</Term>
 
 ## Comments 与 Zen of Python：解释决策，不复述语法
 
@@ -142,26 +215,38 @@ comment以`#`开始。高价值注释说明为什么选择某个阈值、为何�
 本章的clean code不是追求某种固定格式，而是让name binding、字符串转换和数值假设可观察。变量名表达角色，f-string明确输出边界，constant convention提示稳定配置，comment记录不能从代码直接读出的原因。后续章节会把这些习惯扩展到list、function、class和项目结构。
 
 <Callout type="trap" title="调用 strip 后原变量已经被清洗">
-string immutable，`raw.strip()`返回新对象。如果不赋值给`clean`或传入下一步，`raw`仍保留原值。需要审计时同时保存raw和normalized，而不是覆盖后假装输入从未有空白。
+  string
+  immutable，`raw.strip()`返回新对象。如果不赋值给`clean`或传入下一步，`raw`仍保留原值。需要审计时同时保存raw和normalized，而不是覆盖后假装输入从未有空白。
 </Callout>
 
 <Callout type="trap" title="0.1 + 0.2 不等于 0.3 说明 Python 算错了">
-这是有限二进制floating-point approximation。显示误差不等于运算随机；应按领域选择容差比较、Decimal或整数最小单位，不能直接用`==`判断所有计算结果。
+  这是有限二进制floating-point
+  approximation。显示误差不等于运算随机；应按领域选择容差比较、Decimal或整数最小单位，不能直接用`==`判断所有计算结果。
+</Callout>
+
+<Callout type="trap" title="用 strip 删除完整前缀">
+  **现象 →** 想用 `raw.strip("https://")` 删掉 URL 的 `https://` 前缀。 **原因
+  →** `strip` 的参数是「两端可移除的字符集合」，不是完整前缀；它会从两端逐个删
+  h/t/p/s/: 任意字符，可能误删合法字符。 **修法 →** 删完整前缀用
+  `removeprefix("https://")`，删完整后缀用 `removesuffix(".txt")`；strip
+  只用于清理两端空白。
 </Callout>
 
 ## 本章回顾：从绑定到可读代码
 
-1. Variables Are Labels：赋值建立name binding，重新赋值不会自动修改其他名字。
-2. string methods返回新对象；f-string组成消息，whitespace与prefix/suffix处理必须选择正确语义。
-3. integer精确保存整数，float存在二进制近似；预测表达式时同时关心value与type。
-4. Multiple Assignment提高相关初始化可读性，Constants是大写约定而非运行时保护。
-5. comments解释原因，Zen of Python提供可读、明确和简单之间的设计方向。
+- 赋值建立 name binding，复制 reference 而非值；重绑定不自动修改其他 name
+- string methods 返回新对象，未赋值的结果会被丢弃；strip/removeprefix/removesuffix 语义不同
+- integer 精确保存整数，float 存在二进制近似；预测表达式同时关心 value 与 type
+- Multiple Assignment 初始化相关名字，Constants 是大写约定而非运行时保护
+- comment 解释决策原因，Zen of Python 平衡明确、简单与可读
 
 <Exercises>
 
 **问题 1：执行 `status = "draft"; snapshot = status; status = "ready"` 后两个名字分别是什么？为什么？**
 
-<Answer>`status`打印`ready`，`snapshot`打印`draft`。第二句让两个名字都指向旧字符串，第三句创建或取得新字符串并只重绑定status。字符串不可变，重绑定一个名字不会原地改写旧对象，也不会自动移动snapshot。</Answer>
+<Answer>
+  `status`打印`ready`，`snapshot`打印`draft`。第二句让两个名字都指向旧字符串，第三句创建或取得新字符串并只重绑定status。字符串不可变，重绑定一个名字不会原地改写旧对象，也不会自动移动snapshot。
+</Answer>
 
 **问题 2：实现URL规范化，要求只删除两端空白、开头的`https://`和结尾的`.json`，同时保留原始输入。**
 
@@ -169,18 +254,61 @@ string immutable，`raw.strip()`返回新对象。如果不赋值给`clean`或�
 
 **问题 3：为什么价格计算不应直接依赖 `0.1 + 0.2 == 0.3`？给出两种策略。**
 
-<Answer>float用有限二进制近似表示十进制小数，0.1和0.2通常不能精确保存，因此直接相等可能失败。策略一是把货币转换为整数最小单位，例如分；策略二是使用`decimal.Decimal`并从字符串构造。科学计算则可用`math.isclose`和业务定义的容差。</Answer>
+<Answer>
+  float用有限二进制近似表示十进制小数，0.1和0.2通常不能精确保存，因此直接相等可能失败。策略一是把货币转换为整数最小单位，例如分；策略二是使用`decimal.Decimal`并从字符串构造。科学计算则可用`math.isclose`和业务定义的容差。
+</Answer>
+
+**问题 4：独立实现 `normalize_url(raw)` 函数——输入原始 URL，返回 raw 与 normalized 两个值，并对 strip 误用抛出提醒（独立实现）**
+
+<Answer>
+保留 raw 值，用 strip/removeprefix/removesuffix 生成 normalized；检测 strip 误用模式并抛 `ValueError`：
+
+```python
+def normalize_url(raw: str) -> dict:
+    original = raw
+    stripped = raw.strip()
+    normalized = stripped.removeprefix("https://").removesuffix(".txt")
+    return {"raw": original, "normalized": normalized}
+
+# strip 误用检测：若有人把 strip 当前缀删，提示正确方法
+def safe_normalize(raw: str) -> str:
+    if "https://" in raw and raw.strip("https://") != raw.strip():
+        raise ValueError("strip(\"https://\") 误删字符集，改用 removeprefix")
+    return raw.strip().removeprefix("https://").removesuffix(".txt")
+```
+
+关键：raw 与 normalized 分离保留，便于审计；strip 参数是字符集合而非前缀。
+
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="name binding" definition="赋值让名字引用对象，重绑定只改变该名字的指向。" />
-  <GlossaryItem term="string method" definition="作用于字符串并返回新字符串、不会原地修改旧值的方法。" />
-  <GlossaryItem term="f-string" definition="在花括号中求值表达式并构造新字符串的格式化语法。" />
-  <GlossaryItem term="floating-point approximation" definition="用有限二进制位近似表示实数造成的可预测精度限制。" />
-  <GlossaryItem term="constant convention" definition="用全大写名字表达不应重绑定配置的Python约定。" />
+  <GlossaryItem
+    term="name binding"
+    definition="赋值让名字引用对象，重绑定只改变该名字的指向。"
+  />
+  <GlossaryItem
+    term="string method"
+    definition="作用于字符串并返回新字符串、不会原地修改旧值的方法。"
+  />
+  <GlossaryItem
+    term="f-string"
+    definition="在花括号中求值表达式并构造新字符串的格式化语法。"
+  />
+  <GlossaryItem
+    term="floating-point approximation"
+    definition="用有限二进制位近似表示实数造成的可预测精度限制。"
+  />
+  <GlossaryItem
+    term="constant convention"
+    definition="用全大写名字表达不应重绑定配置的Python约定。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 2: Variables and Simple Data Types" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />
+<Attribution
+  adaptedFrom="Python Crash Course, Third Edition, Chapter 2: Variables and Simple Data Types"
+  adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition"
+/>
