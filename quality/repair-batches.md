@@ -311,10 +311,10 @@ B11清理确认：四worker已关闭，所属PID91440/91441/91469退出，3100�
 - B13交接、任务清单、修改前章节快照和审计日志归档于 `quality/artifacts/repair-batches/2026-10-08-13/session/`；验收详情见 `quality/repair-reports/batch-13.json`。开发服务器及B13临时目录在清理完成后移除。
 - 本批仅本地验收；未提交、push或部署。**不自动开启B14，等待用户指令。**
 
-## 批次 14：三本书内容复核与部署准备（完成门禁修复，待部署）
+## 批次 14：三本书内容复核与生产发布（完成）
 
 - 有效管理者全书14页质量审计通过（分数93/94/94/93及第1–8章95/94/92/94/92/91/93/92，官方导读地图99、复习页92），视觉14/14通过；Python Advanced质量审计16/16通过，视觉16/16通过；Python Crash Course质量审计22/22通过，视觉22/22通过。详细章节结果和哈希见`quality/repair-reports/batch-14.json`。
 - 三书资格检查通过；通过正式审批脚本将`effective-executive`与`python-crash-course`加入发布白名单，`python-advanced`原已批准。为使有效管理者的获批章节能进入生产路由，14页的`draft`经本次用户部署指令和正式审批后改为`false`；来源模式与来源范围保持不变。Python Advanced仍为16页可发布，Python Crash Course本批改动的4页可发布，其余18页继续保留草稿。
 - 最终检查：4609 MDX文件0错误、组件注册表2658 routes/2716 lazy modules、全库 TypeScript、目标组件 ESLint、目标书籍文件 Prettier 均通过。
 - 首次并发视觉巡检因测试服务器未运行及并发超时未放行；启动本地服务后，将巡检并发降为1并重跑所有页面，三书全部通过，没有跳过视觉门禁。
-- 部署门禁全部通过（质量、视觉、TypeScript、全站内链）；生产 smoke routes 已能枚举。尚未完成生产构建/服务器切换，部署成功后再更新状态。
+- 三书部署门禁全部通过（质量、视觉、TypeScript、全站内链），全站生产构建完成；release `release-20261009T045256Z-53fedcaea14e`（commit `53fedcaea14ed1a708dce5555f19ad955c16a002`）已原子切换并通过公网复检。有效管理者14章、Python Advanced 16章记为 published；Python Crash Course的4个非草稿修订章已在线，其余18章保持草稿。三书生产抽样路由分别5/5、5/5、3/3返回200。
