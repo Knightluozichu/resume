@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T13:04:27.005Z
+> 生成时间：2026-10-15T14:29:18.351Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,10 +13,10 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 478 |
-| failed | 1792 |
+| manifest 证据不完整 unit | 480 |
+| failed | 1788 |
 | queued | 196 |
-| passed | 1740 |
+| passed | 1744 |
 | published | 881 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -1059,7 +1059,7 @@
     - 路径：`content/big-nerd-ranch-guide/ui-fragment/ui-fragments.mdx`
     - 正式 unit：`ui-fragments` explained=8/8
 
-## blender-3d（17 个内容页面 · passed:17 · 🚫 门禁阻断 2 项）
+## blender-3d（17 个内容页面 · failed:1 passed:16 · 🚫 门禁阻断 2 项）
 
 - 门禁摘要：目录=未登记，manifest=15；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：blender-3d: publication-policy-not-approved。
@@ -1106,7 +1106,7 @@
 - [x] ✅ **06-final/bl3-13-camera-tracking** — passed；score 100
     - 路径：`content/blender-3d/06-final/bl3-13-camera-tracking.mdx`
     - 正式 unit：`bl3-13` explained=5/5
-- [ ] ✅ P1 **06-final/bl3-14-lighting-compositing-rendering** — passed；score 99；门禁阻断: contentHash-stale=6c9c628f712cb603 actual=8d21ee4b4df82bbf
+- [ ] ❌ P1 **06-final/bl3-14-lighting-compositing-rendering** — failed；score 87；门禁阻断: status=failed、score=87<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/blender-3d/06-final/bl3-14-lighting-compositing-rendering.mdx`
     - 正式 unit：`bl3-14` explained=4/4
 - [x] ✅ **07-extend-review/bl3-15-other-features** — passed；score 100
@@ -1116,7 +1116,7 @@
     - 路径：`content/blender-3d/07-extend-review/bl3-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## blockchain-dev-practice（17 个内容页面 · passed:17 · 🚫 门禁阻断 2 项）
+## blockchain-dev-practice（17 个内容页面 · failed:1 passed:16 · 🚫 门禁阻断 2 项）
 
 - 门禁摘要：目录=未登记，manifest=15；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：blockchain-dev-practice: publication-policy-not-approved。
@@ -1127,7 +1127,7 @@
 - [x] ✅ **01-preface/bdp-preface** — passed；score 99
     - 路径：`content/blockchain-dev-practice/01-preface/bdp-preface.mdx`
     - 正式 unit：`bdp-preface` explained=1/1
-- [ ] ✅ P1 **02-01-understand-blockchain/bdp-01-understand-blockchain** — passed；score 93；门禁阻断: contentHash-stale=cb003871b1db1546 actual=28f3d369c0039257
+- [ ] ❌ P1 **02-01-understand-blockchain/bdp-01-understand-blockchain** — failed；score 81；门禁阻断: status=failed、score=81<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/blockchain-dev-practice/02-01-understand-blockchain/bdp-01-understand-blockchain.mdx`
     - 正式 unit：`bdp-01-understand-blockchain` explained=22/22
 - [x] ✅ **03-02-practice-preparation/bdp-02-practice-preparation** — passed；score 96
@@ -9128,9 +9128,9 @@
     - 路径：`content/large-language-models/15-review/llm-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## large-scale-llm-practice（14 个内容页面 · failed:8 passed:6 · 🚫 门禁阻断 8 项）
+## large-scale-llm-practice（14 个内容页面 · failed:2 passed:12 · 🚫 门禁阻断 2 项）
 
-- 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=98.4%；未映射 unit=0；证据不完整 unit=1。
+- 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=96.1%；未映射 unit=0；证据不完整 unit=3。
 
 - [x] ✅ **00-map/lsl-official-learning-map** — passed；score 96
     - 路径：`content/large-scale-llm-practice/00-map/lsl-official-learning-map.mdx`
@@ -9150,22 +9150,22 @@
 - [x] ✅ **05-data/lsl-03-pretraining-data** — passed；score 98
     - 路径：`content/large-scale-llm-practice/05-data/lsl-03-pretraining-data.mdx`
     - 正式 unit：`lsl-03` explained=19/19
-- [ ] ❌ P1 **06-distributed-training/lsl-04-distributed-training** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **06-distributed-training/lsl-04-distributed-training** — passed；score 93
     - 路径：`content/large-scale-llm-practice/06-distributed-training/lsl-04-distributed-training.mdx`
-    - 正式 unit：`lsl-04` explained=15/15
-- [ ] ❌ P1 **07-supervised-finetuning/lsl-05-supervised-finetuning** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+    - 正式 unit：`lsl-04` explained=14/15
+- [x] ✅ **07-supervised-finetuning/lsl-05-supervised-finetuning** — passed；score 97
     - 路径：`content/large-scale-llm-practice/07-supervised-finetuning/lsl-05-supervised-finetuning.mdx`
-    - 正式 unit：`lsl-05` explained=21/21
-- [ ] ❌ P1 **08-reinforcement-learning/lsl-06-reinforcement-learning** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+    - 正式 unit：`lsl-05` explained=19/21
+- [x] ✅ **08-reinforcement-learning/lsl-06-reinforcement-learning** — passed；score 95
     - 路径：`content/large-scale-llm-practice/08-reinforcement-learning/lsl-06-reinforcement-learning.mdx`
     - 正式 unit：`lsl-06` explained=17/17
-- [ ] ❌ P1 **09-applications/lsl-07-llm-applications** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **09-applications/lsl-07-llm-applications** — passed；score 96
     - 路径：`content/large-scale-llm-practice/09-applications/lsl-07-llm-applications.mdx`
     - 正式 unit：`lsl-07` explained=18/18
-- [ ] ❌ P1 **10-evaluation/lsl-08-llm-evaluation** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **10-evaluation/lsl-08-llm-evaluation** — passed；score 95
     - 路径：`content/large-scale-llm-practice/10-evaluation/lsl-08-llm-evaluation.mdx`
     - 正式 unit：`lsl-08` explained=13/13
-- [ ] ❌ P1 **11-references/lsl-references** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **11-references/lsl-references** — passed；score 97
     - 路径：`content/large-scale-llm-practice/11-references/lsl-references.mdx`
     - 正式 unit：`lsl-references` explained=1/1
 - [ ] ❌ P1 **12-index/lsl-index** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
@@ -9176,6 +9176,10 @@
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [ ] 🔴 P1 **[正式 unit lsl-02] 第2章 大语言模型基础** — evidence 不完整；explained=13/15
     - 关联路径：`content/large-scale-llm-practice/04-foundations/lsl-02-llm-foundations.mdx`
+- [ ] 🔴 P1 **[正式 unit lsl-04] 第4章 分布式训练** — evidence 不完整；explained=14/15
+    - 关联路径：`content/large-scale-llm-practice/06-distributed-training/lsl-04-distributed-training.mdx`
+- [ ] 🔴 P1 **[正式 unit lsl-05] 第5章 有监督微调** — evidence 不完整；explained=19/21
+    - 关联路径：`content/large-scale-llm-practice/07-supervised-finetuning/lsl-05-supervised-finetuning.mdx`
 
 ## learnopengl（41 个内容页面 · passed:41 · ✅ 书级门禁条件满足）
 
