@@ -3,14 +3,13 @@ title: 第8章 回调机制
 type: C
 section: 第8章 回调机制
 order: 9
-description: >-
-  把模型、链、工具和检索事件转换为可关联trace；并列原书2024与当前v1，用版本合同、执行trace和发布门交付事件schema、run树、脱敏检查、延迟分解与回归面板
+description: 用父子 run 跨度、局部与请求回调分叉、有界观测队列解释回调机制，并用锁定的真实 core SDK 验证继承与异常边界。
 demo: true
 math: false
 sourceUrl: "https://aitutor.liduos.com/"
 draft: false
 qualityVersion: 2
-practiceMode: simulation
+practiceMode: code
 sourceMode: independent-rewrite
 officialUnitId: lcp-08
 ---
@@ -19,8 +18,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,217 +30,377 @@ import {
   Lcp08CallbacksReleaseGateLab,
 } from "@/components/mdx/langchain-programming/v2/lcp-08-callbacks";
 
+{/* 动笔前知识清单见 callbacks/01-plan.md：处理器→跨度事件图；run→树与时序；继承→handler分叉；脱敏→过滤闸；背压→队列槽与丢弃支路。五个Term均闭环Glossary。 */}
+
 <Objectives>
 
-- 解释回调处理器、构造器/请求回调与可观测性插件的输入schema、执行状态、事件与输出，而不只背API名称
-- 并列原书2024轨道与当前LangChain v1轨道，定位“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”的首个分岔
-- 交付事件schema、run树、脱敏检查、延迟分解与回归面板，说明评估、回退、安全与未测试边界
+- 能根据开始、结束和错误事件画出父子调用树，算出父耗时而不重复累加子耗时。
+- 能修改完整 SDK 程序，验证构造器局部回调与请求回调的可见范围，并定位断传递后的孤儿调用。
+- 能回答：队列容量为 2、消费者停滞、每拍到达 2 条时，5 拍后保留与丢弃各多少条？插件异常是否等于业务失败？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 为什么只打印最终答案不够：直觉
 
-第8章 回调机制围绕“回调怎样从日志钩子升级为能定位延迟、错误、成本和质量回归的可观测证据？”建立贯穿任务：在锁定的2024原书轨道和当前LangChain v1轨道上重放回调处理器、构造器/请求回调与可观测性插件。先预测依赖、schema、事件、状态、工具/检索调用或评估中的首个变化，再运行原书参考、v1参考、迁移故障与回退；只有守住“第8章 回调机制的包版本、输入输出schema、执行事件、评估结果与回退路径始终一致”并交付事件schema、run树、脱敏检查、延迟分解与回归面板，代码运行才构成可发布证据。
+流水线交付慢了，只看到最后一张出货单，无法知道卡在加工还是检验。每个工位都记录进入、离开和失败，才有机会定位等待发生在哪里。
 
-## 原书、伴学材料与当前v1边界
+但记录也要有边界：记录员不能把客户资料原样外发，记录通道堵塞也不能无限占用仓库。本章把“谁能看到哪段工作”和“记录来不及处理怎么办”分开实验。
 
-第8章 回调机制以[作者李多多（莫尔索）的开放学习站](https://aitutor.liduos.com/)核对作者身份、实践取向和相关公开伴学材料；站点明确称其为个人学习笔记并宣传纸书，但它不是人民邮电出版社纸书的逐页全文，因此本课程把来源级别记为“作者授权伴学样本”，不虚构完整书稿访问权。
-
-第8章 回调机制以[首版公开书目与完整目录](https://m.bookschina.com/9299314.htm)核对《LangChain编程：从入门到实践》、人民邮电出版社、2024年4月、192页、ISBN 9787115639424，以及前言、10章和全部节/小节。正式分母是1个前言、10个章标题和135个节/小节，共146个层级；课程用学习地图、前言、10章和总复习共13页承载。
-
-第8章 回调机制以[LangChain当前官方总览](https://docs.langchain.com/oss/python/langchain/overview)与[v1迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)建立第二条事实轨道：当前v1精简核心命名空间、把大量旧Chain与检索接口移到langchain-classic，并以create_agent、中间件、LangGraph和LangSmith组织主路径。本站不复制纸书或伴学站正文、代码和图片，所有中文解释、双轨迁移、反例、交互、练习与答案均为独立重写。
-
-### 本页独立事实来源
-
-- [LangSmith官方可观测性文档](https://docs.langchain.com/langsmith/observability)：在第8章 回调机制中，核对trace、调试和评估的当前证据入口。
-- [LangChain当前官方总览](https://docs.langchain.com/oss/python/langchain/overview)：在第8章 回调机制中，核对当前v1的agent harness、模型接口、LangGraph与LangSmith定位。
-- [LangChain v1官方迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)：在第8章 回调机制中，核对精简命名空间、langchain-classic、create_agent和破坏性变化。
-- [LangChain官方安全公告](https://github.com/langchain-ai/langchain/security/advisories)：在第8章 回调机制中，核对依赖与模板等安全风险不能只靠书中静态建议。
-
-## 146个正式坐标中的本页覆盖
+## 正式范围与事实来源
 
 ### 第8章 回调机制
 
-**坐标 1/6：第8章 回调机制。** 第8章 回调机制用run树关联模型、工具、检索和错误事件，并对敏感输入脱敏；日志存在不等于trace完整或质量已评估。 对第8章 回调机制的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+这里的<Term def="收到执行事件后运行的一组观察方法，不等于业务步骤本身">回调处理器</Term>是观察入口：应用执行模型、链、工具或检索时，框架把相应事件交给它。它可以计时、计数、记录失败，但不是多加一步推理。实验 1 展示事件与调用结构，实验 2 展示处理器的可见范围，实验 3 展示记录离开进程前的边界。
+
+本页以 2026-07-30 登记的全书 146 个目录坐标限定本章六个正式标题，独立重写而非复现纸书。2026-10-15 访问[作者伴学站](https://aitutor.liduos.com/)可用；它是开放伴学材料，不是纸书全文或改编许可。[中图书目页](https://m.bookschina.com/9299314.htm)返回 200 但跳到登录页，因此**不声称今天重新核验全目录**。
+
+版本边界不能省略：
+
+| 轨道                | 本页实际做了什么                                           | 不作什么保证                                       |
+| ------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
+| 2024 原书范围       | 保留回调处理器、构造器/请求回调、观测插件的标题范围        | 未安装历史 0.x 包，未复现纸书示例                  |
+| `langchain-classic` | 依据官方 v1 迁移说明辨认旧链所在包                         | 本页程序不导入它，不将旧 `Chain` 当成 v1 核心      |
+| v1 核心             | 实跑 `langchain-core==1.0.7` 的管理器、Runnable 和测试模型 | 不声称这是最新版本，不外推所有集成、异步或流式行为 |
+
+实际可访问的官方事实来源（2026-10-15）：
+
+- [BaseCallbackHandler](https://reference.langchain.com/python/langchain-core/callbacks/base/BaseCallbackHandler) 与 [raise_error](https://reference.langchain.com/python/langchain-core/callbacks/base/BaseCallbackHandler/raise_error)：事件入口与处理器异常开关。
+- [CallbackManager.configure](https://reference.langchain.com/python/langchain-core/callbacks/manager/CallbackManager/configure) 和 [ParentRunManager.get_child](https://reference.langchain.com/python/langchain-core/callbacks/manager/ParentRunManager/get_child)：局部/继承列表与子管理器。
+- [BaseLLM](https://reference.langchain.com/python/langchain-core/language_models/llms/BaseLLM)：模型的构造器回调入口；[BaseRetriever](https://reference.langchain.com/python/langchain-core/retrievers/BaseRetriever) 不代表有相同构造器字段。
+- [v1 迁移说明](https://docs.langchain.com/oss/python/migrate/langchain-v1) 与 [LangSmith 观测说明](https://docs.langchain.com/oss/python/langchain/observability)：旧接口归属与官方追踪集成。
+
+在线 API 文档会变化；其当前签名比本页锁定包多出的参数不能照抄到 1.0.7。本页结论同时用已安装包源码和下面的断言核对，而不是仅凭链接存在。
 
 ### 8.1 回调处理器
 
-**坐标 2/6：8.1 回调处理器。** 第8章 回调机制用run树关联模型、工具、检索和错误事件，并对敏感输入脱敏；日志存在不等于trace完整或质量已评估。 对第8章 回调机制的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+一次<Term def="具有独立ID、开始和终止事件的一次执行；父ID表达嵌套关系">run</Term>至少需要区分 `run_id` 与 `parent_run_id`：前者把同次调用的开始/终止配对，后者把子调用连到父调用。空父 ID 通常表示根；若预期有父而记录成空，实验 1 的“丢父关联”会显示无法连回的孤儿。不要用相邻日志或相同名字猜父子关系。
+
+事件按对象类型选择：普通链常见 `on_chain_start/end/error`，工具是 `on_tool_*`，检索器是 `on_retriever_*`；聊天模型的开始入口是 `on_chat_model_start`，本页测试的文本模型用 `on_llm_start/end`。`on_llm_new_token` 依赖实际流式实现，不能假定每个模型、每次调用都发 token 事件。处理器不实现的方法可以不记录。
+
+先预测：工具耗时从 30 改为 40 ms，父跨度会多多少？把实验 1 步进到最后，再打开“工具失败”和“丢父关联”。
+
+<Lcp08CallbacksVersionContractLab />
+
+图中是预设时间的教学模拟，不是供应商延迟测量。正常状态 M 为 10–50 ms，T 为 55–85 ms，R 为 0–100 ms。父跨度为 100 ms，两个子跨度为 40 与 30 ms；剩余 30 ms 是这条顺序轨迹的其他开销，不能把三者相加为 170 ms。调整 T 后，R 的结束点随之移动；并行子跨度有重叠时，更不能直接相加。
+
+“工具失败”只表示**本模拟父编排器未捕获异常**，因此 T 与 R 终止为 error；实际父节点若捕获并恢复，可以成功结束。业务错误事件、观察者报错和事件丢失是三件不同的事。
+
+<Callout type="trap" title="误区一：父耗时等于所有日志耗时相加">
+  **现象 →** 报告 170 ms，但请求只花 100 ms。**原因 →**
+  父跨度已包含子跨度，被重复累计。**修法 →** 以同一 run 的开始/终止配对，实验 1
+  区分嵌套与并行区间。
+</Callout>
 
 ### 8.2 使用回调的两种方式
 
-**坐标 3/6：8.2 使用回调的两种方式。** 第8章 回调机制用run树关联模型、工具、检索和错误事件，并对敏感输入脱敏；日志存在不等于trace完整或质量已评估。 对第8章 回调机制的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+请求的<Term def="把请求处理器沿受支持的子调用配置继续传递；不表示所有实例处理器都会传播">回调继承</Term>解决一次请求跨多个对象的关联问题。构造器回调属于对象本地设置；请求回调在本次
+`invoke` 的 `config` 中传入。能否看见子调用，取决于该 API 是否把可继承列表及父
+ID 传给子管理器，而不是看处理器“定义在哪里”。
+
+实验 2 的 R 是手动编排的父 run。L 通过 `local_callbacks` 注册在父管理器，Q 通过 `inheritable_callbacks` 注册；子 M 是真实 SDK 测试模型，它的 C 则来自模型构造器。图是这段代码的传播模拟，不是 2024 原书实现。
 
 ### 8.2.1 构造器回调
 
-**坐标 4/6：8.2.1 构造器回调。** 第8章 回调机制用run树关联模型、工具、检索和错误事件，并对敏感输入脱敏；日志存在不等于trace完整或质量已评估。 对第8章 回调机制的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+模型 `FakeListLLM(..., callbacks=[C])` 接受对象局部回调；本页 C 只收到 M 的两个事件，不向上看到 R，也不等于整次请求的观察者。父管理器的局部 L 只收到 R 的两个事件，`get_child()` 不把 L 放入子管理器的继承列表。这两种“局部”位置不同，但都不能被误讲成自动子调用传播。
+
+不是所有 Runnable 都有构造器 `callbacks` 参数：在锁定 1.0.7 中，`BaseRetriever` 的字段没有它，`RunnableLambda` 也不能照抄模型构造器。需逐类核对 API；`with_config(callbacks=...)` 是绑定运行配置，不是由此变成“构造器局部回调”。看实验 2 的空心 L/C 与实心 Q 分叉。
 
 ### 8.2.2 请求回调
 
-**坐标 5/6：8.2.2 请求回调。** 第8章 回调机制用run树关联模型、工具、检索和错误事件，并对敏感输入脱敏；日志存在不等于trace完整或质量已评估。 对第8章 回调机制的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+标准 Runnable 组合可通过 `invoke(input, config={"callbacks": [Q]})` 传入请求处理器。本页的 `RunnableLambda | FakeListLLM` 会把 Q 传给两个子 run；自写编排函数、外部线程或不使用该配置的库调用，不会仅因嵌套在 Python 函数里就获得正确的父子关联。
+
+先预测：只断开 `get_child`，C 会消失吗？把实验 2 步进到最后，对照正常的 L/Q/C = 2/4/2 与断传递的 2/2/2，再关闭“请求 Q”。
+
+<Lcp08CallbacksRunnableTraceLab />
+
+这里 `parent.get_child()` 创建带父 ID 和继承处理器的管理器；故 M 的 `parent_run_id` 等于 R 的 `run_id`。断传递分支显式给 M `callbacks=[]`，该手动程序没有外层 Runnable 上下文，M 变为根；但其构造器 C 仍有效。这是明确的反例条件，**不是宣称任何环境下省略 config 都必然断传递**。
+
+<Callout type="trap" title="误区二：实例里有 callbacks 就会传遍调用树">
+  **现象 →** 对象本身有日志，子调用缺日志。**原因 →**
+  把局部列表当作继承列表，或自写调用未传子管理器。**修法 →** 检查具体类 API 和父
+  ID，用实验 2 的断传递状态定位，而不是重复注册导致双份日志。
+</Callout>
+
+## 用真实已锁定 SDK 复算传播
+
+以下是完整 `callbacks.py`，**按顺序拼接五段 Python 代码到同一个文件**，没有省略函数或私有附件。它调用真实 `langchain-core`；`FakeListLLM` 是 SDK 自带的离线测试模型，不会请求模型供应商，不能据此声称供应商或 LangSmith 端到端测试通过。测试时关闭环境中的远程追踪，避免将输入意外发出。
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install "langchain-core==1.0.7"
+export LANGSMITH_TRACING=false LANGCHAIN_TRACING_V2=false
+python callbacks.py
+```
+
+本次实际运行使用 Python 3.14.5；直接依赖只有上述 core，解析得到 `langsmith==0.14.8`、`pydantic==2.14.1`。全量依赖冻结与输出保存在本章独占证据，正文不依赖它才能运行；在其他解释器上安装解析结果可能不同，需保留自己的 `pip freeze`。这不是 0.x 或 classic 的复现环境。
+
+第一段定义事件记录器。每个签名保留 `**kw`，不打印 prompts、完整模型响应或异常详情，UUID 只用于结构断言。
+
+```python
+from importlib.metadata import version
+from langchain_core.callbacks import BaseCallbackHandler, CallbackManager
+from langchain_core.language_models.fake import FakeListLLM
+from langchain_core.runnables import RunnableLambda
+
+class Recorder(BaseCallbackHandler):
+    def __init__(self):
+        self.events = []
+    def save(self, event, run_id, parent_run_id):
+        self.events.append((event, run_id, parent_run_id))
+    def on_chain_start(self, serialized, inputs, *, run_id, parent_run_id=None, **kw):
+        self.save("chain:start", run_id, parent_run_id)
+    def on_chain_end(self, outputs, *, run_id, parent_run_id=None, **kw):
+        self.save("chain:end", run_id, parent_run_id)
+    def on_chain_error(self, error, *, run_id, parent_run_id=None, **kw):
+        self.save("chain:error", run_id, parent_run_id)
+    def on_llm_start(self, serialized, prompts, *, run_id, parent_run_id=None, **kw):
+        self.save("llm:start", run_id, parent_run_id)
+    def on_llm_end(self, response, *, run_id, parent_run_id=None, **kw):
+        self.save("llm:end", run_id, parent_run_id)
+```
+
+第二段手动创建父 run。`local_callbacks` 不继承，`get_child()` 才携带请求处理器和父 ID。注意此父生命周期由程序显式开始和结束，不冒称框架自动插桩。
+
+```python
+def run(forward=True):
+    request, local, model_local = Recorder(), Recorder(), Recorder()
+    manager = CallbackManager.configure(
+        inheritable_callbacks=[request], local_callbacks=[local])
+    parent = manager.on_chain_start({"name": "parent"}, {"q": "hi"})
+    model = FakeListLLM(responses=["OK"], callbacks=[model_local])
+    child_callbacks = parent.get_child() if forward else []
+    result = model.invoke("hi", config={"callbacks": child_callbacks})
+    parent.on_chain_end({"answer": result})
+    assert result == "OK"
+    assert [e[0] for e in local.events] == ["chain:start", "chain:end"]
+    assert [e[0] for e in model_local.events] == ["llm:start", "llm:end"]
+    expected = ["chain:start", "llm:start", "llm:end", "chain:end"]
+    assert [e[0] for e in request.events] == (expected if forward else expected[::3])
+    root_id = request.events[0][1]
+    assert local.events[0][1] == root_id
+    assert model_local.events[0][2] == (root_id if forward else None)
+    if forward:
+        assert request.events[1][1] == model_local.events[0][1]
+        assert request.events[1][2] == root_id
+    print("forward" if forward else "broken", len(local.events),
+          len(request.events), len(model_local.events))
+```
+
+第三段运行正常/断传递两种情况，并另测真实 Runnable 组合的自动请求传播：Q 看见根、预处理与模型共六个事件，C 只看见模型两个。
+
+```python
+assert version("langchain-core") == "1.0.7"
+run()
+run(False)
+
+# Actual Runnable propagation: no hand-built manager for this sequence.
+request, local = Recorder(), Recorder()
+model = FakeListLLM(responses=["OK"], callbacks=[local])
+sequence = RunnableLambda(lambda s: s) | model
+assert sequence.invoke("hi", config={"callbacks": [request]}) == "OK"
+assert [e[0] for e in local.events] == ["llm:start", "llm:end"]
+assert [e[0] for e in request.events] == [
+    "chain:start", "chain:start", "chain:end", "llm:start", "llm:end", "chain:end"]
+assert request.events[1][2] == request.events[0][1]
+assert request.events[3][2] == request.events[0][1]
+print("sequence", len(local.events), len(request.events))
+```
+
+第四段故意让观察者在模型结束时出错。默认 `raise_error=False` 会记录日志后继续，打开它则抛异常；这不是业务模型自己失败。
+
+```python
+class BrokenObserver(BaseCallbackHandler):
+    def on_llm_end(self, response, **kw):
+        raise RuntimeError("observer offline")
+
+for strict in [False, True]:
+    handler = BrokenObserver()
+    handler.raise_error = strict
+    try:
+        FakeListLLM(responses=["OK"], callbacks=[handler]).invoke("hi")
+    except RuntimeError as exc:
+        assert strict and str(exc) == "observer offline"
+        print("observer", strict, "raised")
+    else:
+        assert not strict
+        print("observer", strict, "continued")
+```
+
+第五段让业务函数失败，验证 `chain:error` 而非成功结束。真实 UUID 每次变化，预期输出不依赖其字面值。
+
+```python
+errors = Recorder()
+def fail(x):
+    raise ValueError("business failed")
+try:
+    RunnableLambda(fail).invoke("hi", config={"callbacks": [errors]})
+except ValueError:
+    pass
+else:
+    raise AssertionError("business error was swallowed")
+assert [e[0] for e in errors.events] == ["chain:start", "chain:error"]
+print("business chain:error; PASS core", version("langchain-core"))
+```
+
+预期标准输出如下；第四段还会在标准错误中出现两条 `BrokenObserver.on_llm_end` 错误日志，属于故意注入，不是测试失败。程序正常退出为 0。
+
+```text
+forward 2 4 2
+broken 2 2 2
+sequence 2 6
+observer False continued
+observer True raised
+business chain:error; PASS core 1.0.7
+```
+
+断言不仅检查事件数量，也检查局部与请求记录到的同一模型 ID、模型父 ID、组合的两个子 run 父 ID。数量相同而父 ID 错误，仍不是正确的追踪树。本次没有覆盖异步任务、流式 token、重试、分布式上下文、缓存命中或具体供应商事件签名。
 
 ### 8.3 实现可观测性插件
 
-**坐标 6/6：8.3 实现可观测性插件。** 第8章 回调机制冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第8章 回调机制的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+插件首先是处理器加输出边界，不是安装后就自动安全。<Term def="在记录离开受控边界前删除或替换敏感字段，只保留获准信息">脱敏</Term>应在入队之前完成：实验 3 的闸门位置不能移到网络发送之后。与其用正则替换完整提示，不如默认只允许事件类型、run ID、父 ID、耗时等字段；这些 ID 与 metadata 也可能关联到个人，仍需访问控制和保留期限。异常消息、tags、工具参数同样可能泄密。
 
-## 先预测，再操作双轨实验
+当生产快于消费时，<Term def="生产速度超过消费速度时对上游或缓冲区施加的容量约束与处理策略">背压</Term>迫使插件选择策略。实验 3 是明确的有损设计：容量 2 或
+4，每拍先消费最多一条，再到达两条；满队丢**新**事件，计数，不重试。消费停滞、导出异常与未脱敏分别控制三条不同的故障路径。这不是
+SDK 或 LangSmith 承诺的默认队列策略。
 
-先预测：在第8章 回调机制只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”时，依赖解析、输入schema、执行事件、工具/检索状态、输出解析或独立评估中的哪一项最先变化？请先写下可观测信号，再切换原书/v1轨道和参考/故障trace。
+先预测：容量 2、正常消费到第 5 拍，成功 4、在队 2、丢弃 4；打开“消费停滞”后丢弃会变成多少？再改变容量、注入插件异常、关闭脱敏，看槽位、出口和丢弃支路一起变化。
 
-<Stepper>
-  <Step title="版本合同：比较原书与v1">
-    <Lcp08CallbacksVersionContractLab />
-  </Step>
-  <Step title="执行轨迹：重放参考与故障">
-    <Lcp08CallbacksRunnableTraceLab />
-  </Step>
-  <Step title="发布证据门：检查评估与回退">
-    <Lcp08CallbacksReleaseGateLab />
-  </Step>
-</Stepper>
+<Lcp08CallbacksReleaseGateLab />
 
-## 最小可复现与迁移协议
+图中恰有“产生 = 成功 + 导出异常 + 在队 + 满队丢弃”，所以默认为 10 = 4 + 0 + 2 + 4；停滞时为 10 = 0 + 0 + 2 + 8。停滞时没有出队，因此即使打开插件异常也不会触发导出失败。图里 `DEMO` 是虚构字段，遮罩只是位置演示，不是完整的数据防泄漏证明。
 
-1. 为第8章 回调机制分别冻结原书2024与当前v1的Python、包锁、集成包、模型/工具版本、输入schema、随机性和评估集，禁止跨轨拼接。
-2. 在两条轨道运行参考流程，保存事件schema、run树、脱敏检查、延迟分解与回归面板；若只能看到最终输出，就无法判断差异来自框架、provider还是数据。
-3. 保持模型、数据和评估不变，只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”，定位依赖、schema、状态、事件或输出中的首个分岔。
-4. 撤销故障，从同一快照重放；只有trace、评估和回退都恢复，才允许批准迁移或发布。
+#### 最小插件：只保留允许字段，显式统计损失
 
-<Callout type="trap" title="第8章 回调机制误区一：旧API等于错误知识">
-  原书2024接口是历史教学轨道，仍可解释稳定机制；第8章
-  回调机制应标注版本并建立迁移关系，而不是删除历史或假装它仍是当前默认。
-</Callout>
+把下面两段拼为独立的 `safe_observer.py`，在上面的同一环境运行 `python safe_observer.py`。它也用真实 SDK 产生事件，但 `deque` 与导出函数是**本页自写的内存示例**，无后台线程、磁盘持久化或供应商网络。第一段实现入队过滤；不用 `deque(maxlen=...)` 静默丢旧数据。
 
-<Callout type="trap" title="第8章 回调机制误区二：改导入路径就完成迁移">
-  v1改变命名空间、agent构建、状态、中间件和内容块等语义；第8章
-  回调机制必须重跑schema、stream、工具错误、trace和评估，不能只让代码通过import。
-</Callout>
+```python
+from collections import deque
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.language_models.fake import FakeListLLM
 
-<Callout type="trap" title="第8章 回调机制误区三：演示成功即可上线">
-  LangChain应用还依赖模型、检索、外部工具、权限和数据；第8章
-  回调机制必须覆盖故障、重复事件、敏感数据、回退与持续评估。
+class SafeObserver(BaseCallbackHandler):
+    def __init__(self, capacity=2):
+        self.capacity, self.queue = capacity, deque()
+        self.dropped, self.failed, self.sent = 0, 0, 0
+    def offer(self, kind, run_id, parent_run_id):
+        record = {"kind": kind, "run_id": str(run_id),
+                  "parent_run_id": str(parent_run_id) if parent_run_id else None}
+        if len(self.queue) >= self.capacity:
+            self.dropped += 1
+        else:
+            self.queue.append(record)
+    def on_llm_start(self, serialized, prompts, *, run_id, parent_run_id=None, **kw):
+        self.offer("start", run_id, parent_run_id)
+    def on_llm_end(self, response, *, run_id, parent_run_id=None, **kw):
+        self.offer("end", run_id, parent_run_id)
+    def on_llm_error(self, error, *, run_id, parent_run_id=None, **kw):
+        self.offer("error", run_id, parent_run_id)
+    def drain(self, exporter):
+        while self.queue:
+            record = self.queue.popleft()
+            try:
+                exporter(record)
+                self.sent += 1
+            except Exception:
+                self.failed += 1
+```
+
+第二段先不消费，制造四条模型开始/结束事件。前两条进入队列，后两条因满队丢弃；随后用本地函数模拟导出失败。回调内不上传、不输出原文，因此模型结果仍是 `OK`。
+
+```python
+observer = SafeObserver(capacity=2)
+model = FakeListLLM(responses=["OK"], callbacks=[observer])
+assert model.invoke("private DEMO input") == "OK"
+assert model.invoke("another DEMO input") == "OK"
+assert len(observer.queue) == 2 and observer.dropped == 2
+assert all(set(r) == {"kind", "run_id", "parent_run_id"}
+           for r in observer.queue)
+
+def offline_exporter(record):
+    raise OSError("synthetic offline sink")
+
+observer.drain(offline_exporter)
+assert observer.failed == 2 and observer.sent == 0
+assert not observer.queue
+print("safe fields; dropped=2 failed=2 sent=0")
+```
+
+预期输出 `safe fields; dropped=2 failed=2 sent=0`，退出 0。这个插件单线程、同步、容量有限，不能直接用于并发生产：需再定义锁、关闭时 flush、采样、重试上限与丢弃指标。不要在 handler 中同步等待慢网络；要么阻塞业务，要么明确有损。业务成功不等于观测完整，丢掉终止事件会留下未闭合跨度；无法通过一个 `end` 缺席判断业务仍在运行还是数据丢了。
+
+<Callout type="trap" title="误区三：观察者报错就是模型失败">
+  **现象 →** 模型已得到结果，记录插件却报离线。**原因 →** 混淆业务异常与
+  handler/导出异常。**修法 →** 用程序核查 `raise_error`，分别计数业务
+  error、满队丢弃和导出失败；安全审计需要失败关闭时应显式设计，不能依赖默认吞错。
 </Callout>
 
 ## 小结
 
-- 回调处理器与可观测性插件纳入证据链
-- 原书轨道解释2024语义，v1文档重建接口
-- schema和trace揭示行为并定位不兼容点
-- 独立评估与回退机制决定能否发布
-- 交付事件schema、run树、脱敏检查与回归面板
+- 按 run ID 配对事件，父 ID 连树，跨度不重复相加。
+- 构造器局部不是请求继承；自写编排检查子管理器。
+- 入队前过滤，满队和导出失败分别计数。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：第8章 回调机制**
-
-为第8章 回调机制的第8章 回调机制写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 1：工具耗时从 30 改为 40 ms，父跨度应为多少？为什么不是所有跨度相加？**
 
 <Answer>
-  先分别锁定两条版本轨道，把第8章
-  回调机制映射到明确schema、执行状态和输出事件；参考运行保存事件schema、run树、脱敏检查、延迟分解与回归面板，故障运行只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第8章
-  回调机制边界外。
+  实验 1 最后一步为 R=110 ms，M=40 ms，T=40 ms。R
+  已包含两个子跨度；顺序执行且没有重叠时，其他开销仍为 30
+  ms。打开工具失败只能改变本模拟的终止类型，不能凭 error
+  事件推断现实里父节点是否捕获恢复。
 </Answer>
 
-**问题 2：8.1 回调处理器**
-
-为第8章 回调机制的8·1 回调处理器写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 2：独立实现一个断言，证明请求处理器看到了与模型局部处理器相同的模型 run，而父局部 L 没有继承。删掉 get_child 后哪些断言要变？**
 
 <Answer>
-  先分别锁定两条版本轨道，把8·1
-  回调处理器映射到明确schema、执行状态和输出事件；参考运行保存事件schema、run树、脱敏检查、延迟分解与回归面板，故障运行只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第8章
-  回调机制边界外。
+  在完整程序 `run()` 中检查 `request.events[1][1] ==
+  model_local.events[0][1]`，并检查其父 ID 等于 `request.events[0][1]`；L
+  的事件列表仍只有 chain:start/end。断传递时请求列表没有 llm
+  事件，所以不能再用索引 1 代表模型；模型局部事件仍有两个，但父 ID 为 None。实验
+  2 对照 2/4/2 与 2/2/2；再读组合实验的 2/6，不能把手动父 run 与
+  RunnableSequence 的事件数量混为一谈。
 </Answer>
 
-**问题 3：8.2 使用回调的两种方式**
-
-为第8章 回调机制的8·2 使用回调的两种方式写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 3：把实验 3 容量设为 4、消费停滞，到第 5 拍丢多少？把最小插件改为丢旧事件有什么风险？**
 
 <Answer>
-  先分别锁定两条版本轨道，把8·2
-  使用回调的两种方式映射到明确schema、执行状态和输出事件；参考运行保存事件schema、run树、脱敏检查、延迟分解与回归面板，故障运行只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第8章
-  回调机制边界外。
-</Answer>
-
-**问题 4：8.2.1 构造器回调**
-
-为第8章 回调机制的8·2·1 构造器回调写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把8·2·1
-  构造器回调映射到明确schema、执行状态和输出事件；参考运行保存事件schema、run树、脱敏检查、延迟分解与回归面板，故障运行只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第8章
-  回调机制边界外。
-</Answer>
-
-**问题 5：8.2.2 请求回调**
-
-为第8章 回调机制的8·2·2 请求回调写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把8·2·2
-  请求回调映射到明确schema、执行状态和输出事件；参考运行保存事件schema、run树、脱敏检查、延迟分解与回归面板，故障运行只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第8章
-  回调机制边界外。
-</Answer>
-
-**问题 6：8.3 实现可观测性插件**
-
-为第8章 回调机制的8·3 实现可观测性插件写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把8·3
-  实现可观测性插件映射到明确schema、执行状态和输出事件；参考运行保存事件schema、run树、脱敏检查、延迟分解与回归面板，故障运行只注入“只打印开始结束事件，缺少run关联、输入脱敏、嵌套关系和失败状态”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第8章
-  回调机制边界外。
-</Answer>
-
-**问题 7：为什么不能混合两条轨道**
-
-解释第8章 回调机制为什么不能在同一示例中无标记地混用原书v0接口、langchain-classic与当前v1接口。
-
-<Answer>
-  三者的命名空间、状态、事件、agent和内容语义可能不同。无标记混用会让读者无法复现依赖，也无法判断成功来自兼容层还是当前接口。正确做法是分开锁文件和运行入口，逐项写迁移映射，再用同一输入与评估比较行为。
-</Answer>
-
-**问题 8：发布证据**
-
-第8章 回调机制除了“代码能运行”还需要哪些证据才能上线？
-
-<Answer>
-  第8章
-  回调机制至少需要依赖与许可证清单、输入输出schema、完整trace、失败和重试路径、检索或工具调用证据、安全与敏感数据检查、独立质量评估、延迟成本预算、监控告警以及可执行回退快照。任一项未知都应显式列入第8章
-  回调机制的发布边界。
+  10 条产生、4 条在队、6
+  条丢弃。消费停滞时插件异常不会发生，因为没有消费。改为丢旧会改变观测偏差：可能删除开始事件，使后来保留的结束事件无法配对。实现时显式先
+  popleft 并递增丢弃指标，再 append；不要只设 deque(maxlen=4)
+  而失去丢弃计数。两种策略都不保证完整审计；需要完整记录时应评估持久化及业务阻塞代价，而不是把队列扩容当作无限容量。
 </Answer>
 
 </Exercises>
 
-## 术语与运行证据
-
-在第8章 回调机制中，<Term def="第8章 回调机制把原书2024与当前v1分开的依赖和接口语义">版本轨道</Term>、<Term def="第8章 回调机制对消息、文档、工具参数或事件负载的类型合同">输入schema</Term>、<Term def="第8章 回调机制把模型、检索、工具、状态和错误关联起来的事件树">执行trace</Term>、<Term def="第8章 回调机制只改变一个版本或接口假设以定位不兼容点">迁移故障</Term>、<Term def="第8章 回调机制不复用演示样本的质量、安全、延迟和成本检查">独立评估</Term>、<Term def="第8章 回调机制能够恢复依赖、状态和服务行为的可部署版本">回退快照</Term>共同约束发布。术语必须落到锁文件、schema、trace、评估和回退；把旧类名替换成新类名而不重跑行为合同，不叫迁移。
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="版本轨道">
-    第8章 回调机制把原书2024与当前v1分开的依赖和接口语义。
+  <GlossaryItem term="回调处理器">
+    执行到特定事件时被调用的观察方法集合；本页程序用它记录事件，不承担模型业务。
   </GlossaryItem>
-  <GlossaryItem term="输入schema">
-    第8章 回调机制对消息、文档、工具参数或事件负载的类型合同。
+  <GlossaryItem term="run">
+    一次有独立 ID 的执行，开始和终止属于同一次调用；父 ID
+    说明它嵌在哪个调用里。见实验 1。
   </GlossaryItem>
-  <GlossaryItem term="执行trace">
-    第8章 回调机制把模型、检索、工具、状态和错误关联起来的事件树。
+  <GlossaryItem term="回调继承">
+    把可继承的请求处理器连同父 ID
+    传给子调用；局部处理器不因此自动进入子调用。见实验 2。
   </GlossaryItem>
-  <GlossaryItem term="迁移故障">
-    第8章 回调机制只改变一个版本或接口假设以定位不兼容点。
+  <GlossaryItem term="脱敏">
+    在数据离开受控边界前删去或替换敏感字段；本页最小插件只保留允许字段。
   </GlossaryItem>
-  <GlossaryItem term="独立评估">
-    第8章 回调机制不复用演示样本的质量、安全、延迟和成本检查。
-  </GlossaryItem>
-  <GlossaryItem term="回退快照">
-    第8章 回调机制能够恢复依赖、状态和服务行为的可部署版本。
+  <GlossaryItem term="背压">
+    记录产生得比处理快时施加容量约束；可能阻塞、采样或丢弃，本页实验 3
+    明确采用满队丢新。
   </GlossaryItem>
 </Glossary>
 
 <Attribution
   mode="independent-rewrite"
-  sourceBasis="author-authorized-companion-sample-plus-public-toc-and-current-upstream-docs"
-  workTitle="李多多（莫尔索）《LangChain编程：从入门到实践》"
-  adaptedUrl="https://aitutor.liduos.com/"
+  workTitle="《LangChain编程：从入门到实践》第8章 回调机制"
+  sourceUrl="https://aitutor.liduos.com/"
+  sourceBasis="outline-only"
 />
