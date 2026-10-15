@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T10:55:53.320Z
+> 生成时间：2026-10-15T11:04:49.424Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -16,8 +16,8 @@
 | manifest 证据不完整 unit | 477 |
 | failed | 1798 |
 | queued | 196 |
-| passed | 1747 |
-| published | 868 |
+| passed | 1734 |
+| published | 881 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
 
@@ -9031,47 +9031,47 @@
     - 路径：`content/kubernetes-in-action/23-final-review/k8s-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## langchain-programming（13 个内容页面 · passed:13 · ✅ 书级门禁条件满足）
+## langchain-programming（13 个内容页面 · published:13 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=11；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
-- [x] ✅ **00-map/lcp-official-learning-map** — passed；score 100
+- [x] 🚀 **00-map/lcp-official-learning-map** — published（已发布）；score 100
     - 路径：`content/langchain-programming/00-map/lcp-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [x] ✅ **01-preface/lcp-preface** — passed；score 99
+- [x] 🚀 **01-preface/lcp-preface** — published（已发布）；score 99
     - 路径：`content/langchain-programming/01-preface/lcp-preface.mdx`
     - 正式 unit：`lcp-preface` explained=1/1
-- [x] ✅ **02-introduction/lcp-01-introduction** — passed；score 96
+- [x] 🚀 **02-introduction/lcp-01-introduction** — published（已发布）；score 96
     - 路径：`content/langchain-programming/02-introduction/lcp-01-introduction.mdx`
     - 正式 unit：`lcp-01` explained=16/16
-- [x] ✅ **03-quickstart/lcp-02-first-experience** — passed；score 98
+- [x] 🚀 **03-quickstart/lcp-02-first-experience** — published（已发布）；score 98
     - 路径：`content/langchain-programming/03-quickstart/lcp-02-first-experience.mdx`
     - 正式 unit：`lcp-02` explained=13/13
-- [x] ✅ **04-model-io/lcp-03-model-io** — passed；score 96
+- [x] 🚀 **04-model-io/lcp-03-model-io** — published（已发布）；score 96
     - 路径：`content/langchain-programming/04-model-io/lcp-03-model-io.mdx`
     - 正式 unit：`lcp-03` explained=15/15
-- [x] ✅ **05-chains/lcp-04-building-chains** — passed；score 98
+- [x] 🚀 **05-chains/lcp-04-building-chains** — published（已发布）；score 98
     - 路径：`content/langchain-programming/05-chains/lcp-04-building-chains.mdx`
     - 正式 unit：`lcp-04` explained=25/25
-- [x] ✅ **06-rag/lcp-05-rag** — passed；score 97
+- [x] 🚀 **06-rag/lcp-05-rag** — published（已发布）；score 97
     - 路径：`content/langchain-programming/06-rag/lcp-05-rag.mdx`
     - 正式 unit：`lcp-05` explained=14/14
-- [x] ✅ **07-agents/lcp-06-agents** — passed；score 97
+- [x] 🚀 **07-agents/lcp-06-agents** — published（已发布）；score 97
     - 路径：`content/langchain-programming/07-agents/lcp-06-agents.mdx`
     - 正式 unit：`lcp-06` explained=8/8
-- [x] ✅ **08-memory/lcp-07-memory** — passed；score 98
+- [x] 🚀 **08-memory/lcp-07-memory** — published（已发布）；score 98
     - 路径：`content/langchain-programming/08-memory/lcp-07-memory.mdx`
     - 正式 unit：`lcp-07` explained=18/18
-- [x] ✅ **09-callbacks/lcp-08-callbacks** — passed；score 98
+- [x] 🚀 **09-callbacks/lcp-08-callbacks** — published（已发布）；score 98
     - 路径：`content/langchain-programming/09-callbacks/lcp-08-callbacks.mdx`
     - 正式 unit：`lcp-08` explained=6/6
-- [x] ✅ **10-project/lcp-09-multimodal-bot** — passed；score 97
+- [x] 🚀 **10-project/lcp-09-multimodal-bot** — published（已发布）；score 97
     - 路径：`content/langchain-programming/10-project/lcp-09-multimodal-bot.mdx`
     - 正式 unit：`lcp-09` explained=15/15
-- [x] ✅ **11-community/lcp-10-community-resources** — passed；score 97
+- [x] 🚀 **11-community/lcp-10-community-resources** — published（已发布）；score 97
     - 路径：`content/langchain-programming/11-community/lcp-10-community-resources.mdx`
     - 正式 unit：`lcp-10` explained=15/15
-- [x] ✅ **12-review/lcp-official-final-review** — passed；score 100
+- [x] 🚀 **12-review/lcp-official-final-review** — published（已发布）；score 100
     - 路径：`content/langchain-programming/12-review/lcp-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
