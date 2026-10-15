@@ -3,14 +3,13 @@ title: 第6章 智能代理设计
 type: C
 section: 第6章 智能代理设计
 order: 7
-description: >-
-  把模型、工具、提示、状态、循环、停止条件和人工介入组成agent合同；并列原书2024与当前v1，用版本合同、执行trace和发布门交付工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点
+description: 用调用标识、停止预算和执行前审批约束代理循环，追踪多模态附件到工具结果的真实处理路径。
 demo: true
 math: false
 sourceUrl: "https://aitutor.liduos.com/"
 draft: false
 qualityVersion: 2
-practiceMode: simulation
+practiceMode: code
 sourceMode: independent-rewrite
 officialUnitId: lcp-06
 ---
@@ -19,8 +18,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,245 +30,369 @@ import {
   Lcp06AgentsReleaseGateLab,
 } from "@/components/mdx/langchain-programming/v2/lcp-06-agents";
 
+{/* 先行知识点与图形决策见 quality/artifacts/batch-18/agents/decisions.md：代理/工具调用→状态机与ID连线；工具契约/人工批准→串联执行阀门；多模态消息→内容块拆分、附件校验与统计工具泳道。五组术语均回收至Glossary。 */}
+
 <Objectives>
 
-- 解释代理概念、代理类型、自定义工具与多模态代理的输入schema、执行状态、事件与输出，而不只背API名称
-- 并列原书2024轨道与当前LangChain v1轨道，定位“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”的首个分岔
-- 交付工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，说明评估、回退、安全与未测试边界
+- 能逐步追踪代理状态，按调用标识匹配乱序结果，并区分正常结束、协议错误、超时和预算耗尽。
+- 能修改本地执行器，使非法参数、缺权限或未批准请求的副作用次数始终为零。
+- 能回答：图片文件名、图片内容块和图片统计工具的结果，为什么不能互相替代？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 为什么“会回答”还不等于“能办事”
 
-第6章 智能代理设计围绕“智能代理怎样在多模态工具调用中保持参数验证、权限最小化和可恢复状态？”建立贯穿任务：在锁定的2024原书轨道和当前LangChain v1轨道上重放代理概念、代理类型、自定义工具与多模态代理。先预测依赖、schema、事件、状态、工具/检索调用或评估中的首个变化，再运行原书参考、v1参考、迁移故障与回退；只有守住“第6章 智能代理设计的包版本、输入输出schema、执行事件、评估结果与回退路径始终一致”并交付工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，代码运行才构成可发布证据。
+想象一条加工流水线：有人决定下一步加工什么，有人操作机器，还有人检查回执。若把“建议开机”直接当成“已完成加工”，就会漏单、重做，甚至越权开动机器。
 
-## 原书、伴学材料与当前v1边界
+本章把建议、执行、回执分开。没有这层分工，最后一句“办好了”既不能证明操作发生过，也不能证明操作被允许。
 
-第6章 智能代理设计以[作者李多多（莫尔索）的开放学习站](https://aitutor.liduos.com/)核对作者身份、实践取向和相关公开伴学材料；站点明确称其为个人学习笔记并宣传纸书，但它不是人民邮电出版社纸书的逐页全文，因此本课程把来源级别记为“作者授权伴学样本”，不虚构完整书稿访问权。
+## 资料与版本边界
 
-第6章 智能代理设计以[首版公开书目与完整目录](https://m.bookschina.com/9299314.htm)核对《LangChain编程：从入门到实践》、人民邮电出版社、2024年4月、192页、ISBN 9787115639424，以及前言、10章和全部节/小节。正式分母是1个前言、10个章标题和135个节/小节，共146个层级；课程用学习地图、前言、10章和总复习共13页承载。
+本页沿用 **2026-07-30 登记的 146 个目录坐标**，覆盖下面八个正式标题。2026-10-15 实际访问[中图书目](https://m.bookschina.com/9299314.htm)，得到 HTTP 200 但跳转会员登录，**不能据此声称今日重新核验全目录**。[作者开放伴学站](https://aitutor.liduos.com/)可访问，它是学习笔记和伴学材料，不是纸书全文，也不构成改编许可。本页按目录限定范围，独立重写解释、图和代码，不声称复现首版案例。
 
-第6章 智能代理设计以[LangChain当前官方总览](https://docs.langchain.com/oss/python/langchain/overview)与[v1迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)建立第二条事实轨道：当前v1精简核心命名空间、把大量旧Chain与检索接口移到langchain-classic，并以create_agent、中间件、LangGraph和LangSmith组织主路径。本站不复制纸书或伴学站正文、代码和图片，所有中文解释、双轨迁移、反例、交互、练习与答案均为独立重写。
+三个时代要分开：**2024 首版语境**保留“代理类型、工具与多模态应用”的学习问题，旧资料中的 `AgentExecutor`、ReAct 或函数调用范式不能直接当成今天的推荐入口；**langchain-classic** 是旧接口的兼容命名空间，不是“2024 环境复刻”；**现代 v1** 以 `langchain.agents.create_agent` 为主要入口，在 LangGraph 上运行状态循环，人工中断使用中间件及恢复机制。这里不提供未经运行的 SDK 示例，下面运行的是 Python 标准库教学执行器。
 
-### 本页独立事实来源
+本次实际可访问并用于核对事实的官方资料：
 
-- [LangChain当前官方总览](https://docs.langchain.com/oss/python/langchain/overview)：在第6章 智能代理设计中，核对当前v1的agent harness、模型接口、LangGraph与LangSmith定位。
-- [LangChain v1官方迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)：在第6章 智能代理设计中，核对精简命名空间、langchain-classic、create_agent和破坏性变化。
-- [LangGraph官方代码库](https://github.com/langchain-ai/langgraph)：在第6章 智能代理设计中，核对当前有状态、可恢复编排层的职责。
-- [LangChain官方安全公告](https://github.com/langchain-ai/langchain/security/advisories)：在第6章 智能代理设计中，核对依赖与模板等安全风险不能只靠书中静态建议。
+- [Agents](https://docs.langchain.com/oss/python/langchain/agents)：模型与工具循环、状态和工具执行的位置，对应 6.1—6.2.3。
+- [Tools](https://docs.langchain.com/oss/python/langchain/tools)：名称、描述、输入约束及工具运行上下文，对应 6.2.4。
+- [Human-in-the-loop](https://docs.langchain.com/oss/python/langchain/human-in-the-loop)：执行前中断、批准/编辑/拒绝、检查点和恢复，对应实验 2。生产中恢复需要正确的持久化与线程标识。
+- [Messages](https://docs.langchain.com/oss/python/langchain/messages) 与 [Models](https://docs.langchain.com/oss/python/langchain/models)：`AIMessage.tool_calls`、`ToolMessage.tool_call_id`、标准内容块与模型能力差异，对应实验 1、3。
+- [v1 迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)：`create_agent`、旧命名空间与中间件变化。文档是滚动版本，访问成功不等于任何具体 SDK 版本已自测。
 
-## 146个正式坐标中的本页覆盖
+## 第6章 智能代理设计
 
-### 第6章 智能代理设计
+贯穿任务是：先读取两项统计，再决定要不要写一张金额 42 的发票，最后把附件统计放回下一轮输入。我们不让一个“万能模型”承担所有职责，而是把系统拆成三种可核查对象：模型输出的候选调用、宿主保存的待处理集合、工具实际留下的结果或副作用。
 
-**坐标 1/8：第6章 智能代理设计。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+本章只增加五组概念：代理、工具调用、工具契约、人工批准、多模态消息。实验 1 管“下一步去哪、结果属于谁”；实验 2 管“到底能不能执行”；实验 3 管“消息里究竟装了什么”。三者是同一执行路径的不同截面，不是三道发布审核。
 
 ### 6.1 智能代理的概念
 
-**坐标 2/8：6.1 智能代理的概念。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="根据当前消息选择下一步动作，并由宿主执行和反馈的循环系统">
+  智能代理
+</Term>
+不是“一个更长的提示”，而是模型与执行环境组成的循环：读状态 → 提议动作 → 执行 →
+收集结果 →
+再读状态。固定链预先决定路径；代理允许本轮结果改变下一步路径，因此必须另设边界。
+
+状态至少保存消息、待处理标识、执行记录、剩余预算及停止原因。模型返回普通最终回答且没有待处理调用时可正常结束；它不是工具成功的凭据。工具挂起、返回错误或预算耗尽则是不同停止状态，不能全部写成“任务完成”。看实验 1 的“核对→模型”回边：只有回包完整，下一轮才有可靠观察。
 
 ### 6.2 LangChain中的代理
 
-**坐标 3/8：6.2 LangChain中的代理。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+LangChain 提供模型消息、工具描述和代理编排，但权限与业务幂等仍由应用实现。现代 v1 的输入状态通常含 `messages`；模型节点产生调用，工具节点完成执行与反馈。工具返回到消息状态后，模型才有机会修正计划。这解释了为什么只打印最终文本会丢掉关键证据。
+
+实验 1 把调用与回包画在状态机下面：圆角框是候选调用，直角框是结果，交叉线代表**乱序成功**，断线代表**协议不成立**。真正的网络超时、取消信号和并发任务清理由运行时处理；本图的“超时”是明确的确定性事件，不是浏览器等待真实服务。
 
 ### 6.2.1 LLM驱动的智能代理
 
-**坐标 4/8：6.2.1 LLM驱动的智能代理。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="模型提出的工具名、参数与唯一标识；它本身并不执行工具">工具调用</Term>
+包含工具名、参数和调用标识。LangChain 归一化调用中的字段叫 `id`，对应
+`ToolMessage` 的字段叫 `tool_call_id`；某些供应商原始协议叫
+`call_id`。本页图上统一写 call_id 指代这层关联，**不是要求 SDK 字段都改名**。
+
+一次输出可能有多个调用。设待处理集合为 `{c1, c2}`，回包先到 `c2` 再到 `c1` 完全合法；依顺序配对则会串结果。只有每个待处理标识恰有一个终态结果，且没有未知或重复结果标识，才可继续。结果内容可以是明确的工具错误，不一定是成功值，但“根本没有回包”不能假造为成功消息。实验 1 的 c9 故障会使 c1 悬空并停止。
 
 ### 6.2.2 LangChain中的代理
 
-**坐标 5/8：6.2.2 LangChain中的代理。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+一次提议到下一轮模型之间，至少维护三项不变量：调用标识不重复；结果集合与待处理集合一一对应；执行前确认本轮未超过预算。下面的教学执行器在整批执行前检查预算，所以只剩 1 次预算却有 2 个调用时，实际执行是 0 次，不会悄悄执行一半。
+
+同一个标识重提是协议错误；**不同标识、相同参数**可能是模型重试。实验 1 的 c1/c3 是同一个纯统计工具，按“工具名+规范化参数”复用缓存，仍分别生成属于 c1、c3 的结果。这个缓存策略不能套到支付等副作用：重复付款可能是两笔合法业务，必须由业务键、持久记录和原子提交判断，不能凭参数相同就吞单。
 
 ### 6.2.3 代理的类型
 
-**坐标 6/8：6.2.3 代理的类型。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+“ReAct”“结构化工具调用”“多模态”不是互斥的软件类名。ReAct 描述根据观察再选动作的过程；结构化调用描述输出格式；多模态描述输入内容。历史文本代理会从格式化文本解析动作，解析失败是额外故障面；现代结构化调用可减少文本解析歧义，但并不能替代参数和权限检查。
+
+一次模型输出两项统计可并行执行，依 ID 汇合；有数据依赖的步骤必须串行。并行不等于共享一份可随意改写的状态。实验 1 故意反转结果到达顺序；无结果样本则在模拟截止事件发生时停下。除此之外还要有轮数、调用次数、时间/费用预算：即使每轮回包都合法，模型也可能永远继续调用。
+
+先预测：把轨迹切换为“重复参数、新 ID”，执行次数应为 1 还是 2？再分别试 c9、重复 ID、无结果和不足预算，推进到最后，比较连线与实际执行计数。每次“完全重置”应回到乱序合法样本、第一帧和暂停状态。
+
+<Lcp06AgentsVersionContractLab />
 
 ### 6.2.4 自定义代理工具
 
-**坐标 7/8：6.2.4 自定义代理工具。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="工具的名称、用途、输入结构和执行约束所组成的接口约定">工具契约</Term>
+让模型知道能申请什么，也让宿主知道如何拒绝。工具名要稳定、描述要说明何时使用；输入
+schema 可以限制金额为整数且在 1—100 内。**schema
+合法只说明格式合法**，不说明当前用户可以写发票。身份、scope、资源归属必须来自可信执行上下文，而不是模型生成的参数。
+
+<Term def="在副作用执行前等待可信人员对精确动作和参数作出决定">人工批准</Term>
+是执行边界：schema → allowlist 权限 → 挂起审批 → 执行。等待时写入次数必须为
+0；拒绝就终止；批准只适用于当前精确参数。把金额 42 改成 43
+后沿用旧批准，属于审批绕过。现代 HITL
+的编辑决定也不能绕过重新校验；生产环境还需要持久检查点、授权审批人及恢复时重新检查权限。
+
+先预测：批准一个格式正确、却只有读取权限的请求，会写入吗？实验 2 推进到最后，看阀门是否打开、下游是否有流量、账本是否从 0 变成 1。再对合法请求分别等待、拒绝、批准。图中的账本只是一条本地派生记录，不是现实发票服务；播放动画不能自动批准。
+
+<Lcp06AgentsRunnableTraceLab />
 
 ### 6.3 设计并实现一个多模态代理
 
-**坐标 8/8：6.3 设计并实现一个多模态代理。** 第6章 智能代理设计把模型、工具schema、状态、循环、停止原因和权限写成agent合同，并用工具错误与人工介入路径测试恢复。 对第6章 智能代理设计的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="同一消息用不同类型的内容块携带文字、图像或音频等信息">
+  多模态消息
+</Term>
+不是把“图片路径”塞进一段文字。消息可以包含 text、image、audio
+内容块；标准内容块与供应商原生格式还需适配。模型是否支持视觉、音频、文件 URL
+或内联数据，必须查具体模型能力，不能因为接口接收了 JSON 就认定读到了附件。
 
-## 先预测，再操作双轨实验
+处理路径应是：解析内容块 → 检查附件类型/大小 → 按能力分流 → 本地工具或模型读取 → 把工具结果按调用标识回填。实验 3 用 4×4 灰度数组真实计算暗像素数量，用八个音频样本真实计算峰值；这既不是 OCR，也不是语音转写。原生视觉分支只展示“把 image 块交给模型”的路由，**没有进行视觉推理**。
 
-先预测：在第6章 智能代理设计只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”时，依赖解析、输入schema、执行事件、工具/检索状态、输出解析或独立评估中的哪一项最先变化？请先写下可观测信号，再切换原书/v1轨道和参考/故障trace。
+先预测：改成 ZIP MIME 后，图片统计工具还应收到 i1 吗？切到“音频超限”，应只拒绝音频，不把它当成文本继续处理。切到“有视觉能力”，图片的竖直工具支路改为直送曲线，音频仍走峰值工具。实验的 MIME/大小校验只针对本地 fixture；生产还要检查内容魔数、解码上限、附件访问控制，抓取远程 URL 时防止内网访问与超额下载。
 
-<Stepper>
-  <Step title="版本合同：比较原书与v1">
-    <Lcp06AgentsVersionContractLab />
-  </Step>
-  <Step title="执行轨迹：重放参考与故障">
-    <Lcp06AgentsRunnableTraceLab />
-  </Step>
-  <Step title="发布证据门：检查评估与回退">
-    <Lcp06AgentsReleaseGateLab />
-  </Step>
-</Stepper>
+<Lcp06AgentsReleaseGateLab />
 
-## 最小可复现与迁移协议
+## 完整本地实例：把边界写成断言
 
-1. 为第6章 智能代理设计分别冻结原书2024与当前v1的Python、包锁、集成包、模型/工具版本、输入schema、随机性和评估集，禁止跨轨拼接。
-2. 在两条轨道运行参考流程，保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点；若只能看到最终输出，就无法判断差异来自框架、provider还是数据。
-3. 保持模型、数据和评估不变，只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”，定位依赖、schema、状态、事件或输出中的首个分岔。
-4. 撤销故障，从同一快照重放；只有trace、评估和回退都恢复，才允许批准迁移或发布。
+以下是**可直接运行的完整 Python 3.10+ 程序**，只用标准库。依次把七段 Python 代码**按出现顺序**粘贴到同一个 `agents_local.py` 文件，然后运行 `python3 agents_local.py`。不需要 API key，不依赖本网站附件。`script` 是预先写好的模型提议，不是真实 LLM；工具只计算数组或写内存列表，不访问互联网。
 
-<Callout type="trap" title="第6章 智能代理设计误区一：旧API等于错误知识">
-  原书2024接口是历史教学轨道，仍可解释稳定机制；第6章
-  智能代理设计应标注版本并建立迁移关系，而不是删除历史或假装它仍是当前默认。
+第一段定义唯一允许的纯工具。先验证名称与严格整数类型，再返回数值；这里不用 `eval`，也不接受任意函数名。后续 `cache` 仅用于这个纯函数。
+
+```python
+import json
+
+
+def key(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def call(cid, n=3):
+    return {"id": cid, "name": "double", "args": {"n": n}}
+
+
+def pure_tool(c):
+    if c["name"] != "double":
+        raise ValueError("unknown tool")
+    if set(c["args"]) != {"n"} or type(c["args"]["n"]) is not int:
+        raise ValueError("schema")
+    return 2 * c["args"]["n"]
+```
+
+第二段开始循环。`budget` 计算**提议的调用数**，缓存命中也消耗预算，以免无穷重试；`rounds` 是第二道上限。重复 ID 在执行前拦下。这里为了教学简化，全批拒绝，而不是部分调度。
+
+```python
+def run(script, fault="", budget=4, rounds=3):
+    seen, cache, executed, hits = set(), {}, 0, 0
+    def done(reason):
+        return reason, executed, hits
+    for calls in script[:rounds]:
+        if not calls:
+            return done("final")
+        ids = [c["id"] for c in calls]
+        if len(set(ids)) != len(ids) or seen.intersection(ids):
+            return done("duplicate_id")
+        if len(calls) > budget:
+            return done("budget")
+        budget -= len(calls)
+        seen.update(ids)
+        results = []
+        for c in calls:
+            signature = key([c["name"], c["args"]])
+            if signature in cache:
+                hits += 1
+            else:
+                try:
+                    cache[signature] = pure_tool(c)
+                except ValueError:
+                    return done("tool_error")
+                executed += 1
+            results.append({"tool_call_id": c["id"],
+                            "content": cache[signature]})
+```
+
+第三段**接在第二段后面，保持下面前两层缩进**。反转列表模拟乱序；`missing` 注入确定性截止事件，`wrong` 注入未知 ID。未完整收齐就不进入下一轮模型。轮数用完即止损，即使尚有调用预算。
+
+```python
+        results.reverse()
+        if fault == "missing":
+            return done("timeout")
+        if fault == "wrong":
+            results[0]["tool_call_id"] = "c9"
+        received = [r["tool_call_id"] for r in results]
+        if len(received) != len(set(received)) or set(received) != set(ids):
+            return done("protocol")
+    return done("round_limit")
+```
+
+第四段恢复顶格，创建副作用执行器。`proposal` 是可信宿主保存的精确动作快照，批准令牌在此用字符串模拟，不是安全签名。参数变动、未批准或权限不符都会提前返回，唯一写入点在所有条件之后。`used` 仅防同进程内重复执行；现实系统应使用持久业务幂等键和事务，不宣称这段代码能解决跨进程重复支付。
+
+```python
+def write_invoice(c, scope, decision, approval, effects, used):
+    args = c["args"]
+    amount = args.get("amount")
+    if c["name"] != "invoice" or set(args) != {"amount"}:
+        return "schema"
+    if type(amount) is not int or not 1 <= amount <= 100:
+        return "schema"
+    if scope != "invoice:write":
+        return "forbidden"
+    proposal = key(c)
+    if decision == "pending":
+        return "waiting"
+    if decision != "approve" or approval != proposal:
+        return "rejected"
+    if c["id"] in used:
+        return "duplicate"
+    used.add(c["id"])
+    effects.append({"invoice": "INV-42", "amount": amount})
+    return "written"
+```
+
+第五段处理自定义本地内容块，**不是供应商 SDK 请求格式**。image 的单位是灰度字节，audio 的单位是 float32 样本（每个 4 字节）；类型和上限先判，后计算。原生分支仅返回待发送 image 块，不会神奇地识别内容。
+
+```python
+PIXELS = [0, 0, 255, 255, 0, 255, 0, 255,
+          255, 0, 255, 0, 255, 255, 0, 0]
+AUDIO = [0, .25, -.5, .75, -1, .5, -.25, 0]
+
+
+def route(block, native=False):
+    kind, data = block["type"], block["data"]
+    if kind == "text":
+        return {"type": "text", "text": data}
+    expected = {"image": "image/x-gray8", "audio": "audio/x-f32"}
+    if kind not in expected or block["mime"] != expected[kind]:
+        return {"error": "mime"}
+    size = len(data) * (4 if kind == "audio" else 1)
+    if not data or size > 64:
+        return {"error": "size"}
+    if kind == "image" and native:
+        return {"type": "image", "data": data}
+    value = sum(p < 128 for p in data) if kind == "image" else max(map(abs, data))
+    return {"tool_call_id": "i1" if kind == "image" else "a1",
+            "content": value}
+```
+
+第六段验证实验 1、2。被拒绝的写请求不仅有错误字符串，还必须留下**零副作用**；批准后也不能重复消费同一调用。`loop` 使用不同 ID，证明标识合法并不足以保证终止。
+
+```python
+base = [[call("c1"), call("c2", 4)], []]
+assert run(base) == ("final", 2, 0)
+assert run(base, "wrong")[0] == "protocol"
+assert run(base, "missing")[0] == "timeout"
+assert run(base, budget=1) == ("budget", 0, 0)
+assert run([[call("c1"), call("c1")]]) == ("duplicate_id", 0, 0)
+assert run([[call("c1")], [call("c1")]])[0] == "duplicate_id"
+assert run([[call("c1")], [call("c3")], []]) == ("final", 1, 1)
+loop = [[call(str(i))] for i in range(4)]
+assert run(loop)[0] == "round_limit"
+c = {"id": "w1", "name": "invoice", "args": {"amount": 42}}
+effects, used = [], set()
+for amount, scope, decision, expected in [
+    ("42", "invoice:write", "approve", "schema"),
+    (42, "invoice:read", "approve", "forbidden"),
+    (42, "invoice:write", "pending", "waiting"),
+    (42, "invoice:write", "reject", "rejected"),
+    (43, "invoice:write", "approve", "rejected"),
+]:
+    changed = {**c, "args": {"amount": amount}}
+    assert write_invoice(changed, scope, decision, key(c), effects, used) == expected
+    assert effects == []
+assert write_invoice(c, "invoice:write", "approve", key(c), effects, used) == "written"
+assert write_invoice(c, "invoice:write", "approve", key(c), effects, used) == "duplicate"
+assert len(effects) == 1
+```
+
+第七段验证实验 3 的实际计算和拒收，输出唯一的成功行。`8` 是逐个数灰度小于 128 的元素，`1` 是音频绝对值的最大值；不是模型编造的答案。运行不通过时 Python 会在失败的断言处停止。
+
+```python
+image = {"type": "image", "mime": "image/x-gray8", "data": PIXELS}
+audio = {"type": "audio", "mime": "audio/x-f32", "data": AUDIO}
+assert route({"type": "text", "data": "统计附件"})["text"] == "统计附件"
+assert route(image) == {"tool_call_id": "i1", "content": 8}
+assert route(audio) == {"tool_call_id": "a1", "content": 1}
+assert route(image, native=True)["type"] == "image"
+assert route({**image, "mime": "application/zip"}) == {"error": "mime"}
+assert route({**audio, "data": AUDIO * 3}) == {"error": "size"}
+print("PASS: loop, permission, multimodal; dark=8 peak=1 writes=1")
+```
+
+本页本地自测会从正文提取上述七段后拼接执行，而非运行一份隐藏的“正确附件”。这是控制流与数组计算的测试，不覆盖真实 SDK、真实 LLM 决策、供应商附件格式、网络取消、分布式幂等、审批鉴权或外部服务。面向生产迁移时，需要为目标版本补这些集成测试。
+
+## 容易踩的坑
+
+<Callout type="trap" title="按回包顺序拼结果">
+
+**现象 →** c2 的数值被记在 c1 名下。**原因 →** 并行到达顺序不稳定，却用数组下标配对。**修法 →** 按 tool_call_id 与待处理集合核对；未知、重复或缺失都阻止下一轮。实验 1 的交叉线是成功，不是错误。
+
 </Callout>
 
-<Callout type="trap" title="第6章 智能代理设计误区二：改导入路径就完成迁移">
-  v1改变命名空间、agent构建、状态、中间件和内容块等语义；第6章
-  智能代理设计必须重跑schema、stream、工具错误、trace和评估，不能只让代码通过import。
+<Callout type="trap" title="合法参数加一句安全提示就足够">
+
+**现象 →** 只有读取权限也能写发票。**原因 →** schema 只验证结构，模型提示并不执行授权。**修法 →** 宿主从可信身份取权限，副作用之前阻断；审批绑定精确参数。实验 2 的批准不能打开权限阀门。
+
 </Callout>
 
-<Callout type="trap" title="第6章 智能代理设计误区三：演示成功即可上线">
-  LangChain应用还依赖模型、检索、外部工具、权限和数据；第6章
-  智能代理设计必须覆盖故障、重复事件、敏感数据、回退与持续评估。
+<Callout type="trap" title="缓存重试就可以不设终止条件">
+
+**现象 →** 每次都命中缓存，代理却永远不停。**原因 →** 节省工具计算不等于结束模型循环。**修法 →** 每次提议也消耗预算，另设轮数与时间上限；无结果记录超时而非伪造成功。改 run 的 rounds 验证止损。
+
+</Callout>
+
+<Callout type="trap" title="发了文件名就等于模型读到了文件">
+
+**现象 →** 对 ZIP 附件给出“图像识别结果”。**原因 →** 把文本路径或 MIME 声明当作真实内容与能力证明。**修法 →** 校验内容、限制大小并选择支持的模型/工具；实验 3 的拒收支路不会调用统计工具，峰值也不是转写。
+
 </Callout>
 
 ## 小结
 
-- 代理概念、类型与自定义工具纳入证据链
-- 原书轨道解释2024语义，v1文档重建接口
-- schema和trace揭示行为并定位不兼容点
-- 独立评估与回退机制决定能否发布
-- 交付工具schema、权限矩阵与恢复检查点
+- 调用标识配对回包，停止原因单独记录。
+- 校验、权限和批准都通过后才可写入。
+- 内容块与工具结果不同，按能力明确路由。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：第6章 智能代理设计**
-
-为第6章 智能代理设计的第6章 智能代理设计写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 1：把 run 的调用预算改成 1，再分别运行 base 与纯缓存重试脚本，会在哪里停？如何证明无限循环被截断？**
 
 <Answer>
-  先分别锁定两条版本轨道，把第6章
-  智能代理设计映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
+
+base 一次提议两调用，批前预算检查直接返回 `("budget", 0, 0)`。重试脚本第一轮 c1 执行一次，第二轮 c3 即使可命中缓存也因预算不足而不调度。独立实现一个每轮新 ID、同参数的脚本，设置 budget=100、rounds=2，应返回 `round_limit`；不能只检查工具实际执行次数。
+
 </Answer>
 
-**问题 2：6.1 智能代理的概念**
-
-为第6章 智能代理设计的6·1 智能代理的概念写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 2：批准金额 42 后改成 43，为什么不能继续用同一个 approval？补出副作用为零的断言。**
 
 <Answer>
-  先分别锁定两条版本轨道，把6·1
-  智能代理的概念映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
+
+批准对象是完整提议快照，不是“此工具永远可用”。构造 `changed = {**c, "args": {"amount": 43}}`，传 `approval=key(c)`，应返回 `rejected` 且 effects 仍为空。生产中编辑后的请求要重新验证、授权并审批；审批人与执行器之间还需要可信身份和持久恢复边界。
+
 </Answer>
 
-**问题 3：6.2 LangChain中的代理**
-
-为第6章 智能代理设计的6·2 LangChain中的代理写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 3：把第一个灰度 0 改成 255，再把音频复制三份；两条路径分别发生什么？原生图片分支能证明模型识图成功吗？**
 
 <Answer>
-  先分别锁定两条版本轨道，把6·2
-  LangChain中的代理映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
-</Answer>
 
-**问题 4：6.2.1 LLM驱动的智能代理**
+暗像素由 8 变 7，i1 结果也应是 7；三份音频为 24 个 float32 样本、96 字节，超出 64 字节限额，返回 size 错误，不能产生 a1 成功结果。原生分支仅封装 image 块，未发出模型请求，不能证明识图成功。
 
-为第6章 智能代理设计的6·2·1 LLM驱动的智能代理写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把6·2·1
-  LLM驱动的智能代理映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
-</Answer>
-
-**问题 5：6.2.2 LangChain中的代理**
-
-为第6章 智能代理设计的6·2·2 LangChain中的代理写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把6·2·2
-  LangChain中的代理映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
-</Answer>
-
-**问题 6：6.2.3 代理的类型**
-
-为第6章 智能代理设计的6·2·3 代理的类型写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把6·2·3
-  代理的类型映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
-</Answer>
-
-**问题 7：6.2.4 自定义代理工具**
-
-为第6章 智能代理设计的6·2·4 自定义代理工具写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把6·2·4
-  自定义代理工具映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
-</Answer>
-
-**问题 8：6.3 设计并实现一个多模态代理**
-
-为第6章 智能代理设计的6·3 设计并实现一个多模态代理写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把6·3
-  设计并实现一个多模态代理映射到明确schema、执行状态和输出事件；参考运行保存工具schema、状态轨迹、权限矩阵、停止原因与恢复检查点，故障运行只注入“让模型自由选择高权限工具，并把成功最终答案当成每次工具调用都正确”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第6章
-  智能代理设计边界外。
-</Answer>
-
-**问题 9：为什么不能混合两条轨道**
-
-解释第6章 智能代理设计为什么不能在同一示例中无标记地混用原书v0接口、langchain-classic与当前v1接口。
-
-<Answer>
-  三者的命名空间、状态、事件、agent和内容语义可能不同。无标记混用会让读者无法复现依赖，也无法判断成功来自兼容层还是当前接口。正确做法是分开锁文件和运行入口，逐项写迁移映射，再用同一输入与评估比较行为。
-</Answer>
-
-**问题 10：发布证据**
-
-第6章 智能代理设计除了“代码能运行”还需要哪些证据才能上线？
-
-<Answer>
-  第6章
-  智能代理设计至少需要依赖与许可证清单、输入输出schema、完整trace、失败和重试路径、检索或工具调用证据、安全与敏感数据检查、独立质量评估、延迟成本预算、监控告警以及可执行回退快照。任一项未知都应显式列入第6章
-  智能代理设计的发布边界。
 </Answer>
 
 </Exercises>
 
-## 术语与运行证据
-
-在第6章 智能代理设计中，<Term def="第6章 智能代理设计把原书2024与当前v1分开的依赖和接口语义">版本轨道</Term>、<Term def="第6章 智能代理设计对消息、文档、工具参数或事件负载的类型合同">输入schema</Term>、<Term def="第6章 智能代理设计把模型、检索、工具、状态和错误关联起来的事件树">执行trace</Term>、<Term def="第6章 智能代理设计只改变一个版本或接口假设以定位不兼容点">迁移故障</Term>、<Term def="第6章 智能代理设计不复用演示样本的质量、安全、延迟和成本检查">独立评估</Term>、<Term def="第6章 智能代理设计能够恢复依赖、状态和服务行为的可部署版本">回退快照</Term>共同约束发布。术语必须落到锁文件、schema、trace、评估和回退；把旧类名替换成新类名而不重跑行为合同，不叫迁移。
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="版本轨道">
-    第6章 智能代理设计把原书2024与当前v1分开的依赖和接口语义。
+  <GlossaryItem term="智能代理">
+    在建议、执行、反馈之间循环选择下一步的系统，不只是一个聊天模型。见实验 1
+    的回边。
   </GlossaryItem>
-  <GlossaryItem term="输入schema">
-    第6章 智能代理设计对消息、文档、工具参数或事件负载的类型合同。
+  <GlossaryItem term="工具调用">
+    含工具名、参数、标识的动作申请；回包必须按标识归位，申请不等于执行。
   </GlossaryItem>
-  <GlossaryItem term="执行trace">
-    第6章 智能代理设计把模型、检索、工具、状态和错误关联起来的事件树。
+  <GlossaryItem term="工具契约">
+    告诉模型怎样申请、告诉宿主怎样验证的一套接口规则；格式合法不等于有权执行。
   </GlossaryItem>
-  <GlossaryItem term="迁移故障">
-    第6章 智能代理设计只改变一个版本或接口假设以定位不兼容点。
+  <GlossaryItem term="人工批准">
+    先暂停副作用，等可信人员批准精确动作后再执行；改参数需要重新检查。
   </GlossaryItem>
-  <GlossaryItem term="独立评估">
-    第6章 智能代理设计不复用演示样本的质量、安全、延迟和成本检查。
-  </GlossaryItem>
-  <GlossaryItem term="回退快照">
-    第6章 智能代理设计能够恢复依赖、状态和服务行为的可部署版本。
+  <GlossaryItem term="多模态消息">
+    以不同内容块携带文字、图像、音频的消息；路径、原始附件与工具统计值不是同一种东西。
   </GlossaryItem>
 </Glossary>
 
 <Attribution
+  sourceUrl="https://aitutor.liduos.com/"
   mode="independent-rewrite"
-  sourceBasis="author-authorized-companion-sample-plus-public-toc-and-current-upstream-docs"
-  workTitle="李多多（莫尔索）《LangChain编程：从入门到实践》"
-  adaptedUrl="https://aitutor.liduos.com/"
+  workTitle="《LangChain编程：从入门到实践》及作者开放伴学材料"
+  sourceBasis="outline-only"
 />
