@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-15T20:04:45.639Z；旧版分数不迁移。
+> 2026-10-15T21:04:38.471Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1770
+- failed：1764
 - queued：196
-- passed：1748
+- passed：1754
 - published：895
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -31,35 +31,35 @@
 | 18 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
 | 19 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
 | 20 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
-| 21 | this-is-chatgpt | 24 | 24 | 0 | 0 | 24 |
-| 22 | head-first-java | 23 | 23 | 0 | 0 | 111 |
-| 23 | game-design-fundamentals | 23 | 23 | 0 | 0 | 98 |
-| 24 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
-| 25 | os-concepts | 23 | 23 | 0 | 0 | 92 |
-| 26 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
-| 27 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
-| 28 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
-| 29 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
-| 30 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
-| 31 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
-| 32 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
-| 33 | shader-practice | 21 | 21 | 0 | 0 | 63 |
-| 34 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
-| 35 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
-| 36 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
-| 37 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
-| 38 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
-| 39 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
-| 40 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
-| 41 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
-| 42 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
-| 43 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
-| 44 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
-| 45 | unity5 | 18 | 18 | 0 | 0 | 64 |
-| 46 | shaderx | 18 | 18 | 0 | 0 | 60 |
-| 47 | python-ops | 18 | 18 | 0 | 0 | 54 |
-| 48 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
-| 49 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 21 | head-first-java | 23 | 23 | 0 | 0 | 111 |
+| 22 | game-design-fundamentals | 23 | 23 | 0 | 0 | 98 |
+| 23 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
+| 24 | os-concepts | 23 | 23 | 0 | 0 | 92 |
+| 25 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
+| 26 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
+| 27 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
+| 28 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
+| 29 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
+| 30 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
+| 31 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 32 | shader-practice | 21 | 21 | 0 | 0 | 63 |
+| 33 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
+| 34 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
+| 35 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
+| 36 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
+| 37 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
+| 38 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 39 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
+| 40 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
+| 41 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
+| 42 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
+| 43 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
+| 44 | unity5 | 18 | 18 | 0 | 0 | 64 |
+| 45 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 46 | python-ops | 18 | 18 | 0 | 0 | 54 |
+| 47 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
+| 48 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 49 | this-is-chatgpt | 24 | 18 | 0 | 6 | 18 |
 | 50 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
 | 51 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
 | 52 | effective-java | 17 | 17 | 0 | 0 | 73 |

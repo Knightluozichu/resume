@@ -1,9 +1,9 @@
 ---
 title: 机器学习和神经网络训练
-type: C
+type: B
 section: 机器学习和神经网络训练
 order: 7
-description: 用损失、梯度、批次与留出集追踪训练过程；用上下文合同、计算轨迹与证据门交付损失曲线、梯度快照、数据谱系与留出集结果
+description: 从标量计算带手算伴随值，在二维等高线上检查步长，再用样本梯度扇图解释平均与抵消。
 demo: true
 math: true
 sourceUrl: >-
@@ -19,8 +19,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,139 +31,327 @@ import {
   TcgMain06TrainingNeuralNetsEvidenceGateLab,
 } from "@/components/mdx/this-is-chatgpt/v2/tcg-main-06-training-neural-nets";
 
+[上一节：神经网络](/learn/this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets) · [下一节：训练的实践与经验](/learn/this-is-chatgpt/02-neural-models/tcg-main-07-training-practice)
+
 <Objectives>
 
-- 解释损失函数、反向传播、优化与独立评估中的输入、状态、变换与输出，而不只复述结论
-- 用单一反例“训练与测试数据泄漏，或同时更换初始化、批次和学习率后归因”定位机器学习和神经网络训练的首个错误状态
-- 交付损失曲线、梯度快照、数据谱系与留出集结果，并区分2023年原书主张与当前事实
+- 能手算标量计算带的反向导数，并定位丢失局部导数后的首个错误。
+- 能修改步长和批次，分别用等高线轨迹与向量合成解释过冲、平均和抵消。
+- 能回答：训练样本上误差为零，为什么仍不能断言样本范围外预测正确？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 为什么不仅要会算输出
 
-机器学习和神经网络训练围绕“权重更新怎样减少训练目标，同时避免把记忆训练样本误判为泛化？”建立贯穿任务：在固定的2023年原书语境与独立事实来源下重放损失函数、反向传播、优化与独立评估。先写下哪个输入、表示、分布、训练信号、工具状态或评估结果会最先变化，再运行参考、故障和恢复路径；只有守住“机器学习和神经网络训练的输入版本、条件分布或工具状态、输出证据与适用边界始终可追溯”并交付损失曲线、梯度快照、数据谱系与留出集结果，流畅输出或成功演示才可能成为机制证据。
+上一节相当于在地图上按给定路线走一遍；本节要问：终点偏了，应该改哪一个路标、改多少？没有纠偏方法，每次试走就只能盲目碰运气。
+
+但一次朝终点迈步，不保证下一步也安全：步子太大会越过低谷，多个人指的方向也可能相互抵消。我们把这三种现象分开计算，避免把“算出方向”误当成“已经学好”。
 
 ## 原文、版本与事实边界
 
-机器学习和神经网络训练以[Stephen Wolfram作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)核对正文论证，以[Wolfram Media原版产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)核对作者Stephen Wolfram、2023年3月9日出版、112页、纸书ISBN 978-1-57955-081-3以及前言、两篇正文、20个分节、致谢和补充资源。
+本页正式坐标是 **tcg-main-06**，对应作者 2023 年公开文章的 **Machine Learning, and the Training of Neural Nets / 机器学习和神经网络训练**。实际阅读了该节从 examples、generalization 到平方误差、二维下降、链式求导和外推差异的文字；原文中的嵌入图片不能由纯文本完整恢复。本页采用自己的标量与二维例子，不复制原图或逐段翻译。
 
-机器学习和神经网络训练以[Wolfram Media翻译页](https://www.wolfram-media.com/translations/)确认中文译本《这就是ChatGPT》，并以[人民邮电出版社页面](https://www.ptpress.com.cn/publishing/book/4bd62f00-4d6e-4f98-92f4-604be0407b8a)核对WOLFRAM传媒汉化小组译、2023年7月、134页和ISBN 9787115618085；全书正式分母是25个目录层级，课程采用学习地图、22个正文单元和总复习共24页承载。
+[作者公开长文](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)是本节论述的一手历史来源；[Wolfram Media 产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)仅用于版本与目录定位。读到公开长文不等于读到英文或中文原书全文，更不意味着获得开放改编许可。中文书名《这就是ChatGPT》仅用于对应书籍，不据此声称核过译本正文。
 
-机器学习和神经网络训练把作者文章视为可访问的完整一手材料，但可访问不等于开放许可；本站不复制、逐段翻译或近似改写原文、图片、代码与示例，所有中文机制解释、交互、反例、练习和答案均为独立教学重写。书中关于GPT-3、早期ChatGPT、参数量和接口形态的陈述属于2023年历史快照，不能冒充2026年当前产品规格。
+作者当时有关 ChatGPT 的规模与训练解释属于 **2023 历史表述**，不是当前产品实现的独立披露。以下是本站独立教学重写：只计算几个实数，不训练大语言模型，不测真实 GPU 时间，也不模拟当前 ChatGPT 的全部训练。小批量扇图是为解释平均运算而补充的有限计算，**不是作者本节原有实验**。
 
-### 本页独立事实来源
+## Machine Learning, and the Training of Neural Nets / 机器学习和神经网络训练
 
-- [作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)：在机器学习和神经网络训练中，核对本页在作者论证链中的位置、示例目的和原始时间边界。
+这个正式单元的核心区别是：运行模型时参数固定，训练时则用样本计算误差，再改变参数。沿用上一节的“模型是可计算函数”作为先修，本节不再画神经元加权连线，也不复讲激活函数、ReLU 或 XOR。我们只检查训练中三个相互独立的问题：误差对参数有多敏感、沿那个方向走多远、多个样本的方向怎样合在一起。
 
-## 正式目录坐标逐项解释
+### 从样本到一个可比较的数
 
-### Machine Learning, and the Training of Neural Nets / 机器学习和神经网络训练
+给定输入 x、目标 y 和预测 wx，<Term def="把预测与目标的差异变成一个要减小的数的规则">损失函数</Term>把好坏变成可计算的标量。这里 w 是唯一可调参数，x 与 y 是固定样本。使用一半平方误差是为了让求导简单；这不是语言模型训练目标的完整形式。
 
-**坐标 1/1：Machine Learning, and the Training of Neural Nets / 机器学习和神经网络训练。** 机器学习和神经网络训练记录逐层输入、加权和、非线性激活、损失与参数更新；表示能力、可优化性、样本效率和泛化必须分别验收。 这里的验收不是“读过”或“能复述”，而是能保存输入快照、运行参考路径、只注入训练与测试数据泄漏，或同时更换初始化、批次和学习率后归因、定位首个分岔，并用损失曲线、梯度快照、数据谱系与留出集结果说明恢复结果与不适用边界。
+$$
+a=wx,\qquad r=a-y,\qquad L=\tfrac12 r^2.
+$$
 
-## 先预测，再运行三个交互视图
+这个式子说：先得到预测，再保留有符号的差，最后把差平方；平方后的 L 不再告诉我们该往左还是往右改 w。实验一会保留这三个中间值，用它们找回方向信息。
 
-先预测：只注入“训练与测试数据泄漏，或同时更换初始化、批次和学习率后归因”时，机器学习和神经网络训练在哪个阶段最先偏离参考路径？请写下会变化的输入、表示、条件分布、工具状态或评估信号，再操作视图；看到结果后补写的理由不能算预注册预测。
+### 计算带：存值后反向回写
 
-<Stepper>
-  <Step title="上下文合同：选择坐标与阶段">
-    <TcgMain06TrainingNeuralNetsContextContractLab />
-  </Step>
-  <Step title="计算轨迹：比较参考与故障">
-    <TcgMain06TrainingNeuralNetsComputeTraceLab />
-  </Step>
-  <Step title="证据门：展开检查与交付">
-    <TcgMain06TrainingNeuralNetsEvidenceGateLab />
-  </Step>
-</Stepper>
+这里的<Term def="从一个标量输出向前面的运算倒序传回导数并累加贡献的方法">反向模式求导</Term>不反转模型，也不根据输出恢复输入。神经网络训练中常说的反向传播，就是在网络计算上应用这类链式求导。它先记录正向运算及求导所需的值，再以输出对自身的导数 1 为起点，倒着乘每一步的局部导数。记带横线的量为 L 对该量的导数，例如 r̄ 表示 ∂L/∂r。
 
-## 最小可复现实验协议
+$$
+\bar L=1,\quad \bar r=\bar L\,r,\quad \bar a=\bar r\cdot1,\quad \bar w=\bar a\,x.
+$$
 
-1. 为机器学习和神经网络训练冻结作者材料、技术论文、模型或工具版本、输入、随机性和成功标准，并把未知的当前产品细节明确标为未知。
-2. 运行参考路径，逐阶段保存损失曲线、梯度快照、数据谱系与留出集结果；若只能看到最终自然语言输出，就还没有机制证据。
-3. 保持其余条件不变，只注入“训练与测试数据泄漏，或同时更换初始化、批次和学习率后归因”，记录首个偏离参考状态的位置以及它向后传播的方式。
-4. 撤销故障，从同一快照重放；只有状态与独立评估都恢复，才允许把异常归因给该故障。
+这条链在说：每个中间量只负责把收到的敏感度乘上本地倍率，再传给它依赖的量；如果一个量被多处使用，应把多路贡献相加。本例只有一条依赖链，所以不需要画神经网络结构。
 
-<Callout type="trap" title="机器学习和神经网络训练误区一：历史快照就是当前规格">
-  作者在2023年使用的GPT-3规模、ChatGPT训练解释或工具接口是历史材料；没有当前一手来源时，机器学习和神经网络训练必须写“未知”，不能用现在时包装旧数字。
+在 w=0.75、x=2、y=1 时，正向为 a=1.5、r=0.5、L=0.125；逆向依次写入 1、0.5、0.5、1。最后的 1 意味着 w 的微小增加会令损失约增加同样大小。丢掉最后的倍率 x，不会改变正向结果，却会把最终导数写成 0.5。
+
+先预测：把输入 x 改为 3，哪些正向值和伴随线段会变长？播放到最后，再打开“把 x 错写成 1”，观察首个分岔是否只发生在 w̄。所有线段与数值都来自同一组计算。
+
+<TcgMain06TrainingNeuralNetsContextContractLab />
+
+### 二维方向：导数不等于更新
+
+多个参数对应的偏导数组成<Term def="由各参数偏导数组成、指向局部增长最快方向的向量">梯度</Term>。在欧氏坐标中，沿它的反方向走一个足够小的步子，通常能在当前可微位置降低损失；“足够小”不能省略。反向模式负责算导数，更新规则负责使用它，两者不是一回事。
+
+实验二故意选择可解析的二维碗面。u、v 是两个参数，不是样本坐标；椭圆上的点损失相同。横纵轴使用相同像素尺度，所以轨迹可以与等高线方向比较。
+
+$$
+L(u,v)=\tfrac12(u^2+4v^2),\qquad \nabla L=(u,4v).
+$$
+
+这个式子说：沿 v 方向的弯曲程度是 u 方向的四倍，同样的参数偏移会得到更大的 v 方向导数。
+
+### 步长：朝下也可能跨过低谷
+
+<Term def="把梯度转换成一次参数移动量的比例系数">学习率</Term>η
+控制更新距离，不能把它解释成“学得越快就越好”。实验中使用最简单的负梯度更新，不含动量或自适应缩放。
+
+$$
+u_{k+1}=(1-\eta)u_k,\qquad v_{k+1}=(1-4\eta)v_k.
+$$
+
+这就是从旧参数减去 η 倍梯度后逐项整理的结果；两轴分别按不同倍率收缩或翻转。要对任意起点都收敛，两个倍率的绝对值都须小于 1，因此本例需 0＜η＜0.5。η=0.4 时 v 来回换号但幅度减小；η=0.55 时 v 换号且幅度增大。轨迹过冲和损失发散不是同义词。
+
+先预测：保持起点不变，把 η 从 0.2 改为 0.4，再改为 0.55，逐步看点是接近还是远离中心。打开“减写成加”会在第一步使损失上升。虚线始终给出同参数的正确减法参考；越界会明确报警，不通过自动缩放把发散伪装为收敛。
+
+<TcgMain06TrainingNeuralNetsComputeTraceLab />
+
+作者原文以山谷说明局部与全局的区别，但这只是直觉：一般非凸目标上的离散更新不保证一定到达某个局部最小点，还可能遇到鞍点、震荡或不收敛。本实验的碗面只有一个最小点，不能凭它断言复杂网络也只有一个最优解。
+
+### 批次：先合方向，再做一次更新
+
+一个<Term def="一次更新使用的一小组训练样本">小批量</Term>（mini-batch）让多个样本共同决定一次更新。本页固定同一个参数 θ，为第 i 个样本指定目标点 tᵢ，令它的损失为到目标点的平方距离的一半。这是二维二次函数族，不是神经网络训练实录。
+
+$$
+L_B(\theta)=\frac1m\sum_{i=1}^{m}\frac{\|\theta-t_i\|^2}{2},\qquad g_B=\frac1m\sum_{i=1}^{m}(\theta-t_i).
+$$
+
+这个式子说：在同一个 θ 上先算每个样本的方向，再逐项相加并除以样本数 m；平均损失的导数就是平均梯度。逐样本连续更新会改变后续梯度的计算位置，不等于这里固定 θ 后平均一次。
+
+实验三固定 θ=(0,0)，四个梯度依次是 (2,s)、(2,−s)、(−2,s)、(−2,−s)。虚线扇图保留各样本方向，细实线首尾相接给出求和路线，主色箭头表示平均梯度；实际下降方向还需取负号。m=2 时均值是 (2,0)，m=4 时恰好抵消为零，即使每个样本的梯度都非零。
+
+先预测：增大 s 为什么会展开扇面，却不改变前两个样本的平均方向？将批次改成 4 并拖到最后，检查零向量。再改回 2，打开“只求和不除样本数”；错误箭头变成 (4,0)，同一学习率下更新长度翻倍。四样本的零可能把这一错误掩盖，不能只测一个输入。
+
+<TcgMain06TrainingNeuralNetsEvidenceGateLab />
+
+### 训练拟合与范围外预测是两项验收
+
+训练损失下降只说明给定样本与目标上的数值改善。原文强调：不同参数解可能都符合观察到的数据，却在样本之外产生不同预测。这个区别不需要大模型就能验证：只给 x=−1 和 x=1 两点、目标均为 1，函数 f(x)=1 与 h(x)=x² 在两点都零误差，但在 x=0 或 x=2 就不同。
+
+下面的程序把未参与更新的点单独检查。它不是完整的泛化研究，也不通过观察这个留出点再调参数。对于真实任务，还需代表目标用途的数据、明确的数据划分和独立评估；本页不展开下一节的训练经验或配方。
+
+## 用标准库把三个实验复算一遍
+
+按出现顺序把以下 Python 代码块拼接为一个文件，再用 `python3 文件名.py` 执行。全部使用标准库，所有断言均实际执行；浮点数只在比较时给出容差，不把显示四舍五入后的数字拿来递推。它验证的是有限教学计算，不是训大模型或 GPU 测量。完整拼接副本和运行记录保存在本章离线证据目录，正文已包含完整程序。
+
+### 先存标量，再回传导数
+
+`chain` 明确区分正向的残差和反向的导数；故障只替换最后一个局部倍率。`math.isclose` 用于后面的独立检查。
+
+```python
+from math import isclose
+
+
+def chain(w=0.75, x=2.0, y=1.0, fault=False):
+    a = w * x
+    r = a - y
+    loss = r * r / 2
+    bar_loss = 1.0
+    bar_r = bar_loss * r
+    bar_a = bar_r
+    bar_w = bar_a * (1.0 if fault else x)
+    return loss, (bar_loss, bar_r, bar_a, bar_w)
+
+
+base_loss, bars = chain()
+assert isclose(base_loss, 0.125)
+assert bars == (1.0, 0.5, 0.5, 1.0)
+```
+
+对 w 两边各挪一小步，直接重新计算损失，就能用差分核对导数；这里的独立检查不复用反向计算结果。故障后的前三个伴随值仍一致，最终值才分岔。
+
+```python
+h = 1e-6
+finite = (chain(0.75 + h)[0] - chain(0.75 - h)[0]) / (2*h)
+assert isclose(finite, bars[-1], rel_tol=1e-8)
+bad_loss, bad_bars = chain(fault=True)
+assert bad_loss == base_loss
+assert bad_bars[:3] == bars[:3]
+assert bad_bars[-1] == 0.5
+assert not isclose(finite, bad_bars[-1], rel_tol=1e-8)
+assert chain() == (base_loss, bars)  # 撤销故障可重放
+```
+
+### 用同一个碗面检查收缩与过冲
+
+下面的 `walk` 返回包含起点的九个位置。符号故障不改目标函数，只把负梯度变为正梯度，因此可把两条路径逐步比较。
+
+```python
+def bowl(p):
+    u, v = p
+    return (u*u + 4*v*v) / 2
+
+
+def walk(rate, fault=False, start=(3.0, 1.5)):
+    points = [start]
+    for _ in range(8):
+        u, v = points[-1]
+        sign = 1 if fault else -1
+        points.append((u + sign*rate*u, v + sign*rate*4*v))
+    return points
+
+
+stable = walk(0.2)
+assert all(bowl(b) < bowl(a) for a, b in zip(stable, stable[1:]))
+assert isclose(stable[1][0], 2.4)
+assert isclose(stable[1][1], 0.3)
+```
+
+“翻到另一侧”不代表一定失败。先验证 η=0.4 的符号翻转和幅度收缩，再检查 η=0.55 走八步后的增长；后者不是声称每一条轴、每一步总损失都立即增加。
+
+```python
+oscillating = walk(0.4)
+assert oscillating[1][1] < 0
+assert abs(oscillating[1][1]) < abs(oscillating[0][1])
+unstable = walk(0.55)
+assert abs(unstable[-1][1]) > abs(unstable[0][1])
+assert bowl(unstable[-1]) > bowl(unstable[0])
+ascent = walk(0.2, fault=True)
+assert ascent[0] == stable[0]
+assert bowl(ascent[1]) > bowl(stable[0])
+assert walk(0.2) == stable
+```
+
+### 把样本方向平均，而不是悄悄放大步长
+
+为了与扇图对应，所有向量都在同一个 θ=0 上计算。这不是按样本依次更新参数的循环。函数的故障分支仅省略除法。
+
+```python
+def batch_gradient(m, s=1.0, fault=False):
+    gradients = [(2, s), (2, -s), (-2, s), (-2, -s)][:m]
+    total = tuple(sum(g[j] for g in gradients) for j in (0, 1))
+    return total if fault else tuple(v / m for v in total)
+
+
+assert batch_gradient(1) == (2, 1)
+assert batch_gradient(2) == (2, 0)
+assert batch_gradient(2, s=2) == (2, 0)
+assert batch_gradient(4) == (0, 0)
+assert batch_gradient(2, fault=True) == (4, 0)
+assert batch_gradient(4, fault=True) == (0, 0)  # 会掩盖错误
+assert batch_gradient(2) == (2, 0)  # 恢复平均
+```
+
+最后用两条函数检查“训练集一样好，范围外也一样好”的错误推论。这里没有用留出点来训练或选模型；它只是一个反例，展示训练样本不足以唯一确定范围外的函数。
+
+```python
+training = [(-1.0, 1.0), (1.0, 1.0)]
+held_out = [(2.0, 1.0)]
+
+
+def mse(function, samples):
+    return sum((function(x) - y)**2 for x, y in samples) / len(samples)
+
+
+constant = lambda x: 1.0
+square = lambda x: x*x
+assert mse(constant, training) == mse(square, training) == 0
+assert mse(constant, held_out) == 0
+assert mse(square, held_out) == 9
+print("PASS: adjoints, contour path, batch mean, held-out counterexample")
+```
+
+## 常见误区
+
+三个错误分别位于导数计算、更新距离和评估边界，不能都归咎于“网络没学好”。先确定错在哪个算式，再选择相应的修复方法。
+
+### 误区一：损失对了，导数就一定对
+
+<Callout type="trap">
+  **现象 →** 实验一输出的 L 完全正常，却给出错误的 w̄。 **原因 →**
+  正向值相同不代表反向局部倍率正确；省略 x 不会改变预测。 **修法 →**
+  将输入改为非 1，逐行回写并用中心差分核对最终导数。
 </Callout>
 
-<Callout type="trap" title="机器学习和神经网络训练误区二：流畅就是正确">
-  连贯文本、相似度投影或成功演示只能证明某次输出表现；机器学习和神经网络训练仍需事实核查、计算复算、反例和分布外评估。
+### 误区二：每一步方向正确就不会变差
+
+<Callout type="trap">
+  **现象 →** 实验二 η=0.55 时上下跳动且逐渐远离中心。 **原因 →**
+  导数是局部信息，过大的有限步长越过了可降低损失的区域。 **修法 →**
+  用两轴收缩倍率检查步长；不要把所有震荡都称为发散。
 </Callout>
 
-<Callout type="trap" title="机器学习和神经网络训练误区三：一次改很多条件">
-  若同时更换语料、模型、提示、温度、工具和评估集，机器学习和神经网络训练就无法定位因果；必须保留单故障合同和恢复路径。
+### 误区三：批次抵消就说明每个样本都拟合好了
+
+<Callout type="trap">
+  **现象 →** 四样本平均箭头为零，扇图却仍有四个非零方向。 **原因 →**
+  平均梯度为零不等于每个样本损失为零，也不证明范围外预测正确。 **修法 →**
+  检查逐样本结果与独立样本；再用两样本测试求和与平均是否混淆。
 </Callout>
 
-## 小结
+## 小结与练习
 
-- 权重更新通过损失梯度减少训练目标
-- 训练与测试数据泄漏会虚高泛化评估
-- 记忆训练样本不等同于学到泛化能力
-- 交付损失曲线、梯度快照与留出集结果
-- 单一反例定位数据泄漏分岔并重放恢复
+本节的三个实验不是三个训练阶段的万能模板，而是三种可单独检算的运算。能解释每个故障的首个分岔，才算把公式与画面对应起来。
 
-## 练习与答案
+- 计算带存值后倒序传导数，不能丢局部倍率。
+- 等高线给出局部方向，步长决定是否过冲。
+- 扇图平均可抵消，低训练误差不保证外推。
 
 <Exercises>
 
-**问题 1：Machine Learning, and the Training of Neural Nets / 机器学习和神经网络训练**
-
-为机器学习和神经网络训练设计一个最小输入和一个单一反例，说明Machine Learning, and the Training of Neural Nets / 机器学习和神经网络训练会改变哪个中间状态、应保存什么证据，以及结论不能外推到哪里。
+**问题 1**：实验一保持 w=0.75，把 x 改为 3，y=1。手算 L、r̄ 和 w̄；故障开启后哪个值先变？
 
 <Answer>
-  先冻结在固定的2023年原书语境与独立事实来源下重放损失函数、反向传播、优化与独立评估，把Machine
-  Learning, and the Training of Neural Nets /
-  机器学习和神经网络训练映射到明确输入、变换和输出；参考路径保存损失曲线、梯度快照、数据谱系与留出集结果，故障路径只注入“训练与测试数据泄漏，或同时更换初始化、批次和学习率后归因”。若首个分岔可定位且撤销故障后恢复，才能接受局部机制解释；未测试的模型、语料、工具、产品版本与分布都留在机器学习和神经网络训练的适用边界外。
+
+预测为 2.25，残差为 1.25，所以 L=0.78125。输出种子为 1，r̄=ā=1.25，w̄=3.75。故障把最后的倍率 3 换成 1，前三个逆向结果和所有正向值都不变，只在 w̄ 变成 1.25。用计算带逐步核对，再完整重置，确认 x、w、故障和游标都回到默认。
+
 </Answer>
 
-**问题 2：原书与当前事实**
-
-指出机器学习和神经网络训练中至少一个必须标成2023年历史快照的主张，并写出重新验证当前事实需要的一手来源类型。
+**问题 2**：修改实验二的学习率为 0.4 和 0.55，解释它们为何都能上下换边，却只有后者不收敛。再在 Python 中加入 η=0.5 的断言，预测 v 会怎样。
 
 <Answer>
-  凡涉及GPT-3参数、早期ChatGPT训练描述、产品接口或工具集成形态，都先标记为2023年历史快照。当前事实需要模型或产品提供方的官方文档、系统卡、发布说明或原始研究；作者文章与旧版书目只能证明当时如何表述，不能证明2026年仍然如此。
+
+两者的 v 倍率分别为 −0.6 与 −1.2，因此都会换边，前者幅度缩小，后者扩大；u 倍率分别为 0.6 与 0.45，仍收缩。η=0.5 时 v 倍率为 −1，非零 v 的幅度保持不变，可断言 `abs(walk(0.5)[-1][1]) == 1.5`。它不会到中心；若起点 v=0 则是特殊情形，不能用它推出所有起点收敛。
+
 </Answer>
 
-**问题 3：恢复为什么必要**
-
-为什么机器学习和神经网络训练发现故障后还必须撤销故障并从同一快照重放？
+**问题 3**：改实验三的批次为 4，为什么零箭头检测不出“和代替平均”的错误？应添加什么输入测试？若训练集损失也为零，为什么仍需留出点？
 
 <Answer>
-  恢复重放检验“单一故障导致分岔”这一归因。若撤销后损失曲线、梯度快照、数据谱系与留出集结果仍不能回到参考状态，就说明存在隐藏变量、状态污染或不可复现步骤；此时应拒绝单因果结论，而不是把异常强行归给训练与测试数据泄漏，或同时更换初始化、批次和学习率后归因。
+
+四个向量之和为零，除不除以 4 都是零，所以这个测试没有区分力。改成前两个样本且 s=2，正确均值仍是 (2,0)，错误和是 (4,0)，即可观察更新尺度翻倍。训练损失只限制见过的点；程序中常数函数与平方函数都拟合 ±1，却在留出的 x=2 上给出 1 与 4。因此平均为零、训练误差为零和范围外正确是三件不同的事。
+
 </Answer>
 
 </Exercises>
 
-## 术语与可观测量
+## 名词解释
 
-在机器学习和神经网络训练中，<Term def="机器学习和神经网络训练实际优化或执行的可观测目标，而不是拟人化意图">生成目标</Term>、<Term def="机器学习和神经网络训练在给定上下文与版本后对候选输出建立的相对权重">条件分布</Term>、<Term def="机器学习和神经网络训练把离散输入转换为可计算状态的坐标系统">表示空间</Term>、<Term def="机器学习和神经网络训练的数据、目标、更新过程、留出评估与版本记录">训练证据</Term>、<Term def="机器学习和神经网络训练只改变一个条件以定位首个机制分岔的测试">单一反例</Term>、<Term def="机器学习和神经网络训练没有运行、无法核对或不能外推的模型与情境">适用边界</Term>共同组成证据合同。术语只有绑定输入、状态、输出和失败条件才有解释力；把标签换成更时髦的词，不会提升结论可信度。
+以下五个核心术语与正文首现一一对应；参数、样本、预测和求导基础沿用先修数学约定。
 
 <Glossary>
-  <GlossaryItem term="生成目标">
-    机器学习和神经网络训练实际优化或执行的可观测目标，而不是拟人化意图。
+  <GlossaryItem term="损失函数">
+    把预测与目标的差变成一个要减小的数；本页用一半平方误差。
   </GlossaryItem>
-  <GlossaryItem term="条件分布">
-    机器学习和神经网络训练在给定上下文与版本后对候选输出建立的相对权重。
+  <GlossaryItem term="反向模式求导">
+    先保留运算中间值，再从标量结果倒序乘局部导数并累加贡献。
   </GlossaryItem>
-  <GlossaryItem term="表示空间">
-    机器学习和神经网络训练把离散输入转换为可计算状态的坐标系统。
+  <GlossaryItem term="梯度">
+    由参数偏导数组成的方向向量；欧氏坐标中它指向局部增长最快方向。
   </GlossaryItem>
-  <GlossaryItem term="训练证据">
-    机器学习和神经网络训练的数据、目标、更新过程、留出评估与版本记录。
+  <GlossaryItem term="学习率">
+    把梯度缩放成一次移动量的比例；过大可能越过低谷。
   </GlossaryItem>
-  <GlossaryItem term="单一反例">
-    机器学习和神经网络训练只改变一个条件以定位首个机制分岔的测试。
-  </GlossaryItem>
-  <GlossaryItem term="适用边界">
-    机器学习和神经网络训练没有运行、无法核对或不能外推的模型与情境。
+  <GlossaryItem term="小批量">
+    一次更新使用的一小组样本；本页先在同一点计算它们的平均梯度。
   </GlossaryItem>
 </Glossary>
 
+## 出处与下一步
+
+本页依据作者公开长文中本节的主题顺序独立讲解，计算带、二次碗面与扇图均为本站自建例子。它们可证明给定公式的计算关系，不能证明当前产品采用这些具体参数、架构或训练实现。原版书籍页用于书目与目录，不作为原书全文或开放许可证证据。
+
 <Attribution
   mode="independent-rewrite"
-  sourceBasis="author-complete-public-essay-plus-official-editions-and-primary-research"
-  workTitle="Stephen Wolfram著《What Is ChatGPT Doing ... and Why Does It Work?》与中文译本《这就是ChatGPT》"
+  sourceBasis="2023-author-public-essay-section-and-independent-finite-calculations-not-book-full-text"
+  workTitle="Stephen Wolfram《What Is ChatGPT Doing ... and Why Does It Work?》；中文译本《这就是ChatGPT》"
   adaptedUrl="https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/"
 />
+
+[回到上一节：神经网络](/learn/this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets) · [继续下一节：训练的实践与经验](/learn/this-is-chatgpt/02-neural-models/tcg-main-07-training-practice)

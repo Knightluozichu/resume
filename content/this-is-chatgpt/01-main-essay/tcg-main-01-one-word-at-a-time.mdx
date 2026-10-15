@@ -1,9 +1,9 @@
 ---
 title: 一次只添加一个词
-type: C
+type: B
 section: 一次只添加一个词
 order: 2
-description: 用条件分布、token和解码规则解释逐步续写；用上下文合同、计算轨迹与证据门交付上下文快照、候选分布、解码轨迹与重复性反例
+description: 从字节跨度、条件续写树到抽样区间，手算一次追加如何改变下一步；用独立小程序区分词、token、局部选择与整条路径概率。
 demo: true
 math: true
 sourceUrl: >-
@@ -19,8 +19,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,154 +31,350 @@ import {
   TcgMain01OneWordAtATimeEvidenceGateLab,
 } from "@/components/mdx/this-is-chatgpt/v2/tcg-main-01-one-word-at-a-time";
 
+[← 前言](/learn/this-is-chatgpt/01-main-essay/tcg-preface) · [下一节：概率从哪里来 →](/learn/this-is-chatgpt/01-main-essay/tcg-main-02-probabilities)
+
 <Objectives>
 
-- 解释下一个token、温度、贪心与随机采样中的输入、状态、变换与输出，而不只复述结论
-- 用单一反例“把token说成完整单词，并把贪心选择或温度当成模型内部理解”定位一次只添加一个词的首个错误状态
-- 交付上下文快照、候选分布、解码轨迹与重复性反例，并区分2023年原书主张与当前事实
+- 能用同一条字节轴说明字符、英语单词与手工切分片段为何数量不同。
+- 能手算两步续写的路径概率，构造“每步选最大却不是整条路径最大”的反例。
+- 能回答：实验 3 默认设置中，为什么抽样数 0.60 选 A，而漏掉归一化后没有输出？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 从一句没写完的话开始
 
-一次只添加一个词围绕“同一上下文如何经过候选分布与采样规则生成下一个token？”建立贯穿任务：在固定的2023年原书语境与独立事实来源下重放下一个token、温度、贪心与随机采样。先写下哪个输入、表示、分布、训练信号、工具状态或评估结果会最先变化，再运行参考、故障和恢复路径；只有守住“一次只添加一个词的输入版本、条件分布或工具状态、输出证据与适用边界始终可追溯”并交付上下文快照、候选分布、解码轨迹与重复性反例，流畅输出或成功演示才可能成为机制证据。
+输入一句没写完的话，屏幕接出一点；把新增部分留在句尾，再接一点。整段文章看起来像一次完成，实际可以由许多次很小的选择组成。
 
-## 原文、版本与事实边界
+问题在于：每次新增的到底是什么？上一次选了不同的内容，下一次还能照搬原来的选择表吗？不分清这两件事，就容易把“文字很顺”误当成“整段答案已经预先想好”。
 
-一次只添加一个词以[Stephen Wolfram作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)核对正文论证，以[Wolfram Media原版产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)核对作者Stephen Wolfram、2023年3月9日出版、112页、纸书ISBN 978-1-57955-081-3以及前言、两篇正文、20个分节、致谢和补充资源。
+## What Is ChatGPT Doing ... and Why Does It Work? / ChatGPT在做什么，为什么有效？
 
-一次只添加一个词以[Wolfram Media翻译页](https://www.wolfram-media.com/translations/)确认中文译本《这就是ChatGPT》，并以[人民邮电出版社页面](https://www.ptpress.com.cn/publishing/book/4bd62f00-4d6e-4f98-92f4-604be0407b8a)核对WOLFRAM传媒汉化小组译、2023年7月、134页和ISBN 9787115618085；全书正式分母是25个目录层级，课程采用学习地图、22个正文单元和总复习共24页承载。
+这个总论标题对应两个不同层次的问题：“做什么”可以从输入、选择、新增内容的轨迹开始核查；“为什么有效”还需要解释模型如何学到语言规律。本页先回答前者的外层生成过程，不以三个小实验替代对训练、意义或理解能力的论证。
 
-一次只添加一个词把作者文章视为可访问的完整一手材料，但可访问不等于开放许可；本站不复制、逐段翻译或近似改写原文、图片、代码与示例，所有中文机制解释、交互、反例、练习和答案均为独立教学重写。书中关于GPT-3、早期ChatGPT、参数量和接口形态的陈述属于2023年历史快照，不能冒充2026年当前产品规格。
+作者 Stephen Wolfram 在 2023 年 2 月 14 日公开文章的首节，以反复寻找合理续写来解释这个外层过程，并比较每次取最高项与随机选择。本站实际读取的是该公开文章**首节**，另核对其后关于词片段的补充段；没有读取英文书或中文译本全文，也没有运行作者的 Wolfram Language / GPT-2 实验。
 
-### 本页独立事实来源
+[Wolfram Media 产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)只用于核对书名、作者、2023 年出版信息及目录位置。公开文章可访问不等于具有开放改编许可；下文文本、数据、图形和代码为独立教学重写。文中的历史观察不是当前 ChatGPT 的实现规格，三个实验也不声称解释完整产品。
 
-- [作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)：在一次只添加一个词中，核对本页在作者论证链中的位置、示例目的和原始时间边界。
-- [GPT-3原始论文](https://arxiv.org/abs/2005.14165)：在一次只添加一个词中，独立核对书中使用的GPT-3历史参照、规模与少样本语境。
+## It's Just Adding One Word at a Time / 一次只添加一个词
 
-## 正式目录坐标逐项解释
+标题中的“词”是直觉入口，不能当成严格计量单位。实际模型处理的离散片段称为 <Term def="词表中用一个编号表示的离散片段；可能是整词、词的一部分或字节片段">token</Term>。一次新增一个编号，解码后却可能只得到一个单词的一部分；有的字节片段单独还不是完整字符。
 
-### What Is ChatGPT Doing ... and Why Does It Work? / ChatGPT在做什么，为什么有效？
+### 先把“新增一个”放到字节坐标上
 
-**坐标 1/2：What Is ChatGPT Doing ... and Why Does It Work? / ChatGPT在做什么，为什么有效？。** 一次只添加一个词把What Is ChatGPT Doing ... and Why Does It Work? / ChatGPT在做什么，为什么有效？放入输入、变换、输出和独立评估四层合同，并用一个单故障反例确定首个偏离点。 这里的验收不是“读过”或“能复述”，而是能保存输入快照、运行参考路径、只注入把token说成完整单词，并把贪心选择或温度当成模型内部理解、定位首个分岔，并用上下文快照、候选分布、解码轨迹与重复性反例说明恢复结果与不适用边界。
+字符、字节、词不是三种说法而已。`猫 eats` 有 6 个 Unicode 码点，UTF-8 编码占 8 个字节；英语字母段只有 `eats` 一段。汉字如何构成中文词，需要另一个分词问题，不能靠空格或英语正则回答。实验 1 的“字符”专指码点，不涵盖由多个码点组成的可见字形。
 
-### It's Just Adding One Word at a Time / 一次只添加一个词
+实验沿字节从左到右，在**手工词表**中取能匹配的最长片段；没有匹配就退回一个字节。碎片词表让“猫”的三个字节各占一个 token，`eats` 切成 `eat` 和 `s`；较长片段词表则可以把“猫”放进一个 token，并把空格与 `eats` 合成另一片段。相同文本不变，token 数却从 6 变成 2。
 
-**坐标 2/2：It's Just Adding One Word at a Time / 一次只添加一个词。** 一次只添加一个词冻结同一上下文，先比较经验计数与模型条件分布，再分别运行贪心和随机采样；输出差异只能归因于被切换的解码规则。 这里的验收不是“读过”或“能复述”，而是能保存输入快照、运行参考路径、只注入把token说成完整单词，并把贪心选择或温度当成模型内部理解、定位首个分岔，并用上下文快照、候选分布、解码轨迹与重复性反例说明恢复结果与不适用边界。
+这不是 BPE 算法、真实模型词表或真实 tokenizer。它只隔离一个可检查事实：**编号边界不必和字符边界、单词边界重合**。合并所有 token 的字节再解码，可以还原原文；若错误地要求每个 token 都能单独按 UTF-8 解码，字节兜底片段就会被拒绝。
 
-## 先预测，再运行三个交互视图
+猜一猜：保持 `猫 eats` 不变，只把词表从碎片改为较长片段，字符行和字节行会动吗？再打开“逐 token 严格解码”故障，为什么换词表可能让故障暂时不显现？
 
-先预测：只注入“把token说成完整单词，并把贪心选择或温度当成模型内部理解”时，一次只添加一个词在哪个阶段最先偏离参考路径？请写下会变化的输入、表示、条件分布、工具状态或评估信号，再操作视图；看到结果后补写的理由不能算预注册预测。
+<TcgMain01OneWordAtATimeContextContractLab />
 
-<Stepper>
-  <Step title="上下文合同：选择坐标与阶段">
-    <TcgMain01OneWordAtATimeContextContractLab />
-  </Step>
-  <Step title="计算轨迹：比较参考与故障">
-    <TcgMain01OneWordAtATimeComputeTraceLab />
-  </Step>
-  <Step title="证据门：展开检查与交付">
-    <TcgMain01OneWordAtATimeEvidenceGateLab />
-  </Step>
-</Stepper>
+下面的 Python 程序只用标准库。把本页所有 `python` 代码块按出现顺序拼入同一个文件即可执行，变量会在后续代码块继续使用。第一段先生成真正的 UTF-8 字节跨度，而不是按显示宽度猜位置。
 
-## 最小可复现实验协议
+```python
+import math
+import re
 
-1. 为一次只添加一个词冻结作者材料、技术论文、模型或工具版本、输入、随机性和成功标准，并把未知的当前产品细节明确标为未知。
-2. 运行参考路径，逐阶段保存上下文快照、候选分布、解码轨迹与重复性反例；若只能看到最终自然语言输出，就还没有机制证据。
-3. 保持其余条件不变，只注入“把token说成完整单词，并把贪心选择或温度当成模型内部理解”，记录首个偏离参考状态的位置以及它向后传播的方式。
-4. 撤销故障，从同一快照重放；只有状态与独立评估都恢复，才允许把异常归因给该故障。
+LEXICONS = {
+    "pieces": ["re", "play", "ing", " ", "eat", "s", "!"],
+    "coarse": ["猫", " eats", "replaying", "!"],
+}
 
-<Callout type="trap" title="一次只添加一个词误区一：历史快照就是当前规格">
-  作者在2023年使用的GPT-3规模、ChatGPT训练解释或工具接口是历史材料；没有当前一手来源时，一次只添加一个词必须写“未知”，不能用现在时包装旧数字。
-</Callout>
+def segment(text, mode):
+    raw = text.encode("utf-8")
+    vocab = sorted((s.encode() for s in LEXICONS[mode]),
+                   key=len, reverse=True)
+    spans, start = [], 0
+    while start < len(raw):
+        token = next((v for v in vocab if raw.startswith(v, start)),
+                     raw[start:start + 1])
+        end = start + len(token)
+        spans.append((start, end, token))
+        start = end
+    return spans
+```
 
-<Callout type="trap" title="一次只添加一个词误区二：流畅就是正确">
-  连贯文本、相似度投影或成功演示只能证明某次输出表现；一次只添加一个词仍需事实核查、计算复算、反例和分布外评估。
-</Callout>
+`start/end` 是半开字节区间，不是字符下标。下一段检验拼接可逆，并亲自执行那个错误解码步骤；`UnicodeDecodeError` 才是故障证据，而不是把正常输出换成一条红色说明。
 
-<Callout type="trap" title="一次只添加一个词误区三：一次改很多条件">
-  若同时更换语料、模型、提示、温度、工具和评估集，一次只添加一个词就无法定位因果；必须保留单故障合同和恢复路径。
-</Callout>
+```python
+text = "猫 eats"
+pieces = segment(text, "pieces")
+coarse = segment(text, "coarse")
+assert (len(text), len(text.encode()), len(pieces), len(coarse)) == (6, 8, 6, 2)
+assert re.findall(r"[A-Za-z]+", text) == ["eats"]
+assert b"".join(t for _, _, t in pieces).decode() == text
+try:
+    pieces[0][2].decode("utf-8", errors="strict")
+except UnicodeDecodeError:
+    pass
+else:
+    raise AssertionError("故障应在第一个字节片段暴露")
+assert all(t.decode() for _, _, t in coarse)
+assert len(segment("replaying!", "pieces")) == 4
+assert len(segment("replaying!", "coarse")) == 2
+assert segment("", "pieces") == []
+print("字节跨度:", [(a, b) for a, b, _ in pieces])
+```
 
-## 小结
+### 新增内容以后，下一步的条件变了
 
-- ChatGPT按条件分布逐token续写文本
-- 贪心采样与随机采样决定输出差异
-- token不等于完整单词，温度非内部理解
-- 冻结上下文快照并保存候选分布轨迹
-- 单一反例定位解码规则分岔并重放恢复
+对固定前缀给所有候选分配非负、总和为 1 的数，称为 <Term def="在给定已有前缀后，各个下一片段出现的概率列表">条件分布</Term>。这里的“条件”不能省略：`上下文+A` 和 `上下文+B` 是不同输入，下一步概率允许不同。
 
-## 练习与答案
+把每次选中的 token 追加到前缀，再用这个新前缀求下一步分布，就是 <Term def="把已经生成的片段作为后续输入，逐步生成下一个片段的方式">自回归生成</Term>。追加不是修改模型参数；这里只改变下一次计算看到的输入。实验 2 用固定表模拟这件事，不训练模型，也不从语料计数估计概率。
+
+符号中，$c$ 是已有上下文，$a$ 是第一步选择，$x$ 是第二步选择。两步路径的概率为：
+
+$$
+P(a,x\mid c)=P(a\mid c)\,P(x\mid c,a).
+$$
+
+这个式子在说：先走到第一条边，再在已经到达的分支上走第二条边，整条路径的概率是两条条件概率相乘。
+
+上下文 A 的根上，A 比 B 更大：0.6 对 0.4。走 A 后，`x/停` 是 0.51/0.49；走 B 后却是 0.99/0.01。因此每步取最大（贪心）会选 `A→x`，概率为 0.306；另一条 `B→x` 的概率却为 0.396。**局部最大不推出联合最大**，这是数值反例，不是关于所有文章质量的定理。
+
+“停”表示结束标记 EOS，选到就停止。图中的 `x` 只是第二个普通 token；实验只展开两步，并未提供 `x` 之后的分布。全树的四叶比较用于离线验证，不意味着贪心在第一步偷看了第二步。
+
+猜一猜：第一步指定 B 后，第二步还该使用 A 的 0.51/0.49 吗？故障开关只让第二步照抄根表；即使四个叶子加起来仍是 1，为什么计算已经错了？
+
+<TcgMain01OneWordAtATimeComputeTraceLab />
+
+代码把每个条件表分开存储，再枚举四条两步路径。注意 `children[first]` 这一行依赖已经追加的 token；故障恰好破坏这处依赖，而不是更换上下文或同时更换多个概率。
+
+```python
+TREES = {
+    "A": ([0.6, 0.4], [[0.51, 0.49], [0.99, 0.01]]),
+    "B": ([0.2, 0.8], [[0.9, 0.1], [0.25, 0.75]]),
+}
+
+def paths(context, fault=False):
+    root, children = TREES[context]
+    if fault:
+        children = [root, root]
+    return [root[i] * children[i][j]
+            for i in range(2) for j in range(2)]
+
+reference = paths("A")
+assert all(math.isclose(a, b) for a, b in
+           zip(reference, [0.306, 0.294, 0.396, 0.004]))
+assert math.isclose(sum(reference), 1)
+assert reference.index(max(reference)) == 2
+assert reference[0] < reference[2]
+assert math.isclose(paths("A", fault=True)[0], 0.36)
+assert paths("A") == reference  # 撤销故障，恢复同一输入
+assert paths("B") != reference
+print("两步路径 Ax/A停/Bx/B停:", reference)
+```
+
+### 同一张表，还要决定怎样选择
+
+分布不变，也可以采用不同选择规则。贪心直接拿最大项，不使用随机数；随机采样让候选按指定概率获得机会。<Term def="在采样前调节候选概率集中程度的正数；零温度通常另行约定为取最大项">温度</Term>改变的是分布形状，不是文本中事实的可信度，更不是模型的“理解深度”。
+
+令 $p_i$ 为原始候选概率，$T$ 为温度，$q_i$ 为变换后的概率。对 $T>0$：
+
+$$
+q_i=\frac{p_i^{1/T}}{\sum_j p_j^{1/T}}.
+$$
+
+这个式子在说：先把每项做同一个幂变换，再除以总和；大概率项与小概率项的相对差距随温度变化。若原概率来自某组原始分数的指数归一化，这与先把分数除以温度再归一化相同；不需要在本节引入训练过程。
+
+$T=1$ 保持原分布；$T<1$ 让非并列的高概率项更占优势；$T>1$ 让正概率项更接近。原概率为零的项仍为零，不能靠升温“发明”新候选。$T=0$ 不能代入除法，本页另设为取最大项，并列最大取第一个编号；这是一条明确的演示约定。
+
+将 `[0.6,0.3,0.1]` 的温度设为 0.5，先平方得到 `[0.36,0.09,0.01]`，总和 0.46，再除以总和得到约 `[0.782609,0.195652,0.021739]`。若漏掉最后一步，它们只是总长 0.46 的区间，不是覆盖单位区间的概率。
+
+最后用 <Term def="将概率按顺序累加成区间，再用一个零到一之间的数定位候选的离散采样法">逆 CDF 采样</Term>完成一次选择。设 $u$ 是落在 $[0,1)$ 的抽样数，$F_k=\sum_{i=0}^{k}q_i$ 且 $F_{-1}=0$，选择满足下式的编号 $k$：
+
+$$
+F_{k-1}\le u<F_k.
+$$
+
+这个式子在说：候选占有自己的左闭右开区间，抽样数落到哪一段就选哪项。恰好等于分界点时归右侧；显示时的小数舍入不应反过来改变内部边界。实验固定 $u$ 是为了复算，真实随机采样还需给出随机数来源。
+
+猜一猜：保持默认 $p$、$T=0.5$、$u=0.60$，漏掉归一化会发生什么？再只把 T 改成 1，为什么同一个故障开关会暂时没有影响？
+
+<TcgMain01OneWordAtATimeEvidenceGateLab />
+
+下面实现温度变换。正常路径用对数后减去最大值，避免非常小的温度使所有幂都下溢成零；零概率保留为负无穷再转回零。输入不是合法分布或温度为负时直接拒绝。
+
+```python
+def temper(p, temperature):
+    if (not p or any(not math.isfinite(v) or v < 0 for v in p)
+            or not math.isclose(sum(p), 1, abs_tol=1e-12)):
+        raise ValueError("需要总和为1的非负概率")
+    if not math.isfinite(temperature) or temperature < 0:
+        raise ValueError("温度必须有限且非负")
+    if temperature == 0:
+        winner = p.index(max(p))
+        return [float(i == winner) for i in range(len(p))]
+    if temperature == 1:
+        return list(p)
+    logs = [math.log(v) / temperature if v else -math.inf for v in p]
+    peak = max(logs)
+    weights = [math.exp(v - peak) for v in logs]
+    total = sum(weights)
+    return [v / total for v in weights]
+```
+
+采样函数检查总和与随机数范围。故障演示可以显式关闭总和检查，观察空洞；生产实现不应为了“总能输出”而悄悄把空洞归给最后一项。末尾的浮点保护只适用于已通过总和检查、累计舍入导致的微小缺口。
+
+```python
+def sample(q, u, validate=True):
+    if not 0 <= u < 1:
+        raise ValueError("u必须在[0,1)")
+    if not q or any(not math.isfinite(v) or v < 0 for v in q):
+        raise ValueError("无效权重")
+    normalized = math.isclose(sum(q), 1, rel_tol=0, abs_tol=1e-12)
+    if validate and not normalized:
+        raise ValueError("未归一化")
+    edge = 0.0
+    for i, probability in enumerate(q):
+        edge += probability
+        if u < edge:
+            return i
+    if validate and normalized:
+        return max(i for i, v in enumerate(q) if v > 0)
+    return None
+
+p = [0.6, 0.3, 0.1]
+q = temper(p, 0.5)
+assert all(math.isclose(a, b) for a, b in zip(q, [36/46, 9/46, 1/46]))
+assert sample(q, 0.60) == 0
+assert sample([v*v for v in p], 0.60, validate=False) is None
+assert sample(temper(p, 1), 0.60) == 1
+print("温度0.5:", q, "u=0.60选择", "ABC"[sample(q, 0.60)])
+```
+
+最后的断言刻意覆盖默认演示以外的边界：零温度、并列最大、零概率、很小的正温度、精确区间分界点，以及非法输入。它们验证算法约定，不证明真实模型的输出质量。
+
+```python
+assert temper([0.5, 0.5, 0], 0) == [1, 0, 0]
+assert temper([0.6, 0.4, 0], 2)[2] == 0
+assert temper(p, 0.001)[0] > 0.999
+assert sample([0.5, 0.5], 0.5) == 1
+assert sample([0, 1], 0) == 1
+assert sample(q, math.nextafter(1, 0)) == 2
+
+for bad_p, bad_t in [([0, 0], 1), ([-0.1, 1.1], 1), (p, -1)]:
+    try:
+        temper(bad_p, bad_t)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("非法参数未被拒绝")
+for bad_u in [-0.1, 1.0]:
+    try:
+        sample(q, bad_u)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("非法抽样数未被拒绝")
+print("全部边界断言通过；没有加载或运行真实语言模型。")
+```
+
+## 三个需要分开的判断
+
+下面三个误区分别破坏了表示、条件依赖和选择规则，不能靠“最终句子读起来正常”来排除。先在实验中找到首个偏差，再判断它是否足以支持自己的解释。
+
+### 一个 token 就是一个完整单词
+
+**现象 →** 以空格数估算 token 数，或认为每个 token 都能独立显示。
+
+**原因 →** 混淆字节、码点、英语单词与词表编号的边界。
+
+**修法 →** 在实验 1 保持文本不变切换词表；再检查拼接后解码，而非强制逐 token 解码。
+
+### 每一步选最大，整段概率就最大
+
+**现象 →** 把 `A→x=0.306` 当成树中最大路径。
+
+**原因 →** 只比较首条边，忽略选定前缀会改变后续条件分布。
+
+**修法 →** 在实验 2 手算 `B→x=0.396`，再撤销“照抄根分布”故障确认恢复。
+
+### 温度越大越懂，0.8 永远最好
+
+**现象 →** 把不同措辞当成更可靠的事实，或将一个参数值当通用最优。
+
+**原因 →** 混淆概率形状、抽样结果和任务质量；作者首节的 0.8 是历史示例观察。
+
+**修法 →** 用实验 3 固定分布与抽样数只变温度，再单独评估任务事实；本页不声称哪种温度改善所有任务。
+
+## 小结与练习
+
+本页把一次新增拆成了“确定片段边界、根据新前缀重算、按规则选择”三个可复算问题。接下来的概率章讨论概率从哪里来；这里的数字均为手工给定，不能拿它们作为训练结果。
+
+- 字节、字符、词与 token 边界不必重合。
+- 新前缀决定下一步条件表，局部最大不保证联合最大。
+- 温度改变区间；抽样数定位区间，不能漏掉归一化。
 
 <Exercises>
 
-**问题 1：What Is ChatGPT Doing ... and Why Does It Work? / ChatGPT在做什么，为什么有效？**
+**问题 1：改词表，不改文本**
 
-为一次只添加一个词设计一个最小输入和一个单一反例，说明What Is ChatGPT Doing ... and Why Does It Work? / ChatGPT在做什么，为什么有效？会改变哪个中间状态、应保存什么证据，以及结论不能外推到哪里。
+把实验 1 的 `猫 eats` 从碎片词表改为较长词表。写出两种 token 的字节区间；打开逐 token 解码故障，解释为何只有一种设置报错。若改成 `replaying!`，故障必然报错吗？
 
 <Answer>
-  先冻结在固定的2023年原书语境与独立事实来源下重放下一个token、温度、贪心与随机采样，把What
-  Is ChatGPT Doing ... and Why Does It Work? /
-  ChatGPT在做什么，为什么有效？映射到明确输入、变换和输出；参考路径保存上下文快照、候选分布、解码轨迹与重复性反例，故障路径只注入“把token说成完整单词，并把贪心选择或温度当成模型内部理解”。若首个分岔可定位且撤销故障后恢复，才能接受局部机制解释；未测试的模型、语料、工具、产品版本与分布都留在一次只添加一个词的适用边界外。
+  碎片为 [0,1)、[1,2)、[2,3)、[3,4)、[4,7)、[7,8)；较长为
+  [0,3)、[3,8)。前者的前三块分别只有汉字编码的一部分，不能独立严格解码；后者均为完整
+  UTF-8。replaying! 全是 ASCII，单块不会因为不完整 UTF-8
+  报错。这说明故障可能潜伏，不能由一次成功证明实现无误。
 </Answer>
 
-**问题 2：It's Just Adding One Word at a Time / 一次只添加一个词**
+**问题 2：从树上找反例**
 
-为一次只添加一个词设计一个最小输入和一个单一反例，说明It's Just Adding One Word at a Time / 一次只添加一个词会改变哪个中间状态、应保存什么证据，以及结论不能外推到哪里。
+实验 2 用上下文 A，先按根上最大项走，再把第一步改选 B。两条路径概率分别是多少？开启照抄根表故障后，`A→x` 变成多少？为何四叶之和为 1 还不够？
 
 <Answer>
-  先冻结在固定的2023年原书语境与独立事实来源下重放下一个token、温度、贪心与随机采样，把It's
-  Just Adding One Word at a Time /
-  一次只添加一个词映射到明确输入、变换和输出；参考路径保存上下文快照、候选分布、解码轨迹与重复性反例，故障路径只注入“把token说成完整单词，并把贪心选择或温度当成模型内部理解”。若首个分岔可定位且撤销故障后恢复，才能接受局部机制解释；未测试的模型、语料、工具、产品版本与分布都留在一次只添加一个词的适用边界外。
+  正常贪心 A→x 为 0.6×0.51=0.306，指定 B 后为 0.4×0.99=0.396。故障 A→x 为
+  0.6×0.6=0.36；它仍可能归一化，却使用了错误条件，未反映已追加的
+  A。应同时核查条件依赖与总和，撤销故障后返回 0.306。
 </Answer>
 
-**问题 3：原书与当前事实**
+**问题 3：复算默认设置，再改变一个参数**
 
-指出一次只添加一个词中至少一个必须标成2023年历史快照的主张，并写出重新验证当前事实需要的一手来源类型。
-
-<Answer>
-  凡涉及GPT-3参数、早期ChatGPT训练描述、产品接口或工具集成形态，都先标记为2023年历史快照。当前事实需要模型或产品提供方的官方文档、系统卡、发布说明或原始研究；作者文章与旧版书目只能证明当时如何表述，不能证明2026年仍然如此。
-</Answer>
-
-**问题 4：恢复为什么必要**
-
-为什么一次只添加一个词发现故障后还必须撤销故障并从同一快照重放？
+实验 3 默认 T=0.5、u=0.60，为什么正常选 A 而故障没有候选？只把 T 改为 1 后应选什么？再保持 T=1，把 u 改为 0.95，结果是否证明 C 更正确？
 
 <Answer>
-  恢复重放检验“单一故障导致分岔”这一归因。若撤销后上下文快照、候选分布、解码轨迹与重复性反例仍不能回到参考状态，就说明存在隐藏变量、状态污染或不可复现步骤；此时应拒绝单因果结论，而不是把异常强行归给把token说成完整单词，并把贪心选择或温度当成模型内部理解。
+  平方后的总和是 0.46；正常 A 区间为 [0,36/46)，包含 0.60。故障只覆盖
+  [0,0.46)，0.60 落在空洞。T=1 时恢复原分布，0.60 恰在 B 的左端，所以选
+  B；u=0.95 落在 C。C
+  被抽中只说明选择规则，不证明内容的正确性，示意数据也不包含可核查的语义事实。
 </Answer>
 
 </Exercises>
 
-## 术语与可观测量
+## 名词解释
 
-在一次只添加一个词中，<Term def="一次只添加一个词实际优化或执行的可观测目标，而不是拟人化意图">生成目标</Term>、<Term def="一次只添加一个词在给定上下文与版本后对候选输出建立的相对权重">条件分布</Term>、<Term def="一次只添加一个词把离散输入转换为可计算状态的坐标系统">表示空间</Term>、<Term def="一次只添加一个词的数据、目标、更新过程、留出评估与版本记录">训练证据</Term>、<Term def="一次只添加一个词只改变一个条件以定位首个机制分岔的测试">单一反例</Term>、<Term def="一次只添加一个词没有运行、无法核对或不能外推的模型与情境">适用边界</Term>共同组成证据合同。术语只有绑定输入、状态、输出和失败条件才有解释力；把标签换成更时髦的词，不会提升结论可信度。
+这里回收五个核心术语；实验中的手工词表、概率表和固定抽样数是教学输入，不是模型测量值。
 
 <Glossary>
-  <GlossaryItem term="生成目标">
-    一次只添加一个词实际优化或执行的可观测目标，而不是拟人化意图。
+  <GlossaryItem term="token">
+    词表中用编号表示的离散片段，可能不是完整词或完整字符。
   </GlossaryItem>
   <GlossaryItem term="条件分布">
-    一次只添加一个词在给定上下文与版本后对候选输出建立的相对权重。
+    给定已有前缀后，各个下一片段出现的概率列表；前缀改变，列表可以改变。
   </GlossaryItem>
-  <GlossaryItem term="表示空间">
-    一次只添加一个词把离散输入转换为可计算状态的坐标系统。
+  <GlossaryItem term="自回归生成">
+    把已生成片段留在前缀里，再用这个前缀逐步生成下一个片段。
   </GlossaryItem>
-  <GlossaryItem term="训练证据">
-    一次只添加一个词的数据、目标、更新过程、留出评估与版本记录。
+  <GlossaryItem term="温度">
+    采样前调节概率集中程度的参数；零值需另定规则，不代表理解能力。
   </GlossaryItem>
-  <GlossaryItem term="单一反例">
-    一次只添加一个词只改变一个条件以定位首个机制分岔的测试。
-  </GlossaryItem>
-  <GlossaryItem term="适用边界">
-    一次只添加一个词没有运行、无法核对或不能外推的模型与情境。
+  <GlossaryItem term="逆 CDF 采样">
+    把概率累加为区间，用零到一之间的抽样数定位一个候选。
   </GlossaryItem>
 </Glossary>
 
+## 来源与使用边界
+
+本页核查范围是[作者公开文章首节](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/#its-just-adding-one-word-at-a-time)及后文的 token 补充段，另读取[出版社页面](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)的版本、目录信息。两篇网页访问成功不等于读取原书全文；不把原文截图或代码称为本站原创，也不把本站三个模拟说成作者实验。本文未对当前 ChatGPT 的词表、模型结构、参数规模或默认采样设置作产品断言。
+
+[← 返回前言](/learn/this-is-chatgpt/01-main-essay/tcg-preface) · [继续：概率从哪里来 →](/learn/this-is-chatgpt/01-main-essay/tcg-main-02-probabilities)
+
 <Attribution
   mode="independent-rewrite"
-  sourceBasis="author-complete-public-essay-plus-official-editions-and-primary-research"
-  workTitle="Stephen Wolfram著《What Is ChatGPT Doing ... and Why Does It Work?》与中文译本《这就是ChatGPT》"
+  sourceBasis="author-public-essay-selected-section-and-publisher-metadata"
+  workTitle="Stephen Wolfram《What Is ChatGPT Doing ... and Why Does It Work?》与中文译本《这就是ChatGPT》"
   adaptedUrl="https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/"
 />

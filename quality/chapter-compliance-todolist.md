@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T20:04:47.095Z
+> 生成时间：2026-10-15T21:04:39.948Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 483 |
-| failed | 1770 |
+| failed | 1764 |
 | queued | 196 |
-| passed | 1748 |
+| passed | 1754 |
 | published | 895 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -13831,32 +13831,32 @@
     - 路径：`content/the-c-programming-language/04-struct-io/unix-interface.mdx`
     - 正式 unit：`kr2-08` explained=6/6
 
-## this-is-chatgpt（24 个内容页面 · failed:24 · 🚫 门禁阻断 24 项）
+## this-is-chatgpt（24 个内容页面 · failed:18 passed:6 · 🚫 门禁阻断 18 项）
 
 - 门禁摘要：目录=未登记，manifest=22；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
 - [ ] ❌ P1 **00-learning-map/tcg-official-learning-map** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/this-is-chatgpt/00-learning-map/tcg-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] ❌ P1 **01-main-essay/tcg-main-01-one-word-at-a-time** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-main-essay/tcg-main-01-one-word-at-a-time** — passed；score 96
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time.mdx`
     - 正式 unit：`tcg-main-01` explained=2/2
-- [ ] ❌ P1 **01-main-essay/tcg-main-02-probabilities** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-main-essay/tcg-main-02-probabilities** — passed；score 99
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-02-probabilities.mdx`
     - 正式 unit：`tcg-main-02` explained=1/1
-- [ ] ❌ P1 **01-main-essay/tcg-main-03-model** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-main-essay/tcg-main-03-model** — passed；score 97
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-03-model.mdx`
     - 正式 unit：`tcg-main-03` explained=1/1
-- [ ] ❌ P1 **01-main-essay/tcg-main-04-human-like-tasks** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-main-essay/tcg-main-04-human-like-tasks** — passed；score 99
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-04-human-like-tasks.mdx`
     - 正式 unit：`tcg-main-04` explained=1/1
 - [ ] ❌ P1 **01-main-essay/tcg-preface** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-preface.mdx`
     - 正式 unit：`tcg-preface` explained=1/1
-- [ ] ❌ P1 **02-neural-models/tcg-main-05-neural-nets** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-neural-models/tcg-main-05-neural-nets** — passed；score 99
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets.mdx`
     - 正式 unit：`tcg-main-05` explained=1/1
-- [ ] ❌ P1 **02-neural-models/tcg-main-06-training-neural-nets** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-neural-models/tcg-main-06-training-neural-nets** — passed；score 99
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-06-training-neural-nets.mdx`
     - 正式 unit：`tcg-main-06` explained=1/1
 - [ ] ❌ P1 **02-neural-models/tcg-main-07-training-practice** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux

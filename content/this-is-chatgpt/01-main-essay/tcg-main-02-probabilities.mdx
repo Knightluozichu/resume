@@ -3,7 +3,7 @@ title: 概率从何而来
 type: C
 section: 概率从何而来
 order: 3
-description: 从字符与n-gram稀疏性推进到未见序列的概率估计；用上下文合同、计算轨迹与证据门交付计数表、稀疏性曲线、未见上下文探针与校准记录
+description: 从字符窗口计数、条件概率的质量守恒，到留出序列的对数损失，理解频率估计为何稀疏，以及模型估计并非事实真值。
 demo: true
 math: true
 sourceUrl: >-
@@ -19,8 +19,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,140 +31,366 @@ import {
   TcgMain02ProbabilitiesEvidenceGateLab,
 } from "@/components/mdx/this-is-chatgpt/v2/tcg-main-02-probabilities";
 
+[上一节：一次只添加一个词](/learn/this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time) · [下一节：什么是模型](/learn/this-is-chatgpt/01-main-essay/tcg-main-03-model)
+
 <Objectives>
 
-- 解释频率估计、组合爆炸、泛化与校准中的输入、状态、变换与输出，而不只复述结论
-- 用单一反例“把语料频率、模型条件概率和校准后的真实概率混成同一个量”定位概率从何而来的首个错误状态
-- 交付计数表、稀疏性曲线、未见上下文探针与校准记录，并区分2023年原书主张与当前事实
+- 手算分文档的字符窗口，解释为什么前缀节点次数不等于整篇字符次数。
+- 用概率质量格检验加性平滑的分子、分母，并识别未知条件下的未定义行。
+- 能回答：为什么把留出串偷偷加入计数后，损失下降不能证明模型更会泛化？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 先分清“数过多少次”和“估计多大概率”
 
-概率从何而来围绕“为什么直接计数不能覆盖长文本，而模型能为未见上下文给出估计？”建立贯穿任务：在固定的2023年原书语境与独立事实来源下重放频率估计、组合爆炸、泛化与校准。先写下哪个输入、表示、分布、训练信号、工具状态或评估结果会最先变化，再运行参考、故障和恢复路径；只有守住“概率从何而来的输入版本、条件分布或工具状态、输出证据与适用边界始终可追溯”并交付计数表、稀疏性曲线、未见上下文探针与校准记录，流畅输出或成功演示才可能成为机制证据。
+假设两个人都说“下一个字符很可能是 b”。一个人只数过五次 a 后面的字符，另一个人用大量文本训练了神经网络。这两句相似的预测，背后的证据却完全不同。前者能列出窗口；后者给的是模型在训练目标约束下学到的分布。二者都不能直接回答“下一句话有多大概率是真的”。
 
-## 原文、版本与事实边界
+本页先把字母表缩小为 a、b、c，使用三个手写短文档。我们不生成句子、不做 token 切分、不调温度，也不拟合神经网络；只沿着“计数怎样变成条件分布，分布怎样接受未见数据检验”向前走。这样可以逐项核对每个数字，而不会把一次漂亮续写当成概率正确的证据。
 
-概率从何而来以[Stephen Wolfram作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)核对正文论证，以[Wolfram Media原版产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)核对作者Stephen Wolfram、2023年3月9日出版、112页、纸书ISBN 978-1-57955-081-3以及前言、两篇正文、20个分节、致谢和补充资源。
+## Where Do the Probabilities Come From? / 概率从何而来？
 
-概率从何而来以[Wolfram Media翻译页](https://www.wolfram-media.com/translations/)确认中文译本《这就是ChatGPT》，并以[人民邮电出版社页面](https://www.ptpress.com.cn/publishing/book/4bd62f00-4d6e-4f98-92f4-604be0407b8a)核对WOLFRAM传媒汉化小组译、2023年7月、134页和ISBN 9787115618085；全书正式分母是25个目录层级，课程采用学习地图、22个正文单元和总复习共24页承载。
+这是本页唯一的正式目录坐标。作者的公开长文本节先从单字母频率走到字母对和更长的窗口，再指出完整文本组合太多，不能把每个组合都直接数一遍。它最终引出“用模型估计未见序列概率”的问题，而不是声称神经网络就是一张巨大的频数表。
 
-概率从何而来把作者文章视为可访问的完整一手材料，但可访问不等于开放许可；本站不复制、逐段翻译或近似改写原文、图片、代码与示例，所有中文机制解释、交互、反例、练习和答案均为独立教学重写。书中关于GPT-3、早期ChatGPT、参数量和接口形态的陈述属于2023年历史快照，不能冒充2026年当前产品规格。
+<Term def="连续 n 个离散符号组成的窗口；本页的符号是字符，而非实际产品的 token">
+  n-gram
+</Term>
+给了我们一个可以检查的中间台阶。n=2 时窗口是字符对，估计时只看前一个字符；n=3
+时看前两个。窗口更长能区别更多上下文，也需要更多数据支撑，不能只把阶数看作准确率旋钮。
 
-### 本页独立事实来源
+### 从文档边界开始数
 
-- [作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)：在概率从何而来中，核对本页在作者论证链中的位置、示例目的和原始时间边界。
-- [GPT-3原始论文](https://arxiv.org/abs/2005.14165)：在概率从何而来中，独立核对书中使用的GPT-3历史参照、规模与少样本语境。
+固定训练集 A：`abac | abab | ac`。竖线是文档边界，不是字母表中的字符。二字符窗口分别为 `ab, ba, ac`、`ab, ba, ab`、`ac`，共 7 个。若把文档先拼成 `abacababac`，会多出一个 `ca` 和一个 `ba`；这不是发现了规律，而是改变了被统计的事件。
 
-## 正式目录坐标逐项解释
+对长度为 n 的窗口集合，前缀树的根计数等于窗口数；每个节点计数等于其所有后代完整窗口的出现次数。每层子计数之和等于父计数，但只统计能组成完整窗口的位置。例如三字符窗口只有 4 个，前缀 a 的次数是 2；不要用全语料中 a 出现 5 次来替换它。
 
-### Where Do the Probabilities Come From? / 概率从何而来？
+**先预测：**n 从 2 改成 3，可能组合更多，实际窗口数会变多还是变少？把查询改为 `aaa` 的前 n 字，零节点代表“未观察到”还是“不可能”？在最后一步注入跨文档拼接故障，再撤销，比较多出的分枝。
 
-**坐标 1/1：Where Do the Probabilities Come From? / 概率从何而来？。** 概率从何而来冻结同一上下文，先比较经验计数与模型条件分布，再分别运行贪心和随机采样；输出差异只能归因于被切换的解码规则。 这里的验收不是“读过”或“能复述”，而是能保存输入快照、运行参考路径、只注入把语料频率、模型条件概率和校准后的真实概率混成同一个量、定位首个分岔，并用计数表、稀疏性曲线、未见上下文探针与校准记录说明恢复结果与不适用边界。
+<TcgMain02ProbabilitiesContextContractLab />
 
-## 先预测，再运行三个交互视图
+图中枝条是已经进入统计的字符前缀，不是下一词的候选续写路径。初始只累计首个窗口；点击单步看树内计数增加，再到全部窗口核对守恒。虚线也可能是“尚未累计”，完整扫描结束后才能据此判断训练集是否见过。组 B `acac | ac | bc` 则改变了真实训练计数，不是只换标题。
 
-先预测：只注入“把语料频率、模型条件概率和校准后的真实概率混成同一个量”时，概率从何而来在哪个阶段最先偏离参考路径？请写下会变化的输入、表示、条件分布、工具状态或评估信号，再操作视图；看到结果后补写的理由不能算预注册预测。
+### 代码一：确定数据、符号和事件
 
-<Stepper>
-  <Step title="上下文合同：选择坐标与阶段">
-    <TcgMain02ProbabilitiesContextContractLab />
-  </Step>
-  <Step title="计算轨迹：比较参考与故障">
-    <TcgMain02ProbabilitiesComputeTraceLab />
-  </Step>
-  <Step title="证据门：展开检查与交付">
-    <TcgMain02ProbabilitiesEvidenceGateLab />
-  </Step>
-</Stepper>
+下面所有 Python 代码块按顺序拼接，就是一个只用标准库的完整程序。无需下载模型或语料。第一块显式保留文档边界，空文档或短于 n 的文档不贡献窗口；本程序不插入句首、句尾符号，也不估计终止概率。
 
-## 最小可复现实验协议
+```python
+from collections import Counter
+from math import log2, prod, isclose, isinf
 
-1. 为概率从何而来冻结作者材料、技术论文、模型或工具版本、输入、随机性和成功标准，并把未知的当前产品细节明确标为未知。
-2. 运行参考路径，逐阶段保存计数表、稀疏性曲线、未见上下文探针与校准记录；若只能看到最终自然语言输出，就还没有机制证据。
-3. 保持其余条件不变，只注入“把语料频率、模型条件概率和校准后的真实概率混成同一个量”，记录首个偏离参考状态的位置以及它向后传播的方式。
-4. 撤销故障，从同一快照重放；只有状态与独立评估都恢复，才允许把异常归因给该故障。
+V = ("a", "b", "c")
+TRAIN = ("abac", "abab", "ac")
+OTHER = ("acac", "ac", "bc")
 
-<Callout type="trap" title="概率从何而来误区一：历史快照就是当前规格">
-  作者在2023年使用的GPT-3规模、ChatGPT训练解释或工具接口是历史材料；没有当前一手来源时，概率从何而来必须写“未知”，不能用现在时包装旧数字。
+
+def windows(docs, n, join=False):
+    assert n >= 1
+    records = ("".join(docs),) if join else docs
+    return [doc[i:i+n] for doc in records
+            for i in range(max(0, len(doc) - n + 1))]
+
+
+def prefix_counts(ws):
+    return Counter(w[:k] for w in ws
+                   for k in range(len(w) + 1))
+
+
+ws = windows(TRAIN, 2)
+trie = prefix_counts(ws)
+assert len(ws) == 7 and trie[""] == 7
+assert trie["a"] == trie["ab"] + trie["ac"] == 5
+assert Counter(windows(TRAIN, 2, join=True)) - Counter(ws) == Counter({"ca": 1, "ba": 1})
+assert windows(("", "a"), 2) == []
+```
+
+这里的根节点是空前缀，`Counter` 对不存在的键返回零。我们只用它表达计数零，还没有把零频次说成零的真实概率。
+
+### 条件分母：只除以同一条件下的次数
+
+<Term def="在条件 h 已给定时，对下一个符号 x 的概率；不同 h 有不同的一行分布">
+  条件概率
+</Term>
+的分母必须来自同一行事件。训练集 A 中 a 后面出现 b 三次、c 两次、a
+零次。因此在已知前一字符是 a 的条件下，频率估计是 `[0, 3/5,
+2/5]`，不是分别除以全语料 10 个字符，也不是除以全部 7 个字符对。
+
+用 $C(hx)$ 表示完整窗口 hx 的出现次数，$C(h*)=\sum_{x\in V}C(hx)$ 表示这行次数，则最大似然的相对频率估计为：
+
+$$
+\hat p(x\mid h)=\frac{C(hx)}{C(h*)}.
+$$
+
+分母为零时，这个估计未定义。特别是本例 c 总在文档末尾，所以虽见过 c，却从没观察到它后面的字符；不能把“见过条件字符”误当成“见过带后继的条件事件”。这里始终使用窗口行和，避免终点没有后继时误套单字符总次数。
+
+### 把一点质量留给没见过的事件
+
+<Term def="给固定字母表的每个后继都加 alpha 个伪计数，并把分母同步增加 alpha 乘字母表大小">
+  加性平滑
+</Term>
+是一个便于手算的基线，不是现代 ChatGPT 的机制。alpha
+是非负超参数，不是从这几个字符中测出来的置信度。固定 $|V|=3$ 时：
+
+$$
+\hat p_\alpha(x\mid h)=\frac{C(hx)+\alpha}{C(h*)+3\alpha}.
+$$
+
+对 a 行取 alpha=1，得到 `[1/8, 4/8, 3/8]`。a→a 从零变成 1/8，同时 b、c 的质量被让出一部分；不是凭空加上 1/8 却保留旧概率。对完全未知的 c 行，alpha>0 给出均匀的 `[1/3,1/3,1/3]`；这是对称规则的结果，不是观察到了三种后继。alpha=0、行和=0 时仍然未定义。
+
+**先预测：**如果分子全加 1，分母却仍用 5，三个数的和是多少？动手试，把上下文切成 c，再把 alpha 切为 0，观察“没有可归一化质量”和“概率为零”的区别。故障后红线外的格子是不是合法概率的一部分？
+
+<TcgMain02ProbabilitiesComputeTraceLab />
+
+每个小格代表 0.05 质量，五列按行填充；字符分界可以穿过格子，画面没有把概率四舍五入为席位。纹理区分 a/b/c，内缩边框表示伪计数的份额。前 20 格恰好容纳总量 1；错误分母造成的溢出继续画在后面，不会截成看似合法的一整块。四步依次强调观察值、伪计数、归一化及质量核对。
+
+### 代码二：归一化和未知行
+
+这段计算对任意长度的条件 h 都可用。分母从同一长度窗口的行和构造，`None` 专门标记未知行；与 `[0,0,0]` 区分开。后者既没有总和 1，也不能作为这行分布。
+
+```python
+def row_counts(docs, h):
+    counts = Counter(windows(docs, len(h) + 1))
+    return [counts[h + x] for x in V]
+
+
+def distribution(docs, h, alpha, bad_denominator=False):
+    assert alpha >= 0
+    raw = row_counts(docs, h)
+    total = sum(raw)
+    z = total + (0 if bad_denominator else len(V) * alpha)
+    return None if z == 0 else [(c + alpha) / z for c in raw]
+
+
+assert row_counts(TRAIN, "a") == [0, 3, 2]
+assert distribution(TRAIN, "a", 1) == [1/8, 4/8, 3/8]
+assert distribution(TRAIN, "c", 0) is None
+assert distribution(TRAIN, "c", 1) == [1/3] * 3
+assert isclose(sum(distribution(TRAIN, "a", 1)), 1)
+assert isclose(sum(distribution(TRAIN, "a", 1, True)), 8/5)
+```
+
+错误分母模式故意保留，供反例运行；它不是另一种合法平滑。alpha=0 时“漏加”的量本来为零，故障不会产生差异；这是明确的无效注入边界，而不是强行编一个失败。
+
+### 为什么长上下文不能只靠穷举
+
+本例三个字符构成 $3^2=9$ 种二字符组合、$3^3=27$ 种三字符组合；训练集 A 只见到其中 3 种不同二字符组合、3 种不同三字符组合。窗口长度增加了，实际可用窗口却从 7 减少为 4。稀疏来自“可能组合”和“观测预算”增长方向不一致。
+
+作者在 2023 年长文中以约 40,000 个常用词解释这种爆炸。若暂按独立位置的组合数精确计算，二元组为 $40000^2=1.6\times10^9$，三元组为 $40000^3=6.4\times10^{13}$；原文把后者约称为 60 trillion。这是说明数量级的历史论证，不是当前 ChatGPT 的词表规模，也不表示所有组合在自然语言中同样常见。有限文本无法直接统计所有长串，并不推出任何一种神经网络就必然估计准确。
+
+### 留出数据：给模型一道没参与计数的题
+
+<Term def="不用于估计计数或参数、专门用于检验预测的独立数据；反复据它调参也会破坏独立性">
+  留出集
+</Term>
+要在计数之前确定。本实验用 `abcc` 或 `abba`
+作留出串，两者都不是训练文档；共有字母和部分片段是预期的，不把“每个子片段都没见过”当作留出的定义。这里只用两个手写样本做机制探针，不把它们当代表性测试集。
+
+为了各阶模型都评相同的位置，我们统一给定首两字符 ab，只评分第 3、4 字；n=1 忽略上下文，n=2 看前一字，n=3 看前两字。模型给出的条件序列得分是：
+
+$$
+Q(s_3s_4\mid ab)=q(s_3\mid h_3)\,q(s_4\mid h_4).
+$$
+
+其中 h 是该阶数保留的有限上下文。概率连乘会变得很小，所以换成 <Term def="对实际出现符号的预测概率取负对数；本页以 2 为底，单位 bit，序列上可相加">对数损失</Term>。概率越小，单步代价越大；若模型明确分配零概率而该字符出现，代价为无穷大。
+
+$$
+L=-\log_2 Q=\sum_{i=3}^{4}-\log_2 q(s_i\mid h_i),\qquad
+\bar L=L/2.
+$$
+
+默认 n=2、alpha=1，`abcc` 的第一步 b→c 为 1/5，第二步 c→c 为 1/3，总得分 1/15，总损失约 3.907 bit。这里的均匀未知行来自平滑规则。把留出串偷偷并入训练，两个转移的计数都变了，得分上升并不能证明泛化提高。
+
+**先预测：**在默认参数下，泄漏会先改变 b 行还是 c 行？把留出改为 `abba`、alpha=0、n=2：第一个评分位置得到零概率，损失会是一个很大的有限数吗？再完整重置，检查所有参数和播放状态是否回到初值。
+
+<TcgMain02ProbabilitiesEvidenceGateLab />
+
+阶梯的水平轴是两个评分位置，向下的高度是累计 bit；概率仍在旁边逐步连乘，图并不生成新字符。未讲解的后续步骤用浅色预览。大于 8 bit 的数值与非有限结果收在底线，用标签报告原值，不把图形上限当真实损失。若 alpha=0 又遇到整行未定义，连乘本身也未定义；这比“有一个合法分布将观察事件赋零概率”更早失效，不能随手加 epsilon 把它伪装修好。
+
+### 代码三：同样的位置、同样的条件
+
+函数先检验字符表和阶数，始终只评分位置 2、3（Python 从零编号）。`None` 是未定义条件行，`float("inf")` 才是零概率造成的无限代价；两者不混写。我们不插入首尾符号，因此输出是给定两字前缀、固定剩余长度的得分，不能跨长度相加为“所有句子的总概率”。
+
+```python
+def score(docs, text, n, alpha, leak=False):
+    assert 1 <= n <= 3 and len(text) == 4
+    assert set(text) <= set(V)
+    train = tuple(docs) + ((text,) if leak else ())
+    trace = []
+    for i in (2, 3):
+        h = "" if n == 1 else text[i-n+1:i]
+        ps = distribution(train, h, alpha)
+        if ps is None:
+            trace.append((h, None, None))
+        else:
+            p = ps[V.index(text[i])]
+            loss = float("inf") if p == 0 else -log2(p)
+            trace.append((h, p, loss))
+    if any(p is None for _, p, _ in trace):
+        return trace, None, None
+    return trace, prod(p for _, p, _ in trace), sum(
+        loss for _, _, loss in trace)
+
+
+trace, probability, loss = score(TRAIN, "abcc", 2, 1)
+assert [h for h, _, _ in trace] == ["b", "c"]
+assert isclose(probability, 1/15)
+assert isclose(loss, log2(15))
+assert isclose(loss / 2, 1.9534452978042594)
+```
+
+### 代码四：故障、恢复与零概率边界
+
+这一块把实验的泄漏变成可以复查的断言，随后用相同输入重新计算。好看的损失只是某个模型对这两个评分位置的结果，不是正确答案率，更不是对真实世界事实的信心。
+
+```python
+_, leaked_p, leaked_loss = score(TRAIN, "abcc", 2, 1, leak=True)
+assert isclose(leaked_p, 1/6)
+assert isclose(leaked_loss, log2(6))
+assert leaked_loss < loss
+assert score(TRAIN, "abcc", 2, 1) == (trace, probability, loss)
+
+_, zero_p, infinite_loss = score(TRAIN, "abba", 2, 0)
+assert zero_p == 0 and isinf(infinite_loss)
+_, unknown_p, unknown_loss = score(TRAIN, "abcc", 2, 0)
+assert unknown_p is None and unknown_loss is None
+assert "abcc" not in TRAIN and "abba" not in TRAIN
+
+for docs in (TRAIN, OTHER, ()):
+    for h in ("", "a", "b", "c", "ab", "aa"):
+        for alpha in (0, 0.5, 1):
+            ps = distribution(docs, h, alpha)
+            if ps is not None:
+                assert all(0 <= p <= 1 for p in ps)
+                assert isclose(sum(ps), 1)
+
+```
+
+### 从平滑到泛化：这里只搭桥，不偷换机制
+
+加性平滑把未见事件的概率从零抬起来，却不理解哪些未见组合更合理。对完全未知的条件，三种后继一视同仁，正好暴露它的信息不足。现代神经语言模型通过共享表示和参数，从多个上下文复用统计结构；这不等于为每个新上下文查一个频次，也不等于本页的均匀伪计数。下一节再讨论“模型”这种估计装置，本页不画函数拟合来冒充它。
+
+“归一化”和“校准”同样不同。前者只检查同一条件下的候选概率是否和为 1；后者需要在定义清楚的重复预测任务上，看报出约 0.7 的事件是否真的约七成发生。下面是**另设的二元事件校准反例**：十次都报 0.7，只有两次发生。它与本页字符留出探针不是同一个数据集，不能拿两串的低损失声称完成了校准。
+
+### 代码五：归一化仍可能失准
+
+这段只演示一个概率分箱的经验差距，样本太少，不能估计长期校准，更不用于证明某个产品失准。对数损失是逐事件的适当评分工具，但有限样本上的低损失并不自动证明校准或事实可靠。
+
+```python
+predicted_event_probability = [0.7] * 10
+observed_binary_events = [1, 1] + [0] * 8
+assert all(isclose(p + (1 - p), 1)
+           for p in predicted_event_probability)
+mean_prediction = sum(predicted_event_probability) / 10
+observed_rate = sum(observed_binary_events) / 10
+assert isclose(mean_prediction, 0.7)
+assert isclose(observed_rate, 0.2)
+assert isclose(abs(mean_prediction - observed_rate), 0.5)
+
+print("全部断言通过；没有训练神经网络，也没有调用 ChatGPT。")
+```
+
+这些数值表明：一行合法概率、一个有限语料中的相对频率、一批留出数据上的表现，以及某句陈述是否为真，是四种不同的判断。把它们都简称“概率正确”会跳过关键证据。
+
+## 常见误区
+
+下面三种错误分别破坏事件、质量和评估边界；修好其中一个不代表另外两个也自动成立。
+
+### 误区一：跨文档拼接只是排版变化
+
+<Callout type="trap" title="统计事件被偷偷换了">
+  **现象：**计数树多出 ca
+  分枝。**原因：**删除边界让原本不相邻的字符形成窗口。**修法：**分文档滑窗；在实验一最后一步比较
+  7 与 9 个窗口，而不是只盯着概率表。
 </Callout>
 
-<Callout type="trap" title="概率从何而来误区二：流畅就是正确">
-  连贯文本、相似度投影或成功演示只能证明某次输出表现；概率从何而来仍需事实核查、计算复算、反例和分布外评估。
+### 误区二：给每个候选加一点概率，不用改分母
+
+<Callout type="trap" title="平滑不是凭空加质量">
+  **现象：**a 行三个数总和为
+  1.6。**原因：**分子加了三个伪计数，分母却没加。**修法：**用行和加 alpha
+  乘完整固定字母表大小；实验二的溢出格必须消失，未知行则单独处理。
 </Callout>
 
-<Callout type="trap" title="概率从何而来误区三：一次改很多条件">
-  若同时更换语料、模型、提示、温度、工具和评估集，概率从何而来就无法定位因果；必须保留单故障合同和恢复路径。
+### 误区三：留出损失降了，就证明理解和校准更强
+
+<Callout type="trap" title="低损失不自动消除泄漏">
+  **现象：**并入留出串后得分提高。**原因：**评估事件参与了计数；此外文字概率与陈述真值本来不同。**修法：**先固定拆分与评分位置，撤销实验三的泄漏，另用足量独立事件检验校准。
 </Callout>
 
-## 小结
+## 小结与练习
 
-- 直接计数无法覆盖长文本的组合爆炸
-- 模型为未见上下文给出泛化概率估计
-- 语料频率、条件概率与校准概率须区分
-- 交付计数表、稀疏性曲线与校准记录
-- 单一反例定位概率混淆分岔并重放恢复
+我们把“概率哪里来”拆成可验证的三步：先定义带边界的计数事件，再把一行计数变成守恒的质量，最后用没有参与估计的数据计算序列损失。它们揭示直接计数的稀疏性，却没有测量 ChatGPT 的内部概率或泛化能力。
 
-## 练习与答案
+- 长窗口的组合更多，固定文本贡献的窗口反而更少。
+- 平滑同时改变分子和分母；未知行不等于零分布。
+- 独立留出与相同评分位置是比较损失的前提。
 
 <Exercises>
 
-**问题 1：Where Do the Probabilities Come From? / 概率从何而来？**
-
-为概率从何而来设计一个最小输入和一个单一反例，说明Where Do the Probabilities Come From? / 概率从何而来？会改变哪个中间状态、应保存什么证据，以及结论不能外推到哪里。
+**问题 1**：实验一用训练集 A、n=3，走到全部窗口。写出完整窗口及根计数；若先拼接文档，哪些窗口多了？
 
 <Answer>
-  先冻结在固定的2023年原书语境与独立事实来源下重放频率估计、组合爆炸、泛化与校准，把Where
-  Do the Probabilities Come From? /
-  概率从何而来？映射到明确输入、变换和输出；参考路径保存计数表、稀疏性曲线、未见上下文探针与校准记录，故障路径只注入“把语料频率、模型条件概率和校准后的真实概率混成同一个量”。若首个分岔可定位且撤销故障后恢复，才能接受局部机制解释；未测试的模型、语料、工具、产品版本与分布都留在概率从何而来的适用边界外。
+  分文档得到 aba、bac、aba、bab，根计数 4。拼接得到
+  aba、bac、aca、cab、aba、bab、aba、bac，根计数 8。多出的窗口是
+  aca、cab、aba、bac，各一次；后两个字符串虽已出现，新增的那次仍跨了文档边界。出现次数变化与新增不同分枝数不是同一个量。
 </Answer>
 
-**问题 2：原书与当前事实**
-
-指出概率从何而来中至少一个必须标成2023年历史快照的主张，并写出重新验证当前事实需要的一手来源类型。
+**问题 2**：改实验二为 B 组、条件 b、alpha=0.5。手算三个概率；开启错误分母，质量和变成多少？再切到条件 c、alpha=0，先核查它是否真是未知条件：该显示哪一行？与 A 组的 c 有何区别？
 
 <Answer>
-  凡涉及GPT-3参数、早期ChatGPT训练描述、产品接口或工具集成形态，都先标记为2023年历史快照。当前事实需要模型或产品提供方的官方文档、系统卡、发布说明或原始研究；作者文章与旧版书目只能证明当时如何表述，不能证明2026年仍然如此。
+  b 行只观察到 bc 一次，计数 [0,0,1]。正确分母 1+1.5=2.5，概率
+  [0.2,0.2,0.6]；故障分母为 1，得到 [0.5,0.5,1.5]，质量和 2.5，已不是合法概率。B
+  组 c 后曾跟 a 一次，因此 c 行 alpha=0 是
+  [1,0,0]，并非未知行！要复现未知行，应切回 A 组的 c；该行才是
+  0/0，显示未定义。此题要求先核对文档，不能把 A 的边界结论照搬到 B。
 </Answer>
 
-**问题 3：恢复为什么必要**
-
-为什么概率从何而来发现故障后还必须撤销故障并从同一快照重放？
+**问题 3**：保持实验三默认 n=2、alpha=1、abcc，只开泄漏。分别写出两步概率与损失变化；这能证明泛化或校准吗？
 
 <Answer>
-  恢复重放检验“单一故障导致分岔”这一归因。若撤销后计数表、稀疏性曲线、未见上下文探针与校准记录仍不能回到参考状态，就说明存在隐藏变量、状态污染或不可复现步骤；此时应拒绝单因果结论，而不是把异常强行归给把语料频率、模型条件概率和校准后的真实概率混成同一个量。
+  参考路径为 1/5 × 1/3 = 1/15，总损失 log₂15≈3.907 bit。泄漏后 b 行变
+  [2,0,1]，加一后 c 的概率 2/6；c 行变 [0,0,1]，c 的概率 2/4。乘积为 1/6，损失
+  log₂6≈2.585
+  bit。下降来自留出串进入训练，不是独立泛化改进；两个样本也不足以评估校准。撤销故障后应恢复参考路径，再完整重置回到初始暂停。
 </Answer>
 
 </Exercises>
 
-## 术语与可观测量
+## 五个术语核对
 
-在概率从何而来中，<Term def="概率从何而来实际优化或执行的可观测目标，而不是拟人化意图">生成目标</Term>、<Term def="概率从何而来在给定上下文与版本后对候选输出建立的相对权重">条件分布</Term>、<Term def="概率从何而来把离散输入转换为可计算状态的坐标系统">表示空间</Term>、<Term def="概率从何而来的数据、目标、更新过程、留出评估与版本记录">训练证据</Term>、<Term def="概率从何而来只改变一个条件以定位首个机制分岔的测试">单一反例</Term>、<Term def="概率从何而来没有运行、无法核对或不能外推的模型与情境">适用边界</Term>共同组成证据合同。术语只有绑定输入、状态、输出和失败条件才有解释力；把标签换成更时髦的词，不会提升结论可信度。
+这些术语分别回答“数什么、条件是什么、怎样留质量、用什么评估、分数怎样相加”，不要把名字背熟当作计算通过。
 
 <Glossary>
-  <GlossaryItem term="生成目标">
-    概率从何而来实际优化或执行的可观测目标，而不是拟人化意图。
+  <GlossaryItem term="n-gram">
+    连续 n 个符号的窗口；本页是字符窗口，n−1 个字符作为估计条件。
   </GlossaryItem>
-  <GlossaryItem term="条件分布">
-    概率从何而来在给定上下文与版本后对候选输出建立的相对权重。
+  <GlossaryItem term="条件概率">
+    在同一个条件 h 下，后继 x 占多少概率质量；归一化必须使用该条件行。
   </GlossaryItem>
-  <GlossaryItem term="表示空间">
-    概率从何而来把离散输入转换为可计算状态的坐标系统。
+  <GlossaryItem term="加性平滑">
+    每个固定候选加 alpha 个伪计数，并同步增加分母；是简单估计基线而非神经模型。
   </GlossaryItem>
-  <GlossaryItem term="训练证据">
-    概率从何而来的数据、目标、更新过程、留出评估与版本记录。
+  <GlossaryItem term="留出集">
+    不参与参数或计数估计的评估数据；反复用它调参会泄漏评估信息。
   </GlossaryItem>
-  <GlossaryItem term="单一反例">
-    概率从何而来只改变一个条件以定位首个机制分岔的测试。
-  </GlossaryItem>
-  <GlossaryItem term="适用边界">
-    概率从何而来没有运行、无法核对或不能外推的模型与情境。
+  <GlossaryItem term="对数损失">
+    实际观察事件的负对数概率，越低越好；以 2 为底时单位是 bit，可沿序列相加。
   </GlossaryItem>
 </Glossary>
 
+## 来源、版本与未做的事
+
+本页以 [Stephen Wolfram 2023 年公开长文的对应节](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/#where-do-the-probabilities-come-from)核对单字符频次、n-gram 稀疏性和引向模型估计的论证顺序。实际读取范围是本节标题至下一节“什么是模型”之前的段落，未读取原书或中文译本正文。作者在前一节所用 GPT-3、175B、temperature 0.8 等属于 2023 年示例，既非当前 ChatGPT 实现的核查结果，也非普遍最佳参数，本页不据此实现产品复刻。
+
+[Wolfram Media 产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)只用于英文书版本与目录定位：Stephen Wolfram，2023 年出版的 _What Is ChatGPT Doing ... and Why Does It Work?_，中文译本名为《这就是ChatGPT》。公开长文与书籍不是可以不加区分的同一访问对象，网页公开可读也不等于获得改编或复制许可。本页全部中文解释、a/b/c 语料、图、故障、代码和习题为独立重写，没有搬用作者图或生成文本。
+
+另以 [Jurafsky 与 Martin《Speech and Language Processing》第 3 章 PDF](https://web.stanford.edu/~jurafsky/slp3/3.pdf)核对条件频率（§3.1.2）、对数计算（§3.1.3）、训练/留出隔离（§3.2）、概率乘积与按长度归一（§3.3）、加一及加 k 平滑（§§3.6.1–3.6.2）。实际获取的是 **2026-08-19 草稿**，属于本页补充资料，不伪装成 2023 年原书内容；未声称通读教材全书。该教材也明确指出加性平滑不是现代语言建模的优选方法，本页只因其便于手算而采用。
+
+本页未访问当前 ChatGPT 权重、训练语料或内部概率接口，没有训练模型，没有用浏览器 GPU 测速，更没有从两个留出串推断产品的理解、真实性或长期校准。下一节将把“直接数每个事件”与“构建能估计的模型”继续区分。
+
 <Attribution
   mode="independent-rewrite"
-  sourceBasis="author-complete-public-essay-plus-official-editions-and-primary-research"
-  workTitle="Stephen Wolfram著《What Is ChatGPT Doing ... and Why Does It Work?》与中文译本《这就是ChatGPT》"
+  sourceBasis="author-public-essay-selected-section-plus-explicitly-dated-textbook-supplement"
+  workTitle="Stephen Wolfram《What Is ChatGPT Doing ... and Why Does It Work?》及中文译本《这就是ChatGPT》；未读取书籍正文"
   adaptedUrl="https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/"
 />
+
+[上一节：一次只添加一个词](/learn/this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time) · [下一节：什么是模型](/learn/this-is-chatgpt/01-main-essay/tcg-main-03-model)
