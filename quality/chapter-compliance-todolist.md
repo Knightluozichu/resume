@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T10:01:13.843Z
+> 生成时间：2026-10-15T10:55:53.320Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 477 |
-| failed | 1799 |
+| failed | 1798 |
 | queued | 196 |
-| passed | 1746 |
+| passed | 1747 |
 | published | 868 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -9031,7 +9031,7 @@
     - 路径：`content/kubernetes-in-action/23-final-review/k8s-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## langchain-programming（13 个内容页面 · failed:1 passed:12 · 🚫 门禁阻断 1 项）
+## langchain-programming（13 个内容页面 · passed:13 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=11；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
@@ -9071,7 +9071,7 @@
 - [x] ✅ **11-community/lcp-10-community-resources** — passed；score 97
     - 路径：`content/langchain-programming/11-community/lcp-10-community-resources.mdx`
     - 正式 unit：`lcp-10` explained=15/15
-- [ ] ❌ P1 **12-review/lcp-official-final-review** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **12-review/lcp-official-final-review** — passed；score 100
     - 路径：`content/langchain-programming/12-review/lcp-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
