@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T15:27:59.721Z
+> 生成时间：2026-10-15T15:45:26.639Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -16,8 +16,8 @@
 | manifest 证据不完整 unit | 480 |
 | failed | 1786 |
 | queued | 196 |
-| passed | 1746 |
-| published | 881 |
+| passed | 1732 |
+| published | 895 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
 
@@ -9128,50 +9128,50 @@
     - 路径：`content/large-language-models/15-review/llm-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## large-scale-llm-practice（14 个内容页面 · passed:14 · ✅ 书级门禁条件满足）
+## large-scale-llm-practice（14 个内容页面 · published:14 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=96.1%；未映射 unit=0；证据不完整 unit=3。
 
-- [x] ✅ **00-map/lsl-official-learning-map** — passed；score 96
+- [x] 🚀 **00-map/lsl-official-learning-map** — published（已发布）；score 96
     - 路径：`content/large-scale-llm-practice/00-map/lsl-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [x] ✅ **01-preface/lsl-preface** — passed；score 100
+- [x] 🚀 **01-preface/lsl-preface** — published（已发布）；score 100
     - 路径：`content/large-scale-llm-practice/01-preface/lsl-preface.mdx`
     - 正式 unit：`lsl-preface` explained=1/1
-- [x] ✅ **02-notation/lsl-mathematical-notation** — passed；score 100
+- [x] 🚀 **02-notation/lsl-mathematical-notation** — published（已发布）；score 100
     - 路径：`content/large-scale-llm-practice/02-notation/lsl-mathematical-notation.mdx`
     - 正式 unit：`lsl-mathematical-notation` explained=1/1
-- [x] ✅ **03-introduction/lsl-01-introduction** — passed；score 98
+- [x] 🚀 **03-introduction/lsl-01-introduction** — published（已发布）；score 98
     - 路径：`content/large-scale-llm-practice/03-introduction/lsl-01-introduction.mdx`
     - 正式 unit：`lsl-01` explained=5/5
-- [x] ✅ **04-foundations/lsl-02-llm-foundations** — passed；score 97
+- [x] 🚀 **04-foundations/lsl-02-llm-foundations** — published（已发布）；score 97
     - 路径：`content/large-scale-llm-practice/04-foundations/lsl-02-llm-foundations.mdx`
     - 正式 unit：`lsl-02` explained=13/15
-- [x] ✅ **05-data/lsl-03-pretraining-data** — passed；score 98
+- [x] 🚀 **05-data/lsl-03-pretraining-data** — published（已发布）；score 98
     - 路径：`content/large-scale-llm-practice/05-data/lsl-03-pretraining-data.mdx`
     - 正式 unit：`lsl-03` explained=19/19
-- [x] ✅ **06-distributed-training/lsl-04-distributed-training** — passed；score 93
+- [x] 🚀 **06-distributed-training/lsl-04-distributed-training** — published（已发布）；score 93
     - 路径：`content/large-scale-llm-practice/06-distributed-training/lsl-04-distributed-training.mdx`
     - 正式 unit：`lsl-04` explained=14/15
-- [x] ✅ **07-supervised-finetuning/lsl-05-supervised-finetuning** — passed；score 97
+- [x] 🚀 **07-supervised-finetuning/lsl-05-supervised-finetuning** — published（已发布）；score 97
     - 路径：`content/large-scale-llm-practice/07-supervised-finetuning/lsl-05-supervised-finetuning.mdx`
     - 正式 unit：`lsl-05` explained=19/21
-- [x] ✅ **08-reinforcement-learning/lsl-06-reinforcement-learning** — passed；score 95
+- [x] 🚀 **08-reinforcement-learning/lsl-06-reinforcement-learning** — published（已发布）；score 95
     - 路径：`content/large-scale-llm-practice/08-reinforcement-learning/lsl-06-reinforcement-learning.mdx`
     - 正式 unit：`lsl-06` explained=17/17
-- [x] ✅ **09-applications/lsl-07-llm-applications** — passed；score 96
+- [x] 🚀 **09-applications/lsl-07-llm-applications** — published（已发布）；score 96
     - 路径：`content/large-scale-llm-practice/09-applications/lsl-07-llm-applications.mdx`
     - 正式 unit：`lsl-07` explained=18/18
-- [x] ✅ **10-evaluation/lsl-08-llm-evaluation** — passed；score 95
+- [x] 🚀 **10-evaluation/lsl-08-llm-evaluation** — published（已发布）；score 95
     - 路径：`content/large-scale-llm-practice/10-evaluation/lsl-08-llm-evaluation.mdx`
     - 正式 unit：`lsl-08` explained=13/13
-- [x] ✅ **11-references/lsl-references** — passed；score 97
+- [x] 🚀 **11-references/lsl-references** — published（已发布）；score 97
     - 路径：`content/large-scale-llm-practice/11-references/lsl-references.mdx`
     - 正式 unit：`lsl-references` explained=1/1
-- [x] ✅ **12-index/lsl-index** — passed；score 99
+- [x] 🚀 **12-index/lsl-index** — published（已发布）；score 99
     - 路径：`content/large-scale-llm-practice/12-index/lsl-index.mdx`
     - 正式 unit：`lsl-index` explained=1/1
-- [x] ✅ **13-review/lsl-official-final-review** — passed；score 100
+- [x] 🚀 **13-review/lsl-official-final-review** — published（已发布）；score 100
     - 路径：`content/large-scale-llm-practice/13-review/lsl-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [ ] 🔴 P1 **[正式 unit lsl-02] 第2章 大语言模型基础** — evidence 不完整；explained=13/15
