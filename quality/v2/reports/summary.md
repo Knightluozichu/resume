@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-15T17:14:42.521Z；旧版分数不迁移。
+> 2026-10-15T18:51:08.857Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1780
+- failed：1774
 - queued：196
-- passed：1738
+- passed：1744
 - published：895
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -102,8 +102,8 @@
 | 89 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 90 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
 | 91 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 92 | large-language-models | 16 | 10 | 0 | 6 | 10 |
-| 93 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 92 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 93 | large-language-models | 16 | 4 | 0 | 12 | 4 |
 | 94 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 95 | blender-3d | 17 | 1 | 0 | 16 | 1 |
 | 96 | blockchain-dev-practice | 17 | 1 | 0 | 16 | 1 |

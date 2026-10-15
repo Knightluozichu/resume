@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T17:14:43.709Z
+> 生成时间：2026-10-15T18:51:10.357Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,10 +13,10 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 480 |
-| failed | 1780 |
+| manifest 证据不完整 unit | 482 |
+| failed | 1774 |
 | queued | 196 |
-| passed | 1738 |
+| passed | 1744 |
 | published | 895 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -9075,9 +9075,9 @@
     - 路径：`content/langchain-programming/12-review/lcp-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## large-language-models（16 个内容页面 · failed:10 passed:6 · 🚫 门禁阻断 10 项）
+## large-language-models（16 个内容页面 · failed:4 passed:12 · 🚫 门禁阻断 4 项）
 
-- 门禁摘要：目录=未登记，manifest=14；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
+- 门禁摘要：目录=未登记，manifest=14；正式概念覆盖率=98.7%；未映射 unit=0；证据不完整 unit=2。
 
 - [x] ✅ **00-map/llm-official-learning-map** — passed；score 100
     - 路径：`content/large-language-models/00-map/llm-official-learning-map.mdx`
@@ -9097,22 +9097,22 @@
 - [x] ✅ **05-pretraining-decoding/llm-04-pretraining-decoding** — passed；score 98
     - 路径：`content/large-language-models/05-pretraining-decoding/llm-04-pretraining-decoding.mdx`
     - 正式 unit：`llm-04` explained=6/6
-- [ ] ❌ P1 **06-icl-finetuning/llm-05-icl-lightweight-finetuning** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **06-icl-finetuning/llm-05-icl-lightweight-finetuning** — passed；score 97
     - 路径：`content/large-language-models/06-icl-finetuning/llm-05-icl-lightweight-finetuning.mdx`
     - 正式 unit：`llm-05` explained=16/16
-- [ ] ❌ P1 **07-training-scale/llm-06-training-larger-models** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **07-training-scale/llm-06-training-larger-models** — passed；score 96
     - 路径：`content/large-language-models/07-training-scale/llm-06-training-larger-models.mdx`
-    - 正式 unit：`llm-06` explained=18/18
-- [ ] ❌ P1 **08-sparse-moe/llm-07-sparse-moe** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+    - 正式 unit：`llm-06` explained=17/18
+- [x] ✅ **08-sparse-moe/llm-07-sparse-moe** — passed；score 97
     - 路径：`content/large-language-models/08-sparse-moe/llm-07-sparse-moe.mdx`
-    - 正式 unit：`llm-07` explained=16/16
-- [ ] ❌ P1 **09-retrieval-augmented/llm-08-retrieval-augmented-lm** — failed；score 89；门禁阻断: status=failed、score=89<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+    - 正式 unit：`llm-07` explained=15/16
+- [x] ✅ **09-retrieval-augmented/llm-08-retrieval-augmented-lm** — passed；score 97
     - 路径：`content/large-language-models/09-retrieval-augmented/llm-08-retrieval-augmented-lm.mdx`
     - 正式 unit：`llm-08` explained=8/8
-- [ ] ❌ P1 **10-preference-alignment/llm-09-human-preference-alignment** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **10-preference-alignment/llm-09-human-preference-alignment** — passed；score 97
     - 路径：`content/large-language-models/10-preference-alignment/llm-09-human-preference-alignment.mdx`
     - 正式 unit：`llm-09` explained=14/14
-- [ ] ❌ P1 **11-bias-toxicity/llm-10-bias-toxicity** — failed；score 89；门禁阻断: status=failed、score=89<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **11-bias-toxicity/llm-10-bias-toxicity** — passed；score 95
     - 路径：`content/large-language-models/11-bias-toxicity/llm-10-bias-toxicity.mdx`
     - 正式 unit：`llm-10` explained=11/11
 - [ ] ❌ P1 **12-vision-language/llm-11-vision-language-models** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
@@ -9127,6 +9127,10 @@
 - [ ] ❌ P1 **15-review/llm-official-final-review** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/large-language-models/15-review/llm-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
+- [ ] 🔴 P1 **[正式 unit llm-06] 第6章 训练更大的模型** — evidence 不完整；explained=17/18
+    - 关联路径：`content/large-language-models/07-training-scale/llm-06-training-larger-models.mdx`
+- [ ] 🔴 P1 **[正式 unit llm-07] 第7章 稀疏专家模型** — evidence 不完整；explained=15/16
+    - 关联路径：`content/large-language-models/08-sparse-moe/llm-07-sparse-moe.mdx`
 
 ## large-scale-llm-practice（14 个内容页面 · published:14 · ✅ 书级门禁条件满足）
 
