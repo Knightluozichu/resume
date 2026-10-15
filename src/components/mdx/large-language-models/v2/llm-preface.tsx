@@ -1,116 +1,449 @@
 "use client";
 
-import { LlmEvidenceLab, type LlmEvidenceModel } from "./llm-evidence-lab";
+import { useState, type ReactNode } from "react";
+import { useTeachingTimeline } from "@/components/mdx/anim/use-teaching-timeline";
+import { TimelineControls } from "@/components/mdx/anim/timeline-controls";
 
-const model = {
-  unitId: "llm-preface",
-  title: "前言",
-  question:
-    "哪些内容属于2024年原书范围，哪些是当前补充，怎样避免把后来进展倒填为原书判断？",
-  concepts: ["前言"],
-  invariant: "出版时间、目录坐标、原始研究日期和当前API日期分栏记录",
-  fault: "把2024年以后出现的模型、基准或政策写成原书已讨论事实",
-  artifact: "范围声明、时间线、来源角色表与不适用边界",
-  stages: [
-    {
-      name: "前言 · 数据与输入",
-      input: "建立一张原书目录、原始研究与当前实现的时间边界表",
-      operation:
-        "冻结范围、时间与来源角色所需的数据角色、版本、切分、模板和shape",
-      output: "前言的输入合同、版本表与基线快照",
-      check: "前言的来源、许可、角色、单位、shape和可见性没有越界",
+const C = {
+  bg: "var(--bg)",
+  border: "var(--border)",
+  text: "var(--text-primary)",
+  muted: "var(--text-secondary)",
+  accent: "var(--accent)",
+  danger: "var(--danger)",
+} as const;
+const steps = ["来源", "中间状态", "页面结论"].map((label) => ({ label }));
+function useReadingTrace() {
+  return useTeachingTimeline({
+    steps,
+    build: (tl) => {
+      const clock = { tick: 0 };
+      steps.forEach((s, i) => tl.label(s.label, i * 900));
+      tl.add(clock, { tick: 3, duration: 2700, ease: "linear" }, 0);
     },
-    {
-      name: "前言 · 目标与计算",
-      input: "前言的冻结输入与模型快照",
-      operation:
-        "执行界定本书从语言建模到环境影响的12章范围、读者、出版时点与事实更新规则的最小计算并保存中间状态",
-      output: "前言的目标分量、计算轨迹与单故障分岔",
-      check: "前言每一步可由同一输入、公式、版本和随机状态复算",
-    },
-    {
-      name: "前言 · 输出与解码",
-      input: "前言的中间状态、候选与决策规则",
-      operation: "比较输出、路由、检索、策略或资源估计的更新前后状态",
-      output: "前言的候选差、引用/策略/资源谱系与恢复路径",
-      check: "前言没有把代理目标、精选输出或训练内统计当作最终结论",
-    },
-    {
-      name: "前言 · 独立评估",
-      input: "前言的冻结候选与未见数据、盲评或独立诊断",
-      operation: "重放预测、单故障、恢复和不适用边界",
-      output: "前言的接受、回退或拒绝理由",
-      check: "前言满足“出版时间、目录坐标、原始研究日期和当前API日期分栏记录”",
-    },
-  ],
-  cases: [
-    {
-      name: "前言 · 基线",
-      setup:
-        "固定建立一张原书目录、原始研究与当前实现的时间边界表的数据、模型、模板、种子和预算",
-      prediction:
-        "前言的参考轨迹应持续满足“出版时间、目录坐标、原始研究日期和当前API日期分栏记录”",
-      boundary: "前言只回答本页正式坐标与已运行实验合同内的问题",
-    },
-    {
-      name: "前言 · 单故障",
-      setup:
-        "保持其余条件不变，只注入“把2024年以后出现的模型、基准或政策写成原书已讨论事实”",
-      prediction: "前言应出现可定位的首个状态分岔，而不是只在末端输出异常",
-      boundary: "前言的故障结论不能外推到未运行的数据、模型、语言或部署流量",
-    },
-    {
-      name: "前言 · 恢复",
-      setup:
-        "撤销故障并从同一快照重放建立一张原书目录、原始研究与当前实现的时间边界表",
-      prediction: "前言的计算、独立评估和交付证据应恢复基线",
-      boundary: "前言若不能复现恢复结果，就不能把异常归因给单一故障",
-    },
-  ],
-  referenceTrace: [
-    "前言参考步骤1：冻结范围、时间与来源角色所需的数据角色、版本、切分、模板和shape；保存前言的输入合同、版本表与基线快照。",
-    "前言参考步骤2：执行界定本书从语言建模到环境影响的12章范围、读者、出版时点与事实更新规则的最小计算并保存中间状态；保存前言的目标分量、计算轨迹与单故障分岔。",
-    "前言参考步骤3：比较输出、路由、检索、策略或资源估计的更新前后状态；保存前言的候选差、引用/策略/资源谱系与恢复路径。",
-    "前言参考步骤4：重放预测、单故障、恢复和不适用边界；保存前言的接受、回退或拒绝理由。",
-  ],
-  faultTrace: [
-    "前言故障步骤1：保持建立一张原书目录、原始研究与当前实现的时间边界表不变，检查前言的输入合同、版本表与基线快照如何受单一故障传播。",
-    "前言故障步骤2：只注入“把2024年以后出现的模型、基准或政策写成原书已讨论事实”，记录首个偏离“前言每一步可由同一输入、公式、版本和随机状态复算”的状态。",
-    "前言故障步骤3：保持前言的中间状态、候选与决策规则不变，检查前言的候选差、引用/策略/资源谱系与恢复路径如何受单一故障传播。",
-    "前言故障步骤4：保持前言的冻结候选与未见数据、盲评或独立诊断不变，检查前言的接受、回退或拒绝理由如何受单一故障传播。",
-  ],
-  gates: [
-    {
-      label: "原书结构与时间边界",
-      detail:
-        "前言区分2024年发行版目录、原始研究、当前框架行为与本站独立重写，不把后续进展倒填为原书内容。",
-    },
-    {
-      label: "数据、表示与计算合同",
-      detail:
-        "前言的输入、来源、切分、词元/模态shape、模型版本、中间状态和随机性可复算。",
-    },
-    {
-      label: "目标、输出与资源合同",
-      detail:
-        "前言的训练/代理目标、解码/路由/检索决策、输出、引用、资源或伤害指标已归档。",
-    },
-    {
-      label: "独立评估与社会技术边界",
-      detail:
-        "前言以未见数据、盲评或独立诊断复核“出版时间、目录坐标、原始研究日期和当前API日期分栏记录”，并报告“把2024年以后出现的模型、基准或政策写成原书已讨论事实”的恢复结果。",
-    },
-  ],
-} as const satisfies LlmEvidenceModel;
+  });
+}
+function Frame({
+  id,
+  title,
+  children,
+}: {
+  id: "date" | "tree" | "citation";
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      data-preface={id}
+      data-visual-kind={
+        {
+          date: "publication-month-cutoff",
+          tree: "outline-depth-branch-tree",
+          citation: "citation-support-propagation",
+        }[id]
+      }
+      className="llm-preface-lab not-prose my-8 rounded-xl border border-border p-3 sm:p-5"
+    >
+      <style>{`.llm-preface-lab button,.llm-preface-lab select,.llm-preface-lab input{min-height:44px;min-width:44px}.llm-preface-lab button:focus-visible,.llm-preface-lab select:focus-visible,.llm-preface-lab input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.llm-preface-lab svg{display:block;width:100%;max-width:420px;margin:16px auto}.llm-preface-lab select{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--text-primary);border-radius:6px;padding:8px}.llm-preface-lab label{display:block;margin:12px 0;font-size:14px}.llm-preface-lab p{font-size:14px;line-height:1.7}.llm-preface-lab svg text{font-family:inherit}`}</style>
+      <h3 className="text-lg font-semibold">{title}</h3>
+      {children}
+    </section>
+  );
+}
+function Fault({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      data-fault
+      aria-pressed={active}
+      onClick={onClick}
+      className="my-2 w-full rounded-md border border-border px-3 py-2 text-sm"
+    >
+      {active ? "撤销故障：" : "注入故障："}
+      {children}
+    </button>
+  );
+}
 
+/** 出版月份只切分时间相容性，绝不推断原书实际内容。 */
 export function LlmPrefaceContextContractLab() {
-  return <LlmEvidenceLab model={model} view="context-contract" />;
+  const [cutoff, setCutoff] = useState("2024-04");
+  const [backdate, setBackdate] = useState(false);
+  const tl = useReadingTrace();
+  const dates = [
+    "2019-06",
+    "2020-05",
+    "2023-07",
+    backdate ? "2023-01" : "2025-01",
+  ];
+  const names = [
+    "BERT · NAACL",
+    "Few-shot · 预印本",
+    "推测解码 · ICML",
+    "教学虚构记录",
+  ];
+  const x = (date: string) =>
+    30 +
+    ((Number(date.slice(0, 4)) - 2019) * 12 + Number(date.slice(5)) - 1) * 3;
+  const cutX = x(cutoff);
+  const count = dates.filter((d) => d <= cutoff).length;
+  return (
+    <Frame id="date" title="01 / 出版时点切线">
+      <label>
+        截止月份
+        <select
+          aria-label="截止月份"
+          value={cutoff}
+          onChange={(e) => setCutoff(e.target.value)}
+        >
+          <option value="2024-04">2024-04 · 本书出版月</option>
+          <option value="2023-12">2023-12 · 负例：均未跨界</option>
+          <option value="2023-06">2023-06 · ICML 发表前</option>
+        </select>
+      </label>
+      <svg
+        viewBox="0 0 300 350"
+        role="img"
+        aria-label={`时间横轴，截止${cutoff}，${count}条时间相容，虚构记录${dates[3]}`}
+      >
+        <rect
+          x="22"
+          y="35"
+          width={cutX - 22}
+          height="268"
+          fill={C.accent}
+          opacity="0.08"
+        />
+        <path d="M22 305 H285" stroke={C.border} />
+        {dates.map((date, i) => (
+          <path
+            key={date}
+            data-cutoff-segment
+            d={`M${cutX} ${61 + i * 65} V${100 + i * 65}`}
+            stroke={C.accent}
+            strokeWidth="2"
+            strokeDasharray="5 4"
+          />
+        ))}
+        <text x="24" y="22" fontSize="14" fill={C.text}>
+          阴影：时间相容，不等于书中出现
+        </text>
+        {dates.map((d, i) => (
+          <g key={names[i]}>
+            <path d={`M22 ${68 + i * 65} H285`} stroke={C.border} />
+            <circle
+              cx={x(d)}
+              cy={68 + i * 65}
+              r={tl.currentStep === Math.min(i, 2) ? 8 : 5}
+              fill={
+                i === 3 && backdate
+                  ? C.danger
+                  : d <= cutoff
+                    ? C.accent
+                    : C.muted
+              }
+            />
+            <text x="25" y={53 + i * 65} fontSize="14" fill={C.text}>
+              {names[i]} · {d}
+            </text>
+          </g>
+        ))}
+        <text x="24" y="333" fontSize="14" fill={C.muted}>
+          2019
+        </text>
+        <text x="245" y="333" fontSize="14" fill={C.muted}>
+          2026
+        </text>
+      </svg>
+      <p data-result>
+        时间相容 {count}/4；后续 {4 - count}/4。2025
+        条目是教学虚构，不对应真实模型。当前扫描：{steps[tl.currentStep].label}
+        。
+      </p>
+      <Fault active={backdate} onClick={() => setBackdate(!backdate)}>
+        把虚构记录倒填到 2023
+      </Fault>
+      <TimelineControls
+        timeline={tl}
+        reset={{
+          label: "完整重置",
+          onClick: () => {
+            setCutoff("2024-04");
+            setBackdate(false);
+            tl.seek(0);
+          },
+        }}
+      />
+    </Frame>
+  );
 }
 
+const chapterBranches = {
+  "3": [0, 0, 2, 0, 0, 4, 6, 0],
+  "9": [6, 0, 0, 0, 0, 0, 0],
+} as const;
+/** 真目录的三层分叉；灰色空心叶=浅来源没有列出，非不存在。 */
 export function LlmPrefaceComputeTraceLab() {
-  return <LlmEvidenceLab model={model} view="compute-trace" />;
+  const [chapter, setChapter] = useState<"3" | "9">("3");
+  const [depth, setDepth] = useState("shallow");
+  const [erase, setErase] = useState(false);
+  const tl = useReadingTrace();
+  const branches = chapterBranches[chapter];
+  const deep = branches.reduce<number>((a, b) => a + b, 0);
+  const denominator = 1 + branches.length + (erase ? 0 : deep);
+  return (
+    <Frame id="tree" title="02 / 目录深度分叉树">
+      <label>
+        观察章节
+        <select
+          aria-label="观察章节"
+          value={chapter}
+          onChange={(e) => setChapter(e.target.value as "3" | "9")}
+        >
+          <option value="3">第3章 · Transformer</option>
+          <option value="9">第9章 · 对齐语言模型与人类偏好</option>
+        </select>
+      </label>
+      <label>
+        来源深度
+        <select
+          aria-label="来源深度"
+          value={depth}
+          onChange={(e) => setDepth(e.target.value)}
+        >
+          <option value="shallow">得到 · 浅层目录</option>
+          <option value="deep">豆瓣 · 细层目录</option>
+        </select>
+      </label>
+      <svg
+        viewBox="0 0 300 410"
+        role="img"
+        aria-label={`第${chapter}章，${branches.length}个一级节，${deep}个深层节，分母${denominator}`}
+      >
+        <text x="16" y="23" fontSize="14" fill={C.text}>
+          章根
+        </text>
+        <text x="95" y="23" fontSize="14" fill={C.text}>
+          一级节
+        </text>
+        <text x="204" y="23" fontSize="14" fill={C.text}>
+          深层节
+        </text>
+        <circle cx="37" cy="195" r="13" fill={C.accent} />
+        <text x="37" y="200" textAnchor="middle" fontSize="14" fill={C.bg}>
+          {chapter}
+        </text>
+        {branches.map((n, i) => {
+          const y = 53 + i * 43;
+          return (
+            <g key={i}>
+              <path
+                d={`M50 195 L104 ${y}`}
+                stroke={tl.currentStep >= 1 ? C.accent : C.border}
+                fill="none"
+              />
+              <circle cx="109" cy={y} r="5" fill={C.accent} />
+              <text x="121" y={y + 5} fontSize="14" fill={C.text}>
+                {chapter}.{i + 1}
+              </text>
+              {!erase &&
+                Array.from({ length: n }, (_, j) => (
+                  <g key={j}>
+                    <path
+                      d={`M153 ${y} L${204 + j * 14} ${y + 16}`}
+                      stroke={
+                        tl.currentStep >= 2 && depth === "deep"
+                          ? C.accent
+                          : C.border
+                      }
+                    />
+                    <circle
+                      cx={204 + j * 14}
+                      cy={y + 16}
+                      r="4"
+                      fill={depth === "deep" ? C.accent : C.bg}
+                      stroke={depth === "deep" ? C.accent : C.muted}
+                      strokeDasharray={depth === "shallow" ? "2 2" : undefined}
+                    />
+                  </g>
+                ))}
+            </g>
+          );
+        })}
+        <text x="16" y="389" fontSize="14" fill={erase ? C.danger : C.muted}>
+          {erase
+            ? "错误：未列出的小节被删除"
+            : "空心叶：浅来源未列出；实心叶：已列出"}
+        </text>
+      </svg>
+      <p data-result>
+        章内正式坐标分母：{denominator} = 1 + {branches.length} +{" "}
+        {erase ? 0 : deep}。来源列出{" "}
+        {1 + branches.length + (depth === "deep" ? deep : 0)}{" "}
+        个；列出多少不改变真实分母。
+      </p>
+      <Fault active={erase} onClick={() => setErase(!erase)}>
+        将“未列出”误作“不存在”
+      </Fault>
+      <TimelineControls
+        timeline={tl}
+        reset={{
+          label: "完整重置",
+          onClick: () => {
+            setChapter("3");
+            setDepth("shallow");
+            setErase(false);
+            tl.seek(0);
+          },
+        }}
+      />
+    </Frame>
+  );
 }
-
+const claims = ["260 纸本页", "作者为熊涛", "示范不更新梯度"];
+const sourceNames = ["豆瓣元数据", "馆藏书目", "Few-shot 摘要"];
+const support = [[0, 1], [1], [2]];
+/** 支持集合逐边取交集；摘录/本站说明不能凭转引扩大权威范围。 */
 export function LlmPrefaceEvidenceGateLab() {
-  return <LlmEvidenceLab model={model} view="evidence-gate" />;
+  const [claim, setClaim] = useState(0);
+  const [source, setSource] = useState(0);
+  const [broken, setBroken] = useState(false);
+  const tl = useReadingTrace();
+  const supported = support[source].includes(claim);
+  const reached = supported && !broken && tl.currentStep === 2;
+  return (
+    <Frame id="citation" title="03 / 引文来源传递路径">
+      <label>
+        待核对主张
+        <select
+          aria-label="待核对主张"
+          value={claim}
+          onChange={(e) => setClaim(Number(e.target.value))}
+        >
+          {claims.map((c, i) => (
+            <option key={c} value={i}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        起始来源
+        <select
+          aria-label="起始来源"
+          value={source}
+          onChange={(e) => setSource(Number(e.target.value))}
+        >
+          {sourceNames.map((s, i) => (
+            <option key={s} value={i}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </label>
+      <svg
+        viewBox="0 0 300 360"
+        role="img"
+        aria-label={`来源传递路径，支持${supported}，断链${broken}，已抵达${tl.currentStep + 1}层`}
+      >
+        {[0, 1].map((i) => (
+          <g key={i}>
+            <path
+              d={`M55 ${91 + i * 105} V${153 + i * 105}`}
+              stroke={
+                (i === 1 && broken) || !supported
+                  ? C.danger
+                  : tl.currentStep > i
+                    ? C.accent
+                    : C.border
+              }
+              strokeWidth="4"
+              strokeDasharray={
+                (i === 1 && broken) || !supported ? "5 8" : undefined
+              }
+            />
+            {i === 1 && broken && (
+              <path
+                d="M44 217 l22 22 m0 -22 l-22 22"
+                stroke={C.danger}
+                strokeWidth="3"
+              />
+            )}
+          </g>
+        ))}
+        {[sourceNames[source], "摘录 / 来源链接", "本站阅读说明"].map(
+          (name, i) => (
+            <g key={i}>
+              <circle
+                cx="55"
+                cy={66 + i * 105}
+                r="24"
+                fill={C.bg}
+                stroke={
+                  i <= tl.currentStep &&
+                  (i === 0 || (supported && (!broken || i < 2)))
+                    ? C.accent
+                    : C.border
+                }
+                strokeWidth="3"
+              />
+              <text
+                x="55"
+                y={71 + i * 105}
+                fontSize="15"
+                textAnchor="middle"
+                fill={C.text}
+              >
+                {i + 1}
+              </text>
+              <text x="94" y={62 + i * 105} fontSize="14" fill={C.text}>
+                {name}
+              </text>
+              <text x="94" y={84 + i * 105} fontSize="14" fill={C.muted}>
+                {i === 0
+                  ? `支持集合 {${support[source].map((n) => n + 1).join(", ")}}`
+                  : i > tl.currentStep
+                    ? "尚未传递"
+                    : supported && (!broken || i < 2)
+                      ? `保留主张 {${claim + 1}}`
+                      : "支持集合为空"}
+              </text>
+            </g>
+          ),
+        )}
+        <text x="20" y="338" fontSize="14" fill={C.muted}>
+          编号 1=页数 · 2=作者 · 3=摘要主张
+        </text>
+      </svg>
+      <p data-result>
+        源头支持：{supported ? "是" : "否"}；页面可追溯支持：
+        {reached ? "已到达" : "未到达"}
+        。这是人工标记的集合传播，不自动判定语义或验证原书正文忠实性；主张 3
+        仅限 GPT-3 论文摘要的实验设置。
+      </p>
+      <Fault active={broken} onClick={() => setBroken(!broken)}>
+        摘录丢失原始链接
+      </Fault>
+      <TimelineControls
+        timeline={tl}
+        reset={{
+          label: "完整重置",
+          onClick: () => {
+            setClaim(0);
+            setSource(0);
+            setBroken(false);
+            tl.seek(0);
+          },
+        }}
+      />
+    </Frame>
+  );
 }

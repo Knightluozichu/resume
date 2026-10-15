@@ -1,142 +1,462 @@
 "use client";
 
-import { LlmEvidenceLab, type LlmEvidenceModel } from "./llm-evidence-lab";
+import { useState } from "react";
+import { useTeachingTimeline } from "@/components/mdx/anim/use-teaching-timeline";
+import { TimelineControls } from "@/components/mdx/anim/timeline-controls";
 
-const model = {
-  unitId: "llm-01",
-  title: "第1章 大语言模型：辩论、争议与未来发展方向",
-  question: "一个关于LLM理解、意识或世界模型的主张需要什么操作定义和反例？",
-  concepts: [
-    "第1章 大语言模型：辩论、争议与未来发展方向",
-    "1.1 新时代的曙光",
-    "1.2 LLM有意识吗",
-    "1.2.1 理解LLM的层次结构",
-    "1.2.2 意识是否需要碳基生物学",
-    "1.2.3 具身化与落地",
-    "1.2.4 世界模型",
-    "1.2.5 沟通意图",
-    "1.2.6 系统性和全面泛化",
-    "1.3 未来发展方向",
-    "1.4 小结",
-  ],
-  invariant: "术语、行为测试、机制证据、替代解释和不适用范围彼此分离",
-  fault: "把流畅输出或单个成功案例直接当作意识与全面泛化证明",
-  artifact: "主张—证据矩阵、反例、替代解释与结论强度",
-  stages: [
-    {
-      name: "第1章 大语言模型：辩论、争议与未来发展方向 · 数据与输入",
-      input: "复核一项关于大语言模型能力或意识的公开主张",
-      operation:
-        "冻结能力主张、意识争议与可证伪性所需的数据角色、版本、切分、模板和shape",
-      output:
-        "第1章 大语言模型：辩论、争议与未来发展方向的输入合同、版本表与基线快照",
-      check:
-        "第1章 大语言模型：辩论、争议与未来发展方向的来源、许可、角色、单位、shape和可见性没有越界",
+const C = {
+  bg: "var(--bg)",
+  border: "var(--border)",
+  text: "var(--text-primary)",
+  muted: "var(--text-secondary)",
+  accent: "var(--accent)",
+  danger: "var(--danger)",
+  success: "var(--success)",
+};
+const panel =
+  "not-prose my-6 min-w-0 rounded-xl border border-border bg-bg p-3 sm:p-5 text-primary [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-accent [&_input]:h-11 [&_input]:min-w-11 [&_select]:min-h-11 [&_select]:w-full [&_select]:min-w-0 [&_select]:rounded-md [&_select]:border [&_select]:border-border [&_select]:bg-bg [&_select]:px-2 [&_select]:text-primary [&_select]:focus-visible:outline-2 [&_select]:focus-visible:outline-accent [&_input]:focus-visible:outline-2 [&_input]:focus-visible:outline-accent";
+const button = "rounded-md border border-border px-3 py-2 text-sm";
+const steps = [
+  { label: "输入", caption: "冻结输入与假设" },
+  { label: "操作", caption: "施加选定变化" },
+  { label: "输出", caption: "计算预测结果" },
+  { label: "核对", caption: "对照真值与边界" },
+] as const;
+function useDebateTrace() {
+  return useTeachingTimeline({
+    steps,
+    build: (tl) => {
+      const clock = { t: 0 };
+      steps.forEach((s, i) => {
+        tl.label(s.label, i * 1000);
+      });
+      tl.add(clock, { t: 4, duration: 4000, ease: "linear" }, 0);
     },
-    {
-      name: "第1章 大语言模型：辩论、争议与未来发展方向 · 目标与计算",
-      input: "第1章 大语言模型：辩论、争议与未来发展方向的冻结输入与模型快照",
-      operation:
-        "执行把意识、具身、世界模型、意图与泛化争议改写成可证伪主张和分层证据的最小计算并保存中间状态",
-      output:
-        "第1章 大语言模型：辩论、争议与未来发展方向的目标分量、计算轨迹与单故障分岔",
-      check:
-        "第1章 大语言模型：辩论、争议与未来发展方向每一步可由同一输入、公式、版本和随机状态复算",
-    },
-    {
-      name: "第1章 大语言模型：辩论、争议与未来发展方向 · 输出与解码",
-      input:
-        "第1章 大语言模型：辩论、争议与未来发展方向的中间状态、候选与决策规则",
-      operation: "比较输出、路由、检索、策略或资源估计的更新前后状态",
-      output:
-        "第1章 大语言模型：辩论、争议与未来发展方向的候选差、引用/策略/资源谱系与恢复路径",
-      check:
-        "第1章 大语言模型：辩论、争议与未来发展方向没有把代理目标、精选输出或训练内统计当作最终结论",
-    },
-    {
-      name: "第1章 大语言模型：辩论、争议与未来发展方向 · 独立评估",
-      input:
-        "第1章 大语言模型：辩论、争议与未来发展方向的冻结候选与未见数据、盲评或独立诊断",
-      operation: "重放预测、单故障、恢复和不适用边界",
-      output:
-        "第1章 大语言模型：辩论、争议与未来发展方向的接受、回退或拒绝理由",
-      check:
-        "第1章 大语言模型：辩论、争议与未来发展方向满足“术语、行为测试、机制证据、替代解释和不适用范围彼此分离”",
-    },
-  ],
-  cases: [
-    {
-      name: "第1章 大语言模型：辩论、争议与未来发展方向 · 基线",
-      setup:
-        "固定复核一项关于大语言模型能力或意识的公开主张的数据、模型、模板、种子和预算",
-      prediction:
-        "第1章 大语言模型：辩论、争议与未来发展方向的参考轨迹应持续满足“术语、行为测试、机制证据、替代解释和不适用范围彼此分离”",
-      boundary:
-        "第1章 大语言模型：辩论、争议与未来发展方向只回答本页正式坐标与已运行实验合同内的问题",
-    },
-    {
-      name: "第1章 大语言模型：辩论、争议与未来发展方向 · 单故障",
-      setup:
-        "保持其余条件不变，只注入“把流畅输出或单个成功案例直接当作意识与全面泛化证明”",
-      prediction:
-        "第1章 大语言模型：辩论、争议与未来发展方向应出现可定位的首个状态分岔，而不是只在末端输出异常",
-      boundary:
-        "第1章 大语言模型：辩论、争议与未来发展方向的故障结论不能外推到未运行的数据、模型、语言或部署流量",
-    },
-    {
-      name: "第1章 大语言模型：辩论、争议与未来发展方向 · 恢复",
-      setup:
-        "撤销故障并从同一快照重放复核一项关于大语言模型能力或意识的公开主张",
-      prediction:
-        "第1章 大语言模型：辩论、争议与未来发展方向的计算、独立评估和交付证据应恢复基线",
-      boundary:
-        "第1章 大语言模型：辩论、争议与未来发展方向若不能复现恢复结果，就不能把异常归因给单一故障",
-    },
-  ],
-  referenceTrace: [
-    "第1章 大语言模型：辩论、争议与未来发展方向参考步骤1：冻结能力主张、意识争议与可证伪性所需的数据角色、版本、切分、模板和shape；保存第1章 大语言模型：辩论、争议与未来发展方向的输入合同、版本表与基线快照。",
-    "第1章 大语言模型：辩论、争议与未来发展方向参考步骤2：执行把意识、具身、世界模型、意图与泛化争议改写成可证伪主张和分层证据的最小计算并保存中间状态；保存第1章 大语言模型：辩论、争议与未来发展方向的目标分量、计算轨迹与单故障分岔。",
-    "第1章 大语言模型：辩论、争议与未来发展方向参考步骤3：比较输出、路由、检索、策略或资源估计的更新前后状态；保存第1章 大语言模型：辩论、争议与未来发展方向的候选差、引用/策略/资源谱系与恢复路径。",
-    "第1章 大语言模型：辩论、争议与未来发展方向参考步骤4：重放预测、单故障、恢复和不适用边界；保存第1章 大语言模型：辩论、争议与未来发展方向的接受、回退或拒绝理由。",
-  ],
-  faultTrace: [
-    "第1章 大语言模型：辩论、争议与未来发展方向故障步骤1：保持复核一项关于大语言模型能力或意识的公开主张不变，检查第1章 大语言模型：辩论、争议与未来发展方向的输入合同、版本表与基线快照如何受单一故障传播。",
-    "第1章 大语言模型：辩论、争议与未来发展方向故障步骤2：只注入“把流畅输出或单个成功案例直接当作意识与全面泛化证明”，记录首个偏离“第1章 大语言模型：辩论、争议与未来发展方向每一步可由同一输入、公式、版本和随机状态复算”的状态。",
-    "第1章 大语言模型：辩论、争议与未来发展方向故障步骤3：保持第1章 大语言模型：辩论、争议与未来发展方向的中间状态、候选与决策规则不变，检查第1章 大语言模型：辩论、争议与未来发展方向的候选差、引用/策略/资源谱系与恢复路径如何受单一故障传播。",
-    "第1章 大语言模型：辩论、争议与未来发展方向故障步骤4：保持第1章 大语言模型：辩论、争议与未来发展方向的冻结候选与未见数据、盲评或独立诊断不变，检查第1章 大语言模型：辩论、争议与未来发展方向的接受、回退或拒绝理由如何受单一故障传播。",
-  ],
-  gates: [
-    {
-      label: "原书结构与时间边界",
-      detail:
-        "第1章 大语言模型：辩论、争议与未来发展方向区分2024年发行版目录、原始研究、当前框架行为与本站独立重写，不把后续进展倒填为原书内容。",
-    },
-    {
-      label: "数据、表示与计算合同",
-      detail:
-        "第1章 大语言模型：辩论、争议与未来发展方向的输入、来源、切分、词元/模态shape、模型版本、中间状态和随机性可复算。",
-    },
-    {
-      label: "目标、输出与资源合同",
-      detail:
-        "第1章 大语言模型：辩论、争议与未来发展方向的训练/代理目标、解码/路由/检索决策、输出、引用、资源或伤害指标已归档。",
-    },
-    {
-      label: "独立评估与社会技术边界",
-      detail:
-        "第1章 大语言模型：辩论、争议与未来发展方向以未见数据、盲评或独立诊断复核“术语、行为测试、机制证据、替代解释和不适用范围彼此分离”，并报告“把流畅输出或单个成功案例直接当作意识与全面泛化证明”的恢复结果。",
-    },
-  ],
-} as const satisfies LlmEvidenceModel;
+  });
+}
+const captions = Object.fromEntries(steps.map((s) => [s.label, s.caption]));
 
 export function Llm01DebatesFutureContextContractLab() {
-  return <LlmEvidenceLab model={model} view="context-contract" />;
+  const [strategy, setStrategy] = useState("memory");
+  const [holdout, setHoldout] = useState(0);
+  const [leak, setLeak] = useState(false);
+  const trace = useDebateTrace();
+  const correct = strategy === "rule" || leak ? 3 : 0;
+  const reset = () => {
+    setStrategy("memory");
+    setHoldout(0);
+    setLeak(false);
+    trace.seek(0);
+    trace.pause();
+  };
+  return (
+    <section
+      className={panel}
+      data-lab="compositional-grid"
+      data-visual-kind="held-out-cartesian-grid"
+      aria-label="组合泛化实验"
+    >
+      <h3 className="text-lg font-semibold">
+        实验一 · 未见组合，不等于未见零件
+      </h3>
+      <p className="my-2 text-sm text-secondary">
+        目标值 /
+        预测值；虚线格为留出组合，问号表示查表器没有答案。粗框按轨迹依次检查留出格。
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">
+          预测机制
+          <select
+            aria-label="预测机制"
+            value={strategy}
+            onChange={(e) => setStrategy(e.target.value)}
+          >
+            <option value="memory">记忆查表</option>
+            <option value="rule">组合规则</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          留出组
+          <select
+            aria-label="留出组"
+            value={holdout}
+            onChange={(e) => setHoldout(Number(e.target.value))}
+          >
+            <option value={0}>余数 0</option>
+            <option value={1}>余数 1</option>
+            <option value={2}>余数 2</option>
+          </select>
+        </label>
+      </div>
+      <svg
+        className="mx-auto mt-3 block w-full max-w-[440px]"
+        viewBox="0 0 330 350"
+        role="img"
+        aria-label={`3乘3属性组合网格，留出组${holdout}，${correct}个留出预测正确`}
+      >
+        <g fontSize={16} fill={C.text} textAnchor="middle">
+          <text x={184} y={25}>
+            列属性：1、2、3
+          </text>
+          {[0, 1, 2].map((c) => (
+            <text key={c} x={97 + c * 83} y={56}>
+              {c + 1}
+            </text>
+          ))}
+          {[0, 1, 2].map((r) => (
+            <text key={r} x={24} y={105 + r * 72}>
+              {["A", "B", "C"][r]}
+            </text>
+          ))}
+          {Array.from({ length: 9 }, (_, i) => {
+            const r = Math.floor(i / 3),
+              c = i % 3,
+              held = (r + c) % 3 === holdout;
+            const target = 1 + ((r + c) % 3);
+            const prediction =
+              held && strategy === "memory" && !leak ? "?" : target;
+            const heldIndex = Array.from({ length: i }, (_, j) => j).filter(
+              (j) => (Math.floor(j / 3) + (j % 3)) % 3 === holdout,
+            ).length;
+            const active = held && heldIndex === Math.min(2, trace.currentStep);
+            return (
+              <g key={i}>
+                <rect
+                  x={58 + c * 83}
+                  y={73 + r * 72}
+                  width={77}
+                  height={60}
+                  rx={7}
+                  fill={held ? C.bg : C.border}
+                  stroke={held && leak ? C.danger : active ? C.accent : C.muted}
+                  strokeWidth={active ? 3 : 1}
+                  strokeDasharray={held ? "5 3" : undefined}
+                />
+                <text x={97 + c * 83} y={109 + r * 72}>
+                  {target} / {prediction}
+                </text>
+              </g>
+            );
+          })}
+          <text x={165} y={317} fill={leak ? C.danger : C.accent}>
+            留出正确：{correct} / 3
+          </text>
+          <text x={165} y={342}>
+            {leak ? "切分失效：答案进入记忆" : "训练格 6；留出格 3"}
+          </text>
+        </g>
+      </svg>
+      <button
+        type="button"
+        className={button}
+        aria-pressed={leak}
+        onClick={() => setLeak(!leak)}
+      >
+        故障：泄漏留出答案 · {leak ? "已注入" : "未注入"}
+      </button>
+      <p className="mt-3 text-sm" data-result>
+        {leak
+          ? "虚高：查表器也能命中；这不是未见组合测试。"
+          : strategy === "rule"
+            ? "规则在3个留出格均正确，但规则由人写入，未发生学习。"
+            : "查表器在训练格全对，3个留出格均无答案。"}
+      </p>
+      <TimelineControls
+        timeline={trace}
+        labelText={captions}
+        reset={{ label: "完整重置", onClick: reset }}
+      />
+    </section>
+  );
 }
 
 export function Llm01DebatesFutureComputeTraceLab() {
-  return <LlmEvidenceLab model={model} view="compute-trace" />;
+  const [u, setU] = useState(0);
+  const [operation, setOperation] = useState("observe");
+  const [confound, setConfound] = useState(false);
+  const trace = useDebateTrace();
+  const intervening = operation !== "observe";
+  const cut = intervening && !confound && trace.currentStep >= 1;
+  const x = cut ? Number(operation) : u;
+  const yA = trace.currentStep >= 2 ? x : u;
+  const yB = u;
+  const reset = () => {
+    setU(0);
+    setOperation("observe");
+    setConfound(false);
+    trace.seek(0);
+    trace.pause();
+  };
+  return (
+    <section
+      className={panel}
+      data-lab="causal-intervention"
+      data-visual-kind="observational-equivalence-do-graph"
+      aria-label="因果干预实验"
+    >
+      <h3 className="text-lg font-semibold">实验二 · 相同观察，不同干预</h3>
+      <p className="my-2 text-sm text-secondary">
+        A：X=U，Y=X。B：X=U，Y=U。选干预后，单步到“操作”切入边，到“输出”传播数值。
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">
+          外生变量 U
+          <select
+            aria-label="外生变量 U"
+            value={u}
+            onChange={(e) => setU(Number(e.target.value))}
+          >
+            <option value={0}>0</option>
+            <option value={1}>1</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          操作方式
+          <select
+            aria-label="操作方式"
+            value={operation}
+            onChange={(e) => setOperation(e.target.value)}
+          >
+            <option value="observe">只观察</option>
+            <option value="0">do(X=0)</option>
+            <option value="1">do(X=1)</option>
+          </select>
+        </label>
+      </div>
+      <svg
+        className="mx-auto mt-3 block w-full max-w-[440px]"
+        viewBox="0 0 330 420"
+        role="img"
+        aria-label={`两张因果图，${cut ? "X入边切断" : "保留观察边"}，A的Y为${yA}，B的Y为${yB}`}
+      >
+        <defs>
+          <marker
+            id="debate-arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={C.muted} />
+          </marker>
+        </defs>
+        {[0, 1].map((model) => {
+          const top = 30 + model * 180;
+          return (
+            <g key={model} fontSize={16} fill={C.text} textAnchor="middle">
+              <text x={165} y={top}>
+                {model === 0
+                  ? "A：中介链 U → X → Y"
+                  : "B：共同原因 U → X，U → Y"}
+              </text>
+              <path
+                d={`M 143 ${top + 53} L 83 ${top + 102}`}
+                fill="none"
+                stroke={cut ? C.danger : C.muted}
+                strokeWidth={2}
+                strokeDasharray={cut ? "5 4" : undefined}
+                markerEnd="url(#debate-arrow)"
+              />
+              {cut && (
+                <path
+                  d={`M 101 ${top + 69} l 16 16 m -16 0 l 16 -16`}
+                  stroke={C.danger}
+                  strokeWidth={3}
+                />
+              )}
+              <path
+                d={
+                  model === 0
+                    ? `M 95 ${top + 125} L 234 ${top + 125}`
+                    : `M 187 ${top + 53} L 247 ${top + 102}`
+                }
+                fill="none"
+                stroke={C.muted}
+                strokeWidth={2}
+                markerEnd="url(#debate-arrow)"
+              />
+              {[
+                [165, top + 40, "U", u],
+                [65, top + 125, "X", x],
+                [265, top + 125, "Y", model === 0 ? yA : yB],
+              ].map(([cx, cy, label, value]) => (
+                <g key={label}>
+                  <circle
+                    cx={Number(cx)}
+                    cy={Number(cy)}
+                    r={28}
+                    fill={C.bg}
+                    stroke={label === "X" && cut ? C.accent : C.border}
+                    strokeWidth={3}
+                  />
+                  <text x={cx} y={Number(cy) + 6}>
+                    {label}={value}
+                  </text>
+                </g>
+              ))}
+            </g>
+          );
+        })}
+        <text
+          x={165}
+          y={405}
+          fontSize={16}
+          fill={yA !== yB ? C.accent : C.text}
+          textAnchor="middle"
+        >
+          Y差：{Math.abs(yA - yB)} · {cut ? "替换X方程" : "未切边"}
+        </text>
+      </svg>
+      <button
+        type="button"
+        className={button}
+        aria-pressed={confound}
+        onClick={() => setConfound(!confound)}
+      >
+        故障：以观察冒充干预 · {confound ? "已注入" : "未注入"}
+      </button>
+      <p className="mt-3 text-sm" data-result>
+        {confound && intervening
+          ? "故障保留了U→X，显示的仍是观察结果；不实施目标do操作，不能据此排除另一模型。"
+          : cut
+            ? `操作后 X=${x}；A预测Y=${yA}，B预测Y=${yB}。${x === u ? "本次干预恰与U相同，没有区分力。" : "推进到输出后可区分两模型。"}`
+            : "观察样本都满足X=Y=U；相关相同不能选择因果方向。"}
+      </p>
+      <TimelineControls
+        timeline={trace}
+        labelText={captions}
+        reset={{ label: "完整重置", onClick: reset }}
+      />
+    </section>
+  );
 }
 
+const words = ["dax", "wug", "zup"];
+function Referent({ kind, x, y }: { kind: number; x: number; y: number }) {
+  const shape = { fill: C.bg, stroke: C.accent, strokeWidth: 3 };
+  return kind === 0 ? (
+    <circle cx={x} cy={y} r={19} {...shape} />
+  ) : kind === 1 ? (
+    <rect x={x - 18} y={y - 18} width={36} height={36} {...shape} />
+  ) : (
+    <path
+      d={`M ${x} ${y - 22} L ${x + 22} ${y + 18} L ${x - 22} ${y + 18} Z`}
+      {...shape}
+    />
+  );
+}
 export function Llm01DebatesFutureEvidenceGateLab() {
-  return <LlmEvidenceLab model={model} view="evidence-gate" />;
+  const [permutation, setPermutation] = useState(0);
+  const [channel, setChannel] = useState("text");
+  const [stale, setStale] = useState(false);
+  const trace = useDebateTrace();
+  const anchored = channel === "point";
+  const mapping = anchored && !stale ? permutation : 0;
+  const correct = mapping === permutation ? 3 : 0;
+  const reset = () => {
+    setPermutation(0);
+    setChannel("text");
+    setStale(false);
+    trace.seek(0);
+    trace.pause();
+  };
+  return (
+    <section
+      className={panel}
+      data-lab="referent-permutation"
+      data-visual-kind="referent-permutation-bipartite"
+      aria-label="符号落地实验"
+    >
+      <h3 className="text-lg font-semibold">实验三 · 换了所指，文字仍相同</h3>
+      <p className="my-2 text-sm text-secondary">
+        实线：系统当前指称。虚线：本轮真实约定。纯文本只展示候选0，不知道哪一个约定为真。
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">
+          真实指称置换
+          <select
+            aria-label="真实指称置换"
+            value={permutation}
+            onChange={(e) => setPermutation(Number(e.target.value))}
+          >
+            <option value={0}>循环 0</option>
+            <option value={1}>循环 1</option>
+            <option value={2}>循环 2</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          可用通道
+          <select
+            aria-label="可用通道"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+          >
+            <option value="text">仅同一段文字</option>
+            <option value="point">另给外部指认</option>
+          </select>
+        </label>
+      </div>
+      <svg
+        className="mx-auto mt-3 block w-full max-w-[440px]"
+        viewBox="0 0 330 370"
+        role="img"
+        aria-label={`三个词与三个形状的二部指称图，真实循环${permutation}，系统循环${mapping}`}
+      >
+        <g fontSize={16} fill={C.text} textAnchor="middle">
+          <text x={165} y={27}>
+            同一文本：dax wug zup
+          </text>
+          {words.map((w, i) => (
+            <g key={w}>
+              <text x={55 + i * 110} y={70}>
+                {w}
+              </text>
+              <path
+                d={`M ${55 + i * 110} 86 L ${55 + ((i + permutation) % 3) * 110} 244`}
+                stroke={C.muted}
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                fill="none"
+              />
+              <path
+                d={`M ${55 + i * 110} 86 Q ${55 + i * 110} 170 ${55 + ((i + mapping) % 3) * 110} 244`}
+                stroke={stale && anchored ? C.danger : C.accent}
+                strokeWidth={trace.currentStep === i ? 4 : 2}
+                fill="none"
+              />
+              <Referent kind={i} x={55 + i * 110} y={273} />
+              <text x={55 + i * 110} y={317}>
+                {["圆", "方", "三角"][i]}
+              </text>
+            </g>
+          ))}
+          <text x={165} y={354}>
+            {anchored ? `指称命中 ${correct}/3` : "文本兼容3个循环候选"}
+          </text>
+        </g>
+      </svg>
+      <button
+        type="button"
+        className={button}
+        aria-pressed={stale}
+        onClick={() => setStale(!stale)}
+      >
+        故障：缓存旧指称 · {stale ? "已注入" : "未注入"}
+      </button>
+      <p className="mt-3 text-sm" data-result>
+        {!anchored
+          ? "即使候选0碰巧命中，也不是从文字识别了真实指称；还兼容另外两个循环约定。"
+          : stale
+            ? "指认通道存在，但缓存仍沿用循环0；换到循环1或2即可暴露失效。"
+            : "外部指认更新映射，实线跟随虚线；这只验证给定约定下的指称一致性。"}
+      </p>
+      <TimelineControls
+        timeline={trace}
+        labelText={captions}
+        reset={{ label: "完整重置", onClick: reset }}
+      />
+    </section>
+  );
 }

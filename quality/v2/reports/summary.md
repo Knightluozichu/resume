@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-10-15T15:27:58.539Z；旧版分数不迁移。
+> 2026-10-15T17:14:42.521Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1786
+- failed：1780
 - queued：196
-- passed：1746
-- published：881
+- passed：1738
+- published：895
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -74,35 +74,35 @@
 | 61 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
 | 62 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
 | 63 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
-| 64 | large-language-models | 16 | 16 | 0 | 0 | 16 |
-| 65 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
-| 66 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
-| 67 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 68 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 69 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 70 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 71 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 72 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 73 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 74 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 75 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 76 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 77 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 78 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 79 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 80 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 81 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 82 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 83 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 84 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 85 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 86 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 87 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 88 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 89 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 90 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 91 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 92 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 64 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
+| 65 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
+| 66 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 67 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 68 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 69 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 70 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 71 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 72 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 73 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 74 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 75 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 76 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 77 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 78 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 79 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 80 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 81 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 82 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 83 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 84 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 85 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 86 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 87 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 88 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 89 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 90 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 91 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 92 | large-language-models | 16 | 10 | 0 | 6 | 10 |
 | 93 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 94 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 95 | blender-3d | 17 | 1 | 0 | 16 | 1 |
@@ -203,7 +203,7 @@
 | 190 | illustrated-server-network | 8 | 0 | 0 | 0 | 0 |
 | 191 | inside-cpp-object-model | 9 | 0 | 0 | 9 | 0 |
 | 192 | langchain-programming | 13 | 0 | 0 | 0 | 0 |
-| 193 | large-scale-llm-practice | 14 | 0 | 0 | 14 | 0 |
+| 193 | large-scale-llm-practice | 14 | 0 | 0 | 0 | 0 |
 | 194 | learnopengl | 41 | 0 | 0 | 41 | 0 |
 | 195 | linear-algebra-done-right | 11 | 0 | 0 | 11 | 0 |
 | 196 | linux-kernel-design | 22 | 0 | 0 | 22 | 0 |

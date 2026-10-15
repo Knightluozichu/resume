@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T15:45:26.639Z
+> 生成时间：2026-10-15T17:14:43.709Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 480 |
-| failed | 1786 |
+| failed | 1780 |
 | queued | 196 |
-| passed | 1732 |
+| passed | 1738 |
 | published | 895 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -9075,26 +9075,26 @@
     - 路径：`content/langchain-programming/12-review/lcp-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## large-language-models（16 个内容页面 · failed:16 · 🚫 门禁阻断 16 项）
+## large-language-models（16 个内容页面 · failed:10 passed:6 · 🚫 门禁阻断 10 项）
 
 - 门禁摘要：目录=未登记，manifest=14；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
-- [ ] ❌ P1 **00-map/llm-official-learning-map** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **00-map/llm-official-learning-map** — passed；score 100
     - 路径：`content/large-language-models/00-map/llm-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] ❌ P1 **01-preface/llm-preface** — failed；score 87；门禁阻断: status=failed、score=87<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-preface/llm-preface** — passed；score 99
     - 路径：`content/large-language-models/01-preface/llm-preface.mdx`
     - 正式 unit：`llm-preface` explained=1/1
-- [ ] ❌ P1 **02-debates-future/llm-01-debates-future** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-debates-future/llm-01-debates-future** — passed；score 97
     - 路径：`content/large-language-models/02-debates-future/llm-01-debates-future.mdx`
     - 正式 unit：`llm-01` explained=11/11
-- [ ] ❌ P1 **03-language-tokenization/llm-02-language-modeling-tokenization** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-language-tokenization/llm-02-language-modeling-tokenization** — passed；score 97
     - 路径：`content/large-language-models/03-language-tokenization/llm-02-language-modeling-tokenization.mdx`
     - 正式 unit：`llm-02` explained=12/12
-- [ ] ❌ P1 **04-transformer/llm-03-transformer** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **04-transformer/llm-03-transformer** — passed；score 95
     - 路径：`content/large-language-models/04-transformer/llm-03-transformer.mdx`
     - 正式 unit：`llm-03` explained=21/21
-- [ ] ❌ P1 **05-pretraining-decoding/llm-04-pretraining-decoding** — failed；score 89；门禁阻断: status=failed、score=89<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **05-pretraining-decoding/llm-04-pretraining-decoding** — passed；score 98
     - 路径：`content/large-language-models/05-pretraining-decoding/llm-04-pretraining-decoding.mdx`
     - 正式 unit：`llm-04` explained=6/6
 - [ ] ❌ P1 **06-icl-finetuning/llm-05-icl-lightweight-finetuning** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
