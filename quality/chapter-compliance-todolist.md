@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T21:04:39.948Z
+> 生成时间：2026-10-15T22:39:08.653Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 483 |
-| failed | 1764 |
+| failed | 1758 |
 | queued | 196 |
-| passed | 1754 |
+| passed | 1760 |
 | published | 895 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -13831,7 +13831,7 @@
     - 路径：`content/the-c-programming-language/04-struct-io/unix-interface.mdx`
     - 正式 unit：`kr2-08` explained=6/6
 
-## this-is-chatgpt（24 个内容页面 · failed:18 passed:6 · 🚫 门禁阻断 18 项）
+## this-is-chatgpt（24 个内容页面 · failed:12 passed:12 · 🚫 门禁阻断 12 项）
 
 - 门禁摘要：目录=未登记，manifest=22；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
@@ -13859,22 +13859,22 @@
 - [x] ✅ **02-neural-models/tcg-main-06-training-neural-nets** — passed；score 99
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-06-training-neural-nets.mdx`
     - 正式 unit：`tcg-main-06` explained=1/1
-- [ ] ❌ P1 **02-neural-models/tcg-main-07-training-practice** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-neural-models/tcg-main-07-training-practice** — passed；score 97
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-07-training-practice.mdx`
     - 正式 unit：`tcg-main-07` explained=1/1
-- [ ] ❌ P1 **02-neural-models/tcg-main-08-universal-network** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-neural-models/tcg-main-08-universal-network** — passed；score 97
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-08-universal-network.mdx`
     - 正式 unit：`tcg-main-08` explained=1/1
-- [ ] ❌ P1 **03-chatgpt-inside/tcg-main-09-embeddings** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-chatgpt-inside/tcg-main-09-embeddings** — passed；score 97
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings.mdx`
     - 正式 unit：`tcg-main-09` explained=1/1
-- [ ] ❌ P1 **03-chatgpt-inside/tcg-main-10-inside-chatgpt** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-chatgpt-inside/tcg-main-10-inside-chatgpt** — passed；score 99
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt.mdx`
     - 正式 unit：`tcg-main-10` explained=1/1
-- [ ] ❌ P1 **03-chatgpt-inside/tcg-main-11-training-chatgpt** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-chatgpt-inside/tcg-main-11-training-chatgpt** — passed；score 97
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt.mdx`
     - 正式 unit：`tcg-main-11` explained=1/1
-- [ ] ❌ P1 **03-chatgpt-inside/tcg-main-12-beyond-basic-training** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-chatgpt-inside/tcg-main-12-beyond-basic-training** — passed；score 99
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training.mdx`
     - 正式 unit：`tcg-main-12` explained=1/1
 - [ ] ❌ P1 **04-meaning-language/tcg-main-13-what-lets-it-work** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux

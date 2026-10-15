@@ -3,7 +3,7 @@ title: ChatGPT的训练
 type: C
 section: ChatGPT的训练
 order: 12
-description: 连接大规模语料、预测目标、参数更新与训练计算量；用上下文合同、计算轨迹与证据门交付数据来源分层、目标函数、规模估计边界与记忆探针
+description: 对齐下一token目标，手算掩码交叉熵和目标层梯度，再用重复预算与留出污染反例检查训练报告
 demo: true
 math: true
 sourceUrl: >-
@@ -19,8 +19,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,140 +31,307 @@ import {
   TcgMain11TrainingChatgptEvidenceGateLab,
 } from "@/components/mdx/this-is-chatgpt/v2/tcg-main-11-training-chatgpt";
 
+[上一章：ChatGPT内部](/learn/this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt) · [下一章：基础训练之外](/learn/this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training)
+
 <Objectives>
 
-- 解释预训练、压缩、记忆、规模估计与未知项中的输入、状态、变换与输出，而不只复述结论
-- 用单一反例“把参数量、训练语料估计和计算量级写成当前ChatGPT的公开事实”定位ChatGPT的训练的首个错误状态
-- 交付数据来源分层、目标函数、规模估计边界与记忆探针，并区分2023年原书主张与当前事实
+- 能把一段合成序列变成逐位置预测任务，标出被排除的跨文档目标。
+- 能手算一个位置的概率、损失与目标层梯度，并用有限差分检查结果。
+- 能回答：展示次数增加、留出分数变好，为什么仍可能没有独立泛化证据？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 看过三遍，不等于看过三份
 
-ChatGPT的训练围绕“预训练怎样把语料统计压入参数，而不等于逐字保存或保证事实正确？”建立贯穿任务：在固定的2023年原书语境与独立事实来源下重放预训练、压缩、记忆、规模估计与未知项。先写下哪个输入、表示、分布、训练信号、工具状态或评估结果会最先变化，再运行参考、故障和恢复路径；只有守住“ChatGPT的训练的输入版本、条件分布或工具状态、输出证据与适用边界始终可追溯”并交付数据来源分层、目标函数、规模估计边界与记忆探针，流畅输出或成功演示才可能成为机制证据。
+工厂检查员反复看同一箱零件，熟练程度可能增加，但没有因此接触三箱不同产品。若结业考试还抽回这箱零件，成绩变好又该归功于什么？
 
-## 原文、版本与事实边界
+文字学习也要分清“每次要求预测什么”“总共展示了多少次”和“考试是否真的独立”。缺少其中任何一项，训练报告里的好数字都可能答非所问。
 
-ChatGPT的训练以[Stephen Wolfram作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)核对正文论证，以[Wolfram Media原版产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)核对作者Stephen Wolfram、2023年3月9日出版、112页、纸书ISBN 978-1-57955-081-3以及前言、两篇正文、20个分节、致谢和补充资源。
+## The Training of ChatGPT / ChatGPT的训练
 
-ChatGPT的训练以[Wolfram Media翻译页](https://www.wolfram-media.com/translations/)确认中文译本《这就是ChatGPT》，并以[人民邮电出版社页面](https://www.ptpress.com.cn/publishing/book/4bd62f00-4d6e-4f98-92f4-604be0407b8a)核对WOLFRAM传媒汉化小组译、2023年7月、134页和ISBN 9787115618085；全书正式分母是25个目录层级，课程采用学习地图、22个正文单元和总复习共24页承载。
+作者这一节从网络内部结构转向参数怎样获得，讨论大规模文本、重复展示、分布式数值表示与计算代价。本页把这些问题落实为三个可复算的微型机制：先制作训练目标，再检查目标层的误差信号，最后拆开预算、重复与评估污染。它们都是本站手写的合成算例，不是实测 ChatGPT 训练，也不声称掌握当前模型的私有语料或工程配方。一般反向传播见前面的神经网络训练章；人类反馈与后续调优留给下一章。
 
-ChatGPT的训练把作者文章视为可访问的完整一手材料，但可访问不等于开放许可；本站不复制、逐段翻译或近似改写原文、图片、代码与示例，所有中文机制解释、交互、反例、练习和答案均为独立教学重写。书中关于GPT-3、早期ChatGPT、参数量和接口形态的陈述属于2023年历史快照，不能冒充2026年当前产品规格。
+### 语料切片：一段文本可以提供多个预测位置
 
-### 本页独立事实来源
+<Term def="按约定从有序文本单元中取出的有限窗口，用来组成一次训练输入和目标">
+  语料切片
+</Term>
+不是把整本书当成一个标签。这里沿用先修章的 token 概念，但直接手写 A、B
+等符号，不运行实际分词器。序列包含两份文档：`BOS A B EOS` 与 `BOS C D
+EOS`；BOS、EOS 是本例的文档标记，不是任何当前产品的特殊 token 规格。
 
-- [作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)：在ChatGPT的训练中，核对本页在作者论证链中的位置、示例目的和原始时间边界。
-- [GPT-3原始论文](https://arxiv.org/abs/2005.14165)：在ChatGPT的训练中，独立核对书中使用的GPT-3历史参照、规模与少样本语境。
+每个位置读取当前及之前的内容，尝试预测紧接着的单元。输入取索引 $i$，目标取 $i+1$，二者相差一格；不是让输入位置预测自己。实验一把两行对齐，竖直箭头对应一个训练目标。窗口改变会换掉箭头的端点与有效目标数量，而非只改一句说明。
 
-## 正式目录坐标逐项解释
+### 损失掩码：有位置，不一定有训练信号
 
-### The Training of ChatGPT / ChatGPT的训练
+<Term def="决定某个目标位置是否计入损失的零一开关；零表示这项不产生目标层梯度">
+  损失掩码
+</Term>
+用来排除不应计分的位置。本例要求不同文档独立，因此不计 EOS→BOS
+的跨界目标；最后一个符号没有后继时，以 PAD
+占位且不计损失。实际训练也可能刻意拼接文档，不能把本例规则说成行业唯一正确配方。
 
-**坐标 1/1：The Training of ChatGPT / ChatGPT的训练。** ChatGPT的训练记录逐层输入、加权和、非线性激活、损失与参数更新；表示能力、可优化性、样本效率和泛化必须分别验收。 这里的验收不是“读过”或“能复述”，而是能保存输入快照、运行参考路径、只注入把参数量、训练语料估计和计算量级写成当前ChatGPT的公开事实、定位首个分岔，并用数据来源分层、目标函数、规模估计边界与记忆探针说明恢复结果与不适用边界。
+这里有两条不同约束：模型不能偷看未来，是读取范围的限制；某个目标是否计分，是损失的限制。仅把掩码设为零并不会自动隔断注意力，本例也没有实现注意力运算。若要真实独立处理文档，还必须单独检查上下文隔离，而不能只检查下面的格子。
 
-## 先预测，再运行三个交互视图
+> 猜一猜：起点 0、窗口 5 时，哪一个目标不计分？开启跨界故障后，箭头不变，有效目标数为什么增加？再改起点 4，观察 PAD。
 
-先预测：只注入“把参数量、训练语料估计和计算量级写成当前ChatGPT的公开事实”时，ChatGPT的训练在哪个阶段最先偏离参考路径？请写下会变化的输入、表示、条件分布、工具状态或评估信号，再操作视图；看到结果后补写的理由不能算预注册预测。
+<TcgMain11TrainingChatgptContextContractLab />
 
-<Stepper>
-  <Step title="上下文合同：选择坐标与阶段">
-    <TcgMain11TrainingChatgptContextContractLab />
-  </Step>
-  <Step title="计算轨迹：比较参考与故障">
-    <TcgMain11TrainingChatgptComputeTraceLab />
-  </Step>
-  <Step title="证据门：展开检查与交付">
-    <TcgMain11TrainingChatgptEvidenceGateLab />
-  </Step>
-</Stepper>
+### 交叉熵：惩罚目标拿到太小概率
 
-## 最小可复现实验协议
+<Term def="对正确目标概率取负自然对数的损失；目标概率越小，惩罚越大">
+  交叉熵
+</Term>
+把一次预测转换成数值。先将三个未归一化分数 $z$ 用 softmax 变为概率。本例设
+$z=(\ln r,0,0)$，因此 $p=(r,1,1)/(r+2)$。$r$
+是指数比例，不是采样温度；本章没有随机生成过程。
 
-1. 为ChatGPT的训练冻结作者材料、技术论文、模型或工具版本、输入、随机性和成功标准，并把未知的当前产品细节明确标为未知。
-2. 运行参考路径，逐阶段保存数据来源分层、目标函数、规模估计边界与记忆探针；若只能看到最终自然语言输出，就还没有机制证据。
-3. 保持其余条件不变，只注入“把参数量、训练语料估计和计算量级写成当前ChatGPT的公开事实”，记录首个偏离参考状态的位置以及它向后传播的方式。
-4. 撤销故障，从同一快照重放；只有状态与独立评估都恢复，才允许把异常归因给该故障。
+符号约定：$j$ 表示候选类别，$y$ 表示目标索引，$m$ 为该位置的零一掩码，$p_j$ 为概率，$L$ 为该位置损失。本例没有类别权重或标签平滑。稳定计算先减最大分数再取指数，避免大数溢出。
 
-<Callout type="trap" title="ChatGPT的训练误区一：历史快照就是当前规格">
-  作者在2023年使用的GPT-3规模、ChatGPT训练解释或工具接口是历史材料；没有当前一手来源时，ChatGPT的训练必须写“未知”，不能用现在时包装旧数字。
+$$
+p_j=\frac{e^{z_j-\max(z)}}{\sum_k e^{z_k-\max(z)}},\qquad L=-m\ln p_y.
+$$
+
+人话说：把分数转成相加为一的份额，只看目标得到多少，再决定这项是否计分。默认 $r=2,y=0,m=1$，概率为 $(0.5,0.25,0.25)$，损失为 $\ln2\approx0.693$。若目标错成 B，概率点不动，损失却变成 $\ln4\approx1.386$。因此概率形状相同，不等于训练目标相同。
+
+### 目标层梯度：不能漏掉目标那一项
+
+<Term def="损失对各候选未归一化分数的导数，指出目标层每个分数的局部误差信号">
+  目标层梯度
+</Term>
+在本例可以直接写出，无须画通用反传链。对 $L=m(\ln\sum_k e^{z_k}-z_y)$
+分别求导：前一项给出 $mp_j$，后一项只有 $j=y$ 时给出 $-m$。
+
+$$
+\frac{\partial L}{\partial z_j}=m\bigl(p_j-\mathbf{1}[j=y]\bigr).
+$$
+
+这表示：正确目标的梯度为负，其余候选为正；掩码为零时整行归零。若用梯度下降更新分数，负号会抬高目标分数，但真实训练还需把这些信号继续传回参数。本页到目标层为止，不训练一个真实网络，也不展示上一训练章的下降轨迹。
+
+多位置求平均时，通常只用有效位置数作分母；若全部被排除，必须定义处理方式，不能直接除零。下面的标准库程序明确返回零。PyTorch 2.9 官方文档支持这里的未归一化分数、忽略索引与有效项归约概念，但此处既没有调用 PyTorch，也没有声称所有框架的全忽略行为都相同。
+
+> 猜一猜：只把目标从 A 改为 B，三角形里的概率点会动吗？底部三根梯度杆呢？把 m 改成 0，哪些量还保留？
+
+<TcgMain11TrainingChatgptComputeTraceLab />
+
+### 预算、重复与真正独立的评估
+
+<Term def="在训练和调参时不使用的一组评估材料；若与训练内容重叠，其独立性就受损">
+  留出集
+</Term>
+的价值不在名字，而在没有被训练或调参过程提前使用。实验三每份文档恰有四个各不相同的合成
+token，四份训练文档共 16 个。完整展示三轮消耗 48 次 token 展示，但独有 token
+仍是 16
+个。重复可能帮助优化，也可能强化记忆；“重复没有新数据”不等于“重复必然没有作用”。
+
+为隔离污染这一因素，本例**不拟合学习曲线**：手写一个评分规则，训练见过的文档给正确目标概率 $q$，未见过的统一给 0.25。它是显式查集合的教学探针，不是当前语言模型逐字检索语料的实现。默认训练 A、B、C、D，留出 E、F、G、H，后者全未见，平均负对数概率为 $\ln4$。
+
+故障把训练 C、D 替换成 E、F，保持每轮预算不变。完成第一轮后，留出集有两份已见，平均损失成为
+
+$$
+L_{\mathrm{heldout}}=-\frac{2\ln q+2\ln0.25}{4}.
+$$
+
+这就是说：当 $q=0.8$，报告损失从约 1.386 降到约 0.805，只因考试材料混进训练，不能据此声称独立泛化改善。把 $q$ 提高到 0.9 会让被污染的报告更漂亮，但干净留出仍为 1.386。这里展示一种可能的失真机制，不声称所有现实污染都会造成同样幅度；实际影响还需在去重后的独立材料上测量。
+
+> 猜一猜：轮数 2 改成 3，独有量会增加吗？先按下一步到第一轮，再打开故障。保持预算不变，哪些留出格变红？完整重置后游标应回到“未展示”。
+
+<TcgMain11TrainingChatgptEvidenceGateLab />
+
+### 历史规模估计不是现成的当前规格
+
+作者 2023 年段落将文本展示规模、参数表示和计算代价联系起来，使用数千亿权重等历史数量级推理；那不是对所有后续 ChatGPT 版本的核验。补充来源 GPT-3 论文 v4（2020）§2.2、表 2.2 专门区分数据集容量和训练抽样比例，并讨论部分数据的重复使用；§4 讨论测试材料混入训练后的评估问题。不能把这份 GPT-3 记录直接当作当前 ChatGPT 的完整数据清单。
+
+参数是一组数值表示，不是可以按文档名浏览的原文目录；但这也不能推出“绝不记忆训练内容”。分布式表示、逐字复现风险与独立泛化是不同问题，分别需要探针和独立数据。我们不根据参数数目推算可无损存下多少本书，也不把作者的粗略计算量关系用来预测当前模型的训练账单或 GPU 速度。
+
+## 用标准库把三个机制连起来
+
+下面四块 Python 按顺序拼接即可执行，无随机性、无外部依赖、无文件数据集。它们只计算手写目标、损失、导数检查与集合评分，**不是 ChatGPT 训练，也不是微型语言模型训练**。每块均有预期断言。
+
+### 第一步：生成右移目标与掩码
+
+把“没有后继”和“跨文档”分开检查。默认第 4 列跨界被排除；起点 4 时后两列只能占位。
+
+```python
+from math import exp, log, isclose, isfinite
+
+corpus = ["BOS", "A", "B", "EOS", "BOS", "C", "D", "EOS"]
+
+def window(start=0, length=5, fault=False):
+    rows = []
+    for j in range(length):
+        i = start + j
+        if i + 1 >= len(corpus):
+            rows.append(("PAD", "PAD", 0))
+        else:
+            keep = fault or corpus[i] != "EOS"
+            rows.append((corpus[i], corpus[i + 1], int(keep)))
+    return rows
+
+assert [m for x, y, m in window()] == [1, 1, 1, 0, 1]
+assert sum(m for x, y, m in window(fault=True)) == 5
+assert window(4)[-2:] == [("PAD", "PAD", 0)] * 2
+```
+
+### 第二步：稳定概率和有效位置归约
+
+损失函数接收未归一化分数。只有有效位置参与平均；全忽略时返回零是本程序的显式约定。
+
+```python
+def objective(z, target=0, mask=1):
+    shifted = [exp(v - max(z)) for v in z]
+    p = [v / sum(shifted) for v in shifted]
+    loss = -mask * log(p[target])
+    grad = [mask * (v - int(j == target)) for j, v in enumerate(p)]
+    return p, loss, grad
+
+def mean_valid(losses, masks):
+    return sum(losses) / sum(masks) if sum(masks) else 0.0
+
+z = [log(2), 0, 0]
+p, loss, grad = objective(z)
+assert p == [0.5, 0.25, 0.25]
+assert isclose(loss, log(2)) and grad == [-0.5, 0.25, 0.25]
+assert isclose(objective(z, target=1)[1], log(4))
+assert objective(z, mask=0)[1:] == (0.0, [0.0, 0.0, 0.0])
+assert mean_valid([loss, 0.0], [1, 0]) == loss
+assert mean_valid([0.0, 0.0], [0, 0]) == 0.0
+```
+
+### 第三步：有限差分只核对目标层
+
+左右各挪动一个分数，比较损失变化率。测试覆盖全部控件取值及错目标；这不是训练中的参数更新。
+
+```python
+for ratio in [1, 2, 4]:
+    for target in [0, 1, 2]:
+        for mask in [0, 1]:
+            logits = [log(ratio), 0, 0]
+            _, value, gradient = objective(logits, target, mask)
+            assert isfinite(value) and isclose(sum(gradient), 0, abs_tol=1e-12)
+            for j in range(3):
+                plus, minus = logits[:], logits[:]
+                plus[j] += 1e-5
+                minus[j] -= 1e-5
+                numeric = (objective(plus, target, mask)[1]
+                           - objective(minus, target, mask)[1]) / 2e-5
+                assert isclose(numeric, gradient[j], abs_tol=1e-8)
+```
+
+### 第四步：把污染影响与展示预算拆开
+
+集合只记录见过哪些文档。每轮重复不增加独有量，而故障改变的是训练与留出的交集。
+
+```python
+def budget(rounds=2, seen_p=0.8, fault=False):
+    train = {"A", "B", "E", "F"} if fault else {"A", "B", "C", "D"}
+    held = {"E", "F", "G", "H"}
+    overlap = len(train & held) if rounds else 0
+    nll = -(overlap * log(seen_p) + (4 - overlap) * log(0.25)) / 4
+    return 16 * rounds, 16 if rounds else 0, overlap, nll
+
+assert budget(3)[:3] == (48, 16, 0)
+assert isclose(budget(3)[3], log(4))
+assert budget(fault=True)[:3] == (32, 16, 2)
+assert isclose(budget(fault=True)[3], 0.8047189562170501)
+assert budget(fault=True, seen_p=0.9)[3] < budget(fault=True)[3]
+assert budget(seen_p=0.9)[3] == budget()[3]
+print("PASS: shifted targets, masked loss, finite differences, overlap")
+```
+
+## 常见误区
+
+检查训练报告时，先区分目标、误差信号和评估材料出了什么问题，不要把所有失败都归为“模型不够大”。下面三种错误分别对应三个实验。
+
+### 误区一：输入和标签一样就不用右移
+
+<Callout type="trap">
+
+**现象 →** 输入 A，目标也填 A，练习变成抄当前符号。**原因 →** 把存储相同序列与逐位置目标对齐混为一谈。**修法 →** 明确哪一层执行偏移；本例自己取 i+1，不能在数据端和模型端各偏移一次。再逐列检查边界掩码。
+
 </Callout>
 
-<Callout type="trap" title="ChatGPT的训练误区二：流畅就是正确">
-  连贯文本、相似度投影或成功演示只能证明某次输出表现；ChatGPT的训练仍需事实核查、计算复算、反例和分布外评估。
+### 误区二：只需给正确类一个负梯度
+
+<Callout type="trap">
+
+**现象 →** 目标类写成 −1，其他类全部写零。**原因 →** 漏掉归一化项对每个分数的影响。**修法 →** 使用 p−onehot，再乘掩码；检查三项之和为零，并运行有限差分。m=0 应全部为零。
+
 </Callout>
 
-<Callout type="trap" title="ChatGPT的训练误区三：一次改很多条件">
-  若同时更换语料、模型、提示、温度、工具和评估集，ChatGPT的训练就无法定位因果；必须保留单故障合同和恢复路径。
+### 误区三：预算更大且分数更好就算泛化
+
+<Callout type="trap">
+
+**现象 →** 重复三轮称为三倍新数据，污染留出损失下降又当作能力提升。**原因 →** 混淆展示次数、独有内容及考试独立性。**修法 →** 分别报告三项，检查文档近重复及训练交集，另保留未用于调参的独立材料。
+
 </Callout>
 
-## 小结
+## 小结与练习
 
-- 预训练把语料统计压入参数而非逐字保存
-- 压缩不等于记忆也不保证事实正确
-- 参数量与计算量级属2023年历史估计
-- 交付数据分层、目标函数与记忆探针
-- 单一反例定位规模冒充分岔并重放恢复
-
-## 练习与答案
+- 目标在下一位置；占位、跨界是否计分要显式规定。
+- 目标层梯度是带掩码的 p−onehot。
+- 展示次数不是独有量，污染分数不是独立泛化证据。
 
 <Exercises>
 
-**问题 1：The Training of ChatGPT / ChatGPT的训练**
-
-为ChatGPT的训练设计一个最小输入和一个单一反例，说明The Training of ChatGPT / ChatGPT的训练会改变哪个中间状态、应保存什么证据，以及结论不能外推到哪里。
+**问题 1** 在实验一把起点设为 2、窗口设为 3。写出三组输入→目标与掩码，再开启故障。哪一项改变？改起点 4、窗口 5 后，故障能把 PAD 变成有效目标吗？
 
 <Answer>
-  先冻结在固定的2023年原书语境与独立事实来源下重放预训练、压缩、记忆、规模估计与未知项，把The
-  Training of ChatGPT /
-  ChatGPT的训练映射到明确输入、变换和输出；参考路径保存数据来源分层、目标函数、规模估计边界与记忆探针，故障路径只注入“把参数量、训练语料估计和计算量级写成当前ChatGPT的公开事实”。若首个分岔可定位且撤销故障后恢复，才能接受局部机制解释；未测试的模型、语料、工具、产品版本与分布都留在ChatGPT的训练的适用边界外。
+
+三组是 B→EOS（1）、EOS→BOS（0）、BOS→C（1）。故障只将中间掩码改为 1，有效项从 2 到 3。起点 4、窗口 5 有三个有效后继和两个 PAD；不存在跨界目标，故障不改变有效数，PAD 仍为零。完整重置恢复起点 0、窗口 5、故障关和第一个位置。
+
 </Answer>
 
-**问题 2：原书与当前事实**
-
-指出ChatGPT的训练中至少一个必须标成2023年历史快照的主张，并写出重新验证当前事实需要的一手来源类型。
+**问题 2** 在实验二设 r=4、目标 C、m=1，计算概率、损失、三项梯度。然后开启错目标故障，再令 m=0。为什么三角形概率点始终不随这两个操作移动？
 
 <Answer>
-  凡涉及GPT-3参数、早期ChatGPT训练描述、产品接口或工具集成形态，都先标记为2023年历史快照。当前事实需要模型或产品提供方的官方文档、系统卡、发布说明或原始研究；作者文章与旧版书目只能证明当时如何表述，不能证明2026年仍然如此。
+
+概率为 (2/3,1/6,1/6)，损失 ln6≈1.792，梯度 (2/3,1/6,−5/6)。故障把 C 的索引 2 改成 A 的索引 0，损失 ln(3/2)≈0.405，梯度 (−1/3,1/6,1/6)。m=0 后损失与梯度全零。概率只由分数决定，改目标或是否计分不会改变分数；红目标顶点及梯度会变。重置后应回 r=2、目标 A、m=1、故障关。
+
 </Answer>
 
-**问题 3：恢复为什么必要**
-
-为什么ChatGPT的训练发现故障后还必须撤销故障并从同一快照重放？
+**问题 3** 实验三计划 3 轮、已见概率 0.9。推进至第三轮，比较故障前后展示总量、独有量、交集与平均损失。若“只重复”也能在真实网络中降低干净留出损失，是否与本实验矛盾？
 
 <Answer>
-  恢复重放检验“单一故障导致分岔”这一归因。若撤销后数据来源分层、目标函数、规模估计边界与记忆探针仍不能回到参考状态，就说明存在隐藏变量、状态污染或不可复现步骤；此时应拒绝单因果结论，而不是把异常强行归给把参数量、训练语料估计和计算量级写成当前ChatGPT的公开事实。
+
+两者展示均为 48、独有均为 16。参考交集 0，平均损失 ln4≈1.386；故障交集 2，损失 (−ln0.9−ln0.25)/2≈0.746。本例固定未见概率，只隔离污染，不刻画学习过程；真实网络的独立泛化可能因重复优化而改善，并不矛盾。完整重置后计划轮数 2、概率 0.8、故障关、游标“未展示”、展示及独有均为 0，播放暂停。
+
 </Answer>
 
 </Exercises>
 
-## 术语与可观测量
-
-在ChatGPT的训练中，<Term def="ChatGPT的训练实际优化或执行的可观测目标，而不是拟人化意图">生成目标</Term>、<Term def="ChatGPT的训练在给定上下文与版本后对候选输出建立的相对权重">条件分布</Term>、<Term def="ChatGPT的训练把离散输入转换为可计算状态的坐标系统">表示空间</Term>、<Term def="ChatGPT的训练的数据、目标、更新过程、留出评估与版本记录">训练证据</Term>、<Term def="ChatGPT的训练只改变一个条件以定位首个机制分岔的测试">单一反例</Term>、<Term def="ChatGPT的训练没有运行、无法核对或不能外推的模型与情境">适用边界</Term>共同组成证据合同。术语只有绑定输入、状态、输出和失败条件才有解释力；把标签换成更时髦的词，不会提升结论可信度。
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="生成目标">
-    ChatGPT的训练实际优化或执行的可观测目标，而不是拟人化意图。
+  <GlossaryItem term="语料切片">
+    按约定截取的一段有序输入窗口，不是整本书的分类标签。
   </GlossaryItem>
-  <GlossaryItem term="条件分布">
-    ChatGPT的训练在给定上下文与版本后对候选输出建立的相对权重。
+  <GlossaryItem term="损失掩码">
+    某位置计不计误差的开关；它不是注意力隔离开关。
   </GlossaryItem>
-  <GlossaryItem term="表示空间">
-    ChatGPT的训练把离散输入转换为可计算状态的坐标系统。
+  <GlossaryItem term="交叉熵">
+    本例为目标概率的负自然对数，概率小则惩罚大。
   </GlossaryItem>
-  <GlossaryItem term="训练证据">
-    ChatGPT的训练的数据、目标、更新过程、留出评估与版本记录。
+  <GlossaryItem term="目标层梯度">
+    误差对输出分数的局部导数，还不是对整个网络参数的更新。
   </GlossaryItem>
-  <GlossaryItem term="单一反例">
-    ChatGPT的训练只改变一个条件以定位首个机制分岔的测试。
-  </GlossaryItem>
-  <GlossaryItem term="适用边界">
-    ChatGPT的训练没有运行、无法核对或不能外推的模型与情境。
+  <GlossaryItem term="留出集">
+    训练和调参时不使用的评估材料，须检查与训练是否重叠。
   </GlossaryItem>
 </Glossary>
 
+## 来源与适用边界
+
+- [Wolfram 作者长文（2023-02-14）](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)：本页只核对 “The Training of ChatGPT” 原段。采用批次继承的公开正文快照，非本次重新抓取；公开可读不等于开放许可或已读原书全文。publisher 页面只核版本与目录，不作正文依据。
+- [GPT-3 原始论文 v4（2020-07-22）](https://arxiv.org/pdf/2005.14165v4)：补读 §2.2、表 2.2 及 §4 的重复抽样与污染讨论。论文报告属于 GPT-3；本页合成规则和数值不是它的实验结果，更不是当前 ChatGPT 数据披露。
+- [PyTorch 2.9 CrossEntropyLoss](https://docs.pytorch.org/docs/2.9/generated/torch.nn.CrossEntropyLoss.html)：核对 logits、忽略目标与损失归约的公式。本页只使用无权重、无平滑、单类目标的简化数学，不执行该框架。
+
 <Attribution
   mode="independent-rewrite"
-  sourceBasis="author-complete-public-essay-plus-official-editions-and-primary-research"
-  workTitle="Stephen Wolfram著《What Is ChatGPT Doing ... and Why Does It Work?》与中文译本《这就是ChatGPT》"
+  sourceBasis="full-text"
+  workTitle="Stephen Wolfram 2023 年公开长文中的 The Training of ChatGPT 一节"
   adaptedUrl="https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/"
 />
+
+[上一章：ChatGPT内部](/learn/this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt) · [下一章：基础训练之外](/learn/this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training)

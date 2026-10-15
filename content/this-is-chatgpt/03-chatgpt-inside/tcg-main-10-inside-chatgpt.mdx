@@ -3,7 +3,7 @@ title: ChatGPT内部
 type: C
 section: ChatGPT内部
 order: 11
-description: 追踪token、位置、注意力、前馈层与输出分布的历史架构链；用上下文合同、计算轨迹与证据门交付张量形状账本、层级轨迹、历史版本标记与未知项清单
+description: 用手工向量算清位置叠加、因果注意力和残差归一化前馈小块，定位未来泄漏与消融的首个数值分岔，区分2023年历史示意与当前产品未知规格
 demo: true
 math: true
 sourceUrl: >-
@@ -19,8 +19,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,141 +31,356 @@ import {
   TcgMain10InsideChatgptEvidenceGateLab,
 } from "@/components/mdx/this-is-chatgpt/v2/tcg-main-10-inside-chatgpt";
 
+[← 上一页：嵌入的概念](/this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings)
+
 <Objectives>
 
-- 解释token/位置表示、注意力、前馈计算与历史边界中的输入、状态、变换与输出，而不只复述结论
-- 用单一反例“把作者2023年的GPT-3示意图写成所有当前ChatGPT模型的精确实现”定位ChatGPT内部的首个错误状态
-- 交付张量形状账本、层级轨迹、历史版本标记与未知项清单，并区分2023年原书主张与当前事实
+- 能手算三处输入向量，改出位置重合，并解释为什么求和后仍可能丢失顺序。
+- 能计算一行注意力权重，改变未来输入，定位移除因果限制后的首个数值分岔。
+- 能回答：移除残差、归一化或前馈更新时，哪个中间量先变？为什么这些数值不能证明当前ChatGPT采用同一实现？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 为什么不能只画一串方框
 
-ChatGPT内部围绕“书中GPT-3参照怎样解释早期ChatGPT内部计算，又不能冒充当前产品规格？”建立贯穿任务：在固定的2023年原书语境与独立事实来源下重放token/位置表示、注意力、前馈计算与历史边界。先写下哪个输入、表示、分布、训练信号、工具状态或评估结果会最先变化，再运行参考、故障和恢复路径；只有守住“ChatGPT内部的输入版本、条件分布或工具状态、输出证据与适用边界始终可追溯”并交付张量形状账本、层级轨迹、历史版本标记与未知项清单，流畅输出或成功演示才可能成为机制证据。
+一条流水线上，两个零件的种类相同，却放在不同工位；后面的工位可以读取已经送来的零件，不能提前使用明天才来的零件。如果只画“输入—处理—输出”，位置和先后限制都被藏起来了。
 
-## 原文、版本与事实边界
-
-ChatGPT内部以[Stephen Wolfram作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)核对正文论证，以[Wolfram Media原版产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)核对作者Stephen Wolfram、2023年3月9日出版、112页、纸书ISBN 978-1-57955-081-3以及前言、两篇正文、20个分节、致谢和补充资源。
-
-ChatGPT内部以[Wolfram Media翻译页](https://www.wolfram-media.com/translations/)确认中文译本《这就是ChatGPT》，并以[人民邮电出版社页面](https://www.ptpress.com.cn/publishing/book/4bd62f00-4d6e-4f98-92f4-604be0407b8a)核对WOLFRAM传媒汉化小组译、2023年7月、134页和ISBN 9787115618085；全书正式分母是25个目录层级，课程采用学习地图、22个正文单元和总复习共24页承载。
-
-ChatGPT内部把作者文章视为可访问的完整一手材料，但可访问不等于开放许可；本站不复制、逐段翻译或近似改写原文、图片、代码与示例，所有中文机制解释、交互、反例、练习和答案均为独立教学重写。书中关于GPT-3、早期ChatGPT、参数量和接口形态的陈述属于2023年历史快照，不能冒充2026年当前产品规格。
-
-### 本页独立事实来源
-
-- [作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)：在ChatGPT内部中，核对本页在作者论证链中的位置、示例目的和原始时间边界。
-- [Transformer原始论文](https://arxiv.org/abs/1706.03762)：在ChatGPT内部中，独立核对注意力架构的研究来源，不把后来的实现细节倒灌给原书。
-- [GPT-3原始论文](https://arxiv.org/abs/2005.14165)：在ChatGPT内部中，独立核对书中使用的GPT-3历史参照、规模与少样本语境。
+这一页把流水线拆成可手算的数字：先看同一零件如何带上位置，再看哪些旧输入能参与混合，最后追踪混合后的保留与修改。若数字错在第二步，不能靠最后一句通顺的话证明中间过程正确。
 
 ## 正式目录坐标逐项解释
 
+本页对应原书的一节，不是对当前产品逆向测量。我们把作者的三阶段叙述转成三种独立计算实验；既追踪结构，也标明没有测到什么。
+
 ### Inside ChatGPT / ChatGPT内部
 
-**坐标 1/1：Inside ChatGPT / ChatGPT内部。** ChatGPT内部从token与位置表示追到注意力、前馈计算和输出分布，并把作者使用的GPT-3示意明确标成2023年历史参照。 这里的验收不是“读过”或“能复述”，而是能保存输入快照、运行参考路径、只注入把作者2023年的GPT-3示意图写成所有当前ChatGPT模型的精确实现、定位首个分岔，并用张量形状账本、层级轨迹、历史版本标记与未知项清单说明恢复结果与不适用边界。
+**坐标 1/1：Inside ChatGPT / ChatGPT内部。** 作者2023年的本节依次讨论输入表示、连续计算块、末位置表示到下一项概率的转换；用GPT-2示意和GPT-3历史参照解释“下一步怎样算”。本页实验一检查表示，实验二检查跨位置混合，实验三检查单位置内部更新与简化读出，练习分别回收这三段。
 
-## 先预测，再运行三个交互视图
+作者提到的175B属于当时的历史叙述，不是本站核实的当前ChatGPT参数量；温度0.8出现在前文的生成示例，既不是本页注意力的除数，也不是通用最优设置。层数、头数、位置方法、激活函数和归一化顺序会随模型设计改变，本页不据旧图推断当前产品规格。
 
-先预测：只注入“把作者2023年的GPT-3示意图写成所有当前ChatGPT模型的精确实现”时，ChatGPT内部在哪个阶段最先偏离参考路径？请写下会变化的输入、表示、条件分布、工具状态或评估信号，再操作视图；看到结果后补写的理由不能算预注册预测。
+## 从输入编号到带位置的向量
 
-<Stepper>
-  <Step title="上下文合同：选择坐标与阶段">
-    <TcgMain10InsideChatgptContextContractLab />
-  </Step>
-  <Step title="计算轨迹：比较参考与故障">
-    <TcgMain10InsideChatgptComputeTraceLab />
-  </Step>
-  <Step title="证据门：展开检查与交付">
-    <TcgMain10InsideChatgptEvidenceGateLab />
-  </Step>
-</Stepper>
+前一页讨论把对象放进数值空间；这里多了顺序。本文用<Term def="模型读写的离散文本单位，可以是整词、词片段或其他编码单位">词元</Term>称呼输入单位。A、B是手工词元编号，不是自然语言切分器的结果；E(A)、E(B)是查表得到的数值，不是现场训练出来的语义。
 
-## 最小可复现实验协议
+### 位置相加提供线索，不保证任意汇聚保序
 
-1. 为ChatGPT内部冻结作者材料、技术论文、模型或工具版本、输入、随机性和成功标准，并把未知的当前产品细节明确标为未知。
-2. 运行参考路径，逐阶段保存张量形状账本、层级轨迹、历史版本标记与未知项清单；若只能看到最终自然语言输出，就还没有机制证据。
-3. 保持其余条件不变，只注入“把作者2023年的GPT-3示意图写成所有当前ChatGPT模型的精确实现”，记录首个偏离参考状态的位置以及它向后传播的方式。
-4. 撤销故障，从同一快照重放；只有状态与独立评估都恢复，才允许把异常归因给该故障。
+在输入端加入的<Term def="用与内容向量相同维数的数字提供绝对或相对顺序线索">位置表示</Term>，让同一个A在不同位置能有不同输入。实验采用行向量记法：每个位置一行，列是特征；这是数学索引约定，与程序数组的底层内存布局无关。
 
-<Callout type="trap" title="ChatGPT内部误区一：历史快照就是当前规格">
-  作者在2023年使用的GPT-3规模、ChatGPT训练解释或工具接口是历史材料；没有当前一手来源时，ChatGPT内部必须写“未知”，不能用现在时包装旧数字。
-</Callout>
+| 符号      | 本页含义                  |
+| --------- | ------------------------- |
+| tᵢ、E(tᵢ) | 位置i的词元及二维内容向量 |
+| Pᵢ、s     | 手工位置向量、位置强度    |
+| Xᵢ        | 送入后续计算的本位置向量  |
 
-<Callout type="trap" title="ChatGPT内部误区二：流畅就是正确">
-  连贯文本、相似度投影或成功演示只能证明某次输出表现；ChatGPT内部仍需事实核查、计算复算、反例和分布外评估。
-</Callout>
+$$
+X_i=E(t_i)+sP_i
+$$
 
-<Callout type="trap" title="ChatGPT内部误区三：一次改很多条件">
-  若同时更换语料、模型、提示、温度、工具和评估集，ChatGPT内部就无法定位因果；必须保留单故障合同和恢复路径。
-</Callout>
+这个式子逐坐标相加，不把位置编号直接当作一个额外词元。取E(A)=(1,0)、E(B)=(0,1)，P依次为(0,0)、(0.5,−0.5)、(1,−1)。ABA且s=1时，三行X是(1,0)、(0.5,0.5)、(2,−1)。两处A的距离是√2；故障把所有位置错接到P₀，距离就变成0。
 
-## 小结
+但ABA与BAA的**逐位置矩阵不同，逐行求和却同为(3.5,−0.5)**。位置相加后再把所有行无差别求和，仍会丢失排列；不能把这个汇聚碰撞说成完整有序张量相同。因果可见性本身也提供先后结构，因此“没有位置向量就完全没有顺序信息”同样过强。
 
-- 从token与位置表示追到注意力与前馈计算
-- GPT-3示意图是2023年历史参照非当前实现
-- 张量形状账本逐层追踪计算轨迹
-- 交付层级轨迹、历史版本标记与未知项清单
-- 单一反例定位版本冒充分岔并重放恢复
+> 猜一猜：保持s=1，把ABA换成BAA，二维点和求和各怎样变化？再打开“错误复用P0”，扫描到位置2，检查重复A是否重合。
 
-## 练习与答案
+<TcgMain10InsideChatgptContextContractLab />
+
+### 用标准库建立同一份输入
+
+以下所有Python块按出现顺序拼成一个文件，用Python 3直接执行，无第三方依赖。交互图和程序使用相同手工常量；这是有限维计算模拟，不是训练或运行GPT。第一块的`encode`对应图中的三个终点，断言区分“每行不同”和“求和相同”。
+
+```python
+from math import exp, sqrt, isfinite
+
+def close(a, b, tol=1e-8):
+    return all(abs(x-y) < tol for x, y in zip(a, b))
+
+E = {"A": [1., 0.], "B": [0., 1.]}
+P = [[0., 0.], [.5, -.5], [1., -1.]]
+
+def encode(seq="ABA", scale=1., fault=False):
+    return [[v + scale*P[0 if fault else i][d]
+             for d, v in enumerate(E[token])]
+            for i, token in enumerate(seq)]
+
+def pool(rows):
+    return [sum(r[d] for r in rows) for d in range(2)]
+
+x = encode()
+assert x == [[1., 0.], [.5, .5], [2., -1.]]
+assert encode(fault=True)[0] == encode(fault=True)[2]
+assert x != encode("BAA")
+assert pool(x) == pool(encode("BAA")) == [3.5, -.5]
+print("position", x, "pool", pool(x))
+```
+
+## 从分数到因果注意力
+
+一个位置不仅修改自己的数字，还要从此前位置取信息。这里的<Term def="为已有位置分配归一化权重，同时禁止读取该位置之后输入的混合运算">因果注意力</Term>使用查询Q与键K比较，再按所得权重混合值V。查询、键和值通常来自学得的投影；实验把它们直接列出，避免把手工矩阵伪装成训练结果。
+
+### 先屏蔽，再归一化，最后取值
+
+| 符号    | 本页含义                                  |
+| ------- | ----------------------------------------- |
+| i、j    | 查询的已有输入位置、被读取的位置，从0开始 |
+| dₖ、g   | 键维度2、手工查询增益                     |
+| Mᵢⱼ     | j不大于i时为0，否则为负无穷               |
+| wᵢⱼ、oᵢ | 行内归一化权重、混合后的二维输出          |
+
+$$
+s_{ij}=g\frac{q_i\cdot k_j}{\sqrt{d_k}}+M_{ij},\qquad
+w_{ij}=\frac{e^{s_{ij}}}{\sum_m e^{s_{im}}},\qquad
+o_i=\sum_jw_{ij}V_j
+$$
+
+先用点积衡量匹配，再除以键维度的平方根；将非法位置的分数设为负无穷后，其指数为0，剩余权重才归一化。除数√dₖ用于控制分数尺度，不是生成时的采样温度。实际程序先减行最大值再求指数，避免溢出。
+
+实验令Q=K=((1,0),(0,1),(1,1))，V=((1,0),(0,1),(v,−v))。g=1时第0行合法键只有0，所以权重为(1,0,0)，o₀=(1,0)。去掉mask后该行变成约(0.401112,0.197776,0.401112)；v=2时o₀≈(1.203336,−0.604448)。把v改成4，泄漏输出成为(2.005560,−1.406673)，正确输出却不变。
+
+### 输入位置与预测位置不能混用
+
+图中输入位置i可以读取自身；这个位置的读出用于预测**下一位置i+1**，不是偷看未知目标。原论文采用右移的解码输入并屏蔽后续位置，效果同样是目标预测不读到目标及未来。这里不模拟编码器交叉注意力；多头机制还会使用不同投影并合并，本图只有一个头。
+
+> 猜一猜：当前扫描在查询0时，只提高未来值v，为什么正确权重和o₀都不变？打开故障后，再把v从2改到4，观察第一行输出。
+
+<TcgMain10InsideChatgptComputeTraceLab />
+
+### 复算权重与未来不变性
+
+`attention`与图完全同构。这里仅修改V₂，不修改Q/K；因此即使在泄漏模式，权重也不随v改变，变化发生在加权输出。若同时改Q、K、V，就不能把所有变化归给值向量。
+
+```python
+def softmax(values):
+    peak = max(values)
+    weights = [exp(v-peak) for v in values]
+    total = sum(weights)
+    return [v/total for v in weights]
+
+def attention(gain=1., future=2., fault=False):
+    qk = [[1., 0.], [0., 1.], [1., 1.]]
+    values = [[1., 0.], [0., 1.], [future, -future]]
+    weights = []
+    for i, q in enumerate(qk):
+        scores = [gain*sum(a*b for a, b in zip(q, k))/sqrt(2)
+                  if fault or j <= i else float("-inf")
+                  for j, k in enumerate(qk)]
+        weights.append(softmax(scores))
+    output = [[sum(w[j]*values[j][d] for j in range(3))
+               for d in range(2)] for w in weights]
+    return weights, output
+
+w, o = attention()
+assert w[0] == [1., 0., 0.] and o[0] == [1., 0.]
+assert attention(future=4.)[1][:2] == o[:2]
+assert all(abs(sum(row)-1) < 1e-12 for row in w)
+leak_w, leak_o = attention(fault=True)
+assert close(leak_o[0], [1.203336278, -.604448371])
+assert not close(attention(future=4., fault=True)[1][0], leak_o[0])
+print("attention", w[0], "leak", leak_o[0])
+```
+
+## 混合以后：保留输入，再修改特征
+
+跨位置取信息不是整个计算块。<Term def="把子层更新与原输入逐坐标相加，为原信息保留一条直接通路">残差连接</Term>让更新不必独自承载原表示；<Term def="对单个位置的一组特征计算均值和方差，再缩放平移的运算">层归一化</Term>调整本位置特征尺度。随后逐位置前馈网络在特征之间进行非线性变换，不直接读取别的位置。
+
+### 一个明确标出的post-LN教学块
+
+| 符号     | 本页含义                                           |
+| -------- | -------------------------------------------------- |
+| x、a、r  | 四维输入、固定方向的手工注意力更新、第一次相加结果 |
+| μ、σ²、ε | 本行四个特征的均值、总体方差、稳定项0.00001        |
+| z、h、f  | 归一化输入、三维隐藏值、四维前馈更新               |
+| u、y     | 第二次相加结果、最终归一化输出                     |
+
+$$
+r=x+a,\qquad
+z_d=\frac{r_d-\mu}{\sqrt{\sigma^2+\epsilon}}
+$$
+
+先保留x再加a，然后在同一行的四个特征上归一化。本例归一化的增益固定1、偏置固定0；真实层可以学习这两个参数。它不跨词元估计统计量，不保证信息无损，也不是把长度强制变成1。
+
+$$
+h=\max(0,zW_1+b),\quad f=hW_2,\quad u=z+f,\quad y=\operatorname{LN}(u)
+$$
+
+前馈先把4维映到3维，截掉负激活，再映回4维；所有位置可以共用这组权重。第二次残差相加后再归一化，故称post-LN。2017论文用这个顺序及ReLU；**不能据此断言GPT或当前ChatGPT同样采用post-LN/ReLU**，模型也可选择其他顺序和激活。
+
+### 首个分岔比最终标签更有用
+
+默认x=(1,2,0,−1)，a=(0.5,−0.5,1,0)。第一相加r=(1.5,1.5,1,−1)，均值0.75、方差1.0625，z≈(0.727603,0.727603,0.242534,−1.697741)。实验七行格展示所有后续值。错误删除首残差时，**r先变成a**，接着h恰好全0；不是“输出坏了”这句末端描述。
+
+消融前馈时h仍作为诊断值展示，但f置0；消融归一化时z=r、y=u。两种消融是受控比较，不是声称所有架构都必须包含这些部件。灰色虚线是同一g下完整小块的y，蓝实线是当前y。
+
+> 猜一猜：先把消融设为“移除前馈更新”，哪一行会最先不同？再恢复完整模式、打开“错误删首残差x”，为什么首个分岔提前到了r？
+
+<TcgMain10InsideChatgptEvidenceGateLab />
+
+### 复算归一化与小块权重
+
+下面的矩阵是本站手工设计。`linear`使用行向量乘权重矩阵；`norm`的方差分母是维数，不是维数减1。epsilon防止常数向量除0，因此有限精度下方差接近1，而非强求精确等于1。
+
+```python
+W1 = [[1., 0., -1.], [0., 1., 1.],
+      [-1., 0., 1.], [0., -1., 0.]]
+W2 = [[.5, 0., -.5, 0.], [0., .5, 0., -.5],
+      [.25, -.25, .25, -.25]]
+
+def linear(x, weights):
+    return [sum(v*weights[i][j] for i, v in enumerate(x))
+            for j in range(len(weights[0]))]
+
+def norm(x):
+    mean = sum(x)/len(x)
+    var = sum((v-mean)**2 for v in x)/len(x)
+    return [(v-mean)/sqrt(var+1e-5) for v in x]
+
+def block(gain=1., ablation="full", fault=False):
+    x = [1., 2., 0., -1.]
+    a = [gain*v for v in [.5, -.5, 1., 0.]]
+    r = [(0. if fault else v)+a[i] for i, v in enumerate(x)]
+    z = r[:] if ablation == "noLN" else norm(r)
+    h = [max(0., v+b) for v, b in zip(linear(z, W1), [0., .25, 0.])]
+    f = [0.]*4 if ablation == "noFFN" else linear(h, W2)
+    u = [v+f[i] for i, v in enumerate(z)]
+    y = u[:] if ablation == "noLN" else norm(u)
+    return [x, r, z, h, f, u, y]
+
+rows = block()
+assert rows[1] == [1.5, 1.5, 1., -1.]
+assert abs(sum(rows[2])) < 1e-12
+assert close(rows[-1], [.538236103, 1.046760387, .031660947, -1.616657437])
+```
+
+## 从末位置到下一词元，别把概率当理解证明
+
+作者三阶段叙述的末段，是把末位置表示映成词表分数，再归一化成下一词元分布。这与前面的“对哪些位置取信息”的权重不是同一种分布。图三只用手工两候选读出(y₀,−y₀)，不能代表真实词表，更不能用较大的p(A)宣称语言质量更好。
+
+逻辑上的外层循环是把新词元接回上下文，再求下一步条件分布；单次计算块内则是前向数值变换。这个说明不意味着工程上必须每次重算全部旧位置；缓存和性能实现不在本页实测范围内。
+
+### 执行断言，记录可核查预期
+
+最后一块验证消融的首个分岔、常数归一化和所有结果有限。把四块顺序保存为`inside_toy.py`，执行`python3 inside_toy.py`。预期前三行分别以`position`、`attention`、`block`开头，末行是`all finite assertions passed`；默认p(A)四舍五入为0.745826，故障为0.709802。数值不同只说明这组运算不同，没有评测真实模型。
+
+```python
+broken = block(fault=True)
+no_ffn = block(ablation="noFFN")
+no_ln = block(ablation="noLN")
+assert broken[0] == rows[0] and broken[1] != rows[1]
+assert broken[3] == [0., 0., 0.]
+assert no_ffn[:4] == rows[:4] and no_ffn[4] == [0.]*4
+assert no_ln[:2] == rows[:2] and no_ln[2] != rows[2]
+assert norm([7.]*4) == [0.]*4
+p = softmax([rows[-1][0], -rows[-1][0]])[0]
+p_fault = softmax([broken[-1][0], -broken[-1][0]])[0]
+assert abs(p-.745825800784) < 1e-10
+assert abs(p_fault-.709802022551) < 1e-10
+for mode in ["full", "noFFN", "noLN"]:
+    for gain in [.5, 1., 1.5, 2.]:
+        for fault in [False, True]:
+            assert all(isfinite(v) for r in block(gain, mode, fault) for v in r)
+print("block", [round(v, 6) for v in rows[-1]], "p(A)", round(p, 6))
+print("all finite assertions passed")
+```
+
+## 常见误区
+
+这三类错法分别能在三个实验中定位，修复时保持其他输入不变，避免把多个原因混在一起。
+
+### 误区一：加了位置就永远不会顺序碰撞
+
+**现象 →** ABA和BAA的汇聚结果相同，就说位置表示失效。
+
+**原因 →** 把有序矩阵替换成了无序求和，丢失发生在汇聚。
+
+**修法 →** 同时检查三行X与求和；不要用汇聚碰撞推断整个网络相同。
+
+### 误区二：先算softmax，再把未来格涂成零
+
+**现象 →** 隐藏未来格后，合法权重之和小于1。
+
+**原因 →** 未来项已参与分母，只改显示或归零没有重新归一化。
+
+**修法 →** 在softmax之前屏蔽分数，用改变V₂不影响o₀的断言检查因果性。
+
+### 误区三：教学小块就是当前ChatGPT内部规格
+
+**现象 →** 由图三的post-LN/ReLU与历史175B，推断当前产品。
+
+**原因 →** 将旧示意、2017研究架构与手工权重混成实测。
+
+**修法 →** 分开标注来源年代、教学选择与未知规格；用中间值验证运算而非型号。
+
+## 小结与练习
+
+三段计算分别回答“输入如何带序号”“哪些位置能参与混合”“一个位置怎样保留并修改特征”。它们连成理解线索，但三个实验的手工常量独立，不是拼成了一个已训练语言模型。
+
+- 位置叠加可区分重复输入，求和仍可能丢序。
+- 因果屏蔽在归一化之前发生，未来不可漏入。
+- 对比中间值找分岔，不把玩具当当前产品。
 
 <Exercises>
 
-**问题 1：Inside ChatGPT / ChatGPT内部**
-
-为ChatGPT内部设计一个最小输入和一个单一反例，说明Inside ChatGPT / ChatGPT内部会改变哪个中间状态、应保存什么证据，以及结论不能外推到哪里。
+**问题 1**：在实验一把s改成0.5，扫描到位置2，手算ABA中两处A的距离。换成BAA后，逐行求和是否变化？请再修改Python的P₂为(2,0)，检查“同词元不同位置一定不同”的说法需要什么条件。
 
 <Answer>
-  先冻结在固定的2023年原书语境与独立事实来源下重放token/位置表示、注意力、前馈计算与历史边界，把Inside
-  ChatGPT /
-  ChatGPT内部映射到明确输入、变换和输出；参考路径保存张量形状账本、层级轨迹、历史版本标记与未知项清单，故障路径只注入“把作者2023年的GPT-3示意图写成所有当前ChatGPT模型的精确实现”。若首个分岔可定位且撤销故障后恢复，才能接受局部机制解释；未测试的模型、语料、工具、产品版本与分布都留在ChatGPT内部的适用边界外。
+
+两处A为(1,0)、(1.5,−0.5)，距离√0.5≈0.707107；两种排列求和都为(2.75,0.25)。P₂改成(2,0)后，s非0时两处A不同；但s=0、位置向量重用或两个位置向量相同时仍会重合。“不同位置”本身不保证编码一定不同；本题只验证手工位置表。
+
 </Answer>
 
-**问题 2：原书与当前事实**
-
-指出ChatGPT内部中至少一个必须标成2023年历史快照的主张，并写出重新验证当前事实需要的一手来源类型。
+**问题 2**：在实验二固定g=1、查询0，开启故障并把v改成4。手算o₀；再关闭故障，解释为何输出恢复但未来V₂仍是(4,−4)。若先softmax再删除未来权重，为什么错误行和约为0.401112？
 
 <Answer>
-  凡涉及GPT-3参数、早期ChatGPT训练描述、产品接口或工具集成形态，都先标记为2023年历史快照。当前事实需要模型或产品提供方的官方文档、系统卡、发布说明或原始研究；作者文章与旧版书目只能证明当时如何表述，不能证明2026年仍然如此。
+
+故障权重约为(0.401112,0.197776,0.401112)，所以o₀≈(2.005560,−1.406673)。关闭故障后权重变回(1,0,0)，与V₂具体数值无关。只保留未屏蔽softmax的第0项、删除其余项后，剩余权重仅0.401112；正确做法在归一化前屏蔽，或等价地对合法项重新归一化。本实验“完整重置”还须把v恢复2、g恢复1及时间线归零。
+
 </Answer>
 
-**问题 3：恢复为什么必要**
-
-为什么ChatGPT内部发现故障后还必须撤销故障并从同一快照重放？
+**问题 3**：在实验三先移除前馈，再开启“错误删首残差x”，记录两次首个分岔行。随后完整重置，将Python中的W2全部改为0，验证哪个消融等价。p(A)上升是否说明更会写语言？
 
 <Answer>
-  恢复重放检验“单一故障导致分岔”这一归因。若撤销后张量形状账本、层级轨迹、历史版本标记与未知项清单仍不能回到参考状态，就说明存在隐藏变量、状态污染或不可复现步骤；此时应拒绝单因果结论，而不是把异常强行归给把作者2023年的GPT-3示意图写成所有当前ChatGPT模型的精确实现。
+
+仅移除前馈时前四行x/r/z/h保持一致，f首先从非零变为0；删除首残差则r先变。把W2设为0与`noFFN`在该程序中等价；初始完整模式的y约为(0.538236,1.046760,0.031661,−1.616657)，无前馈时约为(0.727603,0.727603,0.242534,−1.697741)。p(A)从约0.745826升至0.810798只是手工读出变尖，没有语料、真实目标或质量评估可支持“更会写”。
+
 </Answer>
 
 </Exercises>
 
-## 术语与可观测量
+## 名词解释
 
-在ChatGPT内部中，<Term def="ChatGPT内部实际优化或执行的可观测目标，而不是拟人化意图">生成目标</Term>、<Term def="ChatGPT内部在给定上下文与版本后对候选输出建立的相对权重">条件分布</Term>、<Term def="ChatGPT内部把离散输入转换为可计算状态的坐标系统">表示空间</Term>、<Term def="ChatGPT内部的数据、目标、更新过程、留出评估与版本记录">训练证据</Term>、<Term def="ChatGPT内部只改变一个条件以定位首个机制分岔的测试">单一反例</Term>、<Term def="ChatGPT内部没有运行、无法核对或不能外推的模型与情境">适用边界</Term>共同组成证据合同。术语只有绑定输入、状态、输出和失败条件才有解释力；把标签换成更时髦的词，不会提升结论可信度。
+五个词条只回收正文高亮的核心词；前馈运算和权重矩阵的具体含义见实验三与对应代码。
 
 <Glossary>
-  <GlossaryItem term="生成目标">
-    ChatGPT内部实际优化或执行的可观测目标，而不是拟人化意图。
+  <GlossaryItem term="词元">
+    模型读写的离散单位，不一定是一整个词；本页A、B是手工编号。
   </GlossaryItem>
-  <GlossaryItem term="条件分布">
-    ChatGPT内部在给定上下文与版本后对候选输出建立的相对权重。
+  <GlossaryItem term="位置表示">
+    向内容输入提供顺序线索的数字，本页与内容逐坐标相加，不保证任意汇聚保序。
   </GlossaryItem>
-  <GlossaryItem term="表示空间">
-    ChatGPT内部把离散输入转换为可计算状态的坐标系统。
+  <GlossaryItem term="因果注意力">
+    只混合当前位置与此前位置的值；禁止未来位置参与权重分母。
   </GlossaryItem>
-  <GlossaryItem term="训练证据">
-    ChatGPT内部的数据、目标、更新过程、留出评估与版本记录。
+  <GlossaryItem term="残差连接">
+    保留原输入并加上更新，便于分清保留了什么、改变了什么。
   </GlossaryItem>
-  <GlossaryItem term="单一反例">
-    ChatGPT内部只改变一个条件以定位首个机制分岔的测试。
-  </GlossaryItem>
-  <GlossaryItem term="适用边界">
-    ChatGPT内部没有运行、无法核对或不能外推的模型与情境。
+  <GlossaryItem term="层归一化">
+    对一个位置的特征统计均值、方差再调整尺度；不跨词元或训练样本统计。
   </GlossaryItem>
 </Glossary>
 
+## 来源与阅读范围
+
+这是一篇独立教学重写，不复制或逐段翻译原书及图片。实际核读作者公开文章的本节全文文字与温度背景段；公开文章不等于纸书全文，可访问也不等于开放许可。出版社页面只支持英文版日期、ISBN及目录，不支持实验数值。
+
+- [Stephen Wolfram，2023-02-14，Inside ChatGPT](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/#inside-chatgpt)：本节三阶段、相加位置、注意力与前向/外层循环的历史解释。只读对应文字，不宣称读整本书或核验原图中的所有权重。
+- [Vaswani等，Attention Is All You Need](https://arxiv.org/html/1706.03762)：实际核读§3.1–3.5，支持缩放点积、解码因果屏蔽、post-LN残差、逐位置前馈及位置叠加。论文是编码器—解码器研究架构，不是ChatGPT产品规格；本页不复现其训练实验。
+- [Ba等，Layer Normalization](https://arxiv.org/abs/1607.06450)：获取全文PDF，实际选读摘要、§2–3，核对单样本特征统计及可学习增益/偏置；未阅读全文实验部分。epsilon与固定增益偏置是本页明确的教学配置。
+- [Wolfram Media英文版信息与目录](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)：2023-03-09、112页、ISBN 9781579550813。仅版本与目录核对，不声称据此读取纸书。
+
+上一页：[嵌入的概念](/this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings)。下一页：[ChatGPT的训练](/this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt)。
+
 <Attribution
+  sourceUrl={frontmatter.sourceUrl}
   mode="independent-rewrite"
-  sourceBasis="author-complete-public-essay-plus-official-editions-and-primary-research"
-  workTitle="Stephen Wolfram著《What Is ChatGPT Doing ... and Why Does It Work?》与中文译本《这就是ChatGPT》"
+  sourceBasis="full-text"
+  workTitle="Stephen Wolfram公开文章Inside ChatGPT节全文文字（非整篇文章或纸书全文）"
   adaptedUrl="https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/"
 />

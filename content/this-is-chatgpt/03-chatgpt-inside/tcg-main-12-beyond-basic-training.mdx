@@ -1,9 +1,9 @@
 ---
 title: 超越基础训练
-type: C
+type: B
 section: 超越基础训练
 order: 13
-description: 区分基础预训练、监督示范、偏好比较与策略优化；用上下文合同、计算轨迹与证据门交付阶段数据谱系、奖励模型探针、拒答样本与独立事实评估
+description: 区分上下文中的一次性信息与权重训练，用偏好比较和有限离散优化检验奖励与独立评估的分岔。
 demo: true
 math: true
 sourceUrl: >-
@@ -19,8 +19,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,140 +31,404 @@ import {
   TcgMain12BeyondBasicTrainingEvidenceGateLab,
 } from "@/components/mdx/this-is-chatgpt/v2/tcg-main-12-beyond-basic-training";
 
+{/* 知识点先行：上下文→窗口与条件概率柱；监督微调→回答位置mask代码对照；成对偏好/奖励模型→票向、概率曲线与拟合轨迹；KL正则→分布柱与双评估曲线；深计算/工具边界→有限模平方及独立核验。 */}
+
+[上一节：ChatGPT的训练](/learn/this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt) · [下一节：是什么让ChatGPT工作](/learn/this-is-chatgpt/04-meaning-language/tcg-main-13-what-lets-it-work)
+
 <Objectives>
 
-- 解释指令微调、偏好数据、人类反馈与奖励偏差中的输入、状态、变换与输出，而不只复述结论
-- 用单一反例“把人类偏好奖励等同于真实性、安全性或对所有人一致的价值”定位超越基础训练的首个错误状态
-- 交付阶段数据谱系、奖励模型探针、拒答样本与独立事实评估，并区分2023年原书主张与当前事实
+- 能用固定权重的窗口实验解释：一次性告知的信息为什么能改变回答，却不等于完成了一次训练。
+- 能手算四票比较的首步奖励差，并修改约束强度，找出代理奖励上升而独立评估下降的反例。
+- 能回答：什么时候应检查可见输入，什么时候应检查权重更新，什么时候还需要外部计算与独立核验？
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 为什么读得多还不够
 
-超越基础训练围绕“超越基础训练的对齐阶段改变了什么，又没有证明什么？”建立贯穿任务：在固定的2023年原书语境与独立事实来源下重放指令微调、偏好数据、人类反馈与奖励偏差。先写下哪个输入、表示、分布、训练信号、工具状态或评估结果会最先变化，再运行参考、故障和恢复路径；只有守住“超越基础训练的输入版本、条件分布或工具状态、输出证据与适用边界始终可追溯”并交付阶段数据谱系、奖励模型探针、拒答样本与独立事实评估，流畅输出或成功演示才可能成为机制证据。
+一条流水线读过很多产品说明，不等于已经学会按客户要求交付。还需要示范成品、比较不同成品，并检查打分的人究竟在奖励什么；否则，生产得流畅也可能交错货。
+
+客户临时递来一张新订单，又是另一回事：照订单做一次，不等于永久改造了机器。本节把“临时输入”“改造机器”和“把难算的部分交给专用设备”分开，避免把三种成功混为一谈。
 
 ## 原文、版本与事实边界
 
-超越基础训练以[Stephen Wolfram作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)核对正文论证，以[Wolfram Media原版产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)核对作者Stephen Wolfram、2023年3月9日出版、112页、纸书ISBN 978-1-57955-081-3以及前言、两篇正文、20个分节、致谢和补充资源。
+本页正式单元为 **tcg-main-12**。已阅读作者公开文章 **Beyond Basic Training** 整节：人类反馈之外，原段还讨论一次性提示中的信息、生成时的利用、已有框架的限制，以及深计算为何可能需要外部工具。下节才进入语言规律，本页不代替它。
 
-超越基础训练以[Wolfram Media翻译页](https://www.wolfram-media.com/translations/)确认中文译本《这就是ChatGPT》，并以[人民邮电出版社页面](https://www.ptpress.com.cn/publishing/book/4bd62f00-4d6e-4f98-92f4-604be0407b8a)核对WOLFRAM传媒汉化小组译、2023年7月、134页和ISBN 9787115618085；全书正式分母是25个目录层级，课程采用学习地图、22个正文单元和总复习共24页承载。
+[Stephen Wolfram 的 2023 年公开长文](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/#beyond-basic-training)提供历史论述范围；[Wolfram Media 产品页](https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/)只核对 2023 年英文版及目录。可访问长文不等于读到原书全部正文，也不等于开放许可；本站不逐段翻译、复制原图或复现原书。本页不能证明当前 ChatGPT 的具体训练方案或记忆实现。
 
-超越基础训练把作者文章视为可访问的完整一手材料，但可访问不等于开放许可；本站不复制、逐段翻译或近似改写原文、图片、代码与示例，所有中文机制解释、交互、反例、练习和答案均为独立教学重写。书中关于GPT-3、早期ChatGPT、参数量和接口形态的陈述属于2023年历史快照，不能冒充2026年当前产品规格。
-
-### 本页独立事实来源
-
-- [作者公开完整文章](https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/)：在超越基础训练中，核对本页在作者论证链中的位置、示例目的和原始时间边界。
-- [InstructGPT原始论文](https://arxiv.org/abs/2203.02155)：在超越基础训练中，独立核对监督微调、偏好数据和人类反馈训练的证据边界。
+[InstructGPT 原始论文，Ouyang 等，2022，§3.1、§3.5、§5.2–5.3](https://arxiv.org/html/2203.02155v1)是**补充技术来源**：核对示范训练、偏好比较、奖励与约束、标注群体和评估限制，不声称作者原段详细讲了这些公式。下述全部数值来自本站有限玩具计算，不是训练大模型、PPO 复现、真实 RLHF 测量或 GPU 测速。
 
 ## 正式目录坐标逐项解释
 
+这个单元要同时回答“反馈能改变什么”与“给一条新信息算不算训练”。两者都可能改变输出，但改变的对象不同；如果只讲反馈训练，就遗漏了作者后半节的一半问题。
+
 ### Beyond Basic Training / 超越基础训练
 
-**坐标 1/1：Beyond Basic Training / 超越基础训练。** 超越基础训练记录逐层输入、加权和、非线性激活、损失与参数更新；表示能力、可优化性、样本效率和泛化必须分别验收。 这里的验收不是“读过”或“能复述”，而是能保存输入快照、运行参考路径、只注入把人类偏好奖励等同于真实性、安全性或对所有人一致的价值、定位首个分岔，并用阶段数据谱系、奖励模型探针、拒答样本与独立事实评估说明恢复结果与不适用边界。
+作者先讨论用人类评价训练另一个预测评价的模型，再借其信号调整生成网络；随后转向权重不必每次改变的提示内使用，最后指出复杂计算与工具的边界。本页用实验一承接提示问题，用实验二、三拆解反馈链，再以标准库算法核验外部计算。三者不是同一个流程的三个换名面板。
 
-## 先预测，再运行三个交互视图
+## 先分清输入变化和参数变化
 
-先预测：只注入“把人类偏好奖励等同于真实性、安全性或对所有人一致的价值”时，超越基础训练在哪个阶段最先偏离参考路径？请写下会变化的输入、表示、条件分布、工具状态或评估信号，再操作视图；看到结果后补写的理由不能算预注册预测。
+同一函数可以因输入不同而给出不同答案，也可以因参数被训练更新而改变长期行为。判断依据不是“回答变了”，而是比较哪份状态发生变化。
 
-<Stepper>
-  <Step title="上下文合同：选择坐标与阶段">
-    <TcgMain12BeyondBasicTrainingContextContractLab />
-  </Step>
-  <Step title="计算轨迹：比较参考与故障">
-    <TcgMain12BeyondBasicTrainingComputeTraceLab />
-  </Step>
-  <Step title="证据门：展开检查与交付">
-    <TcgMain12BeyondBasicTrainingEvidenceGateLab />
-  </Step>
-</Stepper>
+### 一次性信息进入哪里
 
-## 最小可复现实验协议
+<Term def="这一次生成时可以读取的输入序列，而不是自动写回的永久知识">
+  上下文
+</Term>
+包含当前可用的提示和已有文本。作者的一次性告知讨论的是这类输入使用，不保证每次都写入权重。实验一人为定义一个很小的条件模型：只有第一格带代号
+A 或
+B，其他格不带信息；若绑定离开窗口，模型回到均匀概率。这是显式规则，不是声称真实模型靠字面查表记忆，也不涵盖产品可能另行提供的持久记忆服务。
 
-1. 为超越基础训练冻结作者材料、技术论文、模型或工具版本、输入、随机性和成功标准，并把未知的当前产品细节明确标为未知。
-2. 运行参考路径，逐阶段保存阶段数据谱系、奖励模型探针、拒答样本与独立事实评估；若只能看到最终自然语言输出，就还没有机制证据。
-3. 保持其余条件不变，只注入“把人类偏好奖励等同于真实性、安全性或对所有人一致的价值”，记录首个偏离参考状态的位置以及它向后传播的方式。
-4. 撤销故障，从同一快照重放；只有状态与独立评估都恢复，才允许把异常归因给该故障。
+一次提示能够借用已有表征，不意味着任意陌生规则都能可靠整合。作者特别提醒既有框架的限制：能临时绑定一个代号，与获得一种新的计算能力并不相同。实验也只支持预先定义的 A/B 绑定；往窗口塞进第三种任务，不会让这个固定函数自动长出新算法。
 
-<Callout type="trap" title="超越基础训练误区一：历史快照就是当前规格">
-  作者在2023年使用的GPT-3规模、ChatGPT训练解释或工具接口是历史材料；没有当前一手来源时，超越基础训练必须写“未知”，不能用现在时包装旧数字。
+符号约定：W 为窗口格数，n 为已读格数，c 为可见代号（A 对应 1，B 对应 −1，不可见为 0），α 为固定参数 ln 2。σ 是先修的 sigmoid 函数。
+
+$$
+p(A\mid c)=\frac{e^{\alpha c}}{e^{\alpha c}+e^{-\alpha c}}=\sigma(2\alpha c).
+$$
+
+这个式子在说：同一份参数读到 A 时给 A 的概率是 0.8，读到 B 时是 0.2，没有可用代号时是 0.5；改变的是 c，不是 α。
+
+> 猜一猜：把窗口从 3 改成 2，绑定会提前在哪一格消失？先走到“读绑定”，再走到第 W+1 格；最后注入“窗口外仍保留绑定”比较实柱与虚线。
+
+<TcgMain12BeyondBasicTrainingContextContractLab />
+
+### 示范训练真的改变什么
+
+<Term def="用人写的示范回答作为目标，计算误差并更新模型参数的训练">
+  监督微调
+</Term>
+与实验一不同：它需要示范数据、目标和参数更新。它位于基础预训练之后；InstructGPT
+论文据此训练初始的指令遵循模型，然后才收集比较与优化奖励。
+
+本页代码补充一种**只对回答位置计损失**的教学约定：两格提示的掩码为 0，两格回答为 1；目标 token 在每个位置对应一个 one-hot 目标分布。损失是被选位置的负对数概率平均。把提示也计入，会改变优化对象；但提示虽不直接计损失，仍能作为条件影响回答和梯度。这个小例子不声称还原论文所有训练掩码或数据混合细节。
+
+### 深计算为何还需要另一条路
+
+作者把简单规则的使用与可能需要许多中间计算的任务区别开来，并提出外部计算工具。这不是“所有长计算模型永远做不到”的证明，也不能拿背出一个答案证明算法可靠。实验一只展示输入利用，不能凭它推断模型能正确执行任意算法。
+
+例如计算 7 连续平方 20 次后除以 97 的余数，可以明确交给一个有限算法：输入三元组、保存中间余数、用独立方法复核返回值。后面的 Python 做了这件事，但没有连接真实模型或工具 API。工具也会因错误输入或错误实现失败，校验责任不会随调用消失。
+
+## 从人的比较到可优化的分数
+
+示范告诉模型一种答案怎么写；比较告诉它两个答案哪个更合偏好；学出来的分数再引导生成分布。中间任一环节都可能引入偏差，不能把“人参与了”当作正确性保证。
+
+### 票数怎样约束奖励差
+
+<Term def="在相同提示下判断两个候选回答谁更好的比较标签">成对偏好</Term>
+提供相对方向，而非答案的客观分数。
+<Term def="根据提示与回答预测比较倾向，并输出可用于优化的标量的模型">
+  奖励模型
+</Term>
+把这些标签变成训练信号。实验二只拟合固定候选 A、B
+的一个差值，不训练神经网络；四票只是重复比较的有限样本，不复刻论文中的排序数据规模。
+
+符号约定：r(A)、r(B) 为候选分数，Δ=r(A)−r(B)，q 为四票中 A 的胜率，p 为预测胜率，η 为拟合步长。Bradley–Terry 模型用 sigmoid 把差值转成概率：
+
+$$
+p=\sigma(\Delta),\qquad \ell(\Delta)=-q\log p-(1-q)\log(1-p).
+$$
+
+这个式子在说：三票偏爱 A 时，把 A 胜率预测成 0.75 比 0.5 更符合这些票；它没有读取任何独立事实答案。
+
+先对 Δ 求导，得到 p−q，再沿负方向更新，因此首步从 Δ=0 开始为 η(q−0.5)。令导数为零可解得 Δ 最优值为 log(q/(1−q))；只有奖励差可识别，给两个奖励同时加常数不会改变概率。
+
+> 猜一猜：三票与一票时，首步 Δ 的符号是否相反？把票数改成两票，再反转标签，为什么曲线不能暴露故障？
+
+<TcgMain12BeyondBasicTrainingComputeTraceLab />
+
+### 奖励高为什么仍可能走偏
+
+<Term def="用离参考分布的差异作为代价，限制为提高代理分数而过度改变行为的约束">
+  KL正则
+</Term>
+在这里限制输出分布离开参考分布 q 的程度。此处 q
+是参考概率向量，与上小节的经验胜率不是同一对象。策略就是“给三个候选各分配多少输出概率”；本页直接解离散分布，不实现
+PPO。论文 §3.5 的实际方法还涉及逐 token
+惩罚和可选预训练数据混合，不能由这个闭式解替代。
+
+符号约定：p 是待选的三维概率向量，q=(0.6,0.3,0.1)，r=(1,0,2+b) 是代理分数，b 是错误候选 C 的额外加分，β 大于 0，t 为 0 到 1 的优化强度。
+
+$$
+J_t(p)=t\sum_i p_i r_i-\beta\sum_i p_i\log\frac{p_i}{q_i},\qquad \sum_i p_i=1.
+$$
+
+这个式子在说：增加代理分数会获益，偏离参考分布会付代价；β 越大，离开 q 越贵。t 不是训练步数或 GPU 时间。
+
+加入约束乘子 λ，对 p_i 求导得到 tr_i−β(log(p_i/q_i)+1)+λ=0；移项后 p_i 与 q_i exp(tr_i/β) 成正比，最后用总和归一化：
+
+$$
+p_i^*(t)=\frac{q_i e^{tr_i/\beta}}{\sum_j q_j e^{tr_j/\beta}}.
+$$
+
+这个式子在说：参考分布本来少给 C 的概率，仍可能被过大的 C 奖励指数式放大；约束不是纠正错误奖励的真值系统。
+
+我们另设**不参与优化**的评估 h=(1,0.4,−1)：A 为实答，B 为空泛，C 为讨好但有事实错误。这组刻度是构造反例，不是声称测到了某模型的真实人类价值。优化器看不到 h，所以代理期望上升而 h 期望下降完全可能。真实工作还需独立评估数据、人工复核和分群检查，不能用训练奖励自证安全。
+
+> 猜一猜：走到强度 1，把 β 从 1 降到 0.25，哪个回答被放大？再把 C 的代理加分调高，观察两条线是否同向。移除 KL 时，正强度下会直接选 C。
+
+<TcgMain12BeyondBasicTrainingEvidenceGateLab />
+
+## 连续运行一个有限检查程序
+
+按顺序拼接以下八块，保存为 `beyond_basic_training.py`，运行 `python3 beyond_basic_training.py`。只依赖标准库，成功时输出四行数值与 `all finite assertions passed`。这是公式复核，不是训练实际语言模型。实验一的五格与程序的索引约定完全一致。
+
+### 固定参数，移动可见输入
+
+先定义条件概率与窗口。故障只改变能否使用已经移出的绑定；保留参数快照，用断言排除“悄悄训练”。
+
+```python
+from math import exp, log, isclose
+
+ALPHA = log(2)
+
+def sigmoid(x):
+    return 1 / (1 + exp(-x))
+
+def context(n, window=3, binding=1, sticky=False):
+    visible = n > 0 and max(0, n - window) == 0
+    c = binding if visible or (sticky and n > 0) else 0
+    return sigmoid(2 * ALPHA * c)
+
+weights_before = (ALPHA,)
+assert isclose(context(1), 0.8)
+assert isclose(context(1, binding=-1), 0.2)
+assert isclose(context(3), 0.8)
+assert context(4) == 0.5
+assert isclose(context(4, sticky=True), 0.8)
+assert context(4, sticky=False) == 0.5
+assert weights_before == (ALPHA,)
+print("context:", context(3), context(4))
+```
+
+接着对比示范目标：每项概率都是“分给正确 token 的概率”，不是一个位置上的四类分布。代码明确只训练回答两格，并单独展示一次参数更新。
+
+```python
+correct_token_probs = [0.2, 0.4, 0.6, 0.25]
+mask = [0, 0, 1, 1]
+
+def masked_loss(probs, selected):
+    return -sum(m * log(p) for p, m in zip(probs, selected)) / sum(selected)
+
+sft_loss = masked_loss(correct_token_probs, mask)
+assert isclose(sft_loss, -log(0.6 * 0.25) / 2)
+assert masked_loss(correct_token_probs, [1] * 4) > sft_loss
+w_before = 0.0
+w_after = w_before + 0.2 * (1 - sigmoid(w_before))
+assert isclose(w_after, 0.1) and w_after != w_before
+assert sigmoid(w_after) > sigmoid(w_before)
+```
+
+### 拟合比较，不推断真值
+
+这段与实验二共用同一更新式。反转标签只改目标 q，其他初始值、步数和步长不变。
+
+```python
+def fit(votes=3, rate=1.0, reverse=False):
+    q = votes / 4
+    q = 1 - q if reverse else q
+    path = [0.0]
+    for _ in range(8):
+        path.append(path[-1] + rate * (q - sigmoid(path[-1])))
+    return path
+
+def comparison_loss(delta, q):
+    p = sigmoid(delta)
+    return -q * log(p) - (1 - q) * log(1 - p)
+
+normal, reversed_labels = fit(), fit(reverse=True)
+assert normal[1] == 0.25 and reversed_labels[1] == -0.25
+assert comparison_loss(normal[-1], 0.75) < log(2)
+assert fit(2) == fit(2, reverse=True) == [0.0] * 9
+assert fit(reverse=False) == normal
+assert isclose(sigmoid(log(3)), 0.75)
+print("pair:", normal[1], reversed_labels[1])
+```
+
+### 求出三候选的离散最优分布
+
+指数先减最大值，避免不必要的数值溢出。零强度返回参考分布；移除惩罚的故障在正强度下采用唯一最高奖励候选 C。
+
+```python
+BASE = (0.6, 0.3, 0.1)
+HELDOUT = (1.0, 0.4, -1.0)
+
+def policy(beta=1.0, boost=0.0, t=1.0, no_kl=False):
+    if t == 0:
+        return BASE
+    if no_kl:
+        return (0.0, 0.0, 1.0)
+    reward = (1.0, 0.0, 2.0 + boost)
+    logits = [log(q) + t * r / beta for q, r in zip(BASE, reward)]
+    shift = max(logits)
+    weights = [exp(x - shift) for x in logits]
+    return tuple(w / sum(weights) for w in weights)
+
+def mean(p, values):
+    return sum(a * b for a, b in zip(p, values))
+
+def kl(p, q=BASE):
+    return sum(a * log(a / b) for a, b in zip(p, q) if a)
+```
+
+独立评估与代理奖励分别比较。随后用有限网格提供反例搜索式核验；网格不能代替解析证明，但能抓住归一化或符号写反等实现错误。
+
+```python
+reward = (1.0, 0.0, 2.0)
+p, weak = policy(), policy(beta=0.25)
+assert isclose(sum(p), 1) and kl(p) > 0
+assert mean(weak, reward) > mean(p, reward) > mean(BASE, reward)
+assert mean(weak, HELDOUT) < mean(p, HELDOUT) < mean(BASE, HELDOUT)
+assert policy(no_kl=True) == (0.0, 0.0, 1.0)
+assert isclose(kl(policy(no_kl=True)), log(10))
+assert policy(no_kl=False) == p
+
+def objective(probs):
+    return mean(probs, reward) - kl(probs)
+
+for a in range(21):
+    for b in range(21 - a):
+        candidate = (a / 20, b / 20, (20 - a - b) / 20)
+        assert objective(p) >= objective(candidate) - 1e-12
+print("policy:", tuple(round(x, 6) for x in p))
+```
+
+还要遍历所有面板允许的参数。这里验证概率有限、归一、代理随强度非减；它不宣称任意真实训练过程都单调。
+
+```python
+for beta in (2, 1, 0.5, 0.25):
+    for boost in (0, 0.5, 1, 1.5, 2):
+        scores = (1, 0, 2 + boost)
+        path = [policy(beta, boost, i / 4) for i in range(5)]
+        for probs in path:
+            assert all(0 < x < 1 for x in probs)
+            assert isclose(sum(probs), 1)
+        values = [mean(probs, scores) for probs in path]
+        assert all(b >= a - 1e-12 for a, b in zip(values, values[1:]))
+```
+
+### 把深计算交给可检查的算法
+
+每轮只保存模 97 的余数，20 轮完成 20 次平方；`pow` 采用另一入口核对。输入、结果、断言都可追踪，但这只是外部工具应具备的接口示意。
+
+```python
+def modular_squares(base, rounds, modulus):
+    value = base % modulus
+    trace = [value]
+    for _ in range(rounds):
+        value = value * value % modulus
+        trace.append(value)
+    return value, trace
+
+result, trace = modular_squares(7, 20, 97)
+assert len(trace) == 21 and all(0 <= x < 97 for x in trace)
+assert result == pow(7, 2 ** 20, 97)
+print("tool:", result)
+```
+
+最后把三个实验的首次分岔放在同一组测试中复核，并确认撤销故障恢复同一输入下的数值。界面 reset 的计时器与触屏行为仍需浏览器独立实测，不能由 Python 代替。
+
+```python
+assert context(3) == context(3, sticky=True)
+assert context(4) != context(4, sticky=True)
+assert fit()[0] == fit(reverse=True)[0]
+assert fit()[1] != fit(reverse=True)[1]
+assert policy(t=0) == policy(t=0, no_kl=True)
+assert policy(t=0.25) != policy(t=0.25, no_kl=True)
+assert context(4) == 0.5 and fit() == normal and policy() == p
+print("all finite assertions passed")
+```
+
+## 容易踩的坑
+
+下列三种误判分别对应输入、标注和目标函数。它们都可能在输出很流畅时存在，必须用对照而非观感诊断。
+
+### 把临时使用说成永久学会
+
+<Callout type="trap" title="现象、原因与修法">
+  现象：提示里告诉一次新代号，回答用了它，就宣称权重学会了新知识。原因：混淆输入依赖和参数更新。修法：实验一保持
+  α 不变，移出绑定并比较；再对照代码中明确改变 w 的示范训练。
 </Callout>
 
-<Callout type="trap" title="超越基础训练误区二：流畅就是正确">
-  连贯文本、相似度投影或成功演示只能证明某次输出表现；超越基础训练仍需事实核查、计算复算、反例和分布外评估。
+### 两票对两票证明标注没问题
+
+<Callout type="trap" title="现象、原因与修法">
+  现象：开关反转故障，轨迹都不动。原因：对称数据对反转没有区分力。修法：改成三票对一票；首步应从
+  +0.25 翻到 −0.25，再核对原始票与进入训练的胜者。
 </Callout>
 
-<Callout type="trap" title="超越基础训练误区三：一次改很多条件">
-  若同时更换语料、模型、提示、温度、工具和评估集，超越基础训练就无法定位因果；必须保留单故障合同和恢复路径。
+### 用奖励模型给自己验收
+
+<Callout type="trap" title="现象、原因与修法">
+  现象：代理分数升高就宣称更真实、更安全。原因：优化与验收用了同一偏差信号。修法：实验三同时保留独立
+  h 曲线，降低 β 看分岔，并另查评估者、数据和覆盖范围；KL
+  只能约束偏移，不能修复价值目标本身。
 </Callout>
 
-## 小结
+## 小结与练习
 
-- 对齐阶段区分监督示范、偏好比较与策略优化
-- 人类偏好奖励不等同于真实性或安全性
-- 偏好训练改变行为不证明价值一致
-- 交付数据谱系、奖励探针与拒答样本
-- 单一反例定位奖励混淆分岔并重放恢复
-
-## 练习与答案
+- 新上下文可以改变输出，而不改变权重；遗忘边界要看可用输入。
+- 示范、比较、奖励优化改变的对象不同，不能互相充当验收证据。
+- 代理奖励和独立评估可以分岔；深计算还需可核验的外部算法。
 
 <Exercises>
 
-**问题 1：Beyond Basic Training / 超越基础训练**
-
-为超越基础训练设计一个最小输入和一个单一反例，说明Beyond Basic Training / 超越基础训练会改变哪个中间状态、应保存什么证据，以及结论不能外推到哪里。
+**问题 1**：把实验一的窗口设成 2，代号改成 B。预测读到第 2、3 格时的 p(A)，再打开故障验证。这样的变化与代码中的 `w_after` 有什么区别？给外部计算任务至少写出两项核验条件。
 
 <Answer>
-  先冻结在固定的2023年原书语境与独立事实来源下重放指令微调、偏好数据、人类反馈与奖励偏差，把Beyond
-  Basic Training /
-  超越基础训练映射到明确输入、变换和输出；参考路径保存阶段数据谱系、奖励模型探针、拒答样本与独立事实评估，故障路径只注入“把人类偏好奖励等同于真实性、安全性或对所有人一致的价值”。若首个分岔可定位且撤销故障后恢复，才能接受局部机制解释；未测试的模型、语料、工具、产品版本与分布都留在超越基础训练的适用边界外。
+
+无故障时第 2 格仍可见 B，p(A)=0.2；第 3 格绑定离开窗口，变为 0.5。故障保留 B，会仍给 0.2。α 始终不变，而示范更新将 w 从 0 改成 0.1；两者不可混称训练。工具核验可检查轮数为 20、模数为 97、轨迹长度 21、所有余数范围以及结果与 `pow(7, 2**20, 97)` 一致；仅检查返回格式不够。
+
 </Answer>
 
-**问题 2：原书与当前事实**
-
-指出超越基础训练中至少一个必须标成2023年历史快照的主张，并写出重新验证当前事实需要的一手来源类型。
+**问题 2**：实验二选三票，η=1，手算反转前后的第一次更新；再推导最优奖励差。为什么同时给 A、B 加 100 不改变拟合概率？两票时该怎样补测试？
 
 <Answer>
-  凡涉及GPT-3参数、早期ChatGPT训练描述、产品接口或工具集成形态，都先标记为2023年历史快照。当前事实需要模型或产品提供方的官方文档、系统卡、发布说明或原始研究；作者文章与旧版书目只能证明当时如何表述，不能证明2026年仍然如此。
+
+初始 p=0.5，正确更新 Δ=0+(0.75−0.5)=0.25；反转后 q=0.25，得到 −0.25。最优时 p=q，所以 Δ=log(3)，反转则为 −log(3)。概率只取决于差值，共同加 100 抵消。两票 q=0.5 的反转不改变目标，必须加入三票或一票的非对称样本；这只能检验标签方向，不能证明回答真实。
+
 </Answer>
 
-**问题 3：恢复为什么必要**
-
-为什么超越基础训练发现故障后还必须撤销故障并从同一快照重放？
+**问题 3**：把实验三走到强度 1，β 从 1 改为 0.25，再移除 KL，预测 C 概率与独立评估的方向。独立改 Python 的 `HELDOUT` 为 `(1, 0.4, 1)`，说明哪些断言必须重新评估。为什么这不是当前 ChatGPT 的安全结论？
 
 <Answer>
-  恢复重放检验“单一故障导致分岔”这一归因。若撤销后阶段数据谱系、奖励模型探针、拒答样本与独立事实评估仍不能回到参考状态，就说明存在隐藏变量、状态污染或不可复现步骤；此时应拒绝单因果结论，而不是把异常强行归给把人类偏好奖励等同于真实性、安全性或对所有人一致的价值。
+
+C 概率增大，原设 h 下独立评估降低；移除 KL 后 C 概率为 1，代理为 2，h 为 −1，KL 为 log(10)。把 C 的独立分改成 1 后，“独立评估逐步下降”不再由这个反例保证，原不等式断言应重写，并重新说明评估标准。这里三个候选、代理和 h 都是手工设定，且没有实际训练、采样或真实评估人群，不能外推为当前产品安全性；正式结论需要独立实证。
+
 </Answer>
 
 </Exercises>
 
-## 术语与可观测量
+## 名词解释
 
-在超越基础训练中，<Term def="超越基础训练实际优化或执行的可观测目标，而不是拟人化意图">生成目标</Term>、<Term def="超越基础训练在给定上下文与版本后对候选输出建立的相对权重">条件分布</Term>、<Term def="超越基础训练把离散输入转换为可计算状态的坐标系统">表示空间</Term>、<Term def="超越基础训练的数据、目标、更新过程、留出评估与版本记录">训练证据</Term>、<Term def="超越基础训练只改变一个条件以定位首个机制分岔的测试">单一反例</Term>、<Term def="超越基础训练没有运行、无法核对或不能外推的模型与情境">适用边界</Term>共同组成证据合同。术语只有绑定输入、状态、输出和失败条件才有解释力；把标签换成更时髦的词，不会提升结论可信度。
+五个词条只回收正文首次高亮的概念；概率、参数与梯度沿用先修，本页不新增神经网络结构知识。
 
 <Glossary>
-  <GlossaryItem term="生成目标">
-    超越基础训练实际优化或执行的可观测目标，而不是拟人化意图。
+  <GlossaryItem term="上下文">
+    这一次生成时可读取的输入；利用它不必写回模型权重。
   </GlossaryItem>
-  <GlossaryItem term="条件分布">
-    超越基础训练在给定上下文与版本后对候选输出建立的相对权重。
+  <GlossaryItem term="监督微调">
+    拿示范回答当目标算误差，并真正更新参数的训练。
   </GlossaryItem>
-  <GlossaryItem term="表示空间">
-    超越基础训练把离散输入转换为可计算状态的坐标系统。
+  <GlossaryItem term="成对偏好">
+    同一提示下对两个候选的相对选择；不是客观事实分数。
   </GlossaryItem>
-  <GlossaryItem term="训练证据">
-    超越基础训练的数据、目标、更新过程、留出评估与版本记录。
+  <GlossaryItem term="奖励模型">
+    预测比较倾向并给出优化分数的模型；可能继承标注偏差。
   </GlossaryItem>
-  <GlossaryItem term="单一反例">
-    超越基础训练只改变一个条件以定位首个机制分岔的测试。
-  </GlossaryItem>
-  <GlossaryItem term="适用边界">
-    超越基础训练没有运行、无法核对或不能外推的模型与情境。
+  <GlossaryItem term="KL正则">
+    给偏离参考分布的行为加代价；限制漂移但不能保证奖励正确。
   </GlossaryItem>
 </Glossary>
 
+## 出处与下一步
+
+作者原段提供反馈、提示内信息和外部工具三条问题线；InstructGPT §3.1、§3.5 补充训练方法，§5.2–5.3 提醒偏好群体和局限。窗口绑定、四票一差值和三候选闭式优化都是本站独立教学构造，SFT 回答掩码也只是明确选定的示例约定，不冒充原书实验或当前 ChatGPT 的训练披露。
+
 <Attribution
   mode="independent-rewrite"
-  sourceBasis="author-complete-public-essay-plus-official-editions-and-primary-research"
-  workTitle="Stephen Wolfram著《What Is ChatGPT Doing ... and Why Does It Work?》与中文译本《这就是ChatGPT》"
+  sourceBasis="2023-author-public-essay-section-plus-2022-instructgpt-primary-paper-and-independent-finite-toys"
+  workTitle="Stephen Wolfram《What Is ChatGPT Doing ... and Why Does It Work?》；中文译本《这就是ChatGPT》"
   adaptedUrl="https://writings.stephenwolfram.com/2023/02/what-is-chatgpt-doing-and-why-does-it-work/"
 />
+
+[回到上一节：ChatGPT的训练](/learn/this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt) · [继续下一节：是什么让ChatGPT工作](/learn/this-is-chatgpt/04-meaning-language/tcg-main-13-what-lets-it-work)

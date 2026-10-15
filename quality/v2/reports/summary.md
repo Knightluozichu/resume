@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-15T21:04:38.471Z；旧版分数不迁移。
+> 2026-10-15T22:39:07.196Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1764
+- failed：1758
 - queued：196
-- passed：1754
+- passed：1760
 - published：895
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -59,46 +59,46 @@
 | 46 | python-ops | 18 | 18 | 0 | 0 | 54 |
 | 47 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
 | 48 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
-| 49 | this-is-chatgpt | 24 | 18 | 0 | 6 | 18 |
-| 50 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
-| 51 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
-| 52 | effective-java | 17 | 17 | 0 | 0 | 73 |
-| 53 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 54 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 55 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 56 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 57 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 58 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 59 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
-| 60 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
-| 61 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
-| 62 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
-| 63 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
-| 64 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
-| 65 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
-| 66 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 67 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 68 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 69 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 70 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 71 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 72 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 73 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 74 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 75 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 76 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 77 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 78 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 79 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 80 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 81 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 82 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 83 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 84 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 85 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 86 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 87 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 88 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 49 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
+| 50 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
+| 51 | effective-java | 17 | 17 | 0 | 0 | 73 |
+| 52 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 53 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 54 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 55 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 56 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 57 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 58 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 59 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
+| 60 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
+| 61 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
+| 62 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
+| 63 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
+| 64 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
+| 65 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 66 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 67 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 68 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 69 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 70 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 71 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 72 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 73 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 74 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 75 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 76 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 77 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 78 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 79 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 80 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 81 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 82 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 83 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 84 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 85 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 86 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 87 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 88 | this-is-chatgpt | 24 | 12 | 0 | 12 | 12 |
 | 89 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 90 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
 | 91 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
