@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T14:29:18.351Z
+> 生成时间：2026-10-15T15:27:59.721Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 480 |
-| failed | 1788 |
+| failed | 1786 |
 | queued | 196 |
-| passed | 1744 |
+| passed | 1746 |
 | published | 881 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -9128,7 +9128,7 @@
     - 路径：`content/large-language-models/15-review/llm-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## large-scale-llm-practice（14 个内容页面 · failed:2 passed:12 · 🚫 门禁阻断 2 项）
+## large-scale-llm-practice（14 个内容页面 · passed:14 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=96.1%；未映射 unit=0；证据不完整 unit=3。
 
@@ -9168,10 +9168,10 @@
 - [x] ✅ **11-references/lsl-references** — passed；score 97
     - 路径：`content/large-scale-llm-practice/11-references/lsl-references.mdx`
     - 正式 unit：`lsl-references` explained=1/1
-- [ ] ❌ P1 **12-index/lsl-index** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **12-index/lsl-index** — passed；score 99
     - 路径：`content/large-scale-llm-practice/12-index/lsl-index.mdx`
     - 正式 unit：`lsl-index` explained=1/1
-- [ ] ❌ P1 **13-review/lsl-official-final-review** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **13-review/lsl-official-final-review** — passed；score 100
     - 路径：`content/large-scale-llm-practice/13-review/lsl-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [ ] 🔴 P1 **[正式 unit lsl-02] 第2章 大语言模型基础** — evidence 不完整；explained=13/15
