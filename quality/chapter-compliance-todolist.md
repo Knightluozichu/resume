@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T07:56:00.652Z
+> 生成时间：2026-10-15T09:03:31.991Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 477 |
-| failed | 1811 |
+| failed | 1805 |
 | queued | 196 |
-| passed | 1734 |
+| passed | 1740 |
 | published | 868 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -9031,26 +9031,26 @@
     - 路径：`content/kubernetes-in-action/23-final-review/k8s-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## langchain-programming（13 个内容页面 · failed:13 · 🚫 门禁阻断 13 项）
+## langchain-programming（13 个内容页面 · failed:7 passed:6 · 🚫 门禁阻断 7 项）
 
 - 门禁摘要：目录=未登记，manifest=11；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
-- [ ] ❌ P1 **00-map/lcp-official-learning-map** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **00-map/lcp-official-learning-map** — passed；score 100
     - 路径：`content/langchain-programming/00-map/lcp-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] ❌ P1 **01-preface/lcp-preface** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-preface/lcp-preface** — passed；score 99
     - 路径：`content/langchain-programming/01-preface/lcp-preface.mdx`
     - 正式 unit：`lcp-preface` explained=1/1
-- [ ] ❌ P1 **02-introduction/lcp-01-introduction** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-introduction/lcp-01-introduction** — passed；score 96
     - 路径：`content/langchain-programming/02-introduction/lcp-01-introduction.mdx`
     - 正式 unit：`lcp-01` explained=16/16
-- [ ] ❌ P1 **03-quickstart/lcp-02-first-experience** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-quickstart/lcp-02-first-experience** — passed；score 98
     - 路径：`content/langchain-programming/03-quickstart/lcp-02-first-experience.mdx`
     - 正式 unit：`lcp-02` explained=13/13
-- [ ] ❌ P1 **04-model-io/lcp-03-model-io** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **04-model-io/lcp-03-model-io** — passed；score 96
     - 路径：`content/langchain-programming/04-model-io/lcp-03-model-io.mdx`
     - 正式 unit：`lcp-03` explained=15/15
-- [ ] ❌ P1 **05-chains/lcp-04-building-chains** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **05-chains/lcp-04-building-chains** — passed；score 98
     - 路径：`content/langchain-programming/05-chains/lcp-04-building-chains.mdx`
     - 正式 unit：`lcp-04` explained=25/25
 - [ ] ❌ P1 **06-rag/lcp-05-rag** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux

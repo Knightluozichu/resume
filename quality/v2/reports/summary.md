@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-10-15T07:45:35.867Z；旧版分数不迁移。
+> 2026-10-15T09:03:30.809Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1811
+- failed：1805
 - queued：196
-- passed：1743
-- published：859
+- passed：1740
+- published：868
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -97,15 +97,15 @@
 | 84 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
 | 85 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
 | 86 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 87 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
-| 88 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 89 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 90 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 91 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 92 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 93 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 94 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 95 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 87 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 88 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 89 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 90 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 91 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 92 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 93 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 94 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 95 | langchain-programming | 13 | 7 | 0 | 6 | 7 |
 | 96 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 97 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 98 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
@@ -208,7 +208,7 @@
 | 195 | linear-algebra-done-right | 11 | 0 | 0 | 11 | 0 |
 | 196 | linux-kernel-design | 22 | 0 | 0 | 22 | 0 |
 | 197 | linux-kernel-essence | 10 | 0 | 0 | 10 | 0 |
-| 198 | llm-app-dev-essentials | 9 | 0 | 0 | 9 | 0 |
+| 198 | llm-app-dev-essentials | 9 | 0 | 0 | 0 | 0 |
 | 199 | machine-learning-watermelon | 19 | 0 | 0 | 0 | 0 |
 | 200 | math-girl | 50 | 0 | 0 | 0 | 0 |
 | 201 | modern-cpp-design | 13 | 0 | 0 | 13 | 0 |
