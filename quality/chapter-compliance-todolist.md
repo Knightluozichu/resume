@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-08T11:33:19.154Z
+> 生成时间：2026-10-15T06:21:25.828Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,10 +14,10 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 477 |
-| failed | 1829 |
+| failed | 1814 |
 | queued | 196 |
-| passed | 1739 |
-| published | 845 |
+| passed | 1740 |
+| published | 859 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
 
@@ -4954,51 +4954,50 @@
 - [ ] 🔴 P1 **[正式 unit ecs-04] Chapter 4: Working with LINQ (Items 29-44)** — evidence 不完整；explained=15/16
     - 关联路径：`content/effective-csharp/04-official/working-with-linq.mdx`
 
-## effective-executive（14 个内容页面 · failed:9 passed:5 · 🚫 门禁阻断 10 项）
+## effective-executive（14 个内容页面 · published:14 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=97.1%；未映射 unit=0；证据不完整 unit=1。
-- 其他门禁阻断：effective-executive: publication-policy-not-approved。
 
-- [x] ✅ **00-official-learning-map/eex19-official-learning-map** — passed；score 99
+- [x] 🚀 **00-official-learning-map/eex19-official-learning-map** — published（已发布）；score 99
     - 路径：`content/effective-executive/00-official-learning-map/eex19-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] ❌ P1 **01-recommendation-01/eex19-recommendation-01** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **01-recommendation-01/eex19-recommendation-01** — published（已发布）；score 93
     - 路径：`content/effective-executive/01-recommendation-01/eex19-recommendation-01.mdx`
     - 正式 unit：`eex19-recommendation-01` explained=1/1
-- [ ] ❌ P1 **02-recommendation-02/eex19-recommendation-02** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **02-recommendation-02/eex19-recommendation-02** — published（已发布）；score 94
     - 路径：`content/effective-executive/02-recommendation-02/eex19-recommendation-02.mdx`
     - 正式 unit：`eex19-recommendation-02` explained=1/1
-- [ ] ❌ P1 **03-recommendation-03/eex19-recommendation-03** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **03-recommendation-03/eex19-recommendation-03** — published（已发布）；score 94
     - 路径：`content/effective-executive/03-recommendation-03/eex19-recommendation-03.mdx`
     - 正式 unit：`eex19-recommendation-03` explained=1/1
-- [ ] ❌ P1 **04-preface/eex19-preface** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **04-preface/eex19-preface** — published（已发布）；score 93
     - 路径：`content/effective-executive/04-preface/eex19-preface.mdx`
     - 正式 unit：`eex19-preface` explained=1/1
-- [x] ✅ **05-chapter-01/eex19-chapter-01** — passed；score 95
+- [x] 🚀 **05-chapter-01/eex19-chapter-01** — published（已发布）；score 95
     - 路径：`content/effective-executive/05-chapter-01/eex19-chapter-01.mdx`
     - 正式 unit：`eex19-chapter-01` explained=6/6
-- [x] ✅ **06-chapter-02/eex19-chapter-02** — passed；score 94
+- [x] 🚀 **06-chapter-02/eex19-chapter-02** — published（已发布）；score 94
     - 路径：`content/effective-executive/06-chapter-02/eex19-chapter-02.mdx`
     - 正式 unit：`eex19-chapter-02` explained=5/5
-- [x] ✅ **07-chapter-03/eex19-chapter-03** — passed；score 92
+- [x] 🚀 **07-chapter-03/eex19-chapter-03** — published（已发布）；score 92
     - 路径：`content/effective-executive/07-chapter-03/eex19-chapter-03.mdx`
     - 正式 unit：`eex19-chapter-03` explained=4/5
-- [x] ✅ **08-chapter-04/eex19-chapter-04** — passed；score 94
+- [x] 🚀 **08-chapter-04/eex19-chapter-04** — published（已发布）；score 94
     - 路径：`content/effective-executive/08-chapter-04/eex19-chapter-04.mdx`
     - 正式 unit：`eex19-chapter-04` explained=4/4
-- [ ] ❌ P1 **09-chapter-05/eex19-chapter-05** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **09-chapter-05/eex19-chapter-05** — published（已发布）；score 92
     - 路径：`content/effective-executive/09-chapter-05/eex19-chapter-05.mdx`
     - 正式 unit：`eex19-chapter-05` explained=3/3
-- [ ] ❌ P1 **10-chapter-06/eex19-chapter-06** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **10-chapter-06/eex19-chapter-06** — published（已发布）；score 91
     - 路径：`content/effective-executive/10-chapter-06/eex19-chapter-06.mdx`
     - 正式 unit：`eex19-chapter-06` explained=3/3
-- [ ] ❌ P1 **11-chapter-07/eex19-chapter-07** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **11-chapter-07/eex19-chapter-07** — published（已发布）；score 93
     - 路径：`content/effective-executive/11-chapter-07/eex19-chapter-07.mdx`
     - 正式 unit：`eex19-chapter-07` explained=4/4
-- [ ] ❌ P1 **12-chapter-08/eex19-chapter-08** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **12-chapter-08/eex19-chapter-08** — published（已发布）；score 92
     - 路径：`content/effective-executive/12-chapter-08/eex19-chapter-08.mdx`
     - 正式 unit：`eex19-chapter-08` explained=1/1
-- [ ] ❌ P1 **13-official-final-review/eex19-official-final-review** — failed；score 41；门禁阻断: status=failed、score=41<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
+- [x] 🚀 **13-official-final-review/eex19-official-final-review** — published（已发布）；score 92
     - 路径：`content/effective-executive/13-official-final-review/eex19-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [ ] 🔴 P1 **[正式 unit eex19-chapter-03] 第3章 我能贡献什么** — evidence 不完整；explained=4/5
@@ -9487,26 +9486,26 @@
     - 路径：`content/linux-os-practice/07-review/lop-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## llm-app-dev-essentials（9 个内容页面 · failed:9 · 🚫 门禁阻断 9 项）
+## llm-app-dev-essentials（9 个内容页面 · failed:3 passed:6 · 🚫 门禁阻断 3 项）
 
 - 门禁摘要：目录=未登记，manifest=7；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
-- [ ] ❌ P1 **00-map/lae-official-learning-map** — failed；score 89；门禁阻断: status=failed、score=89<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **00-map/lae-official-learning-map** — passed；score 99
     - 路径：`content/llm-app-dev-essentials/00-map/lae-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] ❌ P1 **01-preface/lae-preface** — failed；score 87；门禁阻断: status=failed、score=87<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-preface/lae-preface** — passed；score 97
     - 路径：`content/llm-app-dev-essentials/01-preface/lae-preface.mdx`
     - 正式 unit：`lae-preface` explained=1/1
-- [ ] ❌ P1 **02-essentials/lae-01-gpt4-chatgpt-essentials** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-essentials/lae-01-gpt4-chatgpt-essentials** — passed；score 97
     - 路径：`content/llm-app-dev-essentials/02-essentials/lae-01-gpt4-chatgpt-essentials.mdx`
     - 正式 unit：`lae-01` explained=23/23
-- [ ] ❌ P1 **03-api/lae-02-api-deep-dive** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-api/lae-02-api-deep-dive** — passed；score 98
     - 路径：`content/llm-app-dev-essentials/03-api/lae-02-api-deep-dive.mdx`
     - 正式 unit：`lae-02` explained=22/22
-- [ ] ❌ P1 **04-apps/lae-03-building-apps** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **04-apps/lae-03-building-apps** — passed；score 97
     - 路径：`content/llm-app-dev-essentials/04-apps/lae-03-building-apps.mdx`
     - 正式 unit：`lae-03` explained=14/14
-- [ ] ❌ P1 **05-advanced/lae-04-advanced-techniques** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **05-advanced/lae-04-advanced-techniques** — passed；score 96
     - 路径：`content/llm-app-dev-essentials/05-advanced/lae-04-advanced-techniques.mdx`
     - 正式 unit：`lae-04` explained=13/13
 - [ ] ❌ P1 **06-frameworks/lae-05-langchain-plugins** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
@@ -12419,10 +12418,9 @@
 - [ ] 🔴 P1 **[正式 unit pya-02] Chapter 2 · Syntax Best Practices—Below the Class Level** — evidence 不完整；explained=4/5
     - 关联路径：`content/python-advanced/01-language-api/pya-syntax-below-class.mdx`
 
-## python-crash-course（22 个内容页面 · passed:22 · 🚫 门禁阻断 1 项）
+## python-crash-course（22 个内容页面 · passed:22 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=20；正式概念覆盖率=97.6%；未映射 unit=0；证据不完整 unit=3。
-- 其他门禁阻断：python-crash-course: publication-policy-not-approved。
 
 - [x] ✅ **00-basics/pcc-learning-map** — passed；score 97
     - 路径：`content/python-crash-course/00-basics/pcc-learning-map.mdx`

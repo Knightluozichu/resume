@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-10-09T04:34:43.353Z；旧版分数不迁移。
+> 2026-10-15T06:21:24.507Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1820
+- failed：1814
 - queued：196
-- passed：1761
-- published：832
+- passed：1740
+- published：859
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -106,7 +106,7 @@
 | 93 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
 | 94 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 95 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 96 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 96 | llm-app-dev-essentials | 9 | 3 | 0 | 6 | 3 |
 | 97 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 98 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 99 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
@@ -188,7 +188,7 @@
 | 175 | easy-cpp-5e | 18 | 0 | 0 | 18 | 0 |
 | 176 | effective-cpp | 57 | 0 | 0 | 0 | 0 |
 | 177 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
-| 178 | effective-executive | 14 | 0 | 0 | 14 | 0 |
+| 178 | effective-executive | 14 | 0 | 0 | 0 | 0 |
 | 179 | effective-modern-cpp | 44 | 0 | 0 | 44 | 0 |
 | 180 | first-line-android | 18 | 0 | 0 | 18 | 0 |
 | 181 | frontend-engineering | 9 | 0 | 0 | 9 | 0 |
@@ -219,7 +219,7 @@
 | 206 | pbrt-book | 16 | 0 | 0 | 0 | 0 |
 | 207 | poeaa-enterprise-patterns | 78 | 0 | 0 | 78 | 0 |
 | 208 | pragmatic-programmer | 71 | 0 | 0 | 71 | 0 |
-| 209 | python-advanced | 16 | 0 | 0 | 13 | 0 |
+| 209 | python-advanced | 16 | 0 | 0 | 0 | 0 |
 | 210 | python-crash-course | 22 | 0 | 0 | 22 | 0 |
 | 211 | ray-tracing-weekend | 12 | 0 | 0 | 12 | 0 |
 | 212 | redis-design-implementation | 26 | 0 | 0 | 0 | 0 |
