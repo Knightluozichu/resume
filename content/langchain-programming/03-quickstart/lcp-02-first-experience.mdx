@@ -3,8 +3,7 @@ title: 第2章 LangChain初体验
 type: C
 section: 第2章 LangChain初体验
 order: 3
-description: >-
-  冻结Python、包锁、密钥边界并重放模型—提示—解析—观测—服务链；并列原书2024与当前v1，用版本合同、执行trace和发布门交付环境锁、输入输出schema、trace、服务合同与密钥泄露检查
+description: 从隔离环境到带类型的数据管道，用可复核的离线程序理解模型、模板、解析器、LCEL、批流观测与服务安全边界，区分2024示例与当前v1。
 demo: true
 math: false
 sourceUrl: "https://aitutor.liduos.com/"
@@ -19,8 +18,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -33,315 +30,314 @@ import {
   Lcp02FirstExperienceReleaseGateLab,
 } from "@/components/mdx/langchain-programming/v2/lcp-02-first-experience";
 
+{/* 可视化决策卡：独立需求分析=初体验的困难是环境导入、逐步类型转换与批流失败定位，而非发布打分；环境/源码/其他库→依赖分叉图，卸载集成包断边、切Python阻断入口；模型/模板/解析器/LCEL→类型数据形状管道，逐步生成消息/字符串/字典并在坏JSON处断流；LangSmith/LangServe/安全→父子run时序与流片段图，批量增加分支、时钟改变条宽、中断截断结果；异构度高，独立实现于lcp-02-first-experience.tsx，保留三个原导出；手动离散状态无自动动画，整数坐标避免hydration浮点差。 */}
+
 <Objectives>
 
-- 解释环境、快速开始、LCEL、LangSmith、LangServe与安全的输入schema、执行状态、事件与输出，而不只背API名称
-- 并列原书2024轨道与当前LangChain v1轨道，定位“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”的首个分岔
-- 交付环境锁、输入输出schema、trace、服务合同与密钥泄露检查，说明评估、回退、安全与未测试边界
+- 根据解释器、包名与导入路径，区分环境故障、SDK故障和模型调用故障。
+- 运行离线最小程序，逐步指出字典、消息列表、AIMessage和解析结果的类型。
+- 预测invoke、batch、stream的结果形态，从父子run定位“已有文本却无最终字典”的首个失败边界，并列出上线前仍缺的证据。
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 为什么第一次体验不从密钥开始
 
-第2章 LangChain初体验围绕“快速开始怎样从一次成功调用升级为可复现、可观测且安全的最小服务？”建立贯穿任务：在锁定的2024原书轨道和当前LangChain v1轨道上重放环境、快速开始、LCEL、LangSmith、LangServe与安全。先预测依赖、schema、事件、状态、工具/检索调用或评估中的首个变化，再运行原书参考、v1参考、迁移故障与回退；只有守住“第2章 LangChain初体验的包版本、输入输出schema、执行事件、评估结果与回退路径始终一致”并交付环境锁、输入输出schema、trace、服务合同与密钥泄露检查，代码运行才构成可发布证据。
+假如终端已经打印出一段流畅的回答，你能判断是模板生效了、模型接通了，还是程序只是返回了预设文本吗？第一次体验应先建立可检查的数据路径，再接入外部服务。
 
-## 原书、伴学材料与当前v1边界
+本页先把模型替换为确定性的离线函数，让每一阶段都可复算；最后再说明真实SDK、观测平台与HTTP部署各自增加了什么责任。三个图与程序都不需要密钥，也不宣称发生过在线模型调用。
 
-第2章 LangChain初体验以[作者李多多（莫尔索）的开放学习站](https://aitutor.liduos.com/)核对作者身份、实践取向和相关公开伴学材料；站点明确称其为个人学习笔记并宣传纸书，但它不是人民邮电出版社纸书的逐页全文，因此本课程把来源级别记为“作者授权伴学样本”，不虚构完整书稿访问权。
+## 来源与版本边界
 
-第2章 LangChain初体验以[首版公开书目与完整目录](https://m.bookschina.com/9299314.htm)核对《LangChain编程：从入门到实践》、人民邮电出版社、2024年4月、192页、ISBN 9787115639424，以及前言、10章和全部节/小节。正式分母是1个前言、10个章标题和135个节/小节，共146个层级；课程用学习地图、前言、10章和总复习共13页承载。
+书目为李多多（莫尔索）《LangChain编程：从入门到实践》，人民邮电出版社，2024-04。原书范围采用仓库中 **2026-07-30** 已核对的目录清单，本页保留其中13个章/节/小节标题；不声称拥有或复现纸书全文。
 
-第2章 LangChain初体验以[LangChain当前官方总览](https://docs.langchain.com/oss/python/langchain/overview)与[v1迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)建立第二条事实轨道：当前v1精简核心命名空间、把大量旧Chain与检索接口移到langchain-classic，并以create_agent、中间件、LangGraph和LangSmith组织主路径。本站不复制纸书或伴学站正文、代码和图片，所有中文解释、双轨迁移、反例、交互、练习与答案均为独立重写。
+**2026-10-15访问说明：** [作者开放伴学站](https://aitutor.liduos.com/)可以访问，但它是开放伴学材料/实践笔记，不是纸书逐页全文，也不据此推定纸书改编授权。[中图书目目录链接](https://m.bookschina.com/9299314.htm)本次返回HTTP 200后显示会员登录，不能作为今日重核完整目录的证据。主会话来源记录见 `quality/artifacts/batch-17/sources.json`；本章补充核验见 `quality/artifacts/batch-17/quickstart/sources.json`。
 
-### 本页独立事实来源
+| 时间或组件        | 本页如何使用                                                       | 不做的推断                                          |
+| ----------------- | ------------------------------------------------------------------ | --------------------------------------------------- |
+| 2024原书示例      | 保留环境、模型—模板—解析、LCEL、观测、服务、安全的学习顺序         | 没有原锁文件，不捏造可重放的2024精确依赖版本        |
+| 当前LangChain v1  | 以官方overview、v1迁移指南核对标准模型接口、create_agent与命名空间 | 不把所有2024导入语句当成当前可用                    |
+| langchain-classic | 承载许多迁出的旧Chain等接口；安装名带连字符，导入名用下划线        | 不是安装v1后自动启用的“旧模式”                      |
+| LangGraph         | 提供图式状态编排与持久执行基础，当前LangChain agent构建于其上      | 不把一条顺序LCEL链称为有持久化的完整agent系统       |
+| 本页离线模拟      | Python标准库可复核类型、JSON解析、批和流的最小机制                 | 不证明SDK、provider、LangSmith或LangServe已集成成功 |
 
-- [LangChain当前官方总览](https://docs.langchain.com/oss/python/langchain/overview)：在第2章 LangChain初体验中，核对当前v1的agent harness、模型接口、LangGraph与LangSmith定位。
-- [LangChain v1官方迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)：在第2章 LangChain初体验中，核对精简命名空间、langchain-classic、create_agent和破坏性变化。
-- [LangSmith官方可观测性文档](https://docs.langchain.com/langsmith/observability)：在第2章 LangChain初体验中，核对trace、调试和评估的当前证据入口。
-- [LangChain官方安全公告](https://github.com/langchain-ai/langchain/security/advisories)：在第2章 LangChain初体验中，核对依赖与模板等安全风险不能只靠书中静态建议。
+事实核对以[当前总览](https://docs.langchain.com/oss/python/langchain/overview)、[v1迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)和[LangSmith官方观测文档](https://docs.langchain.com/langsmith/observability)为准。当前v1的Python下限是3.10；本页离线程序也使用Python 3.10+语法。
 
-## 146个正式坐标中的本页覆盖
+## 第2章 LangChain初体验
 
-### 第2章 LangChain初体验
+这一章的产物不是“一个能回答问题的聊天框”，而是一条能说明输入、处理阶段、输出和失败位置的最小路径。贯穿输入为 `{"topic": "缓存"}`：模板把主题放入用户消息，离线模型返回JSON文本，解析器再生成字典。依赖图解释它在哪里运行，类型管道解释它怎样变形，运行树解释何时成功或中断。学习完应能把故障定位到阶段，而非笼统地说“LangChain坏了”。
 
-**坐标 1/13：第2章 LangChain初体验。** 第2章 LangChain初体验把第2章 LangChain初体验映射到版本、输入schema、执行状态、输出证据和失败边界，再用单一迁移故障定位首个不兼容点。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+## 2.1 开发环境准备
 
-### 2.1 开发环境准备
+先把“解释器能运行”“依赖能导入”“请求能到达服务端”分开检查。<Term def="为一个项目单独保存解释器关联和安装包的目录，避免其他项目的包互相干扰">虚拟环境</Term>解决本机包隔离，不保证远端模型、驱动或系统库也一致。记录 `python --version`、`python -m pip --version`，确认pip属于同一解释器；部署机还需记录操作系统、架构与系统依赖。
 
-**坐标 2/13：2.1 开发环境准备。** 第2章 LangChain初体验冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+**先预测：** 只删除provider集成包，`langchain-core`会一并消失吗？在实验一卸载集成包，再切换v1/classic路径和Python版本。观察分支消失与入口阻断的区别；完成后全重置，回到Python 3.11、v1路径和集成包存在的状态。
+
+<Lcp02FirstExperienceVersionContractLab />
 
 ### 2.1.1 管理工具安装
 
-**坐标 3/13：2.1.1 管理工具安装。** 第2章 LangChain初体验冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+管理工具负责创建环境、安装/解析依赖并记录结果，框架则提供运行时能力。第一次只使用Python自带的venv与pip，避免同时混用多个包管理器；后续采用uv或其他工具时，也应保留一个明确的环境入口。
+
+```bash
+python3 --version
+python3 -m venv .venv
+# macOS / Linux
+source .venv/bin/activate
+# Windows PowerShell 改用 .venv\Scripts\Activate.ps1
+python -m pip --version
+```
+
+这些是读者操作指引，不是本站声称已在所有平台执行的日志。下文离线程序**不需要pip安装任何包**。接入真实SDK时才在单独环境选择并锁定 `langchain`、对应provider包及其兼容依赖；不要把没有版本号的安装命令当成可复现环境。
+
+<Term def="记录实际解析出的依赖版本，必要时连同哈希和环境标记固定安装结果的文件">依赖锁</Term>与虚拟环境是两件事：前者描述“应该装什么”，后者承载“本机实际装了什么”。`python -m pip freeze > requirements.snapshot.txt`可记录当前安装版本，但不等于跨平台、含哈希的完整锁；换机仍需重装、检查并运行测试。删除环境重建，比依赖“我机器上以前装过”更可靠。
 
 ### 2.1.2 源码安装
 
-**坐标 4/13：2.1.2 源码安装。** 第2章 LangChain初体验冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+源码安装适合阅读实现、验证修复或贡献补丁，不是普通调用SDK的必需步骤。先在官方仓库选择与目标发布版本对应的tag或提交，查看该提交的开发文档与包目录，再在包根执行其支持的安装方式，例如 `python -m pip install -e .`。LangChain是多包仓库，不能假定仓库根就是单一可安装包。
+
+`-e`使导入指向工作区，修改源码可能立刻改变行为；必须记录提交ID、未提交补丁、安装包目录与依赖锁。若 `import langchain` 意外加载了当前目录下同名文件，应先查 `module.__file__`，而不是反复重装。实验一的导入路径图只画选定依赖关系，不伪装为某个历史提交的完整依赖树。
 
 ### 2.1.3 其他库安装
 
-**坐标 5/13：2.1.3 其他库安装。** 第2章 LangChain初体验冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+`langchain-core`提供消息、提示与Runnable等基础抽象，`langchain`提供当前高层入口，provider集成包负责对接具体模型SDK；LangSmith客户端用于观测，服务层还可能依赖Web框架。它们不是一个“装了LangChain就全部接通”的整体。
 
-### 2.2 快速开始
+将故障按层排查：`ModuleNotFoundError`先查包与解释器；认证失败查密钥和权限；超时查网络与服务端；解析错误查返回内容与解析约束。实验一没有画网络边，因为**包能导入并不意味着网络能调用**。真实接入时记录provider、模型标识、包版本和环境变量名，但不要把变量值写进依赖清单。
 
-**坐标 6/13：2.2 快速开始。** 第2章 LangChain初体验把2.2 快速开始映射到版本、输入schema、执行状态、输出证据和失败边界，再用单一迁移故障定位首个不兼容点。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Callout type="trap" title="同名包与导入路径不是同一个概念">
+  **现象 →** pip显示已安装，Python仍无法导入旧Chain。 **原因 →**
+  解释器错位，或v1命名空间已精简；不是所有旧入口都留在langchain内。 **修法 →**
+  先核对pip所属解释器，再按迁移指南判断应迁移接口还是显式采用langchain-classic；不可只改包名而不测行为。
+</Callout>
+
+## 2.2 快速开始
+
+把链理解成三个可单独测试的函数：`format_prompt → fake_model → parse`。每个阶段只接收上一阶段的输出。<Term def="规定输入有哪些字段、字段类型及必要校验的规则">输入schema</Term>在本例要求topic为非空字符串；输出则要求answer为字符串。Python类型注解本身不会强制运行时检查，所以程序另写显式校验。
+
+**先预测：** 模型阶段结束后，结果是字典还是装着字符串的消息对象？在实验二逐步执行三次；再全重置、注入坏JSON并重复操作。应看到消息已生成，但最后的字典没有出现，失败点是解析而非环境。
+
+<Lcp02FirstExperienceRunnableTraceLab />
 
 ### 2.2.1 语言模型
 
-**坐标 7/13：2.2.1 语言模型。** 第2章 LangChain初体验用消息角色、模板变量、模型配置和解析schema组成类型链，并分别测试正常输出、拒答、截断与格式错误。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+语言模型接口把模型服务包装成可调用对象。真实聊天模型常接收消息序列并返回 `AIMessage`，其内容可能是文本或结构化内容块，不能无条件把任意模型的 `content` 当成JSON字符串。provider集成解决协议差异，模型选择、采样参数、超时与凭据仍要由应用确定。
+
+本例用 `fake_model` 取代外部服务：固定输入必得固定JSON文本。这样能隔离“模型输出不符合约定”的失败，不能据此判断真实模型质量。当前v1可从标准模型接口开始；需要工具循环与状态管理时再学习 `create_agent` 与LangGraph，而非把每次单模型调用都包装成agent。
 
 ### 2.2.2 提示模板
 
-**坐标 8/13：2.2.2 提示模板。** 第2章 LangChain初体验用消息角色、模板变量、模型配置和解析schema组成类型链，并分别测试正常输出、拒答、截断与格式错误。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="把固定指令和本次输入按位置组合成消息或文本的规则">提示模板</Term>将格式约束放在system消息，把本次主题放在user消息。输入 `{"topic":"缓存"}` 不是直接交给模型的句子，必须先完成变量校验和格式化。真实LangChain中的 `ChatPromptTemplate` 通常产出 `ChatPromptValue`，可以转换为消息列表；本例直接使用列表，刻意省去SDK对象层。
+
+模板不是安全沙箱：用户即使在topic里写“忽略所有指令”，也不应因此获得文件或网络权限。字符串插值也不等于执行Python表达式；不要为便利而接受未受信任的模板代码或使用 `eval`。
 
 ### 2.2.3 输出解析器
 
-**坐标 9/13：2.2.3 输出解析器。** 第2章 LangChain初体验用消息角色、模板变量、模型配置和解析schema组成类型链，并分别测试正常输出、拒答、截断与格式错误。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="把模型返回的内容转换为应用需要的数据形状，并在不合规则时报告错误的步骤">输出解析器</Term>不负责“让模型变聪明”。`json.loads`只能验证JSON语法；`{"answer":7}`语法正确，却不满足本例answer为字符串的约束。因此程序在解析后再检查字段类型。
+
+实验二的坏JSON缺少正确引号，错误在语法解析阶段产生，下游字典必须缺席。真实项目可采用结构化输出能力或更严格的schema校验，但仍需处理拒绝、截断、超时及不合规则的结果，不要把空字典作为静默兜底。
+
+<Callout type="trap" title="模型成功不等于业务成功">
+  **现象 →** 已收到AIMessage，应用仍报JSONDecodeError。 **原因 →**
+  通信成功只证明收到内容，不能保证其格式或字段合法。 **修法 →**
+  分开记录模型run与解析run；验证字段，明确返回错误或有上限的重试，不伪造正常结果。
+</Callout>
 
 ### 2.2.4 使用LCEL进行组合
 
-**坐标 10/13：2.2.4 使用LCEL进行组合。** 第2章 LangChain初体验把2.2.4 使用LCEL进行组合映射到版本、输入schema、执行状态、输出证据和失败边界，再用单一迁移故障定位首个不兼容点。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="LangChain Expression Language，用Runnable的组合规则构造可调用的数据处理链">
+  LCEL
+</Term>
+把兼容的Runnable串联起来，常见写法是 `prompt | model |
+parser`。`|`表示前者输出交给后者，**不会自动修补类型**；相邻阶段形状不匹配时仍会失败。普通Python函数的
+`|`并不能直接组合，本页离线程序用函数调用表达相同的数据流，不冒充SDK的Runnable实现。
+
+Runnable常用入口包括 `invoke`（一个输入得到一个结果）、`batch`（多个输入分别执行，通常按输入顺序收集结果）、`stream`（迭代取得输出片段）。实际并发、异步与异常选项取决于实现；流能否逐步穿过整条链还取决于各阶段是否支持流式转换。完整JSON解析器可能等到末尾才返回，不能仅凭调用了stream就断言全链低延迟。
+
+#### 可复核离线最小程序：先看见类型，再替换模型
+
+依次把以下三段保存到同一个 `quickstart_offline.py`。只用标准库，运行 `python3 quickstart_offline.py`；不需要LangChain、API密钥或联网。本章证据目录保留同名完整程序、独立测试与真实输出。第一段定义输入校验和两条消息，`topic`不合规则直接在模板边界失败。
+
+```python
+import json
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class AIMessage:
+    content: str
+
+def format_prompt(data: dict) -> list[dict[str, str]]:
+    topic = data.get("topic")
+    if not isinstance(topic, str) or not topic.strip():
+        raise ValueError("topic must be a non-empty string")
+    return [
+        {"role": "system", "content": "只返回含answer的JSON"},
+        {"role": "user", "content": topic},
+    ]
+
+def fake_model(messages: list[dict[str, str]], bad=False) -> AIMessage:
+    if bad:
+        return AIMessage("answer: 缺少JSON引号")
+    topic = messages[-1]["content"]
+    return AIMessage(json.dumps({"answer": topic + "的解释"},
+                                ensure_ascii=False))
+```
+
+第二段把AIMessage的字符串内容转换成字典，并组合成一个最小执行入口。解析失败会抛出异常，不能带着无效结果继续运行。本例只保留answer字段，其他字段不会透传。
+
+```python
+def parse(message: AIMessage) -> dict[str, str]:
+    data = json.loads(message.content)
+    if not isinstance(data, dict) or not isinstance(data.get("answer"), str):
+        raise ValueError("answer must be a string")
+    return {"answer": data["answer"]}
+
+def invoke(data: dict, bad=False) -> dict[str, str]:
+    messages = format_prompt(data)
+    reply = fake_model(messages, bad=bad)
+    return parse(reply)
+
+def stream(data: dict, fail=False):
+    text = fake_model(format_prompt(data)).content
+    cuts = (0, len(text) // 3, 2 * len(text) // 3, len(text))
+    for i in range(3):
+        if fail and i == 1:
+            raise TimeoutError("offline simulated interruption")
+        yield text[cuts[i]:cuts[i + 1]]
+```
+
+第三段演示单次、批量、流缓冲以及坏JSON。这里batch是显式列表推导式，**顺序执行**，不是SDK并发测试；stream把字符串分成三块，不等于真实token流。完整缓冲后才调用parse，与实验三的“片段不等于最终结果”一致。
+
+```python
+if __name__ == "__main__":
+    sample = {"topic": "缓存"}
+    print("invoke:", invoke(sample))
+    print("batch:", [invoke({"topic": t}) for t in ("缓存", "管道")])
+    chunks = list(stream(sample))
+    print("stream chunks:", chunks)
+    print("stream parsed:", parse(AIMessage("".join(chunks))))
+    try:
+        invoke(sample, bad=True)
+    except json.JSONDecodeError as exc:
+        print("failure:", type(exc).__name__)
+```
+
+应得到 `invoke: {'answer': '缓存的解释'}`，batch依次返回缓存、管道两个字典；流的三段拼接后等于模型完整JSON文本，最后打印 `failure: JSONDecodeError`。这是离线函数的可复算结果，不是在线SDK执行证明。真实接入的下一步是保持schema测试不变，单独替换模板/模型适配层，再验证凭据、网络、返回内容形状与SDK版本。
 
 ### 2.2.5 使用LangSmith进行观测
 
-**坐标 11/13：2.2.5 使用LangSmith进行观测。** 第2章 LangChain初体验冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+<Term def="把一次请求内各处理步骤关联起来的运行记录，包含父子关系、输入输出、状态及时间等信息">
+  执行trace
+</Term>
+回答“哪一步先失败”，不是仅保存最后一句回答。一次模板—模型—解析链可以有一个root
+run和三个子run，模型输出正常而解析失败时，两个子run的状态不同。LangSmith提供trace采集、查看、调试和评估能力，具体开启方式与环境变量应依[官方文档](https://docs.langchain.com/langsmith/observability)配置。
+
+观测与评估也不同：trace说明这次怎样执行，独立测试集则检查是否满足预期。上线前应验证成功与失败都能关联到请求，确保采样或脱敏不会隐藏关键错误。涉及云端上传时先审查输入、消息和输出是否含个人信息或凭据；仅关闭界面展示不等于未上传。
+
+**先预测：** 把一次调用改为三个输入的batch，应该变成一个更长prompt，还是三个子运行？实验三选择batch并拖动时钟；再选stream，看三个片段到达后才产生完整结果。注入模型中断，观察条宽在第3拍封口，解析阶段缺席；全重置会恢复invoke、时钟0和无故障。
+
+<Lcp02FirstExperienceReleaseGateLab />
+
+图中逻辑拍是人为设置的教学时序，batch假设同时启动三个输入，不是Python程序的实测并发；真实SDK是否并发要单独测。图中run树是本地模拟，**没有上传LangSmith**。程序的独立测试另覆盖了中途流异常：已收到的一个片段不能交给JSON解析器冒充成功结果。
 
 ### 2.2.6 使用LangServe提供服务
 
-**坐标 12/13：2.2.6 使用LangServe提供服务。** 第2章 LangChain初体验冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+LangServe在历史教程中用于把Runnable暴露为HTTP接口，常围绕invoke、batch、stream和输入/输出schema构建服务。其职责是传输与接口封装，不是自动完成鉴权、限流、租户隔离和模型质量保证。HTTP传入的JSON还需要验证才能进入模板；内部异常应映射成不泄露堆栈或密钥的错误响应。
 
-### 2.3 最佳安全实践
+2024的“本地链→LangServe端点”应按当时匹配的包版本理解。[LangServe官方仓库](https://github.com/langchain-ai/langserve)本次可访问，并明确建议新项目考虑LangGraph Platform而非LangServe。当前产品名称和部署选项继续演进，应依最新官方部署资料选型；不能称LangServe为v1唯一生产推荐，也不能把LangGraph运行时、LangSmith观测与HTTP服务视作同一个东西。
 
-**坐标 13/13：2.3 最佳安全实践。** 第2章 LangChain初体验冻结Python与包锁，隔离密钥，保存输入输出schema和trace；一次本地成功不能替代服务合同、安全检查与回退。 对第2章 LangChain初体验的验收必须同时保存依赖锁、输入输出schema、参考trace、单一迁移故障、独立评估和回退结果；仅有导入成功、无异常或最终答案流畅，都不能证明当前v1兼容。
+本章未启动LangServe或Web服务。若把离线invoke包装为服务，至少写下以下接口合同并实际测试：请求体 `{"topic":"缓存"}`；成功返回 `{"answer":"缓存的解释"}`；输入非法与模型/解析失败分开处理；流式接口在中断时发出明确错误/结束信号而不是追加“正常完成”。还需鉴权、限流、超时、日志脱敏、部署环境锁以及回退版本；图中root的失败封口就是服务端不能忽略的状态。
 
-## 先预测，再操作双轨实验
+## 2.3 最佳安全实践
 
-先预测：在第2章 LangChain初体验只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”时，依赖解析、输入schema、执行事件、工具/检索状态、输出解析或独立评估中的哪一项最先变化？请先写下可观测信号，再切换原书/v1轨道和参考/故障trace。
+从“有什么输入、能触达什么资源、会把什么数据送出去”划定边界。<Term def="只授予完成当前任务必需的权限和资源访问范围">最小权限</Term>意味着教学模型调用不应同时拿到生产数据库写权限；密钥从服务端环境或受控密钥系统读取，不放进浏览器包、Git、提示模板和trace。依赖升级前查官方安全公告，不能以书的出版年份判断今天是否安全。
 
-<Stepper>
-  <Step title="版本合同：比较原书与v1">
-    <Lcp02FirstExperienceVersionContractLab />
-  </Step>
-  <Step title="执行轨迹：重放参考与故障">
-    <Lcp02FirstExperienceRunnableTraceLab />
-  </Step>
-  <Step title="发布证据门：检查评估与回退">
-    <Lcp02FirstExperienceReleaseGateLab />
-  </Step>
-</Stepper>
+| 边界          | 典型风险                          | 本章可操作的检查                                 |
+| ------------- | --------------------------------- | ------------------------------------------------ |
+| 输入→模板     | 未受信任模板、超长输入、缺失topic | 只接受预定义字段与非空字符串，服务层另设长度上限 |
+| 模型→解析     | 无效JSON、错误字段、被截断内容    | 先语法后字段校验；失败时不交付业务结果           |
+| 运行→观测平台 | 提示、凭据、个人信息外传          | 上传前脱敏/过滤，检查失败run也不含秘密           |
+| 调用→服务资源 | 匿名滥用、超时堆积、工具越权      | 鉴权与配额、超时取消、服务端最小权限             |
 
-## 最小可复现与迁移协议
+提示注入不能靠“再写一句不要泄密”根治，权限检查必须在模型之外执行。本例没有工具执行、文件读取或外部网络权限，因此坏JSON只能导致解析失败；将来增加工具时，应新增参数白名单、授权检查和副作用审计。
 
-1. 为第2章 LangChain初体验分别冻结原书2024与当前v1的Python、包锁、集成包、模型/工具版本、输入schema、随机性和评估集，禁止跨轨拼接。
-2. 在两条轨道运行参考流程，保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查；若只能看到最终输出，就无法判断差异来自框架、provider还是数据。
-3. 保持模型、数据和评估不变，只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”，定位依赖、schema、状态、事件或输出中的首个分岔。
-4. 撤销故障，从同一快照重放；只有trace、评估和回退都恢复，才允许批准迁移或发布。
-
-<Callout type="trap" title="第2章 LangChain初体验误区一：旧API等于错误知识">
-  原书2024接口是历史教学轨道，仍可解释稳定机制；第2章
-  LangChain初体验应标注版本并建立迁移关系，而不是删除历史或假装它仍是当前默认。
+<Callout type="trap" title="成功截图不能代替安全和失败证据">
+  **现象 →** 演示成功，却在日志或浏览器包中发现真实密钥；流中断还显示完成。
+  **原因 →** 把可观测性等同于全量上传，把局部片段当成业务结果。 **修法 →**
+  撤销泄露密钥、审查上传字段，按root状态结束请求；保存不含秘密的失败trace和可重建环境。
 </Callout>
 
-<Callout type="trap" title="第2章 LangChain初体验误区二：改导入路径就完成迁移">
-  v1改变命名空间、agent构建、状态、中间件和内容块等语义；第2章
-  LangChain初体验必须重跑schema、stream、工具错误、trace和评估，不能只让代码通过import。
-</Callout>
+## 小结与练习
 
-<Callout type="trap" title="第2章 LangChain初体验误区三：演示成功即可上线">
-  LangChain应用还依赖模型、检索、外部工具、权限和数据；第2章
-  LangChain初体验必须覆盖故障、重复事件、敏感数据、回退与持续评估。
-</Callout>
-
-## 小结
-
-- 环境、LCEL、LangSmith与安全纳入证据链
-- 原书轨道解释2024语义，v1文档重建接口
-- schema和trace揭示行为并定位不兼容点
-- 独立评估与回退机制决定能否发布
-- 交付环境锁、IO schema、服务合同与密钥检查
-
-## 练习与答案
+- 环境导入、网络调用、结果解析必须分层检查。
+- 模型返回消息不等于解析后的业务字典。
+- batch增加运行分支；stream片段需要结束语义。
+- 解析失败先查内容，发布还需服务、安全与真实集成证据。
 
 <Exercises>
 
-**问题 1：第2章 LangChain初体验**
-
-为第2章 LangChain初体验的第2章 LangChain初体验写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 1：重建一次可解释的环境。** 同事安装了最新版langchain，又用2024教程导入旧Chain，报错后直接编辑site-packages。请说明管理工具、源码安装、其他库分别该怎么处理，并在实验一演示“旧入口”与“缺包”不是同一故障。
 
 <Answer>
-  先分别锁定两条版本轨道，把第2章
-  LangChain初体验映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
+  先确认Python与pip属于同一虚拟环境，用v1迁移指南判断旧Chain是否已移至langchain-classic，不假定2024代码兼容。管理工具负责隔离与依赖记录；若必须改源码，应单独检出固定tag/提交并在正确包目录按开发文档editable安装，记录补丁，而非手改site-packages。provider、观测和服务依赖按用途分别锁定。实验一切classic会把依赖边移到另一入口，卸载集成包则移除底部分支；Python3.9会先阻断当前v1的环境条件。没有原书锁文件就不能声称恢复了原书环境。
 </Answer>
 
-**问题 2：2.1 开发环境准备**
-
-为第2章 LangChain初体验的2·1 开发环境准备写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 2：改代码并独立实现字段校验。** 在fake_model里返回 `{"answer":7}`，预测在哪一阶段失败。再给输出增加 `source: "offline"`，要求解析器只接受这个固定值；为topic为空、坏JSON和正常输入各写一个断言。
 
 <Answer>
-  先分别锁定两条版本轨道，把2·1
-  开发环境准备映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
+  数字answer是合法JSON，json.loads会通过，随后字段检查抛出ValueError；与实验二缺引号触发JSONDecodeError不同。将fake_model的正常JSON对象加入source字段，在parse的字典检查后验证
+  `data.get("source") ==
+  "offline"`，不符时抛ValueError，并返回含answer与source的字典。正常输入应得到两个字段；空topic在format_prompt抛ValueError；坏JSON仍在json.loads抛JSONDecodeError。最后保留原来的批顺序与流拼接测试，确认修改没有破坏组合。真实LCEL中也要检查相邻Runnable的输入输出，不能期望竖线替你补字段。
 </Answer>
 
-**问题 3：2.1.1 管理工具安装**
-
-为第2章 LangChain初体验的2·1·1 管理工具安装写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
+**问题 3：从流中断决定服务行为。** 实验三在stream模式注入第3拍中断，再解释：应该上传哪类run状态？客户端能否把第一片当作成功JSON？若要通过LangServe或其他服务层部署，还缺什么？
 
 <Answer>
-  先分别锁定两条版本轨道，把2·1·1
-  管理工具安装映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 4：2.1.2 源码安装**
-
-为第2章 LangChain初体验的2·1·2 源码安装写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·1·2
-  源码安装映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 5：2.1.3 其他库安装**
-
-为第2章 LangChain初体验的2·1·3 其他库安装写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·1·3
-  其他库安装映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 6：2.2 快速开始**
-
-为第2章 LangChain初体验的2·2 快速开始写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·2
-  快速开始映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 7：2.2.1 语言模型**
-
-为第2章 LangChain初体验的2·2·1 语言模型写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·2·1
-  语言模型映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 8：2.2.2 提示模板**
-
-为第2章 LangChain初体验的2·2·2 提示模板写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·2·2
-  提示模板映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 9：2.2.3 输出解析器**
-
-为第2章 LangChain初体验的2·2·3 输出解析器写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·2·3
-  输出解析器映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 10：2.2.4 使用LCEL进行组合**
-
-为第2章 LangChain初体验的2·2·4 使用LCEL进行组合写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·2·4
-  使用LCEL进行组合映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 11：2.2.5 使用LangSmith进行观测**
-
-为第2章 LangChain初体验的2·2·5 使用LangSmith进行观测写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·2·5
-  使用LangSmith进行观测映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 12：2.2.6 使用LangServe提供服务**
-
-为第2章 LangChain初体验的2·2·6 使用LangServe提供服务写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·2·6
-  使用LangServe提供服务映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 13：2.3 最佳安全实践**
-
-为第2章 LangChain初体验的2·3 最佳安全实践写一个原书2024输入和一个当前v1输入，指出最小迁移故障、首个可观测分岔、独立评估与回退条件。
-
-<Answer>
-  先分别锁定两条版本轨道，把2·3
-  最佳安全实践映射到明确schema、执行状态和输出事件；参考运行保存环境锁、输入输出schema、trace、服务合同与密钥泄露检查，故障运行只注入“使用未锁定最新版依赖和真实密钥，成功一次后隐藏trace与失败输出”。若首个分岔可定位、当前v1行为满足独立评估且回退恢复参考状态，才能批准局部迁移；未测试provider、模型、数据源和部署仍在第2章
-  LangChain初体验边界外。
-</Answer>
-
-**问题 14：为什么不能混合两条轨道**
-
-解释第2章 LangChain初体验为什么不能在同一示例中无标记地混用原书v0接口、langchain-classic与当前v1接口。
-
-<Answer>
-  三者的命名空间、状态、事件、agent和内容语义可能不同。无标记混用会让读者无法复现依赖，也无法判断成功来自兼容层还是当前接口。正确做法是分开锁文件和运行入口，逐项写迁移映射，再用同一输入与评估比较行为。
-</Answer>
-
-**问题 15：发布证据**
-
-第2章 LangChain初体验除了“代码能运行”还需要哪些证据才能上线？
-
-<Answer>
-  第2章
-  LangChain初体验至少需要依赖与许可证清单、输入输出schema、完整trace、失败和重试路径、检索或工具调用证据、安全与敏感数据检查、独立质量评估、延迟成本预算、监控告警以及可执行回退快照。任一项未知都应显式列入第2章
-  LangChain初体验的发布边界。
+  应保留关联请求的root与模型失败状态，解析阶段未执行，不能伪造成功run。片段1只是JSON文本的一部分，不满足完整语法，必须结束为错误或按协议告知中断；若重试，要有预算并避免副作用重复。观测前脱敏，不上传密钥；服务端补齐输入校验、鉴权、配额、超时、取消和错误映射。LangSmith负责观测而非替代服务鉴权，LangServe是历史封装方案，不是v1唯一推荐。上线仍缺真实SDK、provider网络、服务端点、真实trace上传及部署回退测试，本章离线成功不能覆盖它们。
 </Answer>
 
 </Exercises>
 
-## 术语与运行证据
-
-在第2章 LangChain初体验中，<Term def="第2章 LangChain初体验把原书2024与当前v1分开的依赖和接口语义">版本轨道</Term>、<Term def="第2章 LangChain初体验对消息、文档、工具参数或事件负载的类型合同">输入schema</Term>、<Term def="第2章 LangChain初体验把模型、检索、工具、状态和错误关联起来的事件树">执行trace</Term>、<Term def="第2章 LangChain初体验只改变一个版本或接口假设以定位不兼容点">迁移故障</Term>、<Term def="第2章 LangChain初体验不复用演示样本的质量、安全、延迟和成本检查">独立评估</Term>、<Term def="第2章 LangChain初体验能够恢复依赖、状态和服务行为的可部署版本">回退快照</Term>共同约束发布。术语必须落到锁文件、schema、trace、评估和回退；把旧类名替换成新类名而不重跑行为合同，不叫迁移。
+## 名词解释
 
 <Glossary>
-  <GlossaryItem term="版本轨道">
-    第2章 LangChain初体验把原书2024与当前v1分开的依赖和接口语义。
+  <GlossaryItem term="虚拟环境">
+    一个项目自己的包目录与解释器关联；让项目之间少互相影响，不隔离远端服务。
+  </GlossaryItem>
+  <GlossaryItem term="依赖锁">
+    记录需要安装的确切依赖结果；与本机已有环境对照才能判断是否重建一致。
   </GlossaryItem>
   <GlossaryItem term="输入schema">
-    第2章 LangChain初体验对消息、文档、工具参数或事件负载的类型合同。
+    允许进入程序的字段与类型规则；本例topic必须是非空字符串。
+  </GlossaryItem>
+  <GlossaryItem term="提示模板">
+    固定消息骨架加本次变量，产出交给模型的消息；不是权限控制器。
+  </GlossaryItem>
+  <GlossaryItem term="输出解析器">
+    把模型内容变成应用数据的步骤；格式或字段不合法时应该显式报错。
+  </GlossaryItem>
+  <GlossaryItem term="LCEL">
+    用Runnable组合规则表达数据流的语言；相邻阶段仍必须类型相容。
   </GlossaryItem>
   <GlossaryItem term="执行trace">
-    第2章 LangChain初体验把模型、检索、工具、状态和错误关联起来的事件树。
+    一次请求的运行记录树，可看见哪个步骤成功、哪个失败；不是答案正确性的证明。
   </GlossaryItem>
-  <GlossaryItem term="迁移故障">
-    第2章 LangChain初体验只改变一个版本或接口假设以定位不兼容点。
-  </GlossaryItem>
-  <GlossaryItem term="独立评估">
-    第2章 LangChain初体验不复用演示样本的质量、安全、延迟和成本检查。
-  </GlossaryItem>
-  <GlossaryItem term="回退快照">
-    第2章 LangChain初体验能够恢复依赖、状态和服务行为的可部署版本。
+  <GlossaryItem term="最小权限">
+    只开放任务必需的能力；模型能生成文本，不代表它应能执行任意命令。
   </GlossaryItem>
 </Glossary>
 
+## 来源与复核范围
+
+- 李多多（莫尔索），《LangChain编程：从入门到实践》，人民邮电出版社，2024-04：[中图书目目录](https://m.bookschina.com/9299314.htm)。本次受登录限制，13坐标沿用2026-07-30已有清单，未重新获取纸书全文。
+- [作者开放伴学材料](https://aitutor.liduos.com/)：核对作者伴学实践背景，不当作纸书开放全文或许可证。
+- [LangChain官方总览](https://docs.langchain.com/oss/python/langchain/overview)：标准模型接口、agent与LangGraph定位；[v1迁移指南](https://docs.langchain.com/oss/python/migrate/langchain-v1)：Python下限、精简命名空间与classic。
+- [LangSmith官方观测文档](https://docs.langchain.com/langsmith/observability)：run/trace、调试与观测边界；[LangServe官方仓库](https://github.com/langchain-ai/langserve)：历史服务封装及新项目迁移提示。
+- [LangChain官方安全公告](https://github.com/langchain-ai/langchain/security/advisories)：安全核查入口，不据此宣称本程序通过生产安全审计。
+
+本页中文解释、图形、离线程序、误区与答案为独立重写。真实运行证据只限标准库程序与浏览器本地交互；SDK接入、在线模型、LangSmith上传、LangServe部署与生产回退均未执行。
+
 <Attribution
   mode="independent-rewrite"
-  sourceBasis="author-authorized-companion-sample-plus-public-toc-and-current-upstream-docs"
+  sourceBasis="outline-only"
   workTitle="李多多（莫尔索）《LangChain编程：从入门到实践》"
-  adaptedUrl="https://aitutor.liduos.com/"
+  adaptedUrl="https://m.bookschina.com/9299314.htm"
 />
