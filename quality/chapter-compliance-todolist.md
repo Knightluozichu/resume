@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-15T11:04:49.424Z
+> 生成时间：2026-10-15T13:04:27.005Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,10 +13,10 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 477 |
-| failed | 1798 |
+| manifest 证据不完整 unit | 478 |
+| failed | 1792 |
 | queued | 196 |
-| passed | 1734 |
+| passed | 1740 |
 | published | 881 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -9128,26 +9128,26 @@
     - 路径：`content/large-language-models/15-review/llm-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## large-scale-llm-practice（14 个内容页面 · failed:14 · 🚫 门禁阻断 14 项）
+## large-scale-llm-practice（14 个内容页面 · failed:8 passed:6 · 🚫 门禁阻断 8 项）
 
-- 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
+- 门禁摘要：目录=未登记，manifest=12；正式概念覆盖率=98.4%；未映射 unit=0；证据不完整 unit=1。
 
-- [ ] ❌ P1 **00-map/lsl-official-learning-map** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **00-map/lsl-official-learning-map** — passed；score 96
     - 路径：`content/large-scale-llm-practice/00-map/lsl-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] ❌ P1 **01-preface/lsl-preface** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-preface/lsl-preface** — passed；score 100
     - 路径：`content/large-scale-llm-practice/01-preface/lsl-preface.mdx`
     - 正式 unit：`lsl-preface` explained=1/1
-- [ ] ❌ P1 **02-notation/lsl-mathematical-notation** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-notation/lsl-mathematical-notation** — passed；score 100
     - 路径：`content/large-scale-llm-practice/02-notation/lsl-mathematical-notation.mdx`
     - 正式 unit：`lsl-mathematical-notation` explained=1/1
-- [ ] ❌ P1 **03-introduction/lsl-01-introduction** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **03-introduction/lsl-01-introduction** — passed；score 98
     - 路径：`content/large-scale-llm-practice/03-introduction/lsl-01-introduction.mdx`
     - 正式 unit：`lsl-01` explained=5/5
-- [ ] ❌ P1 **04-foundations/lsl-02-llm-foundations** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **04-foundations/lsl-02-llm-foundations** — passed；score 97
     - 路径：`content/large-scale-llm-practice/04-foundations/lsl-02-llm-foundations.mdx`
-    - 正式 unit：`lsl-02` explained=15/15
-- [ ] ❌ P1 **05-data/lsl-03-pretraining-data** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+    - 正式 unit：`lsl-02` explained=13/15
+- [x] ✅ **05-data/lsl-03-pretraining-data** — passed；score 98
     - 路径：`content/large-scale-llm-practice/05-data/lsl-03-pretraining-data.mdx`
     - 正式 unit：`lsl-03` explained=19/19
 - [ ] ❌ P1 **06-distributed-training/lsl-04-distributed-training** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
@@ -9174,6 +9174,8 @@
 - [ ] ❌ P1 **13-review/lsl-official-final-review** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/large-scale-llm-practice/13-review/lsl-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
+- [ ] 🔴 P1 **[正式 unit lsl-02] 第2章 大语言模型基础** — evidence 不完整；explained=13/15
+    - 关联路径：`content/large-scale-llm-practice/04-foundations/lsl-02-llm-foundations.mdx`
 
 ## learnopengl（41 个内容页面 · passed:41 · ✅ 书级门禁条件满足）
 

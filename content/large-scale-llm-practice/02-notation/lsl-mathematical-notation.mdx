@@ -1,16 +1,15 @@
 ---
 title: 数学符号
-type: C
+type: B
 section: 数学符号
 order: 2
-description: >-
-  把标量、向量、矩阵、张量、概率、梯度、损失和复杂度绑定到shape与单位；用第一版上下文、状态轨迹和独立评估门交付符号表、shape账本、单位检查、最小手算和数值梯度差分
+description: 从张量切片、维度收缩和概率面积出发，手算矩阵乘、梯度、熵与 KL，并用标准库代码核查形状与零概率边界。
 demo: true
 math: true
 sourceUrl: "https://intro-llm.github.io/chapter/LLM-TAP.pdf"
 draft: false
 qualityVersion: 2
-practiceMode: simulation
+practiceMode: calculation
 sourceMode: independent-rewrite
 officialUnitId: lsl-mathematical-notation
 ---
@@ -19,8 +18,6 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
@@ -35,142 +32,463 @@ import {
 
 <Objectives>
 
-- 解释数学符号、张量对象、概率测度与数值检查中的数据、目标、模型/算法状态与证据，而不只罗列名称
-- 用单一反例“在不声明shape、axis和归约范围时混用点积、Hadamard积、期望与KL散度”定位数学符号的首个错误状态
-- 交付符号表、shape账本、单位检查、最小手算和数值梯度差分，严格区分第一版公开稿、第二版和当前技术轨道
+- 能根据下标写出切片、转置、拼接的形状，并在实验一定位越界索引。
+- 能推导矩阵乘中被求和的维度，手算实验二的矩阵乘、点积与逐项乘，核对一个梯度。
+- 能回答：当 P(2)>0 而 Q(2)=0 时，KL 为什么不是有限值？并复算实验三的熵与条件概率。
 
 </Objectives>
 
-## 为什么从这个问题开始
+## 为什么一个冒号会改变计算：先有直觉
 
-数学符号围绕“数学符号怎样成为可执行检查，而不是脱离张量轴、批次和归约方式的装饰？”建立贯穿任务：在作者公开第一版完整稿与锁定的一手研究边界内重放数学符号、张量对象、概率测度与数值检查。先预测来源、数据、目标、模型/系统状态、通信、奖励、应用输出或评估中的首个变化，再运行参考、故障和恢复路径；只有守住“数学符号的版次、数据、模型/算法状态、计算拓扑、输出、评估和适用边界始终可追溯”并交付符号表、shape账本、单位检查、最小手算和数值梯度差分，模型名、loss、吞吐、奖励或演示输出才可能成为机制证据。
+一张表的“第二行”和“第二列”可能都有三个数字，但它们所扮演的角色不同。读公式时，先问取了哪几格、留下几条轴，再问如何计算；只记住符号外形，很容易把应该累加的数留成一张表。
 
-## 第一版公开稿、纸书与第二版边界
+概率也一样：删掉不满足条件的情况后，剩下的权重往往不再加起来等于一。如果忘了重新分配总量，后面的平均值和信息量都会算错。本页用小整数和三个可能结果，把这些错误放大到能手算。
 
-数学符号以[作者官方站点](https://intro-llm.github.io/)和[作者公开第一版完整预览稿](https://intro-llm.github.io/chapter/LLM-TAP.pdf)为一手内容来源。数学符号核对时，官网把该文件标为“第一版完整版”；PDF封面标“预览版”，文件日期为2024年10月7日，共301个PDF页面，正文从前言、数学符号、8章一直覆盖到参考文献和索引。它是作者公开的第一版完整稿，不是出版社纸书的逐页扫描。
+## 数学符号
 
-数学符号以[电子工业出版社第一版页面](https://phei.com.cn/module/goods/wssd_content.jsp?bookid=63826)核对张奇、桂韬、郑锐、黄萱菁著《大规模语言模型：从理论到实践》，2024年1月，320页，ISBN 9787121467059。作者公开稿与纸书页数不同，因此课程保留“作者稿301个PDF页面”和“纸书320页”两个事实，不把页码强行对齐。
+这是第一版的正式范围单元。本页按数学对象重新组织说明，覆盖原稿物理第 6–8 页的数与数组、索引、集合、线性代数、微积分、概率与信息论、数据与概率分布、函数及常用写法；没有新增原书编号章节。
 
-数学符号只覆盖第一版：前言1、数学符号1、8个章标题、115个节/小节、参考文献1和索引1，共127个正式层级。数学符号的排除证据显示，[第二版公开预览稿](https://intro-llm.github.io/chapter/LLM-TAP-v2.pdf)日期为2025年3月5日，共533个PDF页面；[出版社第二版页面](https://www.phei.com.cn/module/goods/wssd_content_comment.jsp?bookid=67177)列2025年4月、ISBN 9787121500572，却公开显示252页，页数与作者稿冲突。第二版新增和改写内容全部留在本课程边界外。
+### 数与数组、索引：先给每条轴命名
 
-来源级别为full-text-primary，但本站仍执行独立教学重构：不复制或近似复刻原书段落、图片、表格、代码和练习。第一版正文用于核对定义、结构和历史实践；技术机制再以原始论文或维护方当前文档交叉检查。数学符号涉及的第一版LangChain、DeepSpeed、MOSS-RLHF、FastServe和vLLM实践属于2023—2024历史轨道，当前接口另列且绝不混写。
+<Term def="描述数格沿各条轴的长度，例如两行三列写成 (2,3)">形状</Term>
+不是数值本身。标量只有一个数，向量是一条有序数列，矩阵有行、列两条轴，
+<Term def="有明确轴数与每轴长度的多维数组；此处仅讨论有限数值数组">张量</Term>
+可有更多轴。粗体、小写、大写等排版约定随文献变化，不应仅凭字形猜对象类型。
 
-### 本页独立事实来源
+设 $A\in\mathbb R^{2\times3\times2}$：前两轴分别是行、列，第三轴选切面。$A_{ijk}$ 是标量，$A_{i:}$ 在二维矩阵中表示一行，$A_{\colon j}$ 表示一列，$A_{::k}$ 表示三维数组的一张二维切面。冒号表示保留该轴所有位置，而固定整数下标会去掉一个轴。实验一用 `A[i,j,k]` 标示数学下标；这是说明语法，**不是 Python 原生列表的访问语法**。
 
-- [作者公开第一版完整预览稿](https://intro-llm.github.io/chapter/LLM-TAP.pdf)：在数学符号中，核对前言、数学符号、8章、参考文献、索引和全部127个正式层级。
-- [Transformer原始论文](https://arxiv.org/abs/1706.03762)：在数学符号中，独立核对注意力、编码器/解码器、残差与前馈网络。
-- [ZeRO原始论文](https://arxiv.org/abs/1910.02054)：在数学符号中，核对优化器状态、梯度和参数分片的内存机制。
+本页一律用零起始索引。序列 $w_{i:j}$ 的端点约定必须另行声明：本页对齐 Python 的左闭右开 `w[i:j]`，长度是 $j-i$；不能假设任何书里的冒号都自动遵守这个约定。$\alpha_{-i}$ 则表示删除第 $i$ 个元素后的向量，不是 Python 的负数索引。
 
-## 第一版正式坐标逐项解释
+**先预测 → 操作 → 解释：**默认切面是 `[[1,2,3],[4,5,6]]`。切到“取列”、选 j=1，结果应是 `(2,5)`，形状 `(2,)`；再选“切片转置”，数字 2 应移动到第二行第一列。最后选择“取行”及 i=2，图应拒绝读数。点击“重置张量实验”回到 k=0、i=0、j=1 和二维切片。
 
-### 数学符号
+<LslMathematicalNotationContextContractLab />
 
-**坐标 1/1：数学符号。稳定证据键 LSL-A。** 数学符号为每个符号声明对象、shape、axis、单位、数据类型与归约范围，再用最小手算和数值差分核对公式与实现。 数学符号只有在保存第一版来源、数据/输入、目标、状态轨迹、单一故障、独立评估和恢复结果后，才能把目录名称升级为可验证知识；参数量、吞吐、loss、奖励或流畅样例不能单独通过发布门。
+### 集合与线性代数：保留轴还是消去轴
 
-## 先预测，再运行三个证据视图
+<Term def="只关心元素是否属于其中、不依赖排列顺序的对象">集合</Term>用来限定输入：$\mathbb R$ 表示实数，$\mathbb C$ 表示复数；$\{0,1,2\}$ 是有限集合，包含 0，不能称为全是正整数。区间 $[a,b]$ 包含两端，$(a,b]$ 不包含左端。后面的代码分别检查集合成员和区间端点；这些约束决定某次取值是否合法。
 
-先预测：只注入“在不声明shape、axis和归约范围时混用点积、Hadamard积、期望与KL散度”时，数学符号的来源版本、数据、token、张量、并行通信、奖励、应用trace或评估中的哪一项最先偏离？请写下可观测信号，再比较参考、故障和恢复轨迹。
+单位矩阵 $I_n$ 只有主对角线是 1，满足 $I_nx=x$。词表大小 $|V|$ 决定<Term def="除所选位置为1外，其余位置全为0的向量">独热向量</Term> $e_w\in\mathbb R^{|V|}$ 的长度；词向量 $v_w\in\mathbb R^d$ 则是长度为 $d$ 的稠密表示，两者不要混淆。例：词表三项，$e_1=(0,1,0)^\top$，嵌入矩阵 $E$ 三行两列，则 $E^\top e_1$ 选出第二行的两个坐标。它和实验一“取行”得到相同的数，但计算方式不同。
 
-<Stepper>
-  <Step title="第一版上下文合同：选择正式坐标">
-    <LslMathematicalNotationContextContractLab />
-  </Step>
-  <Step title="计算轨迹：重放数据、训练或应用状态">
-    <LslMathematicalNotationComputeTraceLab />
-  </Step>
-  <Step title="证据门：检查评估、恢复与版次边界">
-    <LslMathematicalNotationEvidenceGateLab />
-  </Step>
-</Stepper>
+<Term def="将矩阵的行列位置交换：转置结果的第j行第i列取原来的第i行第j列">
+  转置
+</Term>
+满足 $(A^\top)_{ji}=A_{ij}$；不是把每一行内部倒序。
+<Term def="沿指定轴连接数组，其他轴的长度必须相等">拼接</Term>
+不产生乘积：$[x;y]$ 在本页表示纵向接成长向量，$[U;V]$
+表示沿行轴堆叠矩阵，列数必须一致。实验一的拼接把两个 `(2,3)` 接成
+`(4,3)`；转置则把 `(2,3)` 变成 `(3,2)`。
 
-## 最小可重现实验协议
+<Term def="同长向量对应元素相乘后相加，得到一个标量">点积</Term>与
+<Term def="同形数组对应位置相乘，不进行求和">Hadamard 积</Term>最容易混淆。对
+$x=(1,2,3)^\top$、$y=(4,5,6)^\top$：
 
-1. 为数学符号冻结第一版页码/研究版本、数据、tokenizer、模型或算法、并行拓扑、环境、随机种子、计算预算和独立评估集。
-2. 运行参考路径，逐阶段保存符号表、shape账本、单位检查、最小手算和数值梯度差分；只报告最终loss、吞吐、奖励或自然语言输出，无法支持机制归因。
-3. 保持其余条件不变，只注入“在不声明shape、axis和归约范围时混用点积、Hadamard积、期望与KL散度”，记录来源、数据、状态、通信、目标或输出中的首个分岔及传播路径。
-4. 撤销故障，从同一检查点重放；只有中间状态、代理指标和独立评估都恢复，才允许接受归因或批准发布。
+$$
+x^\top y=\sum_{k=0}^{2}x_ky_k=4+10+18=32,\qquad
+x\odot y=(4,10,18)^\top.
+$$
 
-<Callout type="trap" title="数学符号误区一：第二版可以静默补齐第一版">
-  第二版结构、方法、代码和页码不能无标记地写进第一版课程。数学符号必须保留第一版127坐标和独立的当前核查轨道。
+矩阵乘是多个点积。若 $A\in\mathbb R^{m\times n}$、$B\in\mathbb R^{n\times p}$，则 $C=AB\in\mathbb R^{m\times p}$：
+
+$$
+C_{ij}=\sum_{k=0}^{n-1}A_{ik}B_{kj}.
+$$
+
+共同的 $k$ 轴经过<Term def="对共享下标求和，使该下标不再出现在输出中">收缩</Term>消失，输出留下 $i,j$。Hadamard 积不消去轴，而且本页**不启用广播**。实验二采用 $A=[[1,2,3],[4,5,6]]$、$B=[[1,2],[0,1],[2,0]]$，故 $AB=[[7,4],[16,13]]$。逐项乘使用同形的 $E=[[1,2,3],[2,3,4]]$，得到 `[[1,4,9],[8,15,24]]`，不能把它称作 $AB$。
+
+**先预测：**将输出列从 j=0 切到 j=1，首行三项应从 `1,0,6` 变成 `2,2,0`。单步或拖动进度观察累加；“右操作数倍数=2”让条长与结果加倍。“注入形状错误”将右操作数缺失的轴长度显式标出，不会补零或继续运算。重置同时恢复运算、列、倍数、故障和暂停的第一项。
+
+<LslMathematicalNotationComputeTraceLab />
+
+另一个标量运算是<Term def="方阵的一个标量函数；二维时等于ad−bc，可描述有向面积缩放">行列式</Term>：$\det\begin{pmatrix}a&b\\c&d\end{pmatrix}=ad-bc$。例如 `[[2,1],[1,3]]` 的行列式为 5。这里的 $2\times3$ 矩阵没有行列式；不要因为矩阵乘能输出方阵，就给任何输入写 `det`。
+
+### 微积分与函数：梯度也有形状
+
+函数 $f:A\to B$ 把定义域中的输入映到陪域 $B$，实际像集可能只是 $B$ 的子集。复合 $(f\circ g)(x)=f(g(x))$ 要求 $g$ 的输出能被 $f$ 接受。$f(x;\theta)$ 的分号把输入与参数区分开，不表示除法。训练中对参数求导时，先固定样本，再改变 $\theta$。
+
+一元导数 $dy/dx$ 描述输入微变时输出变化率；偏导 $\partial y/\partial x_i$ 还要求固定其他独立变量。<Term def="把标量函数对各输入坐标的偏导按输入形状排列">梯度</Term> $\nabla_x y$ 与 $x$ 同形；矩阵、张量参数的梯度也应保留每个参数坐标。例：
+
+$$
+f(x;\theta)=\theta^\top x,\quad L=\tfrac12(f-y)^2,\quad
+\frac{\partial L}{\partial\theta_i}=(\theta^\top x-y)x_i.
+$$
+
+取 $x=(1,2)$、$\theta=(1,1)$、$y=1$，则 $f=3$、$L=2$、$\nabla_\theta L=(2,4)$。这就是链式法则：先求误差对输出的导数，再乘输出对参数的导数。正文代码用中心差分逐坐标检验，不把数值近似当成解析证明。
+
+<Term def="将实数映到0与1之间的函数1/(1+exp(−x))">Sigmoid</Term>
+是另一个标量函数，其导数为
+$\sigma(x)(1-\sigma(x))$；代码按正负分支避免大负数导致指数溢出。
+<Term def="衡量向量大小的函数；p≥1时，Lp范数为绝对值p次方之和再开p次方根">
+  范数
+</Term>
+$\|x\|_p=(\sum_i|x_i|^p)^{1 / p}$，未标下标的 $\|x\|$ 在本页指 L2 范数。例如
+$(3,4)$ 的 L1 为 7、L2 为 5。代码还用 $f(z)=2z,g(x)=x+1$
+核查复合次序，不将矩阵乘的维度规则生搬给任意函数。
+
+### 概率与信息论：先归一，再取对数
+
+离散随机变量的 $P(x)$ 是每个值的概率。连续变量的 $p(x)$ 是<Term def="连续分布每单位区间长度的概率量，积分才给出概率">概率密度</Term>：$P(a\le X\le b)=\int_a^bp(x)\,dx$，不能用某点密度代替该点概率。记号 $X\sim P$ 表示按分布 $P$ 取值，不保证某一次样本等于期望。
+
+<Term def="在事件B发生的子总体中重新归一得到的概率，要求P(B)>0">条件概率</Term>为 $P(A\mid B)=P(A\cap B)/P(B)$。实验三默认 $P=(1/2,1/4,1/4)$，条件 $X<2$ 的质量是 $3/4$，删除最后一项后须除以 $3/4$，得到 $(2/3,1/3,0)$；不是 $(1/2,1/4,0)$。若条件事件质量为 0，条件概率在这一定义下未定义；本实验的预设避免了这个情况。
+
+独立 $A\perp B$ 要求联合分布分解为 $P(a,b)=P(a)P(b)$；<Term def="给定C的每个正概率取值后，A和B的条件联合分布可分解">条件独立</Term> $A\perp B\mid C$ 要求 $P(a,b\mid c)=P(a\mid c)P(b\mid c)$。它们不能互相替代。例如令公平硬币 $C$ 的值同时赋给 $A,B$，则 $A,B$ 不独立；固定 $C$ 后二者都成为常量，条件分解反而成立。代码枚举这两个有限状态核查，而不是从少量随机抽样推断独立。
+
+<Term def="按各结果的概率加权求平均">期望</Term> $\mathbb E_{X\sim P}[f(X)]=\sum_xP(x)f(x)$ 必须写清按谁加权。<Term def="随机量偏离其均值的平方的期望">方差</Term> $\operatorname{Var}(X)=\mathbb E[(X-\mu)^2]$，<Term def="两个随机量各自偏离均值的乘积的期望">协方差</Term> $\operatorname{Cov}(X,Y)=\mathbb E[(X-\mu_X)(Y-\mu_Y)]$；不相关不等于独立。默认实验中 $X$ 取 0、1、2，$\mathbb E[X]=3/4$，$\mathbb E[X^2]=5/4$，所以方差为 $11/16$。
+
+<Term def="离散分布对自身惊讶量−lnP的平均">熵</Term>与
+<Term def="在P加权下比较lnP与lnQ的期望差，方向一般不可交换">KL 散度</Term>
+定义为：
+
+$$
+H(P)=-\sum_xP(x)\ln P(x),\qquad
+D_{\mathrm{KL}}(P\Vert Q)=\sum_xP(x)\ln\frac{P(x)}{Q(x)}.
+$$
+
+本页遵循原书 `log` 为<Term def="底数为e的对数，代码对应math.log">自然对数</Term>的约定，信息量单位是 nats。默认 $H(P)=\tfrac32\ln2\approx1.039721$；$Q=(1/4,1/2,1/4)$ 时，KL 的三项是 $\tfrac12\ln2$、$-\tfrac14\ln2$、0，总和 $\tfrac14\ln2\approx0.173287$。**单项可以为负，KL 总和非负**；熵与 KL 也不是分布条形的总面积，总面积一直是 1。
+
+**动手试：**先切到“P=Q”，KL 应为 0，熵不必为 0。再切“Q 漏掉 P 的支持”，图中 Q 的第三格面积消失，KL 为无穷；交换 P/Q 后应变成有限值。切“P 的零概率项”时该项贡献按极限计 0。最后条件化 $X<2$，观察剩余两格变高，解释分母；重置恢复默认分布、无条件、不交换。
+
+<LslMathematicalNotationEvidenceGateLab />
+
+<Term def="以均值μ和协方差矩阵Σ描述的连续分布，记作N(μ,Σ)">高斯分布</Term>与这三个离散格不是同一种对象。一维 $\mathcal N(0,1)$ 的密度为 $e^{-x^2/2}/\sqrt{2\pi}$，在 0 处密度约 0.398942，但 $P(X=0)=0$；高维 $\Sigma$ 是协方差矩阵，非退化密度要求它正定。离散熵公式不能直接套到密度值上；连续情形需另定义积分与微分熵。
+
+### 数据、损失与复杂度：把符号接回学习任务
+
+数据集 $\mathcal D$ 或 $\mathcal X$ 包含样本。$x^{(i)}$ 的上标括号是样本编号，不是乘方；$y^{(i)}$ 是对应标签。对于词表 $V$ 中的序列 $x_1,\ldots,x_n$，$v_{x_i}$ 表示第 $i$ 个词的词向量。样本编号和序列位置是两个不同索引，不能因为都写 $i$ 就在代码中混用。
+
+<Term def="对观测标签的条件概率取负对数再归约的损失">负对数似然</Term>可以写成
+
+$$
+L(\theta)=-\sum_{(x,y)\in\mathcal D}\ln P_\theta(y\mid x),\qquad
+\bar L=L/|\mathcal D|.
+$$
+
+求和与平均的梯度相差样本数，报告损失必须说明归约方式。toy 标签 `(0,1)` 对应两行预测概率 `[(0.5,0.5),(0.25,0.75)]` 时，和为 $-\ln0.5-\ln0.75\approx0.980829$，均值约 0.490415。这只验证条件概率和损失接线，**没有训练模型，不是真实训练结果**。
+
+<Term def="条件成立时为1，否则为0的函数">指示函数</Term> $\mathbf1_{\text{condition}}$ 把判断变成数，例如两条预测的正确率为 $\frac12\sum_i\mathbf1_{\hat y^{(i)}=y^{(i)}}$。$O(mn)$ 的空间复杂度则表示存储量随两个尺寸的乘积同阶增长；存储一个稠密 $m\times n$ 矩阵需要 $mn$ 个元素，但这不是字节数、精确峰值内存或运行时间。乘法实验的输出另占 $mp$ 格，不能把输入格数直接当作全部工作空间。
+
+## 完整 Python 示例：用标准库复算
+
+将下面**整个代码块**保存为 `notation_check.py`，用 Python 3.10+ 执行 `python3 notation_check.py`，无需安装依赖。它检查所有有限分布预设的两个 KL 方向及条件化、形状错误、越界、解析/数值梯度和对数单位。代码中的数组和网页相同；纸上公式的向量不自动等同于 Python 的行/列列表，因此函数显式检查形状。
+
+```python
+import math
+
+checks = 0
+
+
+def check(ok):
+    global checks
+    assert ok
+    checks += 1
+
+
+def close(a, b, tol=1e-6):
+    check(math.isclose(a, b, abs_tol=tol, rel_tol=tol))
+
+
+def rejected(fn, error):
+    try:
+        fn()
+    except error:
+        check(True)
+    else:
+        raise AssertionError("expected rejection")
+
+
+def shape(a):
+    if not a or not a[0] or any(len(r) != len(a[0]) for r in a):
+        raise ValueError("nonempty rectangular matrix required")
+    return len(a), len(a[0])
+
+
+def dot(x, y):
+    if len(x) != len(y):
+        raise ValueError("dot lengths differ")
+    return sum(a * b for a, b in zip(x, y))
+
+
+def matmul(a, b):
+    m, n = shape(a)
+    rows, p = shape(b)
+    if n != rows:
+        raise ValueError("inner dimensions differ")
+    return [[sum(a[i][k] * b[k][j] for k in range(n))
+             for j in range(p)] for i in range(m)]
+
+
+def hadamard(a, b):
+    if shape(a) != shape(b):
+        raise ValueError("Hadamard shapes differ; no broadcasting")
+    return [[x * y for x, y in zip(ar, br)] for ar, br in zip(a, b)]
+
+
+def distribution(p):
+    if any(not math.isfinite(v) or v < 0 for v in p):
+        raise ValueError("invalid probability")
+    if not math.isclose(sum(p), 1.0):
+        raise ValueError("probabilities must sum to one")
+    return p
+
+
+def entropy(p):
+    return -sum(v * math.log(v) for v in distribution(p) if v > 0)
+
+
+def kl(p, q):
+    distribution(p)
+    distribution(q)
+    if len(p) != len(q):
+        raise ValueError("supports must use the same coordinates")
+    total = 0.0
+    for a, b in zip(p, q):
+        if a == 0:
+            continue  # includes the 0/0 case: zero contribution
+        if b == 0:
+            return math.inf
+        total += a * math.log(a / b)
+    return total
+
+
+def condition_lt2(p):
+    distribution(p)
+    mass = p[0] + p[1]
+    if mass == 0:
+        raise ValueError("zero-probability condition")
+    return [p[0] / mass, p[1] / mass, 0.0]
+
+
+a = [[1, 2, 3], [4, 5, 6]]
+b = [[1, 2], [0, 1], [2, 0]]
+slices = [a, [[7, 8, 9], [10, 11, 12]]]
+check([r[1] for r in a] == [2, 5])
+check(list(map(list, zip(*a))) == [[1, 4], [2, 5], [3, 6]])
+check(shape(slices[0] + slices[1]) == (4, 3))
+rejected(lambda: a[2], IndexError)
+w = [10, 20, 30, 40]
+check(w[1:3] == [20, 30])
+check(w[:1] + w[2:] == [10, 30, 40])  # alpha_{-1}: delete index 1
+check(0 in {0, 1, 2} and 3 not in {0, 1, 2})
+check(0 <= 0 <= 1 and not (0 < 0 <= 1))  # closed vs left-open
+check(isinstance(1 + 2j, complex))
+identity = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+check(matmul(identity, [[1], [2], [3]]) == [[1], [2], [3]])
+embedding = [[1, 0], [2, 3], [0, 4]]
+one_hot = [0, 1, 0]
+check(matmul(list(map(list, zip(*embedding))), [[v] for v in one_hot])
+      == [[2], [3]])
+check(matmul(a, b) == [[7, 4], [16, 13]])
+close(dot([1, 2, 3], [4, 5, 6]), 32)
+check(hadamard(a, [[1, 2, 3], [2, 3, 4]]) == [[1, 4, 9], [8, 15, 24]])
+rejected(lambda: matmul(a, [[1, 2], [3, 4]]), ValueError)
+rejected(lambda: dot([1, 2, 3], [4, 5]), ValueError)
+rejected(lambda: hadamard(a, b), ValueError)
+rejected(lambda: shape([[1, 2], [3]]), ValueError)
+close(2 * 3 - 1 * 1, 5)  # 2x2 determinant
+
+x, theta, label = [1.0, 2.0], [1.0, 1.0], 1.0
+loss = lambda t: 0.5 * (dot(t, x) - label) ** 2
+analytic = [(dot(theta, x) - label) * v for v in x]
+numeric = []
+for i in range(len(theta)):
+    plus, minus = theta.copy(), theta.copy()
+    plus[i] += 1e-5
+    minus[i] -= 1e-5
+    numeric.append((loss(plus) - loss(minus)) / 2e-5)
+    close(numeric[i], analytic[i])
+close(loss(theta), 2)
+check(analytic == [2, 4])
+sigmoid = lambda z: (1 / (1 + math.exp(-z)) if z >= 0
+                     else math.exp(z) / (1 + math.exp(z)))
+close(sigmoid(0), 0.5)
+check(sigmoid(-1000) == 0 and sigmoid(1000) == 1)
+close(sigmoid(0) * (1 - sigmoid(0)), 0.25)
+close(sum(abs(v) for v in [3, 4]), 7)
+close(math.sqrt(dot([3, 4], [3, 4])), 5)
+f, g = lambda z: 2 * z, lambda z: z + 1
+close(f(g(3)), 8)
+
+p, q = [0.5, 0.25, 0.25], [0.25, 0.5, 0.25]
+close(entropy(p), 1.5 * math.log(2))
+close(kl(p, q), 0.25 * math.log(2))
+close(kl(p, p), 0)
+check(math.isinf(kl(p, [0.5, 0.5, 0])))
+close(kl([0.5, 0.5, 0], q), 0.5 * math.log(2))
+cp = condition_lt2(p)
+close(cp[0], 2 / 3)
+close(cp[1], 1 / 3)
+mean = sum(i * v for i, v in enumerate(p))
+variance = sum((i - mean) ** 2 * v for i, v in enumerate(p))
+close(mean, 0.75)
+close(variance, 11 / 16)
+cov_x_2x = sum((i - mean) * (2 * i - 2 * mean) * v
+              for i, v in enumerate(p))
+close(cov_x_2x, 2 * variance)
+# A=B=C, where P(C=0)=P(C=1)=1/2: dependent, but conditionally independent.
+close(sum(0.5 for c in [0, 1] if c == 0), 0.5)  # P(A=0,B=0)
+check(0.5 != 0.5 * 0.5)
+for c in [0, 1]:
+    for av in [0, 1]:
+        for bv in [0, 1]:
+            joint_given_c = float(av == c and bv == c)
+            close(joint_given_c, float(av == c) * float(bv == c))
+close(math.exp(0) / math.sqrt(2 * math.pi), 0.3989422804)
+rejected(lambda: condition_lt2([0, 0, 1]), ValueError)
+rejected(lambda: distribution([0.5, 0.4]), ValueError)
+rejected(lambda: distribution([1.1, -0.1]), ValueError)
+rejected(lambda: distribution([math.nan, 1.0]), ValueError)
+rejected(lambda: kl(p, [0.5, 0.5]), ValueError)
+# Exhaust the webpage presets, directions, and condition switch.
+for first, second in [(p, q), (p, p), (p, [0.5, 0.5, 0]),
+                      ([0.5, 0.5, 0], q)]:
+    for left, right in [(first, second), (second, first)]:
+        for conditioned in [False, True]:
+            left = condition_lt2(left) if conditioned else left
+            right = condition_lt2(right) if conditioned else right
+            check(kl(left, right) >= -1e-12)
+            close(sum(left), 1)
+
+predictions, labels = [[0.5, 0.5], [0.25, 0.75]], [0, 1]
+nll = -sum(math.log(distribution(r)[y]) for r, y in zip(predictions, labels))
+close(nll, -math.log(0.5) - math.log(0.75))
+close(nll / len(labels), 0.4904146265)
+accuracy = sum(int(pred == y) for pred, y in zip([0, 0], labels)) / len(labels)
+close(accuracy, 0.5)
+print(f"AB={matmul(a, b)}, dot={dot([1, 2, 3], [4, 5, 6])}")
+print(f"H={entropy(p):.6f}, KL={kl(p, q):.6f}, mean={mean:.6f}, var={variance:.6f}")
+print(f"gradient={analytic}, nll_sum={nll:.6f}, nll_mean={nll/2:.6f}")
+print(f"checks={checks}: PASS")
+```
+
+预期前三行依次包含 `AB=[[7, 4], [16, 13]], dot=32`、`H=1.039721, KL=0.173287, mean=0.750000, var=0.687500`、`gradient=[2.0, 4.0], nll_sum=0.980829, nll_mean=0.490415`，最后一行为 `checks=90: PASS`。数值差分受步长与浮点误差影响；这里用绝对/相对容差 `1e-6`，并未覆盖不可导点或任意高维优化问题。
+
+## 三个常见误区
+
+<Callout type="trap" title="数值能对上，形状就一定对？">
+  **现象 →** 把三格逐项乘写成点积。**原因 →** 忘记共享下标是否求和。**修法 →**
+  在实验二切换乘法，先写输出形状，再核对标量 32 与向量 (4,10,18) 的区别。
 </Callout>
 
-<Callout type="trap" title="数学符号误区二：规模或代理指标就是质量">
-  token数、参数量、吞吐、loss、奖励模型分数或LLM裁判分数都可能掩盖污染、偏差和失败切片；数学符号需要留出集、人评、反例和恢复。
+<Callout type="trap" title="零概率都可以直接略过？">
+  **现象 →** Q 漏掉一项仍输出有限 KL。**原因 →** 把 P=0 与 Q=0 混为一谈。**修法 →** 在实验三选漏支持状态；只有 P=0 的项计 0，P>0 且 Q=0 必须是无穷，平滑会改变问题。
 </Callout>
 
-<Callout type="trap" title="数学符号误区三：同时换数据、模型和系统">
-  多变量同时变化无法定位因果；数学符号必须执行单故障实验，保存首个分岔，并验证撤销后的同输入恢复。
+<Callout type="trap" title="条件化只是删一格？">
+  **现象 →** 删除 x=2 后面积只剩 3/4。**原因 →** 没有除以条件事件概率。**修法
+  →** 在实验三条件化，使剩余面积回到 1；条件质量为 0 则拒绝计算，不强行归一。
 </Callout>
 
 ## 小结
 
-- 标量向量矩阵张量绑定shape与单位
-- 声明axis与归约范围防止运算混用
-- 符号表与shape账本支撑状态追踪
-- 最小手算与数值梯度差分校验正确性
-- 独立评估与恢复决定能否发布
+- 索引固定轴，转置换轴，拼接延长轴。
+- 共享下标求和，才是点积或矩阵乘。
+- 先检查支持与归一，再计算自然对数信息量。
 
 ## 练习与答案
 
+<div className="[&_.mdx-answer>button]:min-h-11 [&_.mdx-answer>button]:min-w-11">
 <Exercises>
 
-**问题 1：数学符号**
-
-为数学符号中稳定证据键 LSL-A 对应的数学符号设计一个最小输入、一个单一故障和一个独立评估，说明首个状态分岔、需要保存的证据及不能外推的范围。
+**问题 1：索引与形状。** 在实验一选 k=1、j=2，“取列”得到什么？切片转置与两切面拼接的形状分别是什么？把代码的独热向量改成选择词表最后一项，输出又是什么？
 
 <Answer>
-  先冻结在作者公开第一版完整稿与锁定的一手研究边界内重放数学符号、张量对象、概率测度与数值检查，把稳定证据键
-  LSL-A
-  对应的数学符号映射到来源、数据、目标、模型/系统状态和输出；参考路径保存符号表、shape账本、单位检查、最小手算和数值梯度差分，故障路径只注入“在不声明shape、axis和归约范围时混用点积、Hadamard积、期望与KL散度”。只有首个分岔可定位、撤销后状态恢复且独立评估支持，才能接受局部机制结论；第二版、未测试模型、数据、硬件、任务和部署都留在数学符号边界外。
+  列为 (9,12)，形状 (2,)；转置为 (3,2)，沿行拼接为 (4,3)。独热向量改为
+  [0,0,1]，嵌入输出为 [[0],[4]]。索引 i=2
+  越过仅有两行的范围；闭区间允许端点不等于数组允许长度本身作为索引。
 </Answer>
 
-**问题 2：两个页数为什么不能合并**
-
-作者第一版公开稿是301个PDF页面，出版社第一版页面列320页。数学符号应如何记录？
+**问题 2：推导与修改。** 实验二设 j=1、倍数=2，手算三个累加值与最终结果。Hadamard 模式能得到相同形状吗？将代码中的标签从 1 改成 2，解析梯度应变成什么？
 
 <Answer>
-  把它们记录为两个不同载体：作者官网公开的完整预览稿用于正文与目录核对，出版社书目用于纸书出版元数据。没有逐页映射证据时，不声称301等于320，也不把作者稿页码冒充纸书页码；引用时同时写载体、版本、日期和页面体系。
+  三个乘积是 4、4、0，部分和为 4、8、8；C[0,1]=8。AB 仍为 (2,2)，Hadamard 输出
+  (2,3)，形状不同。新误差为 3−2=1，故梯度为 (1,2)，新损失为
+  1/2。修改标签后也要同步修改期望断言，否则程序应如实失败。
 </Answer>
 
-**问题 3：代理指标怎样过发布门**
-
-为什么数学符号中的loss、吞吐、奖励或LLM裁判分数不能单独证明改动有效？
+**问题 3：概率边界。** 默认 P 与 Q 的 KL 是多少？选 Q=(1/2,1/2,0) 后为何无穷？条件化 x&lt;2 后再计算的两个分布和 KL 又是什么？自然对数改成以 2 为底时数值如何变化？
 
 <Answer>
-  这些量分别只覆盖优化目标、系统效率、偏好代理或自动裁判，可能受数据污染、硬件变化、reward
-  hacking、位置偏差和选择性报告影响。应冻结比较合同，保存中间状态，加入独立留出集、人评、失败切片、成本与恢复结果，再限制结论适用范围。
+  默认 KL=(ln2)/4≈0.173287 nats。漏支持后，P(2)=1/4&gt;0 但
+  Q(2)=0，该项为无穷。条件化后
+  P=(2/3,1/3,0)，Q=(1/2,1/2,0)，KL=(2/3)ln(4/3)+(1/3)ln(2/3)≈0.056633 nats。换
+  log₂ 时将自然对数结果除以 ln2，单位变为 bits；无穷边界不会因此消失。
 </Answer>
 
 </Exercises>
-
-## 六个证据术语
-
-在数学符号中，<Term def="数学符号对第一版、第二版和当前API分别记录的来源与时间线">版本轨道</Term>、<Term def="数学符号从采集、过滤、去重、切分到训练和评估的样本追踪">数据谱系</Term>、<Term def="数学符号中rank、设备、并行组、通信和模型状态的映射">计算拓扑</Term>、<Term def="数学符号可从相同输入与检查点重放的中间张量或事件">状态轨迹</Term>、<Term def="数学符号未参与训练、提示选择、奖励建模或调参的检查">独立评估</Term>、<Term def="数学符号已验证版次、数据、模型、硬件、任务和部署范围">适用边界</Term>组成最小证据语言。每个术语都必须绑定对象、版本、输入、状态和失败条件；只替换框架名、扩大参数量或提高代理分数，不能自动扩大结论边界。
+</div>
 
 <Glossary>
-  <GlossaryItem term="版本轨道">
-    数学符号对第一版、第二版和当前API分别记录的来源与时间线。
+  <GlossaryItem term="形状">每条轴有多少位置；不能只看元素总数。</GlossaryItem>
+  <GlossaryItem term="张量">
+    带轴的多维数组；本页两个切面是同一张量第三轴的两个位置。
   </GlossaryItem>
-  <GlossaryItem term="数据谱系">
-    数学符号从采集、过滤、去重、切分到训练和评估的样本追踪。
+  <GlossaryItem term="集合">
+    不按位置排序的成员总体；注意 0 不是正整数。
   </GlossaryItem>
-  <GlossaryItem term="计算拓扑">
-    数学符号中rank、设备、并行组、通信和模型状态的映射。
+  <GlossaryItem term="独热向量">
+    只有所选位置为 1 的向量，可从嵌入矩阵选择一项。
   </GlossaryItem>
-  <GlossaryItem term="状态轨迹">
-    数学符号可从相同输入与检查点重放的中间张量或事件。
+  <GlossaryItem term="转置">交换两条矩阵轴，元素随坐标一起搬动。</GlossaryItem>
+  <GlossaryItem term="拼接">沿指定轴把数组接长，其他轴必须相容。</GlossaryItem>
+  <GlossaryItem term="点积">同长向量逐项乘再加，输出一个标量。</GlossaryItem>
+  <GlossaryItem term="Hadamard 积">
+    同形数组逐项乘；本页明确不使用广播。
   </GlossaryItem>
-  <GlossaryItem term="独立评估">
-    数学符号未参与训练、提示选择、奖励建模或调参的检查。
+  <GlossaryItem term="收缩">共享下标求和后不再出现在输出中。</GlossaryItem>
+  <GlossaryItem term="行列式">
+    方阵对应的标量，二维时给出有向面积缩放。
   </GlossaryItem>
-  <GlossaryItem term="适用边界">
-    数学符号已验证版次、数据、模型、硬件、任务和部署范围。
+  <GlossaryItem term="梯度">
+    标量对每个输入坐标的偏导，排列成输入的形状。
+  </GlossaryItem>
+  <GlossaryItem term="Sigmoid">
+    把实数映到 (0,1)，数学上不会恰好达到端点。
+  </GlossaryItem>
+  <GlossaryItem term="范数">度量大小；默认 L2 是平方和开根号。</GlossaryItem>
+  <GlossaryItem term="概率密度">
+    连续分布的局部密度，区间积分而非单点密度才是概率。
+  </GlossaryItem>
+  <GlossaryItem term="条件概率">
+    限制到一个正概率事件内后重新归一的概率。
+  </GlossaryItem>
+  <GlossaryItem term="条件独立">
+    给定条件后联合分布可分解，不代表无条件独立。
+  </GlossaryItem>
+  <GlossaryItem term="期望">
+    由指定分布加权的平均，不是一次随机结果。
+  </GlossaryItem>
+  <GlossaryItem term="方差">与均值距离平方的平均。</GlossaryItem>
+  <GlossaryItem term="协方差">
+    两个量的中心化乘积的平均，量化共同变化。
+  </GlossaryItem>
+  <GlossaryItem term="熵">
+    分布对自身负对数概率的平均；确定事件的熵为 0。
+  </GlossaryItem>
+  <GlossaryItem term="KL 散度">
+    有方向的分布差异；漏掉 P 的支持会给出无穷。
+  </GlossaryItem>
+  <GlossaryItem term="自然对数">
+    以 e 为底，信息量用 nats；不是默认以 10 为底。
+  </GlossaryItem>
+  <GlossaryItem term="高斯分布">
+    由均值与协方差描述的连续分布，不是三分类概率格。
+  </GlossaryItem>
+  <GlossaryItem term="负对数似然">
+    观测标签概率的负对数之和或均值，必须注明归约。
+  </GlossaryItem>
+  <GlossaryItem term="指示函数">
+    成立时取 1，不成立时取 0 的判断函数。
   </GlossaryItem>
 </Glossary>
 
+## 来源与边界
+
+依据[作者站点](https://intro-llm.github.io/)标为“第一版完整版”的[公开 PDF](https://intro-llm.github.io/chapter/LLM-TAP.pdf)，核查物理第 6–8 页“数学符号”的符号族。当前下载文件封面写“预览版、2024 年 10 月 7 日”，共 301 个物理页面；不等同于出版社 320 页纸书扫描，也不借第二版补写范围。Python 的切片与 `math.log` 行为另据 [Python 序列文档](https://docs.python.org/3/library/stdtypes.html#common-sequence-operations)和 [math 文档](https://docs.python.org/3/library/math.html#math.log)核查。
+
+本页图形、解释、数值和练习为独立教学重构，不复制原书符号表版式或练习；来源可公开阅读不代表取得改编许可。三个小实验只处理明确给定的有限数组、离散分布和光滑函数，不模拟真实训练、随机采样推断或连续分布学习。
+
 <Attribution
+  sourceUrl="https://intro-llm.github.io/chapter/LLM-TAP.pdf"
+  workTitle="《大规模语言模型：从理论到实践》第一版数学符号（张奇、桂韬、郑锐、黄萱菁）"
   mode="independent-rewrite"
-  sourceBasis="full-text-primary"
-  workTitle="张奇、桂韬、郑锐、黄萱菁《大规模语言模型：从理论到实践》第一版"
-  adaptedUrl="https://intro-llm.github.io/chapter/LLM-TAP.pdf"
+  sourceBasis="full-text"
 />

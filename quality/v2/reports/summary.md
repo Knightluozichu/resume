@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-10-15T10:55:52.015Z；旧版分数不迁移。
+> 2026-10-15T13:04:25.713Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1798
+- failed：1792
 - queued：196
-- passed：1747
-- published：868
+- passed：1740
+- published：881
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -90,21 +90,21 @@
 | 77 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
 | 78 | unity-master | 14 | 14 | 0 | 0 | 42 |
 | 79 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 80 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
-| 81 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 82 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 83 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 84 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 85 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 86 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 87 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 88 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 89 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 90 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 91 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 92 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 93 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 94 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 80 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 81 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 82 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 83 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 84 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 85 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 86 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 87 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 88 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 89 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 90 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 91 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 92 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 93 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 94 | large-scale-llm-practice | 14 | 8 | 0 | 6 | 8 |
 | 95 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 96 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 97 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
@@ -203,7 +203,7 @@
 | 190 | illustrated-ml | 22 | 0 | 0 | 0 | 0 |
 | 191 | illustrated-server-network | 8 | 0 | 0 | 0 | 0 |
 | 192 | inside-cpp-object-model | 9 | 0 | 0 | 9 | 0 |
-| 193 | langchain-programming | 13 | 0 | 0 | 13 | 0 |
+| 193 | langchain-programming | 13 | 0 | 0 | 0 | 0 |
 | 194 | learnopengl | 41 | 0 | 0 | 41 | 0 |
 | 195 | linear-algebra-done-right | 11 | 0 | 0 | 11 | 0 |
 | 196 | linux-kernel-design | 22 | 0 | 0 | 22 | 0 |
