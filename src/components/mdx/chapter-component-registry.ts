@@ -19347,12 +19347,93 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Clrs4Chapter02GettingStartedLab: module0.Clrs4Chapter02GettingStartedLab,
     } as ChapterMdxComponents;
   },
+  "introduction-to-algorithms/01-foundations/03-characterizing-running-times":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch03-characterizing-running-times"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch03-characterizing-running-times"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch03-characterizing-running-times"),
+      ]);
+      return {
+        Clrs4Chapter03CharacterizingRunningTimesLab:
+          modules[0].Clrs4Chapter03CharacterizingRunningTimesLab,
+        Clrs4Chapter03FloorModuloLab: modules[1].Clrs4Chapter03FloorModuloLab,
+        Clrs4Chapter03GrowthLadderLab: modules[2].Clrs4Chapter03GrowthLadderLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/01-foundations/04-divide-and-conquer":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/introduction-to-algorithms/clrs4-04-divide-and-conquer"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-04-divide-and-conquer"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-04-divide-and-conquer"),
+      ]);
+      return {
+        Clrs4Chapter04DivideAndConquerLab:
+          modules[0].Clrs4Chapter04DivideAndConquerLab,
+        Clrs4Chapter04SubstitutionLab: modules[1].Clrs4Chapter04SubstitutionLab,
+        Clrs4Chapter04StrassenLab: modules[2].Clrs4Chapter04StrassenLab,
+      } as ChapterMdxComponents;
+    },
   "introduction-to-algorithms/01-foundations/05-probabilistic-analysis-randomized-algorithms":
     async () => {
       const module0 =
         await import("@/components/mdx/introduction-to-algorithms/clrs4-ch05-probabilistic-analysis-randomized-algorithms");
       return {
         Clrs4Chapter05ProbabilisticLab: module0.Clrs4Chapter05ProbabilisticLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/02-sorting-order-statistics/06-heapsort":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch06-heapsort");
+      return {
+        Clrs4Chapter06HeapsortLab: module0.Clrs4Chapter06HeapsortLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/02-sorting-order-statistics/07-quicksort":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-07-quicksort");
+      return {
+        Clrs4Chapter07QuicksortPartitionLab:
+          module0.Clrs4Chapter07QuicksortPartitionLab,
+        Clrs4Chapter07QuicksortHoareContractLab:
+          module0.Clrs4Chapter07QuicksortHoareContractLab,
+        Clrs4Chapter07QuicksortRecursionDepthLab:
+          module0.Clrs4Chapter07QuicksortRecursionDepthLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/02-sorting-order-statistics/08-sorting-in-linear-time":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch08-sorting-in-linear-time"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch08-sorting-in-linear-time"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch08-sorting-in-linear-time"),
+      ]);
+      return {
+        Clrs4Chapter08SortingInLinearTimeLab:
+          modules[0].Clrs4Chapter08SortingInLinearTimeLab,
+        Clrs4Chapter08CountingRadixLab:
+          modules[1].Clrs4Chapter08CountingRadixLab,
+        Clrs4Chapter08BucketUniformityLab:
+          modules[2].Clrs4Chapter08BucketUniformityLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/02-sorting-order-statistics/09-medians-order-statistics":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch09-medians-order-statistics"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch09-medians-order-statistics"),
+        import("@/components/mdx/introduction-to-algorithms/clrs4-ch09-medians-order-statistics"),
+      ]);
+      return {
+        Clrs4Chapter09MediansOrderStatisticsLab:
+          modules[0].Clrs4Chapter09MediansOrderStatisticsLab,
+        Clrs4Chapter09MediansOrderStatisticsSelectLab:
+          modules[1].Clrs4Chapter09MediansOrderStatisticsSelectLab,
+        Clrs4Chapter09MediansOrderStatisticsWorstCaseLab:
+          modules[2].Clrs4Chapter09MediansOrderStatisticsWorstCaseLab,
       } as ChapterMdxComponents;
     },
   "introduction-to-algorithms/04-advanced-design-analysis/15-greedy-algorithms":

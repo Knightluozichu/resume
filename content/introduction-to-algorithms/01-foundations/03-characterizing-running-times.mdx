@@ -3,170 +3,300 @@ title: "Chapter 3 · Characterizing Running Times"
 type: B
 section: "CLRS4 · 基础"
 order: 3
-description: "按CLRS第四版第3章重建O、Ω、Θ与o、ω的形式化定义、量词证明、渐近关系性质，以及取整、模运算、多项式、指数、对数、阶乘、迭代对数和Fibonacci函数。"
+description: "按 CLRS 第四版第 3 章重建 O/Ω/Θ 与 o/ω 的形式定义、量词结构证明、取整与模运算，以及多项式、指数、对数、阶乘、迭代对数和 Fibonacci 的增长等级比较。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-03
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter03CharacterizingRunningTimesLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch03-characterizing-running-times";
+import { Clrs4Chapter03FloorModuloLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch03-characterizing-running-times";
+import { Clrs4Chapter03GrowthLadderLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch03-characterizing-running-times";
 
-## 从“哪条曲线最终会赢”开始
+{/* 知识点清单：渐近记号族(图,Lab1) / 紧确界Θ(推导,Lab1) / 量词顺序(交互,Lab1故障) / 小o与ω(推导,Lab3) / 取整函数(图,Lab2) / 模运算(交互,Lab2故障) / 多项式指数对数(推导,Lab3) / Stirling与阶乘(公式,Lab3) / 迭代对数(图,Lab3) / Fibonacciφ增长(推导,Lab3)；Term 高亮 5 个：渐近记号、紧确界、小o记号、取整函数、迭代对数 */}
 
-先预测：算法A耗时$1000n$，算法B耗时$n^2$。在小输入上B可能更快，但随着$n$增长，二次项最终超过任何固定倍数的线性项。Characterizing Running Times要刻画的正是这种“越过某个阈值以后”的关系，而不是一台机器上的一次计时。
+{/* 本章可视化决策：渐近定义=见证包络审计图(曲线+包络+扫描光标,select+故障toggle) → 组件clrs4-ch03-characterizing-running-times.tsx；取整/模=切分格+阶梯+槽环图(格子/阶梯折线/圆环,select×3) → 同文件第二导出；增长等级=log刻度赛跑图(多条曲线+超越旗标,select×2) → 同文件第三导出；概念异构度=高 → 三实验独立结构 */}
 
+<Objectives>
 
-渐近分析保留增长率，隐藏固定机器速度、实现常数和低阶项。它不宣称常数不重要，而是把问题拆成两层：先证明规模怎样增长，再用测量选择同一增长等级中的实现。
+- 能写出 O、Ω、Θ 与 o、ω 的量词定义，并给出一组有效见证常数 $c$ 与阈值 $n_0$ 完成 $f\in\Theta(g)$ 的证明。
+- 能解释为什么见证常数必须先于全称量词固定，并能用量词结构判断一条渐近命题成立、不成立还是被偷换。
+- 自测：给定 $f(n)=4n^2+3n$ 与 $g(n)=n^2$，能否写出完整的 $\Theta$ 证明，并说出把 $c$ 从 6 改成 2 后扫描 oracle 会报什么？
 
-## 3.1 O-notation, Ω-notation, and Θ-notation
+</Objectives>
 
-### 上界、下界与紧确界
+## 直觉引入：订单翻倍以后，哪条产线先扛不住
 
-设$f$和$g$在自然数输入上最终非负。给出最终上界；给出最终下界；同时给出两边。
+把每条生产线想象成处理一张随规模增长的订单。一号线的耗时随订单量平铺着涨，二号线却按平方涨：今天订单小，二线反而便宜，你会误判它是赢家。
 
+渐近分析要回答的不是“今天谁快”，而是“订单一直翻倍下去，谁终将拖垮交付”。它故意忽略每台机器的脾气、常数开销和小规模时的偶然领先，只保留增长率的骨架；工程上的常数优化不是被否认，而是被安排到选好增长等级之后的下一轮比较。
 
-形式上，存在正常数$c,c_1,c_2$和阈值$n_0$，使所有$n\ge n_0$满足相应不等式：
+这一章把“谁终将赢”翻译成可以签字画押的数学对象：一对函数、一个固定见证常数、一个覆盖阈值，再加上一条不能交换的量词顺序。
+
+## 上界、下界与紧确界
+
+记号刻画的是函数之间的长期支配关系。设 $f$ 与 $g$ 在充分大的输入上非负，三种记号各自要求一族不等式从某个阈值起恒成立：
 
 $$
 \begin{aligned}
-f\in O(g)&\Longleftrightarrow 0\le f(n)\le c g(n),\\
-f\in \Omega(g)&\Longleftrightarrow 0\le c g(n)\le f(n),\\
-f\in \Theta(g)&\Longleftrightarrow 0\le c_1g(n)\le f(n)\le c_2g(n).
+f\in O(g)&\Longleftrightarrow \exists\,c>0,\ \exists\,n_0>0,\ \forall\,n\ge n_0:\ 0\le f(n)\le c\,g(n),\\
+f\in \Omega(g)&\Longleftrightarrow \exists\,c>0,\ \exists\,n_0>0,\ \forall\,n\ge n_0:\ 0\le c\,g(n)\le f(n),\\
+f\in \Theta(g)&\Longleftrightarrow \exists\,c_1,c_2>0,\ \exists\,n_0>0,\ \forall\,n\ge n_0:\ 0\le c_1 g(n)\le f(n)\le c_2 g(n).
 \end{aligned}
 $$
 
-例如$f(n)=3n^2+2n+1$。对$n\ge1$，有$f(n)\le6n^2$且$f(n)\ge3n^2$，所以$f\in\Theta(n^2)$。常数并不唯一；证明只需给出一组有效见证。
+这组式子在说：O 只要一条固定的包络线从阈值起罩住 $f$；Ω 要求 $f$ 最终压住 $g$ 的某个固定倍数；Θ 两条都要，所以 $f$ 与 $g$ 被夹在同一个增长等级里。
 
+渐近记号的形式化定义只由三个量词零件依次搭成：先存在一个常数 $c$，再存在一个阈值 $n_0$，然后承诺对全部 $n\ge n_0$ 逐点成立。以 O 记号（O-notation）为例，一份完整证明必须同时交付三样东西：常数、阈值，以及不随 $n$ 漂移的推理链。口语里的“$f$ 迟早被 $g$ 的某个常数倍罩住”，只有把这三样补齐，才升格为可以机械检验的定理；缺任何一件，命题都还停留在印象层面。
 
-### “紧确”不等于“精确公式”
+严格地说，<Term def="用 O、Ω、Θ 与小写 o、ω 表示函数间最终支配关系的记号族；每个记号对应一个函数集合，而不是一个数值。">渐近记号</Term> 的成员都是集合，严谨写法是 $f\in O(g)$。文献里的等号写法 $f=O(g)$ 是一种约定：右端代表集合中某个未命名的成员，不能像普通等式那样左右颠倒，由 $f=O(g)$ 推不出 $g=O(f)$。
 
-允许常数倍误差。$4n^2+3n$与$n^2$的比值趋近4，但写$\Theta(n^2)$并不保留系数4。若需求是预测实际延迟，就必须保留操作成本、缓存行为与测量误差，不能只交一条Θ结论。
+看一个具体的见证演算。取 $f(n)=3n^2+2n+1$、$g(n)=n^2$：当 $n\ge1$ 时 $2n+1\le3n^2$，所以 $f(n)\le6n^2$；同时 $f(n)\ge3n^2$ 恒成立。于是 $(c_1,c_2,n_0)=(3,6,1)$ 就是一份有效见证，$f\in\Theta(n^2)$。
 
+<Term def="Θ 记号表达的界；f 与 g 互相被固定常数倍夹住，属于同一增长等级，但不保留精确系数。">
+  紧确界
+</Term>
+只承诺常数倍精度：$4n^2+3n$ 与 $n^2$ 的比值趋近 4，写成 $\Theta(n^2)$ 就把这个 4
+抹掉了。要预测真实延迟，必须另外保留操作成本与测量误差，不能把一条 Θ
+结论当成精确公式。
 
-$f\in\Theta(g)$一定推出$f\in O(g)$和$f\in\Omega(g)$。反向只有两边同时成立才成立：
+由定义立刻得到 $\Theta(g)=O(g)\cap\Omega(g)$。反过来，一个函数可以拥有松上界：$n+10\in O(n^2)$ 为真但不紧确；报告结果时应给出能证明的最紧常用界，例如这里的 $\Theta(n)$。
 
-$$
-\Theta(g)=O(g)\cap\Omega(g).
-$$
+还要区分两件事：最坏、平均、最好情形先各自产生运行时间函数 $T_{\text{worst}}(n)$、$T_{\text{avg}}(n)$、$T_{\text{best}}(n)$，然后才能对这些函数谈 $O$、$\Omega$、$\Theta$。“最坏情形是 $O(n^2)$”与“平均情形是 $\Omega(n\log n)$”是两条独立的断言，需要各自的证据。
 
-一个函数可以拥有松上界。例如$n\in O(n^2)$为真，却不紧确；通常应报告可证明的最紧常用界$n\in\Theta(n)$，让读者看见真实增长等级。
+## 量词顺序：见证必须先固定
 
+定义的灵魂在量词顺序。O 记号的展开式是 $\exists c>0,\ \exists n_0>0,\ \forall n\ge n_0$，常数与阈值必须在“对所有后续 $n$”之前定死，之后不许反悔。
 
-### 输入情形与记号方向不是同一件事
+如果允许每个 $n$ 各选一个 $c(n)=f(n)/g(n)$，那么几乎每个正函数都能“通过”任何候选 $g$——每个采样点都恰好贴身通过，却没有任何一个常数能被写进 $\exists c$。量词一交换，命题就失去了区分增长率的能力。
 
-“最坏情况”先在长度$n$的实例集合上取最大运行时间，得到函数$T_{\mathrm{worst}}(n)$；随后才能说它属于$O(g)$、$\Omega(g)$或$\Theta(g)$。平均情况与最好情况也各自产生自己的函数，它们同样可以拥有上界和下界。
-
-
-## 3.2 Asymptotic notation: formal definitions
-
-### 集合与量词
-
-严格说，$O(g)$是函数集合，正确写法是$f\in O(g)$。算法文献常写$f=O(g)$，这里等号是一种约定：右侧代表集合中的某个未命名函数。它不能像普通等式那样随意反向推理。例如由$f=O(g)$不能推出$g=O(f)$。
-
-定义最关键的是量词顺序。对于O记号：
-
-$$
-\exists c>0,\ \exists n_0>0,\ \forall n\ge n_0:\quad 0\le f(n)\le c g(n).
-$$
-
-常数$c$和$n_0$必须在“对所有后续$n$”之前固定。若允许每个$n$选择$c(n)=f(n)/g(n)$，几乎所有正函数都能通过，定义便失去区分增长率的能力。
-
-
-有限测试只能找反例，不能证明全称命题。程序可以帮助猜测见证，但最终证明要把所有$n\ge n_0$纳入代数推导。对于$3n^2+2n+1$，利用$n\le n^2$和$1\le n^2$即可一次覆盖全部$n\ge1$。
-
-```ts
-function sampledUpperBound(
-  f: (n: number) => number,
-  g: (n: number) => number,
-  c: number,
-  n0: number,
-) {
-  for (let n = n0; n <= 10_000; n += 1) {
-    if (f(n) > c * g(n)) return { ok: false, counterexample: n };
-  }
-  return { ok: true, counterexample: null }; // evidence, not a proof
-}
-```
-
-### 严格上界与严格下界
-
-小写$o$排除同阶常数倍：$f\in o(g)$表示对每个$c>0$都存在阈值，使$f(n)<cg(n)$；小写$\omega$反向表示$f$严格快于$g$。当极限存在且$g$最终为正时，可以用比值理解：
+<Term def="小写 o 表达的严格低阶关系：对每个 ε>0 都存在阈值，使 f(n) < ε·g(n)；ω 是其反向，表示 f 严格快于 g。">
+  小 o 记号
+</Term>
+与 ω 把“同阶”进一步劈开。当极限存在且 $g$ 最终为正时，可以用比值快速判别：
 
 $$
-\lim_{n\to\infty}\frac{f(n)}{g(n)}
-=
+\lim_{n\to\infty}\frac{f(n)}{g(n)}=
 \begin{cases}
-0 &\Rightarrow f\in o(g),\\
-L,\ 0<L<\infty &\Rightarrow f\in\Theta(g),\\
-\infty &\Rightarrow f\in\omega(g).
+0 &\Rightarrow f\in o(g)\ \text{（}f\text{ 严格更低阶）},\\
+L,\ 0<L<\infty &\Rightarrow f\in \Theta(g),\\
+\infty &\Rightarrow f\in \omega(g).
 \end{cases}
 $$
 
+这个判别法在说：比值趋于 0 表示 $f$ 被 $g$ 甩开的速度超过任何固定倍数；趋于正有限值表示同阶；趋于无穷表示 $f$ 严格更快。它只是方便工具而不是定义本身——极限不存在时，仍要回到最终不等式。
 
-例如$n\lg n\in o(n^2)$，而$2^n\in\omega(n^k)$对任意固定$k$成立。注意比值法是方便工具，不替代定义；极限不存在时，仍应回到最终不等式和上下极限。
+渐近关系还自带代数结构：Θ 是自反、对称、传递的等价关系；O 与 Ω 各自传递，并满足转置对称 $f\in O(g)\iff g\in\Omega(f)$；非负函数的和由较快增长项支配，$\Theta(f_1)+\Theta(f_2)=\Theta(\max\{f_1,f_2\})$。这些性质让多步推导可以串联，但每一步都要确认函数最终非负。
 
-### 渐近关系的代数性质
+## 交互实验一：见证包络审计
 
-Θ关系具有自反、对称和传递性，像函数增长等级上的等价关系。O与Ω各自传递，并满足转置对称：$f\in O(g)$当且仅当$g\in\Omega(f)$。这些性质允许把多步界串联，但每步都要保证函数最终非负。
+下面的实验把证明过程变成一场审计：选一族被审函数 $f$ 与候选等级 $g$，固定一个见证常数 $c$，看包络线 $c\cdot g(n)$ 能否从 $n_0$ 起全程罩住 $f$；扫描光标替你逐点核对，量词账本把 $\exists c\ \exists n_0\ \forall n\ge n_0$ 的顺序点亮。
 
-和式通常由较快增长项支配。若$f_1,f_2$最终非负，则：
+猜一猜：把 $c$ 从 6 调到 2，$3n^2+2n+1$ 会在哪个 $n$ 先穿破 $n^2$ 的包络？换成 $n+10$ 对 $n^2$ 呢？
 
-$$
-\Theta(f_1)+\Theta(f_2)=\Theta\!\left(\max\{f_1,f_2\}\right).
-$$
+<Clrs4Chapter03CharacterizingRunningTimesLab />
 
-乘积则相乘各自的界。若项会正负抵消，上述直觉可能失效，因此运行时间分析通常先把成本建模为非负函数。
+观察因果：$c$ 只把整个包络曲线按比例缩放，穿破点的位置随 $c$ 单调移动；函数族决定被审曲线本身，$n+10$ 这类低阶函数即使配很大的 $c$，在 $n$ 足够大时也永远罩不住反向的断言。打开“量词作弊”后，包络在每个采样点恰好贴住 $f$——视觉上毫无破绽，但量词账本一步就拆穿了它：没有任何固定常数能写进 $\exists c$。
 
+## 取整与模运算：离散规模的归一化
 
-## 3.3 Standard notations and common functions
+算法面对的是整数规模。分治把 $n$ 个元素切成两半时，奇数 $n$ 切不出两个相等的半份，于是 <Term def="把实数压到不超过它的最近整数（⌊x⌋），或抬到不小于它的最近整数（⌈x⌉）；两者差不足 1。">取整函数</Term> 登场：左半 $\lfloor n/2\rfloor$ 格，右半 $\lceil n/2\rceil$ 格，恒等式 $\lfloor n/2\rfloor+\lceil n/2\rceil=n$ 保证不多不少。
 
-### 单调性、取整与模运算
+取整的基本夹逼是 $\lfloor x\rfloor\le x\le\lceil x\rceil$：误差永远不足 1，所以在渐近分析里通常不改变增长等级；但在递推基例、数组下标边界和精确计数里，这个不足 1 的差就是越界与不越界的分界，不能直接删除。
 
-算法规模是整数，因此分治常出现$\lfloor n/2\rfloor$和$\lceil n/2\rceil$。取整只造成不足1的误差，通常不改变渐近等级，但在递推基例、数组边界和精确证明中不能直接删除。恒等式$\lfloor x\rfloor\le x\le\lceil x\rceil$提供上下夹界。
+模运算把任意整数归一到固定的余数集合 $a\bmod m\in\{0,1,\ldots,m-1\}$，环形缓冲区、哈希桶和周期状态都靠它定位。要当心负数：数学定义要求余数非负，$((a\bmod m)+m)\bmod m$ 给出结果；而不少语言的 `%` 是截断向零语义，$-5\bmod 4$ 在 C 风格语义下是 $-1$ 而不是 $3$。证明与代码必须用同一语义，否则负数一步就走出数组。
 
-模运算把整数映射到固定余数集合，$a\bmod n\in\{0,\ldots,n-1\}$，用于环形缓冲区、哈希桶和周期状态。对负数时，不同语言的余数约定可能不同；数学证明与代码必须采用同一语义。
+## 交互实验二：两半切分与模环
 
+第二个实验把两个归一化动作并排摆开：左边是 $n$ 个格子的两半切分与 $\lfloor x/2\rfloor$ 的取整阶梯，右边是 $m$ 槽圆环上的指针周游。参数真的改变几何：$n$ 移动界标，$m$ 重排圆环，起点决定指针从环内还是环外出发。
 
-### 多项式、指数与对数
+猜一猜：$n=9$ 时界标左边几格？起点 $-5$、步长 $+1$ 的指针在 4 槽环上依次落在哪些槽？把起点换成 $-1$ 再打开“截断向零”故障，会发生什么？
 
-次数为$d$且首项系数为正的多项式$p(n)$满足$p(n)\in\Theta(n^d)$。任意固定多项式最终都慢于底数大于1的指数函数，而不同底数的指数函数不只差常数倍。
+<Clrs4Chapter03FloorModuloLab />
 
-对数把乘法规模变成加法层数。换底公式表明固定底数只贡献常数：
+观察因果：奇数 $n$ 让界标两侧差一格，偶数 $n$ 两侧相等，恒等读数 $\lfloor n/2\rfloor+\lceil n/2\rceil=n$ 始终成立；负数起点下，数学 floor-mod 把指针归一回环内，截断语义则画出环外幽灵槽——那不是“另一个正确答案”，而是下标越界事故。把起点换回 0，故障立刻失去可见效果，这正是“故障无影响不证明语义正确”的边界样本。
 
-$$
-\log_b n=\frac{\log_a n}{\log_a b}=\Theta(\log_a n).
-$$
+## 常用函数的增长等级
 
+渐近记号需要一套化简词汇。次数为 $d$、首项系数为正的多项式满足 $p(n)\in\Theta(n^d)$：和式里最高次项支配一切低次项与常数项。指数则是另一条赛道：固定底数 $b>1$ 的 $b^n$ 最终超过任何固定次数的多项式，而且不同底数的指数之间不是常数倍差距，$2^n$ 与 $3^n$ 隔着 $(3/2)^n$ 这个无穷因子。
 
-因此算法分析常把$\lg n$写作二进制对数，而在Θ记号中省略底数。常用恒等式包括$\lg(ab)=\lg a+\lg b$、$\lg(a^k)=k\lg a$以及$a^{\lg_b n}=n^{\lg_b a}$。最后一个等式经常用于把递归树的分支数改写为$n$的幂。
-
-### 阶乘、函数迭代与Fibonacci
-
-阶乘计算排列数量，增长快于任意固定指数$c^n$但慢于$n^n$。Stirling近似给出可用于取对数的紧确表达：
+对数把乘法规模折算成加法层数。换底公式
 
 $$
-n!=\sqrt{2\pi n}\left(\frac ne\right)^n
-\left(1+\Theta\!\left(\frac1n\right)\right),
-\qquad
-\lg(n!)=\Theta(n\lg n).
+\log_b n=\frac{\log_a n}{\log_a b}
 $$
 
-函数迭代$f^{(i)}(n)$表示把$f$连续应用$i$次，不是幂。$\lg^*n$就是达到常数范围所需的迭代次数，在并查集和某些高级算法中出现。即使$n$巨大，$\lg^*n$仍很小，但它不是常数函数。
+的分母 $\log_a b$ 只是一个固定常数，所以 $\log_b n=\Theta(\log_a n)$：底数在渐近记号里可以省略，分析中写 $\lg n$（以 2 为底）只是习惯。常用恒等式 $\lg(ab)=\lg a+\lg b$、$\lg(a^k)=k\lg a$ 和 $a^{\lg_b n}=n^{\lg_b a}$ 是递归树分析的记账工具，最后一个等式专门用来把分支数改写成 $n$ 的幂。
 
-Fibonacci数满足$F_i=F_{i-1}+F_{i-2}$。特征根公式显示$F_i$按黄金比例$\varphi^i$指数增长，因此Fibonacci堆或递归算法中的“阶数为对数”结论，往往来自节点规模至少按Fibonacci数增长。
+阶乘数的是排列个数，增长快于任何固定底数指数、又慢于 $n^n$。Stirling 公式给出紧刻画：
 
-```text
-growth ladder for fixed k and c > 1:
-1 ≺ lg* n ≺ lg lg n ≺ lg n ≺ n^k ≺ c^n ≺ n! ≺ n^n
+$$
+n!=\sqrt{2\pi n}\left(\frac ne\right)^n\left(1+\Theta\!\left(\frac1n\right)\right),
+\qquad \lg(n!)=\Theta(n\lg n).
+$$
+
+前一行说 $n!$ 大体上是 $(n/e)^n$ 再乘一个多项式修正；取对数后 $\lg(n!)$ 与 $n\lg n$ 同阶——比较排序下界 $\Omega(n\lg n)$ 正是从“$n$ 个元素的排列有 $n!$ 种、每次比较至多砍掉一半”这条账推出来的。
+
+<Term def="对 n 反复取对数直到结果不超过 1 所需次数；记作 lg* n，增长慢于任何 log 的固定次幂，但不是常数。">
+  迭代对数
+</Term>
+$\lg^* n$ 把“折半再折半”的层数本身变成对象：即使 $n$ 大到写不下来，$\lg^* n$
+依然是个位数量级。它出现在并查集等结构的分析里，提醒存在比任何 $\log^k n$
+都慢的增长档。
+
+Fibonacci 序列 $F_i=F_{i-1}+F_{i-2}$ 按黄金比例 $\varphi=(1+\sqrt5)/2$ 指数增长：Binet 公式 $F_i=\bigl(\varphi^i-\psi^i\bigr)/\sqrt5$（其中 $|\psi|<1$）说明 $F_i$ 与 $\varphi^i/\sqrt5$ 的相对误差指数衰减。斐波那契堆里“节点规模至少按 $F_i$ 增长、因此度数为 $O(\log n)$”这类结论，靠的就是这条指数骨架。
+
+## 交互实验三：增长赛跑
+
+第三个实验把六条增长曲线放上同一条 log 刻度赛道。log 轴把乘法差距压成等距台阶：曲线之间每拉开一格，实际值就差一个数量级。换参赛阵容与地平线，看超越旗标插在何处、终点名次榜怎么写。
+
+猜一猜：经典阵容里 $n=3$ 时谁领先？$n=64$ 时呢？$n!$ 在阶梯阵容里何时反超 $2^n$？Fibonacci 家族的 $F_n$ 与 $\varphi^n/\sqrt5$ 贴合到什么程度？
+
+<Clrs4Chapter03GrowthLadderLab />
+
+观察因果：地平线参数不改变任何一条曲线的形状，只改变你读到的赛段；阵容参数才改变参赛者本身。小样本宣判故障冻结在 $n\le4$ 给 $n^2$ 加冕——那正是 $2^n$ 尚未反超的区间；把地平线推远，锦旗与终点名次榜的冲突就是“用前 4 个样本推广渐近结论”的翻车现场。
+
+## 代码对照：用标准库复算见证
+
+下面的 Python 片段只依赖标准库，与三个实验的机制一一对应：扫描器复算包络穿破点，取整/模助手复算界标与落槽。把两段合并成一个文件即可运行。
+
+第一段是见证扫描器：对每个候选 $c$，从 $n_0$ 起逐点检查覆盖，找出第一个穿破点。它只负责找反例；要证明全称命题，仍须回到代数推导。
+
+```python
+def witness_scan(f, g, c, n0=1, n_max=64):
+    """返回固定 c 从 n0 起覆盖失败的首个 n；全程覆盖则返回 None。"""
+    for n in range(n0, n_max + 1):
+        if f(n) > c * g(n) + 1e-9:
+            return n
+    return None
+
+quad = (lambda n: 3 * n * n + 2 * n + 1, lambda n: n * n)
+for c in (2, 4, 6):
+    print(c, witness_scan(*quad, c))
 ```
 
-这条阶梯要求参数固定。若$k$或$c$随$n$变化，比较关系必须重新证明；“指数一定比多项式快”隐含指数底数固定大于1、多项式次数固定。
+输出是 `2 1`、`4 1`、`6 None`：$c=2$ 与 $c=4$ 在 $n=1$ 处就被穿破，$c=6$ 才能从 1 起全程覆盖——与实验一的扫描读数一致。
 
+第二段复算离散归一化：两半切分、数学 floor-mod 与截断余数对照，外加一个 $n!$ 的对数版 ranking 助手（`math.lgamma` 避免大数溢出）。
+
+```python
+from math import floor, ceil, log2, lgamma
+
+def split_halves(n):
+    return floor(n / 2), ceil(n / 2)
+
+def floor_mod(a, m):
+    return ((a % m) + m) % m   # 数学语义，余数落在 [0, m)
+
+def trunc_mod(a, m):
+    return a % m               # C 风格语义，余数跟随 a 的符号
+
+def log_factorial(n):
+    return lgamma(n + 1)       # ln(n!)，排序与比较都用对数域
+print(split_halves(13), floor_mod(-5, 4), trunc_mod(-5, 4))
+print(round(log_factorial(64) / log2(2.718281828), 1))  # ≈ 64·lg(64/e)
+```
+
+`split_halves(13)` 给出 `(6, 7)`；`floor_mod(-5, 4)` 给出 `3` 而 `trunc_mod(-5, 4)` 给出 `-1`——这正是实验二幽灵槽的数值本尊。对数域里的 $\lg(n!)$ 与 $n\lg n$ 同阶，也印证了 Stirling 一行的读法。
+
+## 常见误区
+
+<Callout type="trap" title="误区：每个 n 都能配一个常数，就等于 O 成立">
+  **现象：** 采样验证全绿，于是宣布 $f\in O(g)$。**原因：** 量词被偷换——允许 $c$
+  随 $n$ 变化时，$c(n)=f(n)/g(n)$ 让任何正函数 trivially 通过。**修法：**
+  先固定一个 $c$，再检查是否存在 $n_0$ 使覆盖对全部 $n\ge n_0$
+  成立；实验一的“量词作弊”开关演示的就是这种伪证书。
+</Callout>
+
+<Callout type="trap" title="误区：取整误差不足 1，渐近里就可以删掉">
+  **现象：** 写递推时直接把 $\lfloor n/2\rfloor$ 换成
+  $n/2$，基例和边界一并省略。**原因：** 不足 1
+  的误差在增长等级上通常无害，但在整数下标上就是半格——奇数 $n$
+  的界标会切进元素中间。**修法：**
+  渐近推导可放松，实现与基例必须保留取整；用实验二的 $n=9$
+  切分视图核对界标两侧格数。
+</Callout>
+
+<Callout type="trap" title="误区：小 n 跑得快的一方，增长等级就低">
+  **现象：** 基准只测到
+  $n\le4$，线性带大常数的实现输给了二次实现，于是宣布二次算法“更快”。**原因：**
+  常数与低阶项在小规模时主导读数，超越点远在测量范围之外。**修法：**
+  明确报告测量区间，并用渐近分析预言区间外的格局；实验三的“小样本宣判”故障就是这类结论的墓志铭。
+</Callout>
 
 ## 小结
 
-Chapter 3 Characterizing Running Times把“增长得更快”变成可证明命题。O记号给最终上界，Ω记号给最终下界，Θ记号要求两边同时成立；o与ω表达严格的低阶和高阶关系。它们都是函数集合，定义依赖固定正常数、阈值和覆盖无限后缀的量词顺序。
+- O 给最终上界、Ω 给最终下界、Θ 要求双边同时成立，o 与 ω 表达严格的低阶与高阶。
+- 每个记号都是函数集合，证明的要件是固定见证 $c$、阈值 $n_0$ 和覆盖全部 $n\ge n_0$ 的推导。
+- 取整 $\lfloor n/2\rfloor/\lceil n/2\rceil$ 管界标，模运算管落槽；负数余数语义必须前后一致。
+- 多项式由最高次支配，固定底对数只差常数，指数超多项式，阶乘由 Stirling 刻画，$\lg(n!)=\Theta(n\lg n)$。
+- $\lg^* n$ 比任何 $\log^k n$ 都慢却不是常数；$F_i$ 按 $\varphi^i$ 指数增长。
+- 增长等级阶梯上的每个“≺”都附带前提：参与比较的参数必须固定。
 
-标准记号与常用函数提供化简词汇：取整处理离散规模，模运算处理周期，多项式由最高次数支配，固定底对数只差常数，指数最终超过固定次数多项式，Stirling公式刻画阶乘，迭代对数和Fibonacci则连接后续数据结构分析。一个完整结果必须同时说明分析对象、界的方向、见证与使用的函数恒等式。
+## 练习
 
+<Exercises>
 
+1. 证明 $f(n)=4n^2+3n$ 属于 $\Theta(n^2)$：给出 $c_1$、$c_2$、$n_0$ 的一组具体取值并验证不等式链；再把见证扫描器跑到 $c=3$ 上，报告首个穿破点并解释它为什么不妨碍 $\Theta$ 结论。
+
+   <Answer>
+
+   下界取 $c_1=4$：$4n^2+3n\ge4n^2$ 对所有 $n\ge1$ 成立。上界取 $c_2=6$：$4n^2+3n\le6n^2$ 等价于 $3n\le2n^2$，即 $n\ge2$，故 $n_0=2$ 起成立。于是 $4n^2\le4n^2+3n\le6n^2$ 对一切 $n\ge2$ 成立，$f\in\Theta(n^2)$。
+
+   扫描 $c=3$ 时 $4n^2+3n\le3n^2$ 即 $n^2+3n\le0$，在 $n\ge1$ 上处处失败，首个穿破点是 $n=1$。这不构成反驳：O 与 Θ 都是存在性命题，单个 $(c,n_0)$ 失败只说明这份见证无效，$(4,6,2)$ 仍然有效。
+
+   </Answer>
+
+2. 计算并排序：(1) $n=13$ 的两半切分格数与界标位置；(2) $-5\bmod4$ 在数学 floor-mod 与 C 截断语义下各是多少，再列出起点 $-5$、步长 $+2$ 在 4 槽环上前 4 步的落槽；(3) 按增长从慢到快排列 $\lg n$、$\sqrt n$、$n$、$n\lg n$、$n^2$、$2^n$、$n!$（$n$ 充分大）。
+
+   <Answer>
+
+   (1) $\lfloor13/2\rfloor=6$、$\lceil13/2\rceil=7$，界标在索引 6 之前，$6+7=13$。(2) 数学语义 $((-5\bmod4)+4)\bmod4=3$；截断语义 $-5\bmod4=-1$。起点 $-5$、步长 $+2$ 的落槽序列是 $3,1,3,1$（每步先加 2 再 floor-mod 4）。(3) 从慢到快：$\lg n\prec\sqrt n\prec n\prec n\lg n\prec n^2\prec2^n\prec n!$。其中 $\sqrt n=n^{1/2}$ 是分数次多项式，仍快于任何对数、慢于线性。
+
+   </Answer>
+
+3. 打开本批附带的 `body.py`，把 `WITNESS_CASES` 中 quad-mix 一行的见证常数从 6 改成 2，先预测扫描输出，再运行验证；随后对 `n+10` 对 $n^2$ 分别以 $c=2$ 和 $c=10$ 运行，说明为什么同一个 O 命题对不同 $c$ 的扫描结果不同，以及 $n_0$ 在其中扮演的角色。
+
+   <Answer>
+
+   quad-mix 换成 $c=2$ 后，$3n^2+2n+1\le2n^2$ 在 $n=1$ 处即失败，扫描输出首个穿破点 $1$。$n+10$ 对 $n^2$：$c=2$ 时首个穿破点是 $n=1$（$11>2$），$c=10$ 时仍在 $n=1$ 穿破（$11>10$），但从 $n_0=3$ 起覆盖成立（$n=3$ 起 $n+10\le2n^2$）。扫描总是从 $n_0=1$ 起报告第一个失败点；O 命题只要求存在某个 $(c,n_0)$ 组合，所以穿破点的存在不否定命题——它只告诉你这份见证需要调参。
+
+   </Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="渐近记号">表示函数间“越过某个阈值以后的支配关系”的记号族，包括 O、Ω、Θ 与严格版 o、ω；每个记号对应一个函数集合。</GlossaryItem>
+<GlossaryItem term="紧确界">Θ 记号表达的界：f 与 g 互相被固定常数倍夹住，属于同一增长等级，但不保留精确系数。详见“上界、下界与紧确界”。</GlossaryItem>
+<GlossaryItem term="小 o 记号">严格低阶关系：对每个 ε>0 都有阈值使 $f(n)<\varepsilon\,g(n)$，即 f/g 趋于 0；ω 是其反向。用极限比值可以快速判别。</GlossaryItem>
+<GlossaryItem term="取整函数">⌊x⌋ 向下压到最近整数，⌈x⌉ 向上抬到最近整数，两者差不足 1；夹逼恒等式 ⌊x⌋≤x≤⌈x⌉ 是分治切分的边界依据。</GlossaryItem>
+<GlossaryItem term="迭代对数">对 n 反复取对数直到不超过 1 的次数，记 lg* n；增长慢于任何 log 的固定次幂，但永远不是常数。详见“常用函数的增长等级”。</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 3 章的目录定位与核心主题进行独立教学重写：O、Ω、Θ 与 o、ω 的形式定义、量词证明结构、取整与模运算、以及多项式/指数/对数/阶乘/迭代对数/Fibonacci 的增长等级，均按官方目录单元限定范围，事实层面以公开学术资料（MIT 出版社目录、Bachmann–Landau 记号与 Stirling 公式的公开条目）核对；不复现原书正文、习题或图表文字。三个交互实验、示例数值、Python oracle、练习与答案为本项目独立编写的教学材料。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 3: Characterizing Running Times"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

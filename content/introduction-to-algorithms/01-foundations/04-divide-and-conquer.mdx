@@ -3,26 +3,66 @@ title: "Chapter 4 · Divide-and-Conquer"
 type: B
 section: "CLRS4 · 基础"
 order: 4
-description: "按CLRS第四版第4章重建方阵分块乘法、Strassen算法、代入法、递归树法、主方法、连续主定理与Akra-Bazzi递推式。"
+description: "按 CLRS 第四版第 4 章重建分治范式、方阵分块乘法、Strassen 算法、代入法、递归树法与主方法三种递推求解路径。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-04
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter04DivideAndConquerLab } from "@/components/mdx/introduction-to-algorithms/clrs4-04-divide-and-conquer";
+import { Clrs4Chapter04SubstitutionLab } from "@/components/mdx/introduction-to-algorithms/clrs4-04-divide-and-conquer";
+import { Clrs4Chapter04StrassenLab } from "@/components/mdx/introduction-to-algorithms/clrs4-04-divide-and-conquer";
 
-## 从“把大问题切成几块”开始
+{/* 可视化决策：分治范式+递归树+主方法=递归树逐层工作量账本（节点几何+账条+情形徽章，Lab1）；代入法=归纳残差阶梯（推导卡+残差条+强化提示，Lab2）；Strassen=块乘积计数与交叉点（乘加双柱+log2 轴+交叉点估计，Lab3）。组件=clrs4-04-divide-and-conquer.tsx，概念异构度高→每机制独立组件。知识点：分治范式(图/公式)、递推式(公式+代码)、方阵分块(公式)、递归树(Lab1)、主方法(Lab1+公式)、代入法(Lab2)、Strassen(Lab3)，进名词解释：分治范式/递推式/递归树/主方法/代入法。 */}
 
-先预测：只要递归地把规模$n$问题切成更小问题，算法就一定更快吗？不一定。每层产生多少子问题、子问题缩小多少，以及divide和combine做多少额外工作，共同决定总成本。若生成太多分支，递归甚至可能比直接算法更慢。
+<Objectives>
 
-的三步结构直接生成递推式：递归调用对应$T$项，非递归工作对应toll函数。
+- 能写出分治算法的 divide、conquer、combine 三步，并把每一步翻译成递推式 `T(n)=aT(n/b)+f(n)` 中的具体项。
+- 能手算递归树前三层的工作量、判断主方法三情形中的哪一情形，并给出对应的渐近增长率。
+- 能完成一次代入法归纳步骤，判断残差符号，并在临界情形用 log 因子或强化假设修正猜测。
+- 自测：对 `T(n)=3T(n/2)+n`，n=16 时逐层账本是哪四个数？总量（含叶子）是多少？主方法落在哪一情形？
 
+</Objectives>
 
-## 4.1 Multiplying square matrices
+## 直觉：为什么切开不一定更快
 
-### 从标量公式到方阵分块
+先预测：只要递归地把大问题切成小问题，算法就一定比直接做更快吗？想一想切蛋糕：切得越碎，每一块确实更好下口，但切的动作本身也要花时间；如果切出来的块数太多，光是“切”和“拼回去”就会超过省下的时间。
 
-两个$n\times n$方阵相乘的直接算法计算$n^2$个输出元素，每个元素做$n$次乘加，因此时间为$\Theta(n^3)$。把A、B、C各分成四个$n/2$阶方阵后，标量行乘列公式仍成立：
+<Term def="把问题切成若干同类子问题、递归求解再用一个 combine 步骤合并答案的算法设计模板，由 divide、conquer、combine 三步组成。">
+  分治范式
+</Term>
+（divide-and-conquer）的全部学问就藏在这笔账里：每一层切出多少个子问题、每个子问题缩小到几分之一、切和拼各花多少工作量。本章的全部工具——递推式、递归树、代入法、主方法——都是为了让这笔账可以被算出来、被证明，而不是凭感觉。
+
+## 权威目录定位
+
+本章按 CLRS 第四版第 4 章的官方目录限定范围：分治范式（divide-and-conquer）、方阵相乘（multiplying square matrices）、Strassen 矩阵乘法、代入法（substitution method）、递归树法（recursion-tree method）与主方法（master method）。写作方式是以权威目录限定范围、以公开学术资料核对事实、不复现原书正文；所有示例数值、图和代码均为独立重写，递推结论用本章自带的 Python oracle 复核。
+
+## 分治范式与递推式
+
+一个分治算法由三个可分别证明的步骤组成：divide 把实例切成若干更小的同类实例；conquer 递归求解每个子问题（规模小到阈值以下时直接解）；combine 把子问题的答案合并成原问题的答案。归并排序是模板：divide 对半切数组，conquer 递归排序两半，combine 线性 merge 两个有序段。
+
+把三步结构翻译成成本语言，就得到本章的中心对象——<Term def="用 T 在更小输入上的值定义 T 本身的等式或不等式；分治算法的运行时间总可以写成这种形式。">递推式</Term>：
+
+$$
+T(n) = a\,T(n/b) + f(n)
+$$
+
+这个式子在说：规模为 `n` 的问题，被切成 `a` 个规模为 `n/b` 的子问题（这就是 `aT(n/b)` 一项），再加上 divide 和 combine 的非递归开销 `f(n)`。只要说清楚 `a`、`b`、`f` 各自来自算法哪一步，成本分析就从一个模糊问题变成一道可以求解的数学题。
+
+## 方阵分块乘法：8 个乘积的账本
+
+矩阵乘法是本章的主线例子，因为它有一个“直接做”的基准算法可以做对照。两个 `n×n` 方阵相乘，输出有 `n²` 个元素，每个元素是长度为 `n` 的行乘列点积，所以直接算法的时间是 `Θ(n³)`。分治视角下，把 `A、B、C` 各自分成四个 `n/2` 阶方阵块，标量乘法公式对块照样成立：
 
 $$
 \begin{aligned}
@@ -33,141 +73,244 @@ C_{22}&=A_{21}B_{12}+A_{22}B_{22}.
 \end{aligned}
 $$
 
-
-每个输出块需要两次递归乘法，共有8个半规模乘法；分块加法处理$\Theta(n^2)$个标量，所以：
+每个输出块是两次块乘积之和，四个输出块共 8 次半规模乘法；块加法的元素量是 `Θ(n²)`，于是分治重写的成本递推为：
 
 $$
 T(n)=8T(n/2)+\Theta(n^2)=\Theta(n^3).
 $$
 
-这种递归重写没有改进渐近阶，却暴露了真正瓶颈：递归树分支数8。如果能用少于8次块乘法恢复四个输出块，指数便可能下降。
+这个式子在说：分支数 `a=8`、缩小因子 `b=2`、层内代价 `f(n)=Θ(n²)`，而结果仍然是 `Θ(n³)`——单纯地递归重写没有改变增长阶。它真正的价值是暴露了瓶颈：递归树每层有 8 个分支。后面会看到，把 8 个乘积降到 7 个，指数就会真的下降。
 
-```text
-MATRIX-MULTIPLY-RECURSIVE(A, B)
-1  if A is 1-by-1, return A[1,1] * B[1,1]
-2  partition A and B into four equal square blocks
-3  recursively compute the eight block products
-4  add paired products to form C11, C12, C21, C22
-5  return the assembled matrix C
-```
+## 递归树：把递推式画成逐层账本
 
-若$n$不是2的幂，可以补零到下一幂、使用不等分区，或在边缘转直接内核。补零不会改变渐近阶，但会影响内存、常数和生产实现中的阈值选择。
-
-## 4.2 Strassen’s algorithm for matrix multiplication
-
-利用代数恒等式先构造$P_1,\ldots,P_7$，再从这些乘积组合四个C块。关键不是某一条公式，而是把昂贵的递归乘法从8次降到7次；额外加减仍为$\Theta(n^2)$。
-
-
-对应递推式为：
+<Term def="把递推式的递归调用关系画成一棵树：根是规模为 n 的问题，每个节点长出 a 个规模为 n/b 的子节点，用来看每层有多少工作。">
+  递归树
+</Term>
+法把抽象递推式变成一张可以逐行核对的账本。第 `i` 层有 `a^i`
+个节点，每个节点的规模是 `n/b^i`，若层内代价是 `n^d`，则第 `i` 层总工作为：
 
 $$
-T(n)=7T(n/2)+\Theta(n^2)
-=\Theta\!\left(n^{\lg 7}\right)
-=O(n^{2.81}).
+w_i = a^i \left(\frac{n}{b^i}\right)^{d}
 $$
 
-Strassen矩阵乘法说明“少一次递归调用”可能比“少若干线性操作”更重要。但渐近改进并不保证所有规模更快：临时矩阵、加法次数、缓存布局和数值误差都会抬高常数。实践中通常只在大块上使用Strassen，降到阈值后切换高度优化的普通矩阵内核。
-
-正确性证明要展开七个$P_i$的定义并验证每个C块中不需要的交叉项抵消，所需项各出现一次。复杂度证明则只依赖“7个半规模乘法加$\Theta(n^2)$块加减”。这两张证书必须分开，代数正确不自动意味着成本递推写对。
-
-## 4.3 The substitution method for solving recurrences
-
-包含两步：猜答案，随后用数学归纳法证明。猜测可以来自递归树、经验或已知模式，但证明必须处理常数和基例。
-
-以$T(n)=2T(n/2)+n$为例，猜$T(n)\le cn\lg n$。代入归纳假设：
+这个式子在说：层内代价随子问题规模下降（括号里的因子），但节点数在上升（`a^i` 因子），两者相乘才是这一层的真实账单。总成本是各层求和再加上叶子基准：
 
 $$
-\begin{aligned}
-T(n)
-&\le2c\frac n2\lg\frac n2+n\\
-&=cn\lg n-cn+n\\
-&\le cn\lg n \qquad(c\ge1).
-\end{aligned}
+T(n)=\sum_{i=0}^{L-1} w_i + a^{L}\cdot T(1),\qquad L=\lceil \log_b n\rceil
 $$
 
+这个式子在说：总账本是“每层的账加起来”，而不是“深度乘以某个常数”——深度只有 `Θ(log n)` 层，每层的工作量却可以相差悬殊。下面这个实验把这张账本画出来，你可以亲手改分支数、缩小因子和层内代价，看树形和数值轨迹一起变化。
 
-最后还要选择足够大的$c$覆盖基例。若直接猜$T(n)\le cn$，代入后得到$cn+n$，多出的$n$无法被吸收，说明候选界太小；若证明$\Theta$，要分别完成O上界和Ω下界。
+<Clrs4Chapter04DivideAndConquerLab />
 
-有时需要加强归纳假设。例如递推中的减法项无法闭合时，可猜$T(n)\le cn\lg n-dn$，让负低阶项提供余量。加强命题不是作弊，而是为归纳步骤保留结构；最终仍可推出所需上界。
+## 主方法：一次比较定增长率
 
-## 4.4 The recursion-tree method
-
-把$T(n)=2T(n/2)+n$展开：第$i$层有$2^i$个规模$n/2^i$节点，每个节点toll为$n/2^i$，所以整层成本始终为$n$。
-
-
-树高为$\lg n$，叶子数为$n$且每个基例成本$\Theta(1)$，于是内部层与叶子合计$\Theta(n\lg n)$。递归树不只是画图：每个节点标签必须是该子问题的toll，层数要由达到基例的方程确定，叶子成本也不能遗漏。
-
-对于不平衡递推，按层节点可能拥有不同规模，不能机械写“每层一样”。可按深度求和、按根到叶路径界定，或转向Akra-Bazzi。递归树常用于形成可信猜测，最终可再用代入法给出严格证明。
-
-
-## 4.5 The master method for solving recurrences
-
-处理固定$a\ge1$、$b>1$的均匀子问题递推。临界函数$n^{\log_b a}$等价于叶子数量级；比较$f(n)$和它，就能判断成本集中在叶、均匀分布于各层，还是集中在根附近。
-
-
-常用三类可写为：
+账本求和有一个常用的“闭卷结论”。对 `T(n)=aT(n/b)+Θ(n^d)`（`a≥1, b>1`），先算临界指数 `log_b a`，再把它和层内代价阶 `d` 比一次大小：
 
 $$
-T(n)=aT(n/b)+f(n)=
-\begin{cases}
-\Theta(n^{\log_b a}),&
-f(n)=O(n^{\log_b a-\epsilon}),\\
-\Theta(n^{\log_b a}\lg^{k+1}n),&
-f(n)=\Theta(n^{\log_b a}\lg^k n),\\
-\Theta(f(n)),&
-f(n)=\Omega(n^{\log_b a+\epsilon}).
+T(n)=\begin{cases}
+\Theta(n^d) & d>\log_b a,\\
+\Theta(n^d \log n) & d=\log_b a,\\
+\Theta(n^{\log_b a}) & d<\log_b a.
 \end{cases}
 $$
 
-第三类还要求存在$c<1$，使充分大$n$上有$af(n/b)\le cf(n)$。这个regularity condition排除剧烈振荡，让根部较大的toll沿递归方向按几何比例衰减。
+这三行在说同一件事：总账本由“最强的那个量级”主导。`d` 大，根层的 toll 就压过一切；两者相等，每层账差不多，层数 `Θ(log n)` 就变成多余的 log 因子；`d` 小，叶子层爆炸的节点数说了算。直觉上它就是在回答“这张账本是顶层贵、每层一样贵、还是底层贵”。
 
+<Term def="对形如 T(n)=aT(n/b)+f(n) 的递推式，直接比较 f 的阶与 n^{log_b a} 就得出 Θ 结论的三情形判定法。">
+  主方法
+</Term>
+的前提不能忘：它要求层内代价是干净的 `Θ(n^d)` 多项式阶。`f(n)=n log n`
+这类“夹在两阶之间”的代价，或者子问题规模不是均匀除以 `b`
+的递推式，都要回到递归树或更强的工具上。
 
-Master method不是所有递推式的万能表。$T(n)=T(n/3)+T(2n/3)+n$的子问题大小不同；$T(n)=2T(n/2)+n\lg\lg n$不一定落入简化三类的多项式差距；$T(n)=T(n-1)+n$也不是按固定比例缩小。遇到不匹配，应改用代入、递归树、连续主定理或Akra-Bazzi，而不是硬套最近的一行。
+## 代入法：先猜，再让归纳说话
 
-
-## 4.6 Proof of the continuous master theorem
-
-连续主定理把离散递归层求和转成带权积分。对形如$T(n)=aT(n/b)+g(n)$的递推，令临界指数$p=\log_b a$，总量由齐次部分$n^p$与toll沿尺度累积的积分共同决定：
-
-$$
-T(n)=\Theta\!\left(
-n^p\left(1+\int_1^n\frac{g(u)}{u^{p+1}}\,du\right)
-\right).
-$$
-
-
-直觉是把递归树第$i$层的离散成本映射到尺度$u=n/b^i$，几何缩放产生权重$u^{-(p+1)}$。积分收敛时叶子项$n^p$占主导；积分按$\lg n$增长时多出一个对数；积分按幂增长时toll占主导。这一证明解释了主方法三类为何出现，而不是只提供背诵表。
-
-应用时仍要检查函数的正性与适度平滑条件，处理取整和基例，并确认连续积分确实近似离散层和。定理的价值是覆盖带慢变因子的边界情形，同时保留递归树的尺度直觉。
-
-## 4.7 Akra-Bazzi recurrences
-
-Akra-Bazzi递推式允许不同缩小比例：
+<Term def="先猜测递推式解的形式（如 T(n)≤cn^k），再用数学归纳法验证猜测、必要时用低阶项强化假设的求解方法。">
+  代入法
+</Term>
+是最通用也最容易翻车的路径：猜一个上界
+`T(n)≤c·n^k`，把递推式右边代进去，看能不能证出目标。以 `T(n)=aT(n/2)+n`
+为例，归纳一步长这样：
 
 $$
-T(x)=\sum_{i=1}^{k}a_iT(b_ix+h_i(x))+g(x),
-\qquad
-\sum_{i=1}^{k}a_ib_i^p=1.
+T(n)\le a\cdot c\left(\frac{n}{2}\right)^{k}+n
+= c\,n^{k}\cdot\frac{a}{2^{k}}+n
 $$
 
-先解特征指数$p$，再用toll积分得到：
+这个式子在说：子问题那部分贡献 `c·n^k` 的 `a/2^k` 倍，剩下 `+n` 是必须在余量里吸收的 toll。把 `c·n^k` 提出来并按 `n` 归一，残差是 `r = c(1-a/2^k)n^{k-1}-1`：`r≥0` 假设才站得住，`r<0` 假设被反推。
+
+代入法的两个经典翻车点正好对应残差的两个来源：临界情形 `a=2^k` 时因子 `(1-a/2^k)` 为零，任何 `c` 都救不了（真解往往带 log 因子，应改猜 `T(n)≤cn log n`）；而像 `T(n)=4T(n/2)+n` 猜 `cn²`，残差恒为 `-1`，修法是强化假设成 `T(n)≤cn²-dn`，用低阶项把 toll 在归纳步里抵掉。下面的实验让你亲手调 `a、k、c`，看残差条的符号裁决。
+
+<Clrs4Chapter04SubstitutionLab />
+
+## Strassen：少一个乘积，降一个指数
+
+回到方阵乘法。普通分块递归每层做 8 次半规模乘法；Strassen 的关键想法是用代数恒等式把 7 个乘积组合出全部四个输出块——多做一些块加减，换少一次递归乘法。乘法子问题数量的递推从 `8T(n/2)` 变成 `7T(n/2)`：
 
 $$
-T(x)=\Theta\!\left(
-x^p\left(1+\int_1^x\frac{g(u)}{u^{p+1}}\,du\right)
-\right).
+\text{mult}(n)=7\,\text{mult}(n/2)\;\Rightarrow\;\text{mult}(n)=n^{\log_2 7}\approx n^{2.807}
 $$
 
+这个式子在说：减少子问题数量直接压低指数——`log2 7≈2.807` 对 `3`，这就是“减少子问题数量是边界案例”的含义。代价是每层多出 18 项块加减（构造 7 个乘积的输入 10 项、组合输出 8 项），加法递推为 `adds(n)=7·adds(n/2)+18·(n/2)²`，展开是 `6·(7^{log2 n}-n²)`。
 
-例如$T(n)=T(n/2)+T(n/3)+n$先由$(1/2)^p+(1/3)^p=1$求$p$。由于线性toll比$n^p$增长更快，积分最终给出$\Theta(n)$。扰动$h_i(x)$允许取整或较小偏移，但必须满足定理规定的增长约束，不能把任意大偏差塞进子问题规模。
+渐近赢家在小规模不一定赢。按上面的计数模型，n=8 时普通分块总账本是 `512+448=960`，Strassen 是 `343+1674=2017`；要到 `n≈1024` 总操作数才反超（真实实现的切换阈值还受常数、缓存和内存布局影响）。下面的实验把两根账柱并排画出来，你可以注入“只数乘法”的故障，亲眼看交叉点结论怎么被藏掉。
 
-Akra-Bazzi统一了均匀和不均匀分治：当所有$b_i=1/b$且共有$a$项时，特征方程给$p=\log_ba$，退化回master临界指数。它的使用流程不是记结论，而是核对系数、解$p$、评价积分、补上正则条件和基例。
+<Clrs4Chapter04StrassenLab />
 
+## 代码对照：两个可运行的 oracle
+
+纸面推导要能被程序复核。第一段代码把递归树账本和主方法判定写成纯函数：输入 `a、b、d、n`，输出逐层工作量、叶子数和总账本，以及三情形结论。
+
+```python
+from math import log
+
+def level_works(a, b, d, n):
+    works, size, i = [], float(n), 0
+    while size > 1 and i < 8:
+        works.append((a ** i) * (size ** d))
+        size /= b
+        i += 1
+    return works, a ** len(works)
+
+def master_case(a, b, d):
+    crit = log(a, b)
+    if d > crit:
+        return "case1", f"O(n^{d})"
+    if d == crit:
+        return "case2", f"O(n^{d} log n)"
+    return "case3", f"O(n^{log(a, b):.3f})"
+```
+
+第二段代码把两种块乘算法的乘法和加法分开记账，并在 2 的幂上扫描总账本交叉点——这正是 Strassen 实验里 `data-crossover-estimate` 读数的来源。
+
+```python
+def counts(n, products, add_blocks):
+    mults, adds, size = 1, 0, 1
+    while size < n:
+        adds = products * adds + add_blocks * size * size
+        mults *= products
+        size *= 2
+    return mults, adds
+
+def crossover():
+    size = 2
+    while size <= 1 << 20:
+        classic = counts(size, 8, 4)   # 普通分块：4 次块加法
+        strassen = counts(size, 7, 18) # Strassen：18 次块加减
+        if sum(strassen) < sum(classic):
+            return size
+        size *= 2
+```
+
+两个函数只用标准库，且与页面三个实验的读出口径完全一致：Lab 1 的 `data-total-work`、Lab 3 的 `data-total-classic` / `data-total-strassen` 都可以拿这里的输出逐位核对。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：看见递归深度 log n，就报 Θ(log n)">
+  **现象**：T(n)=2T(n/2)+n 被说成 Θ(log n)。**原因**：深度只是层数，每层还有线性
+  toll，逐层求和是 Θ(n log n)。**修法**：在 Lab 1 注入“只把 toll
+  记在根层”的故障，看总账本如何塌缩，再恢复正常账本逐层相加。
+</Callout>
+
+<Callout type="trap" title="陷阱：代入时丢掉 toll 项，一切猜测都通过">
+  **现象**：归纳展开写着写着 `+n`
+  不见了，残差恒非负。**原因**：丢弃非递归代价等于删掉要证明的那部分不等式。**修法**：在
+  Lab 2 打开“丢弃 +n”故障对比两行残差；正确展开必须完整保留 `f(n)`，临界情形改猜
+  `cn log n` 或强化假设 `cn²-dn`。
+</Callout>
+
+<Callout type="trap" title="陷阱：只数乘法，断言 Strassen 在任何规模都该用">
+  **现象**：n=8 时也切换到 Strassen。**原因**：18
+  项块加减被排除在账本外，加法段被隐藏。**修法**：在 Lab 3
+  对比乘加总账本；本计数模型的交叉点在
+  n≈1024，真实阈值由测量决定，渐近结论不能替代工程阈值。
+</Callout>
+
+## 练习
+
+<Exercises>
+
+1. 对 `T(n)=3T(n/2)+n`，取 `n=16`。写出递归树前四层的工作量、层数 L、含叶子的总账本，并用主方法给出 Θ 结论。
+
+   <Answer>
+
+   各层工作量为 `16, 24, 36, 54`（第 i 层 `3^i·(16/2^i)`），层数 `L=4`，叶子 `3^4=81` 个，总账本 `16+24+36+54+81=211`。临界指数 `log2 3≈1.585 > d=1`，落在情形 3，结论 `Θ(n^{log2 3})≈Θ(n^1.585)`。可以用 Lab 1 选 a=3、b=2、d=1 逐项核对读数。
+
+   </Answer>
+
+2. 对 `T(n)=4T(n/2)+n`：先说明为什么猜 `T(n)≤cn²` 在归纳一步必败，再证明强化假设 `T(n)≤cn²-dn` 对 `d≥1` 成立，并给出该递推式的真实 Θ 结论。
+
+   <Answer>
+
+   猜 `cn²` 时归纳步为 `4·c(n/2)²+n = cn²+n ≰ cn²`，残差恒 `+n`，任何 `c` 都吸收不了，必败。强化后：`4·(c(n/2)²-dn/2)+n = cn²-2dn+n ≤ cn²-dn` 等价于 `n ≤ dn`，即 `d≥1`，取 `d=1` 成立（初值另行校验）。`log2 4=2>1`，主方法情形 3 给出真实结论 `Θ(n²)`，强化假设与之一致。
+
+   </Answer>
+
+3. `n=16` 时，普通分块乘法与 Strassen 的标量乘法次数各是多少？把第二节代码中 Strassen 的 `add_blocks=18` 改成 15（Winograd 变体的加减数），重新扫描交叉点，估计值变成多少？这说明了什么？
+
+   <Answer>
+
+   普通：`16³=4096`；Strassen：`7^4=2401`，渐近指数 `log2 7≈2.807`。改 15 后 `adds=5·(7^{log2 n}-n²)`，总账本 `6·7^L-5·4^L`（L=log2 n）：n=256 时 `34,261,126 > 33,488,896` 仍落后，n=512 时 `240,810,922 < 268,173,312` 反超，交叉点从 1024 降到 512。说明加减常数直接左右工程阈值，而渐近指数 `2.807` 不变——这正是“减少子问题数量”与“常数优化”两个层面的分工。
+
+   </Answer>
+
+</Exercises>
+
+## 本章证据清单
+
+完成本章后，面对任何一个分治算法，可以按同一顺序留下证据：
+
+1. 写出 divide、conquer、combine 三步，并指明 `a、b、f(n)` 各来自哪一步；
+2. 画出递归树，列出每层工作量 `a^i·(n/b^i)^d` 与叶子账；
+3. 用主方法三情形核对渐近结论，不适用时回退到逐层求和；
+4. 用代入法写出完整归纳一步，检查残差符号与临界情形；
+5. 对“减少子问题数量”式优化，乘加分开记账并找交叉点，不把渐近结论当工程阈值。
 
 ## 小结
 
-Chapter 4 Divide-and-Conquer把算法结构和递推证明连在一起。普通方阵相乘产生8个半规模乘法，仍为$\Theta(n^3)$；Strassen用7次乘法把指数降到$\lg7$。代入法负责严格归纳，递归树法揭示成本分布，主方法比较toll与$n^{\log_ba}$，连续主定理用积分解释边界情形，Akra-Bazzi进一步处理不等规模子问题。
+- 分治范式把算法拆成 divide、conquer、combine 三步，直接生成 `T(n)=aT(n/b)+f(n)`。
+- 递归树法逐层记账：层数由 `b` 决定，层账由 `a` 与 `d` 决定，总量是求和而非深度乘常数。
+- 主方法一次比较 `d` 与 `log_b a` 定三情形；代入法先猜后证，临界情形靠 log 因子或强化假设。
+- Strassen 用 7 个乘积把指数压到 `log2 7≈2.807`，但加减账让交叉点推迟到 n≈1024（本计数模型）。
+- 三种求解路径互为校验：树给直觉，主方法给结论，代入法给证明。
 
-正确使用这些工具需要从真实代码提取递推，保留基例与非递归工作，并验证每个定理的适用条件。一个漂亮的渐近答案若来自错误分支数、漏掉的combine成本或不满足的regularity，仍是错误分析。
+## 术语表
 
+<Glossary>
 
+<GlossaryItem term="分治范式">
+  把问题切成若干同类子问题、递归求解再合并答案的设计模板；divide、conquer、combine
+  三步各产生递推式的一项。
+</GlossaryItem>
+<GlossaryItem term="递推式">
+  用更小输入上的 T 值定义 T
+  本身的等式或不等式，是分治算法运行时间的标准记账单位。
+</GlossaryItem>
+<GlossaryItem term="递归树">
+  把递推式画成树：第 i 层有 a^i 个规模为 n/b^i
+  的节点，用来看每层有多少工作、总量由哪层主导。
+</GlossaryItem>
+<GlossaryItem term="主方法">
+  对 T(n)=aT(n/b)+Θ(n^d) 比较 d 与 log_b a 就直接得出 Θ 结论的三情形判定法。
+</GlossaryItem>
+<GlossaryItem term="代入法">
+  先猜递推式解的形式，再用归纳法验证、必要时用低阶项强化假设的通用求解方法。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 4 章的目录定位与核心主题进行独立教学重写：以权威目录限定范围、以公开学术资料核对事实、不复现原书正文。分治三步、方阵分块、Strassen、代入法、递归树与主方法的主题归属第 4 章目录；交互实验、计数模型、Python oracle、练习答案和验收清单是本项目新增材料。
+
+本章的 Strassen 计数采用“每层 18 项块加减、基准 1×1”的教学模型，得到的总账本交叉点（n≈1024）是该模型下的计算结果，不等于任何具体实现的实测切换阈值。主方法叙述限定在层内代价为 Θ(n^d) 的均匀递推式；非多项式 toll 与非均匀切分需要递归树或更强的定理。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 4: Divide-and-Conquer"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

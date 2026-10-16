@@ -1,161 +1,278 @@
 ---
 title: "Chapter 9 · Medians and Order Statistics"
-type: C
+type: B
 section: "CLRS4 · 排序与顺序统计"
 order: 9
-description: "按CLRS第四版第9章重建最小/最大比较界、RANDOMIZED-SELECT期望线性选择，以及五元组median-of-medians的最坏线性SELECT证明。"
+description: "按 CLRS 第四版第 9 章重建最小/最大值的比较次账本、RANDOMIZED-SELECT 的期望线性递推，以及五分组中位数的中位数为何能保证最坏线性时间。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-09
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter09MediansOrderStatisticsLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch09-medians-order-statistics";
+import { Clrs4Chapter09MediansOrderStatisticsSelectLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch09-medians-order-statistics";
+import { Clrs4Chapter09MediansOrderStatisticsWorstCaseLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch09-medians-order-statistics";
 
-## 从“只要第i小，为什么要排完整数组”开始
+<Objectives>
 
-先预测：求100万个数的中位数，先排序需要$\Theta(n\lg n)$比较；是否存在只做$\Theta(n)$工作的算法？存在。选择算法利用partition一次确定主元秩，然后只保留包含目标秩的一侧，另一侧无需内部有序。
+- 能推导并手算单独找最小值的 $n-1$ 次比较下界，以及配对法同时找最小/最大的 $\lceil 3n/2\rceil-2$ 次比较账本。
+- 能写出 RANDOMIZED-SELECT 的单侧递归与秩平移不变量，并用几何级数说明期望为何是 $\Theta(n)$、最坏为何仍是 $\Theta(n^2)$。
+- 能验证五分组中位数的中位数给出的 $3n/10$ 淘汰保证与 $T(n)\le T(\lceil n/5\rceil)+T(7n/10+6)+\Theta(n)$ 递推，并回答：组大小换成 3，证明还能成立吗？
 
-统一了最小值、最大值、分位数和中位数。
+</Objectives>
 
+## 直觉：只找冠军，何必排完整张榜
 
-当$n$为奇数，中位数秩为$(n+1)/2$；当$n$为偶数，CLRS区分秩$n/2$的lower median与秩$n/2+1$的upper median。统计学中有时取二者平均，但这可能不是输入元素，算法contract必须先选定义。
+流水线上有一千件包裹，主管只要最重的一件。先预测：为了找出它，需要先把一千件按重量全排好序吗？直觉上不必——大多数包裹只要在某次称重里"输过一次"，就可以离开候选区，根本不需要知道自己的完整名次。
 
-## 9.1 Minimum and maximum
+这一章把这种"只领奖、不排名"的问题形式化。你会看到三件事：找出冠军最少要称几次；怎样随机挑裁判让平均称重次数稳定在正比于件数；以及怎样安排一场有保底机制的淘汰赛，让最坏情况也不退化。
 
-### 单独寻找最小值
+没有它，所有"只要中位数/只要前 1%"的需求都会被拖进完整排序的 $\Theta(n\lg n)$ 成本里，而本章的全部目的就是说明这笔账可以压到线性。
 
-维护已扫描前缀最小值，每读入一个新元素比较一次，恰好$n-1$次。这个数量也是下界：若某元素从未在比较中“输过”，它仍可能是最小值；要排除$n-1$个非最小候选，每个比较至多让一个元素输一次。
+## 权威目录定位
 
+本章对应 CLRS 第四版第 9 章 `Chapter 9 · Medians and Order Statistics`，官方概念包括：
+
+- medians and order statistics / 中位数与顺序统计量：把最小值、最大值、分位数统一成"第 $i$ 小"；
+- minimum and maximum / 最小值与最大值：$n-1$ 次比较下界与 $\lceil 3n/2\rceil-2$ 的配对上界；
+- selection in expected linear time / 期望线性时间选择：RANDOMIZED-SELECT 的单侧递归；
+- selection in worst-case linear time / 最坏线性时间选择：五分组中位数的中位数。
+
+正文以自建的数组、计数账本和确定性实验进行独立教学重构。交互实验帮助检查计数与递推，不替代原书的完整证明、习题与章节上下文。
+
+## 最小值与最大值的比较次
+
+先固定度量：本节只数"两个元素直接比大小"的次数，记为<Term def="算法为解决某个问题所必须执行的两个元素直接比较操作的总数；本节把它当作成本账本。">比较次</Term>。键的移动、下标运算都不算，因为比较次有一个漂亮的性质——它能同时给出上界（一种做法用了多少次）和下界（任何做法至少要多少次）。
+
+### 单独找最小：$n-1$ 次，少一次都不行
+
+扫描法再简单不过：先让第一个元素举牌，每个新元素挑战一次擂主，输了就淘汰。$n$ 个元素一共挑战 $n-1$ 次，这就是上界。
+
+$$
+\text{比较次}(\min) = n-1
+$$
+
+这个式子在说：只找最小值时，一次比较恰好淘汰一个"最小候选"，把候选从 $n$ 个削到 $1$ 个需要恰好 $n-1$ 刀。下界同样锋利：如果某个元素从头到尾没输过，它的值就还没被排除——它仍可能是最小值；要排除其余 $n-1$ 个候选，每次比较至多排除一个，所以任何算法都省不掉这 $n-1$ 次。
 
 ```cpp
-int minimum(std::span<const int> values) {
-    if (values.empty()) throw std::invalid_argument("empty input");
-    int best = values.front();
-    for (std::size_t i = 1; i < values.size(); ++i) {
-        if (values[i] < best) best = values[i];
+int minimum(const std::vector<int>& a) {
+    if (a.empty()) throw std::invalid_argument("empty");
+    int champion = a[0];
+    for (std::size_t i = 1; i < a.size(); ++i) {
+        if (a[i] < champion) champion = a[i];
     }
-    return best;
+    return champion;
 }
 ```
 
-空输入没有最小值，应由类型或错误contract处理。重复最小键时，返回值不受影响；若返回记录身份，比较条件决定保留第一个还是最后一个最小记录。
+注意挑战规则的严格不等号：相等不改变擂主，这决定了重复值出现时返回哪一个记录。空输入没有最小值，应该由类型系统或错误合同显式处理，而不是让它默默越界。
 
-### 同时寻找最小和最大
+### 同时找最小与最大：配对的账是 $\lceil 3n/2\rceil-2$
 
-分别扫描需要$2n-2$次比较。让每两个元素花3次比较：一场内部比较、一场与当前minimum比较、一场与current maximum比较。
+朴素做法是独立跑两遍扫描，成本 $2n-2$。配对法把相邻两个元素先拉到一起比一场，胜者只可能挑战"最大"，败者只可能挑战"最小"：
 
+1. 对内一场比较，分出这一对的胜者与败者；
+2. 胜者挑战当前最大，败者挑战当前最小；
+3. 一对花 3 次比较，淘汰两个候选名额。
 
-偶数$n$时先比较前两个元素初始化min与max，剩余$(n-2)/2$对各3次：
+偶数 $n$ 先用第一对做一次初始化，剩下 $(n-2)/2$ 对每对 3 次：
 
 $$
-1+3\frac{n-2}{2}=\frac{3n}{2}-2.
+1+3\cdot\frac{n-2}{2}=\frac{3n}{2}-2
 $$
 
-奇数$n$时用首元素同时初始化min与max，剩余$(n-1)/2$对各3次，总计$3(n-1)/2$。统一上界为$\lceil3n/2\rceil-2$。配对法减少约$n/2$次比较，却仍读取每个元素，时间为$\Theta(n)$。
+这个式子在说：初始化花 1 次，之后每对固定 3 次，账是精确的等式不是估计。奇数 $n$ 让第一个元素同时兼任两个擂主（0 次比较），剩余 $(n-1)/2$ 对仍各 3 次，总计 $3(n-1)/2$。两种情形合并为上界 $\lceil 3n/2\rceil-2$——比 $2n-2$ 省了约 $n/2$ 次，却仍然是线性。
 
-比较下界可用候选状态解释：每个元素起初都可能同时是min和max，一次两未知元素比较把胜者排除出min候选、败者排除出max候选。合理安排首次比较后，后续只需分别淘汰；这正是配对法的竞赛结构。
+先预测：把 $n$ 从 8 换成 9（奇数边界），配对公式 $\lceil 3n/2\rceil-2$ 还精确成立吗？再把策略换成顺序扫描，账本差多少？动手切换下面的实验，核对每一次比较真的发生在它该发生的位置。
 
-## 9.2 Selection in expected linear time
+<Clrs4Chapter09MediansOrderStatisticsLab />
 
-### 只递归包含目标秩的一侧
+## RANDOMIZED-SELECT：期望线性的选择
 
-与randomized quicksort共享partition，但控制流不同。设partition后主元局部秩$k=q-p+1$：
+最小值只是"第 1 小"。一般地，<Term def="在一组可比较元素中，按其键值从小到大排名后恰好位于第 i 位的元素；i=1 是最小值，i=n 是最大值。">顺序统计量</Term> 提问的是：第 $i$ 小是谁？中位数对应 $i=\lceil n/2\rceil$（奇数 $n$ 时唯一定义；偶数 $n$ 需先声明取下中位还是上中位）。完整排序当然能回答问题，但它给出的远比问的多——内部次序我们根本不关心。
 
-- 若$i=k$，主元就是答案。
-- 若$i\lt k$，递归左侧并保持目标秩$i$。
-- 若$i\gt k$，递归右侧，新的局部秩为$i-k$。
+### partition 一次，只留目标那一侧
 
+关键观察：围绕主元做一次划分，主元的秩就被永久确定了，而它左侧和右侧的内部仍然无序。设划分后主元在子数组中的局部秩为 $k$（1-based），目标是第 $i$ 小：
+
+- $i=k$：主元就是答案，直接返回；
+- $i<k$：答案在左侧，递归左侧且 $i$ 不变；
+- $i>k$：答案在右侧，递归右侧，并且新的局部秩要减去已排除的 $k$ 个元素——这就是<Term def="向右递归时把目标秩 i 改写为 i−k，其中 k 是本轮主元的局部秩；漏掉它会让右侧用错误的秩去找答案。">秩平移</Term>。
 
 ```cpp
-int randomized_select(std::vector<int>& a, int p, int r, int i, Rng& rng) {
+int randomized_select(std::vector<int>& a, int p, int r, int i) {
     if (p == r) return a[p];
-    int q = randomized_partition(a, p, r, rng);
-    int k = q - p + 1;
-    if (i == k) return a[q];
-    if (i < k) return randomized_select(a, p, q - 1, i, rng);
-    return randomized_select(a, q + 1, r, i - k, rng);
+    int q = randomized_partition(a, p, r); // 主元落到最终秩上
+    int k = q - p + 1;                     // 主元的局部秩
+    if (i == k) return a[q];               // 命中
+    if (i < k) return randomized_select(a, p, q - 1, i);
+    return randomized_select(a, q + 1, r, i - k); // 秩平移不可省略
 }
 ```
 
+单侧递归是成本飞跃的来源：每一轮只保留包含目标的那一半区间，另一侧整体丢弃，根本不需要排好。正确性则由划分的不变量兜住——主元左侧每个键不大于它、右侧每个键大于它，因此目标秩只可能落在所选的那一侧。
 
-正确性来自partition秩语义和归纳：主元左侧每个键不大于它，右侧每个键大于它，因此目标秩只可能位于上述唯一分支。右侧秩必须减去已经排除的左侧$k-1$个元素与主元，共$k$个；漏做平移会返回错误次序。
+### 期望为什么是 $\Theta(n)$
 
-### 期望为何是Θ(n)
-
-最坏随机路径仍可能每次只淘汰主元，产生$\Theta(n^2)$；期望分析利用好pivot常概率出现。随机主元落在中间一半的概率至少$1/2$，此时下一子问题至多$3n/4$。等待一次好pivot的期望尝试数为常数，每次尝试总扫描当前规模。
-
-
-把同一规模阶段的坏尝试合并，期望工作受几何级数控制：
+最坏的路径仍然存在：每次都倒霉地选到最小元，区间每次只缩 1，总成本退回 $\Theta(n^2)$。期望分析不看单条路径，而看"进展"出现的频率。若主元的秩均匀分布，它落在中间一半（即两侧各自至少占 $n/4$）的概率至少是 $1/2$；一旦发生，较大侧的规模至多 $3n/4$。
 
 $$
-\mathbb E[T(n)]
-\le cn+c\frac{3n}{4}+c\left(\frac34\right)^2n+\cdots
-=O(n).
+\mathbb E[T(n)]\le cn+c\frac{3n}{4}+c\Big(\frac{3}{4}\Big)^2 n+\cdots
+=cn\sum_{j\ge 0}\Big(\frac34\Big)^j=4cn=O(n)
 $$
 
-必须加上读取或partition的$\Omega(n)$下界，所以期望时间为$\Theta(n)$。期望对算法内部随机位计算，对每个固定输入排列成立；若随机源有偏或可被对手预测，pivot秩不再均匀。
+这个式子在说：把"同一规模阶段的尝试"打包，好进展以至少 $1/2$ 的概率反复出现，期望等待次数是常数，于是每一层规模的总开销形成公比 $3/4$ 的几何级数，加起来仍是一个常数倍的 $n$。再补上读取输入的 $\Omega(n)$ 下界，期望时间恰为 $\Theta(n)$。注意期望是对算法内部的随机位取的，对每一个固定输入排列都成立；若随机源有偏或可被对手预测，这个账就作废。
 
-另一种精确递推按主元秩对最大递归侧取平均，也得到线性解。几何阶段证明更直观地说明：算法不要求每次都好，只要求好进展以固定概率反复出现。
+先预测：主元策略从"四分位"换成"总挑最小元"，脊状条形会收缩得更快还是更慢？如果右侧递归忘记做秩平移，读出的"第 $i$ 小"还会是对的那个元素吗？切换下面的实验逐轮核对。
 
+<Clrs4Chapter09MediansOrderStatisticsSelectLab />
 
-## 9.3 Selection in worst-case linear time
+## SELECT：中位数的中位数保证最坏线性
 
-### 五元组构造有保证的主元
+随机化给了期望，但给不了承诺：某一次运行仍可能滑进二次。确定性算法 SELECT 用额外线性工作换一个质量有保证的主元——<Term def="把元素分成每组至多 5 个的小组，取每组中位数，再递归地取这些中位数的中位数作为主元的构造方法。">中位数的中位数</Term>。构造分五步：
 
-随机化给期望线性，但某次运行仍可能退化。用额外线性工作换确定的pivot质量：
+1. 把 $n$ 个元素分成 $\lceil n/5\rceil$ 组，每组至多 5 个；
+2. 组内排序（至多 5 个元素，常数次比较），取出每组的中位数；
+3. 递归地找出这些中位数的中位数，记为 $x$；
+4. 围绕 $x$ 做一次三路划分（小于、等于、大于）；
+5. 与 RANDOMIZED-SELECT 一样，只在包含目标秩的一侧递归。
 
-1. 把$n$个元素分成$\lceil n/5\rceil$组。
-2. 对每组至多5个元素排序并取中位数。
-3. 递归选择这些组中位数的中位数$x$。
-4. 围绕$x$ partition。
-5. 只在含目标秩的一侧递归。
+### 淘汰保证：两侧各躺倒至少 $3n/10$
 
-
-每个完整五元组中位数有两个元素不小于它和两个不大于它。至少一半组中位数不小于$x$；排除$x$所在组和可能不满组后，可保证至少约$3n/10-6$个元素不小于$x$，对称地也有同数量不大于$x$。
-
-$$
-\min\{\#(A\le x),\#(A\ge x)\}
-\ge 3\left\lfloor\frac{\lceil n/5\rceil}{2}\right\rfloor-6
-\ge \frac{3n}{10}-O(1).
-$$
-
-
-因此partition后较大递归侧至多$7n/10+6$。算法还需递归选择约$n/5$个组中位数的中位数，分组、组内常数排序与partition总计$\Theta(n)$：
+为什么 $x$ 靠谱？看那些中位数不小于 $x$ 的组：这样的组至少有一半（除去 $x$ 自己所在的组）。每个这样的组里，中位数带着组内比它大的两个元素一起"不小于 $x$"。把零头（$x$ 自身所在组、可能不满的组）减掉，仍能保证：
 
 $$
-T(n)\le
-T(\lceil n/5\rceil)
-+T(7n/10+6)
-+\Theta(n).
+\#\{a\ge x\}\ \ge\ 3\Big\lceil\frac{\lceil n/5\rceil}{2}\Big\rceil-6
+\ge \frac{3n}{10}-O(1)
 $$
 
+这个式子在说：无论输入长什么样，$x$ 右侧至少躺着约三成的元素，左侧由对称论证同样成立。于是较大的一侧至多 $7n/10+6$ 个元素，递归规模被牢牢卡住。加上找组中位数的中位数那次递归（规模 $\lceil n/5\rceil$）和分组、划分的线性工作：
 
-两个递归规模的渐近比例和为$1/5+7/10=9/10$，留出一成线性余量。假设较小参数满足$T(m)\le cm$，代入得到最多$0.9cn+O(c)+dn$；选择足够大$c$并用固定阈值直接排序基例，便可把线性项吸收，证明$T(n)=O(n)$。读取输入给$\Omega(n)$，所以最坏$\Theta(n)$。
+$$
+T(n)\le T\Big(\Big\lceil\frac n5\Big\rceil\Big)+T\Big(\frac{7n}{10}+6\Big)+\Theta(n)
+$$
 
-### 为什么是五元组
+这个式子在说：两项递归的渐近比例之和是 $1/5+7/10=9/10$，严格小于 1，留下一成的线性余量。代入法取足够大的常数 $c$，把 $0.9cn$ 与线性项对齐后，剩余的 $O(c)$ 小项可以由更大的 $c$ 吸收，基例直接排序——于是 $T(n)=O(n)$，读取下界给出 $\Theta(n)$。
 
-组大小必须在“找组中位数成本”和“主元淘汰保证”之间平衡。五元组能以常数比较得到中位数，并让递归比例和严格小于1。三元组的简单分析可能得到比例和等于1，无法从同一递推推出线性；更大奇数组也能保证线性，但常数和实现复杂度提高。
+### 为什么偏偏是五
 
-的理论意义是证明选择问题无需完整排序；实践中常用quickselect并在深度异常时切换median-of-medians，兼顾平均常数与最坏保证。
+组大小 $s$ 在两头记账：找组中位数的成本随 $s$ 涨，而每组中位数能"带走"的伴生元素是 $(s-1)/2$ 个，淘汰比例约为 $(s+1)/(4s)$。证明要求两项递归比例和 $1/s+(1-(s+1)/(4s))$ 严格小于 1：$s=3$ 时恰好等于 1，递推解不出线性；$s=5$ 得到 $9/10$；$s=7$ 是 $6/7$，同样小于 1 但常数更差、实现更繁。五是"证明刚好闭合"的最小选择。
 
-```text
-SELECT(A, i)
-1  if A is small, sort A and return rank i
-2  split A into groups of at most five and collect their medians M
-3  x = SELECT(M, ceil(|M| / 2))
-4  partition A into keys below, equal to, and above x
-5  return x if i is in the equal block; otherwise recurse on one side
-```
+先预测：把组大小从 5 调成 3，这一组输入上的实测淘汰数会暴跌吗？证明比例会发生什么？再打开故障开关跳过代表筛选，看看保证线会不会被越过。
 
-小输入基例的阈值只影响常数；递归正确性仍要求每次目标秩落入唯一返回分支。伪代码使用三路partition，因此重复键不会削弱淘汰保证，也不会让全相等数组继续递归。
+<Clrs4Chapter09MediansOrderStatisticsWorstCaseLab />
 
-重复键要求partition返回等值区间而非假设主元唯一。若目标秩落在等值块内可立即返回；否则从左右侧递归并按“小于块大小加等值块大小”平移秩。这样既保留正确性，也避免全相等输入反复递归。
+## 常见误区
 
+<Callout type="trap" title="误区：期望线性就是最坏线性">
+
+现象：给 RANDOMIZED-SELECT 贴上"线性时间选择"标签，然后用在有实时约束的路径上。
+原因：期望是对内部随机位取的平均；对抗输入或倒霉的随机序列仍可能每次只淘汰主元，滑回 $\(n^2)$。
+修法：需要承诺时改用 SELECT（中位数的中位数），或像内省式选择那样监控递归深度、异常时切换到确定性主元。
+
+</Callout>
+
+<Callout type="trap" title="误区：中位数的中位数实践中总是更快">
+
+现象：因为有最坏线性保证，就以为它平均也比随机选择快。
+原因：分组、组内排序和递归找代表带来不小的常数，随机选择在典型输入上的常数往往更小。
+修法：把"正确性保证"和"平均性能"分开验收；实践中常用 quickselect，深度异常时才回退到 SELECT。
+
+</Callout>
+
+<Callout type="trap" title="误区：partition 之后两侧内部已经有序">
+
+现象：看到主元落位、左右分区，就以为左右两边也排好了，或把"秩平移"当成可有可无的整理步骤。
+原因：划分只确定主元一个元素的最终秩，两侧内部次序完全未知；向右递归时目标秩若不减去已排除的 $k$ 个元素，就会用错误的秩在右侧找答案。
+修法：用上面的实验二打开故障开关——忘记秩平移的那一栏会返回一个具体的错误元素，而不是抽象地说"错了"。
+
+</Callout>
+
+## 练习
+
+<Exercises>
+
+1. 用配对法同时找 $n=9$ 个元素的最小值与最大值：初始化花几次比较、逐对花几次、总数是多少？说明为什么 $\lceil 3n/2\rceil-2$ 在奇数 $n$ 上仍然精确。
+
+   <Answer>
+
+   奇数 $n$ 时令首元素同时担任两个擂主，初始化 0 次比较；剩余 $(n-1)/2=4$ 对每对 3 次，总计 $3\times 4=12$ 次。公式给出 $\lceil 3\cdot 9/2\rceil-2=14-2=12$，与实验一中 $n=9$ 的账完全一致。关键点：奇数初始化免费，所以公式把两种情况合并后依然精确。
+
+   </Answer>
+
+2. 设"好主元"（秩落在中间一半）以概率至少 $1/2$ 出现，且出现时下一规模至多为 $3m/4$。写出期望工作的几何级数并求和，再说明为什么这不能排除 $\Theta(n^2)$ 的最坏情况。
+
+   <Answer>
+
+   把同一规模阶段的尝试打包，期望开销受 $cn+c\frac{3n}{4}+c(\frac34)^2n+\cdots=cn\sum_{j\ge0}(3/4)^j=4cn$ 控制，即 $O(n)$；读取输入给出匹配的 $\Omega(n)$。但期望界不排除低概率坏路径：若每次主元都是最小元，递推退化为 $T(n)=T(n-1)+\Theta(n)$，解为 $\Theta(n^2)$——这正是实验二中"对抗"主元策略画出的形状。
+
+   </Answer>
+
+3. 对 $n=30$ 的五分组 SELECT：组数 $g$ 是多少？用 $3\lceil g/2\rceil-6$ 计算每侧至少有多少元素不小于 $x$（也不大于 $x$），并由此写出较大递归侧的上界与两项递归的比例和，判断递推能否解出 $O(n)$。
+
+   <Answer>
+
+   $g=\lceil 30/5\rceil=6$；每侧至少有 $3\lceil 6/2\rceil-6=9-6=3$ 个元素被淘汰，较大侧至多 $30-3=27=7n/10+O(1)$。比例和为 $1/5+27/30$ 的渐近形式 $1/5+7/10=9/10<1$，留出一成线性余量，代入法可吸收小项，$T(n)=O(n)$ 成立。实验三默认参数下实测 $\ge x$ 侧 13 个、$\le x$ 侧 16 个，都满足这条保证线。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-Chapter 9 Medians and Order Statistics把最小值、最大值、中位数和任意第$i$小统一为选择问题。最小值需要$n-1$次比较，同时找min/max可用配对法降到约$3n/2$次。RANDOMIZED-SELECT围绕随机主元partition并只递归目标侧，好pivot常概率出现使期望时间为$\Theta(n)$。
+- 第 $i$ 小把最小值、最大值、中位数统一成选择问题；只找最小要 $n-1$ 次比较，且下界不可再省。
+- 配对法同时找最小/最大把账从 $2n-2$ 降到 $\lceil 3n/2\rceil-2$，靠"对内一场、胜者挑战最大、败者挑战最小"的淘汰结构。
+- RANDOMIZED-SELECT 每次划分只留目标侧；秩平移 $i\leftarrow i-k$ 是正确性的一部分，不是优化。
+- 好主元以常概率出现使期望工作成为公比 $3/4$ 的几何级数，期望 $\Theta(n)$、最坏 $\Theta(n^2)$。
+- 五分组中位数的中位数给出每侧 $3n/10-O(1)$ 的淘汰保证，$9/10<1$ 的比例和把最坏情况也压成线性。
 
-确定性SELECT把元素分成五元组，以组中位数的中位数为主元，保证两侧各淘汰约$3n/10$，递推$T(n)\le T(n/5)+T(7n/10+6)+\Theta(n)$给出最坏$\Theta(n)$。选择正确性的核心是主元秩、右侧秩平移、单侧递归和重复键等值块政策。
+## 术语表
 
+<Glossary>
 
+<GlossaryItem term="顺序统计量">
+  一组元素按从小到大排名后第 i 位的那个元素；i=1 是最小值，i=n
+  是最大值，中位数对应中间的 i。
+</GlossaryItem>
+<GlossaryItem term="比较次">
+  算法执行的两个元素直接比较的总次数，常用来给排序与选择问题同时写上界和下界。
+</GlossaryItem>
+<GlossaryItem term="配对法">
+  相邻两个元素先互比一场，胜者只挑战当前最大、败者只挑战当前最小的找极值方法，3
+  次比较淘汰两个候选。
+</GlossaryItem>
+<GlossaryItem term="秩平移">
+  向右递归时把目标秩改写为 i−k（k
+  为本轮主元局部秩）；漏掉它，右侧就会拿着错误的秩找答案。
+</GlossaryItem>
+<GlossaryItem term="中位数的中位数">
+  把元素分成五人小组、取各组中位数、再取这些中位数的中位数作为主元的构造，用来换取最坏情况下的淘汰保证。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与来源边界
+
+本章依据 CLRS 第四版第 9 章的权威目录限定范围，以公开学术资料核对事实，不复现原书正文：所有解释、示例数组、交互实验、练习与答案均为独立重写。`minimum` 与 `randomized_select` 的代码是按本章概念独立编写的教学实现，不是原书代码的翻译。
+
+实验中的数组由确定性公式生成，主元策略由读者显式选择，用于代替随机位做可重复演示；均匀随机下的概率结论（好主元概率至少 $1/2$、期望几何级数）在正文中以论证形式给出，实验不负责伪造随机样本。偶数 $n$ 的中位数定义、重复键的三路划分等边界在正文与实验中均已显式声明。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 9: Medians and Order Statistics"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
