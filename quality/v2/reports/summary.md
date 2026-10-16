@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-10-16T02:35:02.390Z；旧版分数不迁移。
+> 2026-10-16T04:38:57.368Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1746
+- failed：1744
 - queued：196
-- passed：1772
-- published：895
+- passed：1750
+- published：919
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -27,9 +27,9 @@
 | 14 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
 | 15 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
 | 16 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
-| 17 | introduction-to-algorithms | 39 | 24 | 0 | 15 | 72 |
-| 18 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
-| 19 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
+| 17 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
+| 18 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
+| 19 | introduction-to-algorithms | 39 | 24 | 0 | 15 | 64 |
 | 20 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
 | 21 | head-first-java | 23 | 23 | 0 | 0 | 111 |
 | 22 | game-design-fundamentals | 23 | 23 | 0 | 0 | 98 |
@@ -103,34 +103,34 @@
 | 90 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 91 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 92 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 93 | blender-3d | 17 | 1 | 0 | 16 | 1 |
-| 94 | blockchain-dev-practice | 17 | 1 | 0 | 16 | 1 |
-| 95 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 96 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 97 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 98 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 99 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 100 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 101 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 102 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 103 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 104 | ai-agent | 9 | 0 | 0 | 9 | 0 |
-| 105 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
-| 106 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
-| 107 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 108 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 109 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 110 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 111 | android-component-arch | 11 | 0 | 0 | 0 | 0 |
-| 112 | android-design-patterns | 14 | 0 | 0 | 0 | 0 |
-| 113 | android-perf-optimization | 11 | 0 | 0 | 0 | 0 |
-| 114 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 115 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 116 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
-| 117 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
-| 118 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
-| 119 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
-| 120 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 93 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 94 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 95 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 96 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 97 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 98 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 99 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 100 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 101 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 102 | ai-agent | 9 | 0 | 0 | 9 | 0 |
+| 103 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
+| 104 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
+| 105 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 106 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 107 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 108 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 109 | android-component-arch | 11 | 0 | 0 | 0 | 0 |
+| 110 | android-design-patterns | 14 | 0 | 0 | 0 | 0 |
+| 111 | android-perf-optimization | 11 | 0 | 0 | 0 | 0 |
+| 112 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 113 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 114 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
+| 115 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
+| 116 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
+| 117 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
+| 118 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 119 | blender-3d | 17 | 0 | 0 | 17 | 0 |
+| 120 | blockchain-dev-practice | 17 | 0 | 0 | 17 | 0 |
 | 121 | blockchain-plain | 14 | 0 | 0 | 14 | 0 |
 | 122 | building-llm-applications | 18 | 0 | 0 | 18 | 0 |
 | 123 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
@@ -226,7 +226,7 @@
 | 213 | ruby-programming | 25 | 0 | 0 | 25 | 0 |
 | 214 | statistical-learning-methods | 25 | 0 | 0 | 25 | 0 |
 | 215 | the-c-programming-language | 10 | 0 | 0 | 10 | 0 |
-| 216 | this-is-chatgpt | 24 | 0 | 0 | 24 | 0 |
+| 216 | this-is-chatgpt | 24 | 0 | 0 | 0 | 0 |
 | 217 | tiger-book-compiler | 24 | 0 | 0 | 24 | 0 |
 | 218 | unity-advanced-programming | 11 | 0 | 0 | 11 | 0 |
 | 219 | unity-animation | 9 | 0 | 0 | 9 | 0 |

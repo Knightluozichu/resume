@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-16T02:36:32.929Z
+> 生成时间：2026-10-16T04:40:14.345Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,11 +13,11 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 483 |
-| failed | 1746 |
+| manifest 证据不完整 unit | 480 |
+| failed | 1744 |
 | queued | 196 |
-| passed | 1772 |
-| published | 895 |
+| passed | 1750 |
+| published | 919 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
 
@@ -1059,10 +1059,9 @@
     - 路径：`content/big-nerd-ranch-guide/ui-fragment/ui-fragments.mdx`
     - 正式 unit：`ui-fragments` explained=8/8
 
-## blender-3d（17 个内容页面 · failed:1 passed:16 · 🚫 门禁阻断 2 项）
+## blender-3d（17 个内容页面 · passed:17 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=15；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
-- 其他门禁阻断：blender-3d: publication-policy-not-approved。
 
 - [x] ✅ **00-guide/bl3-official-learning-map** — passed；score 100
     - 路径：`content/blender-3d/00-guide/bl3-official-learning-map.mdx`
@@ -1106,7 +1105,7 @@
 - [x] ✅ **06-final/bl3-13-camera-tracking** — passed；score 100
     - 路径：`content/blender-3d/06-final/bl3-13-camera-tracking.mdx`
     - 正式 unit：`bl3-13` explained=5/5
-- [ ] ❌ P1 **06-final/bl3-14-lighting-compositing-rendering** — failed；score 87；门禁阻断: status=failed、score=87<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **06-final/bl3-14-lighting-compositing-rendering** — passed；score 99
     - 路径：`content/blender-3d/06-final/bl3-14-lighting-compositing-rendering.mdx`
     - 正式 unit：`bl3-14` explained=4/4
 - [x] ✅ **07-extend-review/bl3-15-other-features** — passed；score 100
@@ -1116,10 +1115,9 @@
     - 路径：`content/blender-3d/07-extend-review/bl3-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## blockchain-dev-practice（17 个内容页面 · failed:1 passed:16 · 🚫 门禁阻断 2 项）
+## blockchain-dev-practice（17 个内容页面 · passed:17 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=15；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
-- 其他门禁阻断：blockchain-dev-practice: publication-policy-not-approved。
 
 - [x] ✅ **00-map/bdp-official-learning-map** — passed；score 100
     - 路径：`content/blockchain-dev-practice/00-map/bdp-official-learning-map.mdx`
@@ -1127,7 +1125,7 @@
 - [x] ✅ **01-preface/bdp-preface** — passed；score 99
     - 路径：`content/blockchain-dev-practice/01-preface/bdp-preface.mdx`
     - 正式 unit：`bdp-preface` explained=1/1
-- [ ] ❌ P1 **02-01-understand-blockchain/bdp-01-understand-blockchain** — failed；score 81；门禁阻断: status=failed、score=81<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **02-01-understand-blockchain/bdp-01-understand-blockchain** — passed；score 93
     - 路径：`content/blockchain-dev-practice/02-01-understand-blockchain/bdp-01-understand-blockchain.mdx`
     - 正式 unit：`bdp-01-understand-blockchain` explained=22/22
 - [x] ✅ **03-02-practice-preparation/bdp-02-practice-preparation** — passed；score 96
@@ -7952,7 +7950,7 @@
 
 ## introduction-to-algorithms（39 个内容页面 · failed:24 passed:15 · 🚫 门禁阻断 26 项）
 
-- 门禁摘要：目录=未登记，manifest=39；正式概念覆盖率=86.5%；未映射 unit=0；证据不完整 unit=15。
+- 门禁摘要：目录=未登记，manifest=39；正式概念覆盖率=89.1%；未映射 unit=0；证据不完整 unit=12。
 - 其他门禁阻断：introduction-to-algorithms: publication-policy-not-approved。
 
 - [x] ✅ **01-foundations/01-role-of-algorithms** — passed；score 99
@@ -7964,24 +7962,24 @@
 - [ ] ❌ P1 **01-foundations/03-characterizing-running-times** — failed；score 37；门禁阻断: status=failed、score=37<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
     - 路径：`content/introduction-to-algorithms/01-foundations/03-characterizing-running-times.mdx`
     - 正式 unit：`clrs4-03` explained=5/6
-- [ ] ❌ P1 **01-foundations/04-divide-and-conquer** — failed；score 36；门禁阻断: status=failed、score=36<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
+- [ ] ❌ P1 **01-foundations/04-divide-and-conquer** — failed；score 83；门禁阻断: status=failed、score=83<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/introduction-to-algorithms/01-foundations/04-divide-and-conquer.mdx`
-    - 正式 unit：`clrs4-04` explained=6/8
+    - 正式 unit：`clrs4-04` explained=5/8
 - [x] ✅ **01-foundations/05-probabilistic-analysis-randomized-algorithms** — passed；score 99
     - 路径：`content/introduction-to-algorithms/01-foundations/05-probabilistic-analysis-randomized-algorithms.mdx`
     - 正式 unit：`clrs4-05` explained=5/5
-- [ ] ❌ P1 **02-sorting-order-statistics/06-heapsort** — failed；score 35；门禁阻断: status=failed、score=35<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
+- [ ] ❌ P1 **02-sorting-order-statistics/06-heapsort** — failed；score 86；门禁阻断: status=failed、score=86<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/06-heapsort.mdx`
-    - 正式 unit：`clrs4-06` explained=4/6
+    - 正式 unit：`clrs4-06` explained=6/6
 - [ ] ❌ P1 **02-sorting-order-statistics/07-quicksort** — failed；score 32；门禁阻断: status=failed、score=32<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
     - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/07-quicksort.mdx`
     - 正式 unit：`clrs4-07` explained=2/5
-- [ ] ❌ P1 **02-sorting-order-statistics/08-sorting-in-linear-time** — failed；score 36；门禁阻断: status=failed、score=36<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
+- [ ] ❌ P1 **02-sorting-order-statistics/08-sorting-in-linear-time** — failed；score 88；门禁阻断: status=failed、score=88<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/08-sorting-in-linear-time.mdx`
-    - 正式 unit：`clrs4-08` explained=4/5
-- [ ] ❌ P1 **02-sorting-order-statistics/09-medians-order-statistics** — failed；score 30；门禁阻断: status=failed、score=30<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
+    - 正式 unit：`clrs4-08` explained=5/5
+- [ ] ❌ P1 **02-sorting-order-statistics/09-medians-order-statistics** — failed；score 86；门禁阻断: status=failed、score=86<90、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
     - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/09-medians-order-statistics.mdx`
-    - 正式 unit：`clrs4-09` explained=1/4
+    - 正式 unit：`clrs4-09` explained=4/4
 - [ ] ❌ P1 **03-data-structures/10-elementary-data-structures** — failed；score 33；门禁阻断: status=failed、score=33<90、dimensionFailures=source,knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、quality-v2-unreviewed；维度缺口: source、knowledge、pedagogy、visual、practice、ux、engineering
     - 路径：`content/introduction-to-algorithms/03-data-structures/10-elementary-data-structures.mdx`
     - 正式 unit：`clrs4-10` explained=2/4
@@ -8074,16 +8072,10 @@
     - 正式 unit：`clrs4-D` explained=3/3
 - [ ] 🔴 P1 **[正式 unit clrs4-03] Chapter 3 · Characterizing Running Times** — evidence 不完整；explained=5/6
     - 关联路径：`content/introduction-to-algorithms/01-foundations/03-characterizing-running-times.mdx`
-- [ ] 🔴 P1 **[正式 unit clrs4-04] Chapter 4 · Divide-and-Conquer** — evidence 不完整；explained=6/8
+- [ ] 🔴 P1 **[正式 unit clrs4-04] Chapter 4 · Divide-and-Conquer** — evidence 不完整；explained=5/8
     - 关联路径：`content/introduction-to-algorithms/01-foundations/04-divide-and-conquer.mdx`
-- [ ] 🔴 P1 **[正式 unit clrs4-06] Chapter 6 · Heapsort** — evidence 不完整；explained=4/6
-    - 关联路径：`content/introduction-to-algorithms/02-sorting-order-statistics/06-heapsort.mdx`
 - [ ] 🔴 P1 **[正式 unit clrs4-07] Chapter 7 · Quicksort** — evidence 不完整；explained=2/5
     - 关联路径：`content/introduction-to-algorithms/02-sorting-order-statistics/07-quicksort.mdx`
-- [ ] 🔴 P1 **[正式 unit clrs4-08] Chapter 8 · Sorting in Linear Time** — evidence 不完整；explained=4/5
-    - 关联路径：`content/introduction-to-algorithms/02-sorting-order-statistics/08-sorting-in-linear-time.mdx`
-- [ ] 🔴 P1 **[正式 unit clrs4-09] Chapter 9 · Medians and Order Statistics** — evidence 不完整；explained=1/4
-    - 关联路径：`content/introduction-to-algorithms/02-sorting-order-statistics/09-medians-order-statistics.mdx`
 - [ ] 🔴 P1 **[正式 unit clrs4-10] Chapter 10 · Elementary Data Structures** — evidence 不完整；explained=2/4
     - 关联路径：`content/introduction-to-algorithms/03-data-structures/10-elementary-data-structures.mdx`
 - [ ] 🔴 P1 **[正式 unit clrs4-11] Chapter 11 · Hash Tables** — evidence 不完整；explained=4/5
@@ -13831,80 +13823,80 @@
     - 路径：`content/the-c-programming-language/04-struct-io/unix-interface.mdx`
     - 正式 unit：`kr2-08` explained=6/6
 
-## this-is-chatgpt（24 个内容页面 · passed:24 · ✅ 书级门禁条件满足）
+## this-is-chatgpt（24 个内容页面 · published:24 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=22；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
-- [x] ✅ **00-learning-map/tcg-official-learning-map** — passed；score 100
+- [x] 🚀 **00-learning-map/tcg-official-learning-map** — published（已发布）；score 100
     - 路径：`content/this-is-chatgpt/00-learning-map/tcg-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [x] ✅ **01-main-essay/tcg-main-01-one-word-at-a-time** — passed；score 96
+- [x] 🚀 **01-main-essay/tcg-main-01-one-word-at-a-time** — published（已发布）；score 96
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time.mdx`
     - 正式 unit：`tcg-main-01` explained=2/2
-- [x] ✅ **01-main-essay/tcg-main-02-probabilities** — passed；score 99
+- [x] 🚀 **01-main-essay/tcg-main-02-probabilities** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-02-probabilities.mdx`
     - 正式 unit：`tcg-main-02` explained=1/1
-- [x] ✅ **01-main-essay/tcg-main-03-model** — passed；score 97
+- [x] 🚀 **01-main-essay/tcg-main-03-model** — published（已发布）；score 97
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-03-model.mdx`
     - 正式 unit：`tcg-main-03` explained=1/1
-- [x] ✅ **01-main-essay/tcg-main-04-human-like-tasks** — passed；score 99
+- [x] 🚀 **01-main-essay/tcg-main-04-human-like-tasks** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-04-human-like-tasks.mdx`
     - 正式 unit：`tcg-main-04` explained=1/1
-- [x] ✅ **01-main-essay/tcg-preface** — passed；score 99
+- [x] 🚀 **01-main-essay/tcg-preface** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-preface.mdx`
     - 正式 unit：`tcg-preface` explained=1/1
-- [x] ✅ **02-neural-models/tcg-main-05-neural-nets** — passed；score 99
+- [x] 🚀 **02-neural-models/tcg-main-05-neural-nets** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets.mdx`
     - 正式 unit：`tcg-main-05` explained=1/1
-- [x] ✅ **02-neural-models/tcg-main-06-training-neural-nets** — passed；score 99
+- [x] 🚀 **02-neural-models/tcg-main-06-training-neural-nets** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-06-training-neural-nets.mdx`
     - 正式 unit：`tcg-main-06` explained=1/1
-- [x] ✅ **02-neural-models/tcg-main-07-training-practice** — passed；score 97
+- [x] 🚀 **02-neural-models/tcg-main-07-training-practice** — published（已发布）；score 97
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-07-training-practice.mdx`
     - 正式 unit：`tcg-main-07` explained=1/1
-- [x] ✅ **02-neural-models/tcg-main-08-universal-network** — passed；score 97
+- [x] 🚀 **02-neural-models/tcg-main-08-universal-network** — published（已发布）；score 97
     - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-08-universal-network.mdx`
     - 正式 unit：`tcg-main-08` explained=1/1
-- [x] ✅ **03-chatgpt-inside/tcg-main-09-embeddings** — passed；score 97
+- [x] 🚀 **03-chatgpt-inside/tcg-main-09-embeddings** — published（已发布）；score 97
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings.mdx`
     - 正式 unit：`tcg-main-09` explained=1/1
-- [x] ✅ **03-chatgpt-inside/tcg-main-10-inside-chatgpt** — passed；score 99
+- [x] 🚀 **03-chatgpt-inside/tcg-main-10-inside-chatgpt** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt.mdx`
     - 正式 unit：`tcg-main-10` explained=1/1
-- [x] ✅ **03-chatgpt-inside/tcg-main-11-training-chatgpt** — passed；score 97
+- [x] 🚀 **03-chatgpt-inside/tcg-main-11-training-chatgpt** — published（已发布）；score 97
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt.mdx`
     - 正式 unit：`tcg-main-11` explained=1/1
-- [x] ✅ **03-chatgpt-inside/tcg-main-12-beyond-basic-training** — passed；score 99
+- [x] 🚀 **03-chatgpt-inside/tcg-main-12-beyond-basic-training** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training.mdx`
     - 正式 unit：`tcg-main-12` explained=1/1
-- [x] ✅ **04-meaning-language/tcg-main-13-what-lets-it-work** — passed；score 99
+- [x] 🚀 **04-meaning-language/tcg-main-13-what-lets-it-work** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-13-what-lets-it-work.mdx`
     - 正式 unit：`tcg-main-13` explained=1/1
-- [x] ✅ **04-meaning-language/tcg-main-14-meaning-space** — passed；score 97
+- [x] 🚀 **04-meaning-language/tcg-main-14-meaning-space** — published（已发布）；score 97
     - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-14-meaning-space.mdx`
     - 正式 unit：`tcg-main-14` explained=1/1
-- [x] ✅ **04-meaning-language/tcg-main-15-semantic-grammar** — passed；score 99
+- [x] 🚀 **04-meaning-language/tcg-main-15-semantic-grammar** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-15-semantic-grammar.mdx`
     - 正式 unit：`tcg-main-15` explained=1/1
-- [x] ✅ **04-meaning-language/tcg-main-16-conclusion** — passed；score 99
+- [x] 🚀 **04-meaning-language/tcg-main-16-conclusion** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-16-conclusion.mdx`
     - 正式 unit：`tcg-main-16` explained=1/1
-- [x] ✅ **05-resources/tcg-thanks-additional-resources** — passed；score 96
+- [x] 🚀 **05-resources/tcg-thanks-additional-resources** — published（已发布）；score 96
     - 路径：`content/this-is-chatgpt/05-resources/tcg-thanks-additional-resources.mdx`
     - 正式 unit：`tcg-resources` explained=2/2
-- [x] ✅ **06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha** — passed；score 96
+- [x] 🚀 **06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha** — published（已发布）；score 96
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha.mdx`
     - 正式 unit：`tcg-wa-01` explained=2/2
-- [x] ✅ **06-wolfram-alpha/tcg-wa-02-basic-example** — passed；score 99
+- [x] 🚀 **06-wolfram-alpha/tcg-wa-02-basic-example** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-02-basic-example.mdx`
     - 正式 unit：`tcg-wa-02` explained=1/1
-- [x] ✅ **06-wolfram-alpha/tcg-wa-03-more-examples** — passed；score 99
+- [x] 🚀 **06-wolfram-alpha/tcg-wa-03-more-examples** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-03-more-examples.mdx`
     - 正式 unit：`tcg-wa-03` explained=1/1
-- [x] ✅ **06-wolfram-alpha/tcg-wa-04-path-forward** — passed；score 99
+- [x] 🚀 **06-wolfram-alpha/tcg-wa-04-path-forward** — published（已发布）；score 99
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-04-path-forward.mdx`
     - 正式 unit：`tcg-wa-04` explained=1/1
-- [x] ✅ **07-final-review/tcg-official-final-review** — passed；score 97
+- [x] 🚀 **07-final-review/tcg-official-final-review** — published（已发布）；score 97
     - 路径：`content/this-is-chatgpt/07-final-review/tcg-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
