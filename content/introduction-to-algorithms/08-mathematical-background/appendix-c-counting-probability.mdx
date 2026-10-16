@@ -3,344 +3,315 @@ title: "Appendix C · Counting and Probability"
 type: B
 section: "CLRS4 · 数学基础"
 order: 38
-description: "按CLRS第四版附录C重建计数、概率、离散随机变量、几何/二项分布和二项尾界。"
+description: "按 CLRS 第四版附录 C 的目录范围独立重建：计数法则、概率公理与条件概率、离散随机变量、几何/二项分布与二项尾界。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-C
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4AppendixCCountingProbabilityLab } from "@/components/mdx/introduction-to-algorithms/clrs4-appendix-c-counting-probability-lab";
 
-## 从“有多少种结果”到“结果有多可能”开始
+{/* 知识点清单：样本空间/结果序列 → 图示(伯努利树,Lab 阶段1) · 和法则/积法则 → 推导+计算题 · 排列/组合与二项系数 → 图示(系数读数,Lab 阶段2)+计算题 · 等可能概率 → 图示(Venn,Lab 阶段3) · 条件概率/贝叶斯 → 推导+概念讲解 · 独立性/union bound → 推导+误区 · 离散随机变量/PMF → 图示(PMF 柱图,Lab) · 期望与指示变量 → 图示(均值线,Lab 阶段4) · 方差/协方差 → 推导+误区 · 几何分布 → 概念讲解+推导 · 二项分布 → 图示(柱图+μ 线,Lab 阶段5) · 马尔可夫/切比雪夫/切尔诺夫尾界 → 图示(读数对比,Lab 阶段6)+计算题 */}
+{/* 可视化决策卡：样本空间=伯努利结果树 → 交互=阶段推进高亮 · 计数=二项系数读数 → 交互=n/t 滑杆联动 · 概率=Venn 图 → 交互=阶段推进 · 分布=PMF 柱图+均值虚线 → 交互=p/n 滑杆实时重绘 · 尾界=上尾阴影+三界读数 → 交互=t 滑杆+数错方向故障注入 · 组件=clrs4-appendix-c-counting-probability-lab.tsx · 概念异构度=高 → 独立组件 */}
 
-先预测：randomized algorithm先产生一个outcome，再把outcomes映射为运行时间、collision count或success indicator。要算概率，常先数sample space中有多少结果；要算总成本，常把复杂random variable拆成indicators。（counting and probability）连接了组合结构与随机算法保证。
+<Objectives>
 
-每个概率结论都必须带上experiment。相同“抽两个元素”若with replacement、without replacement、ordered或unordered，会产生不同sample space与denominator。公式不能替代model declaration。
+- 能推导并手算积法则、排列 $P(n,k)$、组合 $\binom nk$ 与二项系数恒等式，说明有序/无序、放回/不放回如何改变计数。
+- 能解释等可能性假设、条件概率、独立性与 union bound 各自的前提，并指出一份随机算法分析声明缺失了哪条前提。
+- 能回答：为什么期望的线性性质不需要独立性，而方差的可加性通常需要？
 
-## C.1 Counting
+</Objectives>
 
-### Sum and product rules
+## 先问：“平均很快”为什么不是一句承诺？
 
-（counting）先识别construction。Mutually exclusive alternatives用sum rule；连续stages且每个prefix有固定choice count时用product rule。
+设想你要评估一台偶尔会卡壳的机器。只说“平均每次都很快”并不让人放心——它可能平时飞快、偶尔卡上一整天。想要一句能兑现的承诺（“几乎每次都在一秒内”），你需要两样东西：先会数“一共可能发生多少种情况”，再会算“坏情况加起来占多大比例”。
+
+没有这套语言，随机化算法的结论都无法书写：快排的期望运行时间、哈希表的冲突上界、“以至少 $1-1/n$ 的概率成功”——每一句话背后都是同一个流程：数清所有结果，称出坏结果的总重量，再说明这个重量有多小。
+
+本章就走完这条证据链。先学会数（有多少种结果），再学会称（每个结果多大概率、平均是多少），最后学会开保证书（坏情况的概率被某个上界压住）。下面这个实验台会在每一步陪着你。
+
+## C.1 计数：先数清有多少种结果
+
+### 和法则与积法则
+
+一切从两个数数规则开始。如果完成一件事有若干**互不相干**的门类，总数是各类数量之和；如果一件事分**先后几步**完成，每步的选项数与前面怎么选无关，总数是各步数量之积。两个集合有重叠时，直接相加会把重叠部分数两遍，必须减回来。
+
+计数时先问三个问题：结果有没有顺序？能不能重复？分子分母用的是不是同一个计数约定？这三个问题的答案不同，数出来的世界就不同——"从 52 张牌里抽两张"在有放回、无放回、计顺序、不计顺序下是四个不同的实验。
+
+### 排列与组合
+
+排列把顺序当作结果的一部分：从 $n$ 个不同元素中有序取出 $k$ 个，第一个位置有 $n$ 种选择，第二个剩下 $n-1$ 种，共 $n(n-1)\cdots(n-k+1)$ 种。组合则把顺序抹掉：同一个 $k$ 元子集有 $k!$ 种内部排法被重复计数，除掉就得到二项系数 $\binom nk$。
+
+记住对称性 $\binom nk = \binom n{n-k}$：选中的集合和没选中的补集一一对应。还有 Pascal 恒等式 $\binom nk = \binom{n-1}{k-1} + \binom{n-1}k$——盯住某个特定元素，所有 $k$ 元子集被分成"含它"和"不含它"两类。二项式定理 $(x+y)^n = \sum_k \binom nk x^k y^{n-k}$ 把计数和代数连在一起；令 $x=y=1$ 就得到"$n$ 元集合共有 $2^n$ 个子集"。
+
+## C.2 概率：给结果称重量
+
+### 样本空间与公理
+
+概率从声明实验开始。<Term def="一次实验所有可能结果的集合，记作 Ω；概率只对 Ω 的子集（事件）定义。">样本空间</Term> $\Omega$ 是全部结果的集合，事件是它的子集。概率分配满足三条公理：非负、全集为 1、互斥事件的重量可以相加。
+
+有限样本空间上，若每个结果等可能，则 $P(A) = |A|/|\Omega|$——分子分母是 C.1 数出来的两个计数。但"等可能"是**建模假设**，不是有限集合自动享有的属性：偏置硬币、非均匀哈希、带权抽样都必须逐个结果称重量再求和。
+
+### 条件概率与贝叶斯
+
+<Term def="在已知 B 发生的条件下 A 的概率：把样本空间缩小到 B，再重新归一化，P(A|B)=P(A∩B)/P(B)。">
+  条件概率
+</Term>
+的定义是 $P(A\mid B) = P(A\cap B)/P(B)$。它把样本空间缩小到 $B$
+再重新归一化。乘法法则重排为 $P(A\cap B) = P(B)\,P(A\mid
+B)$，可以一路链式展开——无放回抽样中每一步的分母都在变，正是这条法则在起作用。
+
+贝叶斯法则把条件方向倒转：$P(H\mid E) = P(E\mid H)P(H)/P(E)$。注意似然高不等于后验高：先验极小的假设即使似然不错，也可能被证据带来的分母稀释——假阳性主导筛查结果就是这个机制。
+
+### 独立与 union bound
+
+两个事件独立当且仅当 $P(A\cap B) = P(A)P(B)$。互斥和独立不是一回事：两个正概率事件若互斥，知道一个发生会把另一个的概率压成 0，恰恰最不独立。两两独立也不自动推出相互独立——分析多个变量的乘积或联合界时，必须写清需要的是哪种强度。
+
+union bound 对任意事件（无需任何独立性）给出 $P(\bigcup_i A_i) \le \sum_i P(A_i)$。它很松，但极稳：要证"$m$ 件事全部成立"的高概率保证，只需把每件事的失败概率分别 bound 到 $\delta/m$，相加即得总失败至多 $\delta$。这是"with high probability"最常见的来源。
+
+## C.3 离散随机变量：把结果变成数
+
+<Term def="给样本空间里每个结果赋一个实数的确定函数；随机性来自输入的结果，而不是函数本身。">
+  随机变量
+</Term>
+$X:\Omega\to\mathbb R$
+不是"随机变化的符号"，而是结果的确定函数：抛硬币的序列一旦确定，正面次数也就确定。离散随机变量用概率质量函数
+$p_X(x) = P(X=x)$ 描述（所有质量非负且总和为 1），用分布函数 $F_X(x) = P(X\le
+x)$ 描述累积——注意离散边界上严格与不严格不等号要选对边。
+
+期望的定义是 $E[X] = \sum_x x\,P(X=x)$。最重要的工具是**指示变量**：事件 $A$ 发生时 $I_A$ 取 1，否则取 0，于是 $E[I_A] = P(A)$。冲突次数、占用桶数、比较次数……凡是"数某件事发生多少次"，先写成指示变量之和，期望往往一步就出来了。条件期望还满足全期望公式 $E[X] = E\bigl[E[X\mid Y]\bigr]$，支撑随机化递归的分析。
+
+方差 $\mathrm{Var}(X) = E[(X-E[X])^2] = E[X^2] - E[X]^2$ 度量波动，且 $\mathrm{Var}(aX+b) = a^2\mathrm{Var}(X)$。求和的方差要带协方差项；只有两两独立（或不相关）时才能简单相加。
+
+## C.4 几何分布与二项分布：两类等待问题
+
+几何分布回答"等到第一次成功要多久"：每次试验独立、成功概率 $p$，$X$ 记包含成功在内的试验编号，则 $P(X=k) = (1-p)^{k-1}p$，$E[X] = 1/p$。有的书记数成功前的失败次数，两者只差 1，但必须声明用哪种约定。无记忆性 $P(X > s+t \mid X > s) = P(X > t)$ 是它独有的特征，前提是各次试验独立同分布。
+
+<Term def="n 次独立伯努利试验中成功次数的分布：P(X=k)=C(n,k)·pᵏ·(1−p)ⁿ⁻ᵏ，均值 np、方差 np(1−p)。">
+  二项分布
+</Term>
+$X\sim\mathrm{Bin}(n,p)$ 回答"$n$ 次试验里成功多少次"：选出 $k$
+个成功位置的方案数乘上每个具体序列的概率，就是 $P(X=k) = \binom nk p^k (1-p)^
+{n - k}$。把 $X$ 写成 $n$ 个伯努利指示变量之和，立刻读出 $E[X] = np$、$\mathrm
+{Var}(X) = np(1-p)$。若各次试验的概率 $p_i$
+不同，计数不再是普通二项系数，但期望仍是 $\sum_i p_i$——线性性不挑前提。
+
+## C.5 二项尾界：从均值到保证书
+
+平均好不等于很少翻车。<Term def="对独立伯努利变量之和给出的指数衰减尾概率上界：相对偏离 δ 的概率随 e^(−δ²μ/3) 下降，μ 为均值。">切尔诺夫界</Term> 与它的两个"宽前提"前辈，负责把期望值升级为高概率声明。
+
+马尔可夫不等式对非负 $X$ 给出 $P(X\ge a)\le E[X]/a$；切比雪夫用方差给出 $P(|X-\mu|\ge t)\le \sigma^2/t^2$。两者前提宽，但衰减只是多项式级。切尔诺夫界在独立伯努利变量之和上给出指数衰减：相对偏离 $(1+\delta)\mu$ 的概率至多 $e^{-\delta^2\mu/3}$（$0<\delta\le1$）。均值越大，固定相对偏离越不可能——这把"期望很快"翻译成了"翻车概率随规模指数变小"。
+
+使用时有两条纪律：一是前提一条不能少——切尔诺夫的指数衰减吃掉了独立性，前提丢失界就失效；二是均值太小时界可能超过 1 或干脆无信息，先算数值再引用。最后，期望运行时间与高概率运行时间是两句话：期望小仍可能有罕见的巨大尾部。
+
+## 数学推导一：从计数到概率
+
+本节符号：$n,k$ 为非负整数且 $k\le n$；$A,B$ 为有限集合或事件；$\Omega$ 为样本空间；$P(\cdot)$ 为概率；$H,E$ 为假设与证据；$A_i$ 为一族事件。
+
+计数的两条基本规则与容斥：
 
 $$
-|A\cup B|
-=
-|A|+|B|
-\quad\text{when }A\cap B=\varnothing,
+|A\cup B| = |A| + |B| - |A\cap B|,
 \qquad
-|A\times B|
-=
-|A||B|.
+|A_1\times\cdots\times A_k| = |A_1|\cdots|A_k|.
 $$
 
+这个式子在说：互斥时数量直接相加；分步构造时数量相乘，但一旦两组有重叠，加和会把交集数两遍，必须减回来——概率的容斥公式就是它在"称重量"版本下的翻版。
 
-若alternatives overlap，必须用inclusion-exclusion：
-
-$$
-|A\cup B|
-=
-|A|+|B|-|A\cap B|.
-$$
-
-Subtracting intersection修正double counting。多个sets时符号按intersection order交替；若只需upper bound，union bound式的sum可能足够，不必完整enumerate all intersections。
-
-### Permutations
-
-（permutations）把order视为结果的一部分：
+组合数是排列数除以内部顺序：
 
 $$
-P(n,k)
-=
-n(n-1)\cdots(n-k+1)
-=
-\frac{n!}{(n-k)!}.
+\binom nk = \frac{P(n,k)}{k!} = \frac{n!}{k!(n-k)!}.
 $$
 
+这个式子在说：先有序地取出 $k$ 个（$n(n-1)\cdots(n-k+1)$ 种），再把这 $k$ 个元素自身的 $k!$ 种排法合并成同一个子集。算法里"从 $n$ 个位置选 $k$ 个"几乎总是组合数，除非顺序本身就是结果的一部分。
 
-Full permutation取$k=n$，数量$n!$。若objects有duplicates，交换identical copies不产生new arrangement，需要除以各multiplicity factorial。Algorithm state若只关心set而非sequence，也不能直接使用permutation count。
-
-### Combinations and binomial coefficients
-
-（combinations）把每个$k$-subset的$k!$种internal orders合并：
+条件概率与贝叶斯法则：
 
 $$
-\binom nk
-=
-\frac{n!}{k!(n-k)!}.
-$$
-
-
-Symmetry $\binom nk=\binom n{n-k}$来自选择selected set或其complement。Pascal identity
-
-$$
-\binom nk
-=
-\binom{n-1}{k-1}
-+
-\binom{n-1}{k}
-$$
-
-按某个distinguished element是否被选拆分所有$k$-subsets。
-
-Binomial theorem把counting与algebra连接：
-
-$$
-(x+y)^n
-=
-\sum_{k=0}^{n}\binom nk x^k y^{n-k}.
-$$
-
-令$x=y=1$得到所有subsets数$\sum_k\binom nk=2^n$。令$x=1,y=-1$得到even与odd subset counts的cancellation。
-
-## C.2 Probability
-
-### Sample spaces and axioms
-
-（probability）从sample space $\Omega$和events $A\subseteq\Omega$开始。Axioms为$P(A)\ge0$、$P(\Omega)=1$，以及disjoint events的probabilities相加。
-
-Finite equally likely sample space中
-
-$$
-P(A)
-=
-\frac{|A|}{|\Omega|}.
-$$
-
-
-但“outcomes equally likely”是model assumption，不是finite space自动拥有的性质。Weighted coin、nonuniform hash choice或biased sampling必须按outcome masses求和。
-
-Complement与union formulas：
-
-$$
-P(\overline A)=1-P(A),
+P(A\mid B) = \frac{P(A\cap B)}{P(B)},
 \qquad
-P(A\cup B)=P(A)+P(B)-P(A\cap B).
+P(H\mid E) = \frac{P(E\mid H)\,P(H)}{P(E)}.
 $$
 
-这些是failure-probability calculations的基础。先数success还是先数failure取决于哪一边结构更简单。
+这个式子在说：左式把样本空间缩到 $B$ 内重新归一化；右式把"假设推出证据"的方向倒转成"证据支持假设"，分母 $P(E)$ 可用全概率对假设的划分展开。
 
-### Conditional probability and Bayes
-
-定义
+union bound——不需要任何独立性：
 
 $$
-P(A\mid B)
-=
-\frac{P(A\cap B)}{P(B)}.
+P\Bigl(\bigcup_{i=1}^{m} A_i\Bigr) \le \sum_{i=1}^{m} P(A_i).
 $$
 
+这个式子在说：坏事件至少发生一个的概率，不超过它们各自概率的直接相加。它松但从不撒谎，"每件事失败概率压到 $\delta/m$"就能兑换"整体失败概率压到 $\delta$"的保证。
 
-Product rule重排为$P(A\cap B)=P(B)P(A\mid B)$，并可扩展成sequence chain rule。Without-replacement sampling的每一步denominator会改变，正是conditional probability在工作。
+## 数学推导二：从均值到尾界
 
-Bayes rule反转conditioning direction：
+本节符号：$X,X_i$ 为离散随机变量；$\mu = E[X]$；$\sigma^2 = \mathrm{Var}(X)$；$a,t>0$；$\delta\in(0,1]$；$p$ 为单次成功概率；$n$ 为试验次数。
 
-$$
-P(H\mid E)
-=
-\frac{P(E\mid H)P(H)}{P(E)}.
-$$
-
-
-Denominator可用total probability对hypotheses partition展开。Likelihood高不等于posterior高；rare prior可能使false positives主导observed evidence。
-
-### Independence
-
-满足
+期望的线性性质：
 
 $$
-P(A\cap B)=P(A)P(B).
+E\Bigl[\sum_i X_i\Bigr] = \sum_i E[X_i].
 $$
 
+这个式子在说：和的均值永远等于均值的和，没有任何前提——不需要独立、不需要同分布。这是随机分析里最常被低估的工具：把复杂计数拆成指示变量之和，期望一步到手。
 
-Disjoint与independent不同。若两个positive-probability events disjoint，知道A发生会使B概率降为0，所以它们不independent。Pairwise independence也不自动推出mutual independence；分析多变量product或Chernoff bound时必须检查所需强度。
-
-### Union bound
-
-对任意events，不需要independence：
+方差的可加性带协方差修正：
 
 $$
-P\left(\bigcup_{i=1}^{m}A_i\right)
-\le
-\sum_{i=1}^{m}P(A_i).
+\mathrm{Var}\Bigl(\sum_i X_i\Bigr)
+= \sum_i \mathrm{Var}(X_i) + 2\sum_{i<j}\mathrm{Cov}(X_i, X_j).
 $$
 
+这个式子在说：只有两两独立（协方差全为 0）时方差才能简单相加；各项正相关时真实波动比"各项方差之和"更大。把线性性质当成方差性质用，是随机分析最常见的翻车点。
 
-Union bound可能松，却极其稳定。要证明“所有$m$项同时正确”的高概率保证，可分别bound每项failure，再把failures相加。若每项failure至多$\delta/m$，overall failure至多$\delta$。
-
-
-## C.3 Discrete random variables
-
-### PMF and CDF
-
-（discrete random variables）$X:\Omega\to\mathbb R$不是“随机变化的符号”，而是outcome的deterministic function。Probability mass function为$p_X(x)=P(X=x)$，且所有masses nonnegative并sum to1。
-
-
-Cumulative distribution function $F_X(x)=P(X\le x)$单调nondecreasing、right-continuous，并从0趋近1。Tail probability可写$P(X>t)=1-F_X(t)$，但discrete boundary的strict与nonstrict inequality要对齐。
-
-### Expectation and indicators
-
-定义
+二项分布的均值与方差：
 
 $$
-\mathbb E[X]
-=
-\sum_x x\,P(X=x),
-$$
-
-只要sum定义良好。Linearity：
-
-$$
-\mathbb E\left[\sum_i X_i\right]
-=
-\sum_i\mathbb E[X_i]
-$$
-
-不要求$X_i$ independent。
-
-
-Indicator $I_A$在event A发生时为1，否则0，所以$\mathbb E[I_A]=P(A)$。把collision count、inversion count、occupied bins或comparison count写成indicators之和，常比直接找whole distribution容易。
-
-Conditional expectation满足law of total expectation：对partition或random variable $Y$，
-
-$$
-\mathbb E[X]
-=
-\mathbb E\bigl[\mathbb E[X\mid Y]\bigr].
-$$
-
-这支撑随机递归、deferred decisions与conditional-expectation derandomization。
-
-### Variance and covariance
-
-为
-
-$$
-\operatorname{Var}(X)
-=
-\mathbb E[(X-\mathbb E[X])^2]
-=
-\mathbb E[X^2]-\mathbb E[X]^2.
-$$
-
-
-Scaling obeys $\operatorname{Var}(aX+b)=a^2\operatorname{Var}(X)$。Variance of a sum includes covariance terms；只有pairwise independent或uncorrelated时才能简单相加：
-
-$$
-\operatorname{Var}\left(\sum_iX_i\right)
-=
-\sum_i\operatorname{Var}(X_i)
-+
-2\sum_{i<j}\operatorname{Cov}(X_i,X_j).
-$$
-
-Expectation linearity无需independence，variance additivity通常需要。这是随机分析中最常见的前提遗漏之一。
-
-## C.4 The geometric and binomial distributions
-
-### Geometric distribution
-
-（geometric and binomial distributions）都由Bernoulli success probability $p$建立，但random quantity不同。
-
-本章约定geometric $X$计数“包含success的trial number”，support为$1,2,\ldots$：
-
-$$
-P(X=k)
-=
-(1-p)^{k-1}p,
+E[X] = np,
 \qquad
-\mathbb E[X]=\frac1p.
+\mathrm{Var}(X) = np(1-p).
 $$
 
+这个式子在说：$n$ 次试验每次独立贡献 $p$ 次成功期望，加起来是 $np$；方差里那个 $(1-p)$ 因子在 $p=0.5$ 时最大——最公平的硬币波动也最宽。
 
-有些texts计数success前failures，support从0开始且mean为$(1-p)/p$。两种convention只差1，但必须声明。Memoryless property为$P(X>s+t\mid X>s)=P(X>t)$，依赖independent identical trials。
-
-### Binomial distribution
-
-若$X$计数$n$ independent Bernoulli trials中的successes，则$X\sim\operatorname{Bin}(n,p)$：
+马尔可夫与切比雪夫：
 
 $$
-P(X=k)
-=
-\binom nk p^k(1-p)^{n-k},
-\qquad k=0,\ldots,n.
-$$
-
-
-把$X$写成$n$个Bernoulli indicators之和，立即得到
-
-$$
-\mathbb E[X]=np,
+P(X\ge a) \le \frac{E[X]}{a},
 \qquad
-\operatorname{Var}(X)=np(1-p).
+P(|X-\mu|\ge t) \le \frac{\sigma^2}{t^2}.
 $$
 
-Combination coefficient选择success positions，其余factors给这些positions的joint probability。若trials probabilities不同，count不再是ordinary binomial，尽管expectation仍是各$p_i$之和。
+这个式子在说：非负变量的均值 $\mu$ 限制了它越过 $a$ 的概率（否则平均会被拉高）；知道方差就能把"偏离均值"的概率压成多项式衰减。两者前提宽，但也因此松。
 
-## C.5 The tails of the binomial distribution
-
-### General-purpose bounds
-
-（tails of the binomial distribution）用于把expected performance升级为high-probability statement。
-
-Markov inequality对nonnegative $X$：
+切尔诺夫上尾界：
 
 $$
-P(X\ge a)
-\le
-\frac{\mathbb E[X]}a.
+P\bigl(X\ge(1+\delta)\mu\bigr) \le e^{-\delta^2\mu/3},
+\qquad 0<\delta\le1.
 $$
 
-Chebyshev使用variance：
+这个式子在说：独立伯努利变量之和越过均值相对偏离 $\delta$ 的概率，随 $\delta^2\mu$ 指数衰减。证明思路是矩生成函数：对任意 $\lambda>0$ 把事件改写成 $e^{\lambda X}\ge e^{\lambda(1+\delta)\mu}$，用马尔可夫，靠独立性把期望拆成乘积，再对 $\lambda$ 取最优——独立性正是这一步的粮食。
 
-$$
-P(|X-\mu|\ge t)
-\le
-\frac{\sigma^2}{t^2}.
-$$
+## 交互 Demo：一枚硬币抛 n 次
 
-它们前提宽但tail decay较慢。
+**先预测**：把 $p$ 从 0.5 调到 0.8，均值线会往哪边移动？尾界读数里哪一个变化最剧烈？把 $t$ 拖过均值线，三个上界里谁会先变成"不提供信息"？带着猜测再动手。
 
+下面这个实验台把全章装进一张图：柱子是 $\mathrm{Bin}(n,p)$ 的精确概率，绿色虚线是均值 $\mu=np$，红色竖线是阈值 $t$，阴影是上尾事件 $\{X\ge t\}$ 盖住的概率质量。用下方时间线沿六步证据链推进，观察计数、概率、期望、分布、尾界如何一环扣一环；再用三个滑杆改变 $n$、$p$、$t$，看分布形状与三个界如何联动。勾选"注入故障"可以亲眼看一次把上尾数成下尾的翻车。
 
-### Chernoff bounds
+<Clrs4AppendixCCountingProbabilityLab />
 
-令$X=\sum_iX_i$，其中$X_i$是independent Bernoulli variables，$\mu=\mathbb E[X]$。对$0<\delta\le1$，常用multiplicative bounds为
+阅读这张图的方式：阴影面积是精确尾概率（实验台实时算给你），三个界都应当不小于它——界比精确值小就说明前提被偷换了。注意切尔诺夫一行：当 $t$ 落在均值以下或相对偏离超过 1 时，实验台会拒绝给出数值，因为前提不满足。这种"拒绝回答"本身就是纪律。
 
-$$
-P(X\ge(1+\delta)\mu)
-\le
-\exp\left(-\frac{\delta^2\mu}{3}\right),
-$$
+## 常见误区
 
-以及
+<Callout type="trap">
 
-$$
-P(X\le(1-\delta)\mu)
-\le
-\exp\left(-\frac{\delta^2\mu}{2}\right).
-$$
+**现象**：有限样本空间上直接写 $P(A)=|A|/|\Omega|$，得到的"概率"与实测频率严重不符。
+**原因**：等可能性是建模假设，不是有限集合的自带属性；偏置抽样、非均匀哈希的每个结果重量不同。
+**修法**：先声明抽样机制，再按结果逐个称重量求和；只有确认等可能后，计数比才是概率。
 
+</Callout>
 
-Exponent随$\delta^2\mu$增长，所以mean越大，fixed relative deviation越不可能。反过来，mean很小时bound可能不informative；应先计算数值并cap probability at1。
+<Callout type="trap">
 
-Proof使用moment-generating method：对任意$\lambda>0$，把event $X\ge a$转成$e^{\lambda X}\ge e^{\lambda a}$，应用Markov，再利用independence factor expectation，最后优化$\lambda$。因此independence不是可删前提。
+**现象**：因为 $E[X+Y]=E[X]+E[Y]$ 不需要前提，便顺手写出 $\mathrm{Var}(X+Y)=\mathrm{Var}(X)+\mathrm{Var}(Y)$。
+**原因**：方差的可加性带着 $2\mathrm{Cov}(X,Y)$ 修正项；正相关的变量之和比各项方差之和大。
+**修法**：引用方差可加之前，先检查两两独立（或不相关）；分析 hashing、抽样不放回时尤其要先算协方差。
 
+</Callout>
 
-### From one event to an algorithm guarantee
+<Callout type="trap">
 
-若algorithm有$m$个bad events，每个failure probability最多$n^{-c-1}$且$m\le n$，union bound给overall failure至多$n^{-c}$。这就是“with high probability”常见来源，但exponent、input range和number of events必须写清。
+**现象**：报告 $P(X\ge t)$ 的上界时，阴影和数值却对应 $\{X\le t\}$；或者均值太小时仍引用切尔诺夫界，给出的"概率"大于 1。
+**原因**：事件方向与不等号边没对齐；切尔诺夫要求 $0<\delta\le1$，均值过小时界无信息。
+**修法**：先写出集合形式的尾事件，再数它盖住的柱子；引用界之前先验证前提并把结果截断到 1。Demo 的故障开关演示的就是第一种翻车。
 
-Expected runtime与high-probability runtime不是同一句话。Expectation小仍可能有rare huge tail；tail bound若只控制某个count，也需再证明runtime是该count的monotone function。
+</Callout>
 
-## 随机分析的审计流程
+## 小结与练习
 
+- 计数先定约定：顺序、重复、分子分母一致性。
+- 概率是样本空间上的重量分配，等可能只是特例。
+- 期望线性无条件；方差相加要先过独立性检查。
+- 二项分布的均值 $np$、方差 $np(1-p)$ 来自指示变量分解。
+- 切尔诺夫把均值升级成指数衰减的高概率保证，前提不可省。
 
-## 小结
+<Exercises>
 
-Appendix C Counting and Probability从sum/product rules建立counting，通过permutations、combinations、Pascal identity和binomial theorem枚举structures。Probability在declared sample space上定义events、conditioning、Bayes rule、independence与union bound。
+1. 从 10 个不同元素中取出 3 个：有序无放回的序列有多少个？无序的子集有多少个？两者的比值是什么，为什么是整数？
 
-Discrete random variables用PMF/CDF描述distribution；expectation可无条件linear，variance of sums则包含covariance。Geometric distribution计数first success waiting time，binomial distribution计数fixed independent trials中的successes。Binomial tails通过Markov、Chebyshev与尤其Chernoff bounds把mean转成failure probability。
+<Answer>
 
-完整随机算法结论必须记录experiment、parameters、dependence、random variable、expectation、tail event和guarantee type。没有这些证据，“平均很好”不能升级为“高概率可靠”。
+有序无放回：$P(10,3) = 10\cdot9\cdot8 = 720$。无序子集：$\binom{10}3 = \frac{720}{3!} = 120$。比值 $720/120 = 6 = 3!$，恰为 3 个元素内部的全排列数——组合数就是把同一个子集的 $3!$ 种排列合并后的计数。
 
+</Answer>
 
+2. 独立抛一枚公平硬币 $n=16$ 次，$X$ 为正面次数。用切比雪夫不等式给出 $P(X\ge12)$ 的上界，再用切尔诺夫界给出上界，比较两者的信息量（$\mu=8$，$\sigma^2=4$）。
+
+<Answer>
+
+切比雪夫：$P(X\ge12) = P(X-8\ge4) \le P(|X-8|\ge4) \le \sigma^2/4^2 = 4/16 = 0.25$。
+切尔诺夫：$\delta = 12/8-1 = 0.5$，界为 $e^{-0.5^2\cdot8/3} = e^{-2/3}\approx0.51$。
+此处切比雪夫（0.25）反而更紧——切尔诺夫的优势在 $\delta$ 接近 1 或大偏差的深尾部；浅尾处多项式界可能胜出。引用界之前先算数值。
+
+</Answer>
+
+3. 一个随机算法运行中可能出现 $m\le n$ 个互相关联的坏事件，每个的发生概率至多为 $n^{-3}$。给出"所有坏事件都不发生"的概率下界；若事件之间不独立，结论是否需要修改？
+
+<Answer>
+
+由 union bound，至少一个坏事件发生的概率至多为 $m\cdot n^{-3} \le n\cdot n^{-3} = n^{-2}$，因此所有坏事件都不发生的概率至少为 $1 - n^{-2}$。union bound 对任意事件成立，完全不依赖独立性，所以事件互相关联时结论不变——这正是它成为"with high probability"主力工具的原因。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="样本空间">
+  一次实验所有可能结果的集合，记作 Ω。概率不是对单个结果随口说的，而是先在 Ω
+  上给每个结果分配重量，再对子集（事件）求和。详见 C.2 节。
+</GlossaryItem>
+<GlossaryItem term="条件概率">
+  已知 B 发生后 A 的概率：把样本空间缩小到 B，再重新归一化。P(A|B)=P(A∩B)/P(B)。
+  不放回抽样每一步概率的变化，就是它在连续工作。详见 C.2 节。
+</GlossaryItem>
+<GlossaryItem term="随机变量">
+  给每个实验结果赋一个数的确定函数——随机性来自抛出的结果，不来自函数本身。
+  把它拆成指示变量之和，期望常常一步到手。详见 C.3 节。
+</GlossaryItem>
+<GlossaryItem term="二项分布">
+  n 次独立试验、每次成功概率 p 时，成功次数的分布：P(X=k)=C(n,k)·pᵏ·(1−p)ⁿ⁻ᵏ。
+  均值 np、方差 np(1−p)，是算法分析里最常见的计数型随机变量。详见 C.4 节。
+</GlossaryItem>
+<GlossaryItem term="切尔诺夫界">
+  独立伯努利变量之和的指数尾界：偏离均值相对量 δ 的概率至多
+  e^(−δ²μ/3)。均值越大， 固定相对偏离越不可能；但独立性是它不可省略的粮食。详见
+  C.5 节。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Appendix C: Counting and Probability"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

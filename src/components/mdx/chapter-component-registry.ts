@@ -19683,6 +19683,23 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Clrs4AppendixBSetsEtcLab: module0.Clrs4AppendixBSetsEtcLab,
       } as ChapterMdxComponents;
     },
+  "introduction-to-algorithms/08-mathematical-background/appendix-c-counting-probability":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-appendix-c-counting-probability-lab");
+      return {
+        Clrs4AppendixCCountingProbabilityLab:
+          module0.Clrs4AppendixCCountingProbabilityLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/08-mathematical-background/appendix-d-matrices":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-appendix-d-matrices-lab");
+      return {
+        Clrs4AppendixDMatricesLab: module0.Clrs4AppendixDMatricesLab,
+      } as ChapterMdxComponents;
+    },
   "langchain-programming/00-map/lcp-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/langchain-programming/v2/lcp-official-learning-map");

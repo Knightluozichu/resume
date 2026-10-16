@@ -3,231 +3,328 @@ title: "Appendix D · Matrices"
 type: B
 section: "CLRS4 · 数学基础"
 order: 39
-description: "按CLRS第四版附录D重建矩阵表示、运算、乘法、转置、逆、行列式、秩与基本性质。"
+description: "按 CLRS 第四版附录 D 的目录范围，独立重建矩阵的形状契约、矩阵乘法、转置、行列式、逆与秩等基本性质，并用可交互实验验证乘法语义。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-D
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4AppendixDMatricesLab } from "@/components/mdx/introduction-to-algorithms/clrs4-appendix-d-matrices-lab";
 
-## 从“二维数字表”到“线性变换”开始
+{/* 知识点清单：矩阵形状与元素 → 图示(矩阵网格+内维括号,Lab) · 逐元素运算 → 公式+人话翻译 · 矩阵-向量乘法 → 推导(行观点/列观点)+Lab引用 · 矩阵乘法 → 动画(行×列收缩k,Lab) · 线性变换视角 → 交互(滑杆调a/b/c/d看网格变形,Lab) · 不交换性 → 图示(两条复合路径平行四边形,Lab) · 转置 → 公式+图示(结果矩阵网格对比,Lab) · 行列式 → 公式+交互(det实时显示,Lab) · 逆矩阵 → 公式+故障(塌缩,Lab) · 秩 → 推导+练习 */}
+{/* 可视化决策卡：形状契约=矩阵网格+内维括号 → 交互=故障切换Bᵀ看未定义 · 行×列收缩=三网格高亮行/列/结果格 → 交互=漏项故障标红 · 线性变换=单位方格+坐标网格变形 → 交互=四滑杆调矩阵元素 · 复合不交换=平面多边形两条路径 → 交互=假设AB=BA故障 · 转置反转=三组2×2结果矩阵网格对比 → 交互=忘记反转高亮 · 组件=clrs4-appendix-d-matrices-lab.tsx · 概念异构度=高 → 独立组件 */}
 
-先预测：把matrix只看成rectangular table，容易记住entry却忘记operation order；把它看成linear transformation，shape、composition、identity与inverse会自然对齐。（matrices）同时是一种data representation和algebraic object。
+<Objectives>
 
-算法中matrix可表示graph adjacency、dynamic-programming transitions、linear constraints、probabilities、geometry transforms与machine-learning parameters。每个结论首先是shape statement：operation是否defined、result shape是什么，然后才是entry arithmetic。
+- 能解释矩阵乘法的形状契约，并手算一个 2×3 与 3×2 矩阵乘积的全部元素。
+- 能推导矩阵乘法一般不交换的原因，并说明转置与求逆为什么都反转因子顺序。
+- 能回答：A 是 2×3、B 是 3×2 时，AB 与 BA 都定义吗？若都定义，它们为什么一般不相等？
 
-## D.1 Matrices and matrix operations
+</Objectives>
 
-### Shapes and entries
+## 先问：一张数字表为什么会“动”？
 
-决定matrix $A=(a_{ij})$的type：
+打开手机修图应用，把照片斜拉一下、旋转四十五度、再横向压扁——画面里每个像素都被同一张“指令表”告知要搬到哪里去。这张指令表就是本章的主角。它是一张规整的数字表，但它的语义不是“存数”，而是“搬运”：给每个点一个出发坐标，还你一个到达坐标。
 
-$$
-A\in\mathbb F^{m\times n},
-\qquad
-a_{ij}\text{ is row }i\text{, column }j.
-$$
+算法世界里到处是这样的表：图里谁连着谁、动态规划里状态怎么转移、一组线性约束的条件系数。没有它，这些关系只能停留在口语描述，写不出可执行的计算。更隐蔽的是：指令表的复合顺序错了不会报错——“先斜拉再旋转”和“先旋转再斜拉”产出两张不同的照片，程序却都安静地盘算着。
 
+先预测：把“先横切变、后旋转 90°”与“先旋转 90°、后横切变”施加到同一个正方形上——猜一猜，两个结果一样吗？带着答案进入下面的实验。
 
-$m\times n$ matrix有$mn$ entries。Two matrices相等，当且仅当shapes相同且每个corresponding entry相等。Storage layout可row-major或column-major，但mathematical index meaning不变；工程实现要把layout与strides写清。
+<Clrs4AppendixDMatricesLab />
 
+## 权威目录定位
 
-Column vector是$n\times1$ matrix，row vector是$1\times n$ matrix。Scalar有时视为$1\times1$ matrix，但不能因此忽略一般shape rules。
+本章对齐 CLRS 第四版附录 D，官方概念包括：
 
-### Entrywise operations
+- matrices / 矩阵；
+- matrix operations / 矩阵运算；
+- basic matrix properties / 矩阵基本性质。
 
-（matrix operations）中，addition只允许equal shapes：
+正文是独立教学重构：以“形状契约 → 行乘列收缩 → 平面变形 → 复合顺序 → 顺序反转”为主线重建矩阵运算的语义与基本性质；所有定义和结论均按标准线性代数表述独立撰写，不复现原书正文。
 
-$$
-(A+B)_{ij}
-=
-a_{ij}+b_{ij},
-\qquad
-(\alpha A)_{ij}
-=
-\alpha a_{ij}.
-$$
+事实复核使用 Jim Hefferon 的开放教材《[Linear Algebra](https://hefferon.net/linearalgebra/)》：其第一章覆核矩阵运算与转置的定义，第三章覆核行列式、逆矩阵与秩的刻画；几何直觉另参考 MIT OpenCourseWare [18.06 Linear Algebra](https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/)（Gilbert Strang 公开课）中关于矩阵即线性映射的讲解。CLRS 目录仅用于限定本章范围；这些资料用于核对数学事实，本章没有复用其练习或段落。
 
+## 常见误区与故障注入
 
-Addition commutative且associative，zero matrix是additive identity，$-A$是additive inverse。Scalar multiplication distributes overmatrix addition与scalar addition。这些properties都逐entry成立。
+<Callout type="trap" title="陷阱：把矩阵乘法当数字乘法一样交换">
 
-Hadamard product也是entrywise multiplication，写作$A\odot B$，与matrix product $AB$不同。若API只写multiply而不声明语义，图形、numeric和ML代码极易混淆。
+现象：推导中随手把 $AB$ 改写成 $BA$，或把“先变换 P 再变换 Q”的复合矩阵写成 $PQ$。
 
-### Matrix-vector multiplication
+原因：矩阵乘法一般不交换——有时 $BA$ 连定义都没有（内维不匹配），即使都是方阵且都有定义，通常也不相等。实验的复合一步把两条路径画在同一坐标系里，两个平行四边形明显不同。
 
-对$A\in\mathbb F^{m\times n}$和$x\in\mathbb F^n$，output $y=Ax\in\mathbb F^m$，第$i$项是row $i$与$x$的dot product：
+修复：复合从右往左读应用顺序：$(QP)x$ 表示先施加 $P$ 再施加 $Q$。每次重排乘法顺序前，先证明这两个矩阵可交换，否则保持原样。
 
-$$
-y_i
-=
-\sum_{j=1}^{n}a_{ij}x_j.
-$$
+</Callout>
 
+<Callout type="trap" title="陷阱：转置和求逆忘记反转因子顺序">
 
-按columns看，同一operation是$A$ columns的linear combination，coefficients来自$x$。Row view适合compute outputs，column view适合解释range与rank。
+现象：写 $(AB)^T = A^T B^T$，或写 $(AB)^{-1} = A^{-1} B^{-1}$。
 
-Dense matrix-vector multiplication做$\Theta(mn)$ arithmetic operations。Sparse representation若只保存nonzeros，可按nonzero count计算，但indirection与memory layout会影响实际performance。
+原因：转置和求逆都会反转因子的排列顺序，正确的恒等式是 $(AB)^T = B^T A^T$ 与 $(AB)^{-1} = B^{-1} A^{-1}$。用元素展开验证一步就能发现错误。
 
-### Matrix-matrix multiplication
+修复：记住“袜子—鞋子法则”——先穿袜子再穿鞋，脱的时候必须反过来：先鞋后袜。实验的反转一步给出了数值反例。
 
-若$A$ shape为$m\times n$，$B$ shape为$n\times p$，product $C=AB$ shape为$m\times p$：
+</Callout>
 
-$$
-c_{ij}
-=
-\sum_{k=1}^{n}a_{ik}b_{kj}.
-$$
+<Callout type="trap" title="陷阱：用行列式是否为零判断数值可逆性">
 
+现象：数值代码里写 `if (det(A) != 0) solve(A)`，或对近奇异矩阵直接求逆。
 
-Shared inner dimension必须一致；result保留outer dimensions。Formula中$k$是contracted index，$i,j$是output indices。
+原因：在精确算术里 $\det(A) \neq 0$ 等价于可逆；但在浮点运算里，“接近零”与“等于零”的边界被舍入误差完全抹糊，行列式对缩放还极其敏感。
 
+修复：数值线性代数用残差 $\|Ax - b\|$ 与条件数说话，用 LU/QR 分解求解而不是显式形成逆矩阵。
 
-Naive dense algorithm做$\Theta(mnp)$ scalar work。Square $n\times n$ case为$\Theta(n^3)$，但Chapter 28已说明faster asymptotic algorithms存在。附录的重点是operation semantics，不把naive loop count误写成matrix multiplication的不可突破下界。
+</Callout>
 
-Matrix product表示function composition。若column vectors先经过$B$再经过$A$，combined transform是$AB$；written order与application order相反。
+## D.1 矩阵与矩阵运算
 
-### Transpose
+### 形状与元素
 
-定义
-
-$$
-(A^T)_{ij}
-=
-a_{ji}.
-$$
-
-
-它满足$(A^T)^T=A$、$(A+B)^T=A^T+B^T$、$(\alpha A)^T=\alpha A^T$，而product满足
+<Term def="按行和列整齐排列的矩形数表；形状（几行几列）先于元素值决定它能参加什么运算">
+  矩阵
+</Term>
+$A = (a_{ij})$ 由它的形状和元素共同定义。本节符号：$m, n$ 是行数与列数；$a_{ij}$
+是第 $i$ 行第 $j$ 列的元素；$\mathbb F$ 是元素所在的数域（如实数 $\mathbb R$）。
 
 $$
-(AB)^T
-=
-B^TA^T.
+A \in \mathbb F^{m \times n}, \qquad a_{ij} \text{ 位于第 } i \text{ 行第 } j \text{ 列}.
 $$
 
+这个式子在说：说“一个矩阵”时必须先报形状——$m \times n$ 矩阵有 $mn$ 个元素，形状不同，能参加的运算就不同。
 
-Factor order reversal来自entry expansion，也来自composition direction。忘记reverse是matrix derivation中的高频错误。
+两个矩阵相等，当且仅当形状相同且每个对应元素相等。$n \times 1$ 的矩阵是列向量，$1 \times n$ 的矩阵是行向量。工程实现里还要区分存储布局（按行存放还是按列存放），但那只是内存排列方式，不改变第 $i$ 行第 $j$ 列的数学含义。
 
-Complex-valued matrices常用conjugate transpose $A^*$而非plain transpose定义inner-product adjoint；本章若使用real field，两者相同，但field assumption要写明。
+### 逐元素运算
 
-## D.2 Basic matrix properties
-
-### Identity, zero, and algebraic laws
-
- $I_n$满足
+加法和数乘是逐元素进行的，但加法要求两个矩阵形状相同。本节符号：$A, B$ 是同形状的矩阵；$\alpha$ 是标量。
 
 $$
-I_mA=A=AI_n
-\quad
-\text{for }A\in\mathbb F^{m\times n}.
+(A + B)_{ij} = a_{ij} + b_{ij}, \qquad (\alpha A)_{ij} = \alpha\, a_{ij}.
 $$
 
+这个式子在说：加法就是对应格子里的数相加，数乘就是每个格子同乘一个数——两者都不涉及行与列之间的“交叉”，所以形状不同连格子都对不上，运算没有定义。
 
-Identity size依赖side；rectangular $A$左边用$I_m$，右边用$I_n$。Zero matrices也有shapes，$A+0_{m\times n}=A$。
+矩阵加法可交换、可结合，零矩阵是加法单位元，$-A$ 是加法逆元。还有一种同样逐元素的乘积叫 Hadamard 积，记作 $A \odot B$——它和下一节的矩阵乘积 $AB$ 是完全不同的两个运算，API 里只写 multiply 而不声明语义，是图形、数值与机器学习代码互相混淆的常见来源。
 
-Matrix multiplication associative与distributive：
+### 矩阵–向量乘法：一行点一列
 
-$$
-(AB)C=A(BC),
-\qquad
-A(B+C)=AB+AC.
-$$
-
-
-Associativity允许matrix-chain parenthesization optimization。虽然result相同，不同parenthesization的scalar multiplication count可相差orders of magnitude；Chapter 14 dynamic programming正利用这一点。
-
-### Noncommutativity
-
-Matrix multiplication一般不commutative：
+矩阵乘向量的结果是一个向量：本节符号：$A \in \mathbb F^{m \times n}$，$x \in \mathbb F^n$，$y \in \mathbb F^m$。
 
 $$
-AB\ne BA.
+y_i = \sum_{j=1}^{n} a_{ij} x_j \qquad (i = 1, \dots, m).
 $$
 
+这个式子在说：输出的第 $i$ 个分量，是 $A$ 的第 $i$ 行与整个 $x$ 逐对相乘再求和——一个行向量与列向量的点积。
 
-有时$AB$ defined而$BA$因shape不匹配根本undefined；即使两者都是square且defined，也通常different。少数commuting pairs不能支持general reorder。
+换一种看法，同一个运算可以按列读：$Ax$ 是 $A$ 的各列以 $x$ 的分量为系数的线性组合。行观点适合动手算输出，列观点适合解释 $A$ 的值域与秩。稠密矩阵–向量乘法做 $\Theta(mn)$ 次算术运算；稀疏表示若只存非零元，工作量可按非零元个数计，但间接寻址和内存布局会影响实际性能。
 
+### 矩阵乘法：收缩公共维度
 
-### Determinants and singularity
-
-对$2\times2$ matrix
-
-$$
-\det
-\begin{pmatrix}
-a&b\\
-c&d
-\end{pmatrix}
-=
-ad-bc.
-$$
-
-
-General determinant满足$\det(AB)=\det(A)\det(B)$与$\det(A^T)=\det(A)$。Swapping two rows flips sign，scaling one row scalesdeterminant，adding one row multiple to another leaves determinant unchanged。
-
-Determinant非零等价于full rank与invertible。它适合theoretical criterion；large numerical systems中直接通过cofactor expansion计算既慢又unstable，通常用factorization。
-
-### Inverses
-
-若存在则unique：
+<Term def="行与列的点积运算：A 的第 i 行与 B 的第 j 列逐项相乘求和，得到 AB 的第 (i,j) 个元素">
+  矩阵乘法
+</Term>
+的定义是本章的中心。本节符号：$A \in \mathbb F^{m \times n}$，$B \in \mathbb F^{n \times p}$，$C = AB \in \mathbb F^{m \times p}$；$k$ 是被求和“收缩掉”的内维下标。
 
 $$
-AA^{-1}
-=
-A^{-1}A
-=
-I.
+c_{ij} = \sum_{k=1}^{n} a_{ik} b_{kj} \qquad (i = 1, \dots, m;\ j = 1, \dots, p).
 $$
 
+这个式子在说：$C$ 的每个元素都是一次“$A$ 的一行点 $B$ 的一列”；$A$ 的列数必须等于 $B$ 的行数（内维匹配），结果保留两个外维，所以是 $m \times p$。
 
-Products的inverse也反转order：
+朴素的稠密算法做 $\Theta(mnp)$ 次标量乘法，方阵情形即 $\Theta(n^3)$——这是朴素算法的代价，不是矩阵乘法的渐近下界，第 28 章已经构造了更快的方法。矩阵乘积还表示函数的复合：列向量先经 $B$ 再经 $A$，合起来的变换是 $AB$——书写顺序与应用顺序正好相反，实验的“commute”一步会把这个后果画出来。
 
-$$
-(AB)^{-1}
-=
-B^{-1}A^{-1}.
-$$
+### 转置：交换两个下标
 
-若$Ax=b$且A invertible，形式上$x=A^{-1}b$。Numerical implementation通常solve linear system或用LU/QR factorization，而不是显式形成inverse，因为后者工作更多且可能放大rounding error。
-
-Singular matrix没有two-sided inverse；near-singular matrix虽在exact arithmetic可逆，却可能ill-conditioned。Certificate应报告residual $\|Ax-b\|$与condition information，而不只检查determinant“不等于0”。
-
-### Rank and linear independence
-
-（rank）满足
+<Term def="把矩阵沿主对角线翻折：第 i 行变成第 i 列，(i,j) 位置的元素搬到 (j,i) 位置">
+  转置
+</Term>
+记作 $A^T$。本节符号：$A, B$ 是形状相容可乘的矩阵。
 
 $$
-\operatorname{rank}(A)
-\le
-\min(m,n).
+(A^T)_{ij} = a_{ji}.
 $$
 
+这个式子在说：转置只做一件事——把每个元素的下标对调，第 $i$ 行整个变成第 $i$ 列。
 
-Square $n\times n$ matrix invertible，当且仅当rank为$n$，当且仅当columns linearly independent，当且仅当null space只含zero vector。
+转置满足 $(A^T)^T = A$、$(A+B)^T = A^T + B^T$、$(\alpha A)^T = \alpha A^T$；但对乘积，因子顺序必须整个反转：
 
-Rank obeys $\operatorname{rank}(AB)\le\min(\operatorname{rank}(A),\operatorname{rank}(B))$。Multiplication不能创造超过任何factor的independent directions。
+$$
+(AB)^T = B^T A^T.
+$$
 
-Row operations保持row-equivalence并可揭示rank。Floating-point rank需要tolerance或singular values；exact zero comparisons不适合noisy data。
+这个式子在说：乘积的转置等于转置的反向乘积——从元素展开看，$(AB)^T$ 的 $(i,j)$ 元是 $\sum_k a_{jk} b_{ki}$，正好对应 $B^T A^T$。顺序反转来自复合方向本身，忘记反转是矩阵推导中最高频的错误之一。复数域上常用共轭转置 $A^*$ 代替朴素转置来定义内积的伴随；本章默认实数域，两者相同，但使用复数时字段假设要写明。
 
-### Symmetric and triangular matrices
+## D.2 矩阵的基本性质
 
-满足$A=A^T$。Products of symmetric matrices不一定symmetric，除非factors commute，因为$(AB)^T=BA$。
+### 单位矩阵、零矩阵与代数律
 
-Upper triangular matrix在main diagonal下方为0，lower triangular相反。Triangular systems可用back或forward substitution在$\Theta(n^2)$时间solve；determinant是diagonal entries product。
+单位矩阵 $I_n$（主对角线为 1、其余为 0）是乘法的单位元。本节符号：$I_m, I_n$ 是不同尺寸的单位矩阵；$A \in \mathbb F^{m \times n}$。
 
-Permutation matrices由identity重新排列rows而来，left multiplication permutes rows，right multiplication permutes columns。Orthogonal matrix满足$Q^TQ=I$并保持Euclidean lengths；这些special structures可带来更快、更稳定的algorithms。
+$$
+I_m A = A = A I_n.
+$$
 
+这个式子在说：单位矩阵像乘法里的 1，但它的尺寸要看站在 $A$ 的哪一边——左边配 $I_m$，右边配 $I_n$，矩形矩阵两侧的单位矩阵尺寸可以不同。
 
-## 矩阵推导的审计流程
+矩阵乘法可结合、对加法可分配：
 
+$$
+(AB)C = A(BC), \qquad A(B + C) = AB + AC.
+$$
+
+这个式子在说：括号怎么加不改变乘积结果，所以连乘可以省略括号；乘法对加法像分配律一样展开。结合律使得矩阵链的括号化成为动态规划的优化对象（第 14 章）——结果相同，标量乘法次数却可能相差数个数量级。
+
+### 乘法不交换
+
+矩阵乘法一般不可交换：
+
+$$
+AB \ne BA.
+$$
+
+这个式子在说：这不是例外而是常态——有时 $BA$ 因内维不匹配根本没有定义；即使两者都是同阶方阵、都有定义，结果通常也不同。实验里 $QP$（先切变后旋转）与 $PQ$（先旋转后切变）把同一个单位正方形送到了两个不同的位置。确实存在可交换的矩阵对，但那是需要证明的特殊性质，不是可以默认使用的运算律。
+
+### 行列式与奇异性
+
+<Term def="一个由矩阵元素算出的标量；对 2×2 矩阵是 ad−bc，其绝对值等于线性变换前后的面积比">
+  行列式
+</Term>
+是方阵的标量函数。本节符号：$a, b, c, d$ 是 2×2 矩阵的四个元素。
+
+$$
+\det \begin{pmatrix} a & b \\ c & d \end{pmatrix} = ad - bc.
+$$
+
+这个式子在说：二阶行列式就是主对角线两数之积减去副对角线两数之积；几何上，它等于变换前后的有向面积比，实验的 transform 一步实时显示这个值。
+
+一般行列式满足 $\det(AB) = \det(A)\det(B)$ 与 $\det(A^T) = \det(A)$；交换两行变号，某行乘标量则行列式同乘该标量，某行加上另一行的倍数行列式不变。$\det(A) \neq 0$ 等价于满秩、等价于可逆。行列式适合做理论判据；大型数值系统里用余子式展开计算它既慢又不稳定，实际计算走矩阵分解。
+
+### 逆矩阵
+
+<Term def="与 A 相乘得到单位矩阵的矩阵，记作 A⁻¹；只有行列式非零（满秩）的方阵才有逆">
+  逆矩阵
+</Term>
+若存在则唯一。本节符号：$A$ 是 $n \times n$ 方阵；$I$ 是同阶单位矩阵。
+
+$$
+A A^{-1} = A^{-1} A = I.
+$$
+
+这个式子在说：逆矩阵把 $A$ 的变换“撤销”——先变形再还原，每个点都回到出发位置；这样的撤销矩阵要么恰好一个，要么不存在。
+
+乘积的逆同样反转顺序：
+
+$$
+(AB)^{-1} = B^{-1} A^{-1}.
+$$
+
+这个式子在说：复合变换的撤销必须按相反顺序逐个撤销——先穿袜后穿鞋，脱的时候先鞋后袜。若 $Ax = b$ 且 $A$ 可逆，形式解是 $x = A^{-1}b$；但数值实现通常直接求解线性方程组（LU/QR 分解），而不是显式算出 $A^{-1}$——后者工作量更大，还可能放大舍入误差。奇异矩阵没有双侧逆；近奇异矩阵在精确算术下可逆，却可能病态，验收时应报告残差 $\|Ax - b\|$ 与条件信息，而不是只检查行列式“不等于 0”。
+
+### 秩与线性无关
+
+矩阵的秩刻画它有多少个独立的方向。本节符号：$A \in \mathbb F^{m \times n}$；$B$ 是形状相容的矩阵。
+
+$$
+\operatorname{rank}(A) \le \min(m, n).
+$$
+
+这个式子在说：独立方向的数量不可能超过行数，也不可能超过列数——秩被较小的那个外维封顶。
+
+$n \times n$ 方阵可逆，当且仅当秩为 $n$，当且仅当各列线性无关，当且仅当零空间只有零向量。秩还满足 $\operatorname{rank}(AB) \le \min(\operatorname{rank} A, \operatorname{rank} B)$——乘积不可能创造出超过任何一个因子所拥有的独立方向，这正是奇异矩阵把平面压成直线（秩 2 变秩 1）后信息无法恢复的原因。行变换保持行等价并能揭示秩；浮点数据求秩需要容差或奇异值，精确的零比较不适合含噪数据。
+
+### 特殊结构的算法红利
+
+对称矩阵满足 $A = A^T$；注意两个对称矩阵的乘积一般不再对称，除非它们可交换，因为 $(AB)^T = BA$。上三角矩阵主对角线以下全为 0，下三角反之；三角方程组可用回代/前代在 $\Theta(n^2)$ 时间求解，其行列式就是对角元之积。置换矩阵由单位矩阵重排行得到——左乘置换行、右乘置换列；正交矩阵满足 $Q^T Q = I$，保持欧氏长度。这些特殊结构不是 trivia：它们带来更快、更稳定的算法，LU 分解、QR 分解、最小二乘的稳定性论证全部建立在其上。
 
 ## 小结
 
-Appendix D Matrices从shape和entries定义matrix operations。Addition与scalar multiplication逐entry执行；matrix-vector和matrix-matrix products通过row-column dot products收缩shared dimension；transpose交换indices并反转product order。
+- 矩阵乘法的形状契约：$m \times n$ 乘 $n \times p$ 得 $m \times p$，内维必须相等。
+- 行乘列求和就是乘法的全部语义；$\Theta(mnp)$ 是朴素算法的代价，不是下界。
+- 乘法不交换；转置与求逆都反转因子顺序——袜子—鞋子法则。
+- $\det \neq 0$、满秩、可逆三者等价；数值计算改用残差与条件数。
+- 对称、三角、置换、正交结构是更快更稳算法的通行证。
 
-Basic matrix properties包括identity、associativity、distributivity与noncommutativity。Determinant、inverse和rank从不同角度刻画singularity与independent directions；symmetric、triangular、permutation和orthogonal structures提供额外algorithmic leverage。
+<Exercises>
 
-可靠matrix proof先做shape check，再展开entry，最后验证property premises。Numerical code还必须区分exact algebra与floating-point evidence，使用residual、tolerance和conditioning，而不是只依赖symbolic formula。
+1. 计算题：设 $A = \begin{pmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \end{pmatrix}$，$B = \begin{pmatrix} 7 & 8 \\ 9 & 10 \\ 11 & 12 \end{pmatrix}$。手算 $C = AB$ 的全部四个元素，再说明 $BA$ 是否定义、它的形状是什么，并算出 $(BA)_{11}$。
 
+   <Answer>
 
+   $c_{11} = 1\cdot7 + 2\cdot9 + 3\cdot11 = 58$，$c_{12} = 1\cdot8 + 2\cdot10 + 3\cdot12 = 64$，$c_{21} = 4\cdot7 + 5\cdot9 + 6\cdot11 = 139$，$c_{22} = 4\cdot8 + 5\cdot10 + 6\cdot12 = 154$，所以 $AB = \begin{pmatrix} 58 & 64 \\ 139 & 154 \end{pmatrix}$。$BA$ 也定义：$B$ 是 $3 \times 2$、$A$ 是 $2 \times 3$，内维 2 匹配，结果是 $3 \times 3$。$(BA)_{11} = 7\cdot1 + 8\cdot4 = 39$。两个乘积一个 $2 \times 2$、一个 $3 \times 3$，连形状都不同，更谈不上相等——这是“乘法不交换”最直接的证据。
+
+   </Answer>
+
+2. 推导题：用元素展开证明 $(AB)^T = B^T A^T$。要求写出等式两边第 $(i,j)$ 个元素各自的求和式，并指出求和指标与下标的对应关系，不许跳步。
+
+   <Answer>
+
+   记 $C = AB$。左边：$(AB)^T$ 的第 $(i,j)$ 个元素是 $C$ 的第 $(j,i)$ 个元素，由矩阵乘法定义
+
+   $$
+   \big((AB)^T\big)_{ij} = c_{ji} = \sum_{k} a_{jk} b_{ki},
+   $$
+
+   其中求和指标 $k$ 遍历 $A$ 的列数（= $B$ 的行数）。右边：$B^T$ 的第 $(i,k)$ 个元素是 $b_{ki}$，$A^T$ 的第 $(k,j)$ 个元素是 $a_{jk}$，所以
+
+   $$
+   (B^T A^T)_{ij} = \sum_{k} (B^T)_{ik} (A^T)_{kj} = \sum_{k} b_{ki} a_{jk} = \sum_{k} a_{jk} b_{ki}.
+   $$
+
+   标量乘法可交换，两个求和式逐项相等、指标范围相同，故两边第 $(i,j)$ 个元素相等；由 $(i,j)$ 任意，$(AB)^T = B^T A^T$。注意关键一步是下标顺序整个反转：若误写成 $A^T B^T$，其 $(i,j)$ 元是 $\sum_k a_{ki} b_{jk}$，对应不上。
+
+   </Answer>
+
+3. 审计题：一段伪代码注释声称“矩阵乘法必须做 $\Theta(n^3)$ 次标量乘法”，主函数里又用 `if (det(A) == 0) reject(A)` 判定浮点矩阵是否可逆。逐条审计这两处陈述，说明各自错在哪里、正确的工程做法是什么。
+
+   <Answer>
+
+   第一处：$\Theta(n^3)$ 只是朴素三重循环的代价。Strassen 等算法已经把方阵乘法的渐近复杂度压到 $O(n^{\log_2 7}) \approx O(n^{2.807})$，理论上还有更低的指数——所以应写成“朴素实现 $\Theta(n^3)$，存在更快的渐近算法”，不能写成必须。第二处：浮点行列式对缩放极度敏感，且“等于 0”的精确判断被舍入误差抹糊，近奇异矩阵会被误判或漏判。工程做法：用 LU/QR 分解求解并报告残差 $\|Ax - b\|$ 与条件数估计；确需可逆性判定时用奇异值或带阈值的秩判定，而不是精确比较行列式。
+
+   </Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="矩阵">
+  按行和列整齐排列的矩形数表。先报“几行几列”再谈里面的数：形状决定它能和
+  谁相加、能和谁相乘。
+</GlossaryItem>
+<GlossaryItem term="矩阵乘法">
+  A 的第 i 行与 B 的第 j 列逐项相乘再求和，得到 AB 的第 (i,j) 个元素。要求 A
+  的列数等于 B 的行数；它表示线性变换的复合，一般不交换。
+</GlossaryItem>
+<GlossaryItem term="转置">
+  沿主对角线把矩阵翻个面：第 i 行变成第 i 列。乘积的转置要反转因子顺序： (AB)ᵀ =
+  BᵀAᵀ。
+</GlossaryItem>
+<GlossaryItem term="行列式">
+  由方阵元素算出的一个数（2×2 情形是
+  ad−bc）；它的绝对值是线性变换前后的面积比，非零等价于矩阵可逆。
+</GlossaryItem>
+<GlossaryItem term="逆矩阵">
+  能把 A 的变换原样撤销的矩阵 A⁻¹，满足 AA⁻¹ =
+  I。只有满秩方阵才有；复合变换求逆要按相反顺序： (AB)⁻¹ = B⁻¹A⁻¹。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Appendix D: Matrices"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
