@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-10-16T21:37:05.186Z；旧版分数不迁移。
+> 2026-10-16T22:29:44.291Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
 - failed：1720
 - queued：196
-- passed：1740
-- published：953
+- passed：1701
+- published：992
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -199,7 +199,7 @@
 | 186 | illustrated-ml | 22 | 0 | 0 | 0 | 0 |
 | 187 | illustrated-server-network | 8 | 0 | 0 | 0 | 0 |
 | 188 | inside-cpp-object-model | 9 | 0 | 0 | 9 | 0 |
-| 189 | introduction-to-algorithms | 39 | 0 | 0 | 39 | 0 |
+| 189 | introduction-to-algorithms | 39 | 0 | 0 | 0 | 0 |
 | 190 | langchain-programming | 13 | 0 | 0 | 0 | 0 |
 | 191 | large-language-models | 16 | 0 | 0 | 16 | 0 |
 | 192 | large-scale-llm-practice | 14 | 0 | 0 | 0 | 0 |
