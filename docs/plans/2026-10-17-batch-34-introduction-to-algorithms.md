@@ -29,6 +29,13 @@
 - 官方视觉证据：`quality/artifacts/visual/introduction-to-algorithms/08-mathematical-background/...`
 - 自定义 headful/GPU 证据：`quality/artifacts/headful/introduction-to-algorithms/batch-34/...`
 
-## 部署前保留项
+## 部署结果
+
+- 首次发布后生产复检发现 22 章仍为 `draft:true`，导致部分深链 404。
+- 已将这 22 章改为 `draft:false`，全书视觉重跑 39/39 PASS，审计 `selectedFailures=0`，提交 `f094277b6` 后重新部署。
+- 复部署 release：`release-20261016T223033Z-f094277b6d0a`。
+- 生产复检：首页、首章、ch19、ch22、appendix-c、appendix-d、复习页、静态资源全部 200 且关键内容命中。
+
+## 部署后保留项
 
 - `this-is-chatgpt` 两个缺 `/learn` 的生产 404 链接仍需热修；当前 `introduction-to-algorithms` 部署门禁使用 `audit-internal-links`，不依赖 `check-links.mjs`，但该缺陷仍是生产问题。
