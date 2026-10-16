@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-10-16T00:29:47.792Z
+> 生成时间：2026-10-16T02:36:32.929Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -14,9 +14,9 @@
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 483 |
-| failed | 1752 |
+| failed | 1746 |
 | queued | 196 |
-| passed | 1766 |
+| passed | 1772 |
 | published | 895 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -13831,11 +13831,11 @@
     - 路径：`content/the-c-programming-language/04-struct-io/unix-interface.mdx`
     - 正式 unit：`kr2-08` explained=6/6
 
-## this-is-chatgpt（24 个内容页面 · failed:6 passed:18 · 🚫 门禁阻断 6 项）
+## this-is-chatgpt（24 个内容页面 · passed:24 · ✅ 书级门禁条件满足）
 
 - 门禁摘要：目录=未登记，manifest=22；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
-- [ ] ❌ P1 **00-learning-map/tcg-official-learning-map** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **00-learning-map/tcg-official-learning-map** — passed；score 100
     - 路径：`content/this-is-chatgpt/00-learning-map/tcg-official-learning-map.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 - [x] ✅ **01-main-essay/tcg-main-01-one-word-at-a-time** — passed；score 96
@@ -13850,7 +13850,7 @@
 - [x] ✅ **01-main-essay/tcg-main-04-human-like-tasks** — passed；score 99
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-04-human-like-tasks.mdx`
     - 正式 unit：`tcg-main-04` explained=1/1
-- [ ] ❌ P1 **01-main-essay/tcg-preface** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **01-main-essay/tcg-preface** — passed；score 99
     - 路径：`content/this-is-chatgpt/01-main-essay/tcg-preface.mdx`
     - 正式 unit：`tcg-preface` explained=1/1
 - [x] ✅ **02-neural-models/tcg-main-05-neural-nets** — passed；score 99
@@ -13895,16 +13895,16 @@
 - [x] ✅ **06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha** — passed；score 96
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha.mdx`
     - 正式 unit：`tcg-wa-01` explained=2/2
-- [ ] ❌ P1 **06-wolfram-alpha/tcg-wa-02-basic-example** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **06-wolfram-alpha/tcg-wa-02-basic-example** — passed；score 99
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-02-basic-example.mdx`
     - 正式 unit：`tcg-wa-02` explained=1/1
-- [ ] ❌ P1 **06-wolfram-alpha/tcg-wa-03-more-examples** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **06-wolfram-alpha/tcg-wa-03-more-examples** — passed；score 99
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-03-more-examples.mdx`
     - 正式 unit：`tcg-wa-03` explained=1/1
-- [ ] ❌ P1 **06-wolfram-alpha/tcg-wa-04-path-forward** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **06-wolfram-alpha/tcg-wa-04-path-forward** — passed；score 99
     - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-04-path-forward.mdx`
     - 正式 unit：`tcg-wa-04` explained=1/1
-- [ ] ❌ P1 **07-final-review/tcg-official-final-review** — failed；score 90；门禁阻断: status=failed、dimensionFailures=ux、hardBlockers=visual-evidence-missing；hardBlockers: visual-evidence-missing；维度缺口: ux
+- [x] ✅ **07-final-review/tcg-official-final-review** — passed；score 97
     - 路径：`content/this-is-chatgpt/07-final-review/tcg-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
