@@ -1,209 +1,263 @@
 ---
-title: "Chapter 32 · String Matching"
-type: C
+title: "Chapter 32 · 字符串匹配"
+type: D
 section: "CLRS4 · 专题"
 order: 32
-description: "按CLRS第四版第32章重建朴素匹配、Rabin-Karp、有限自动机、KMP与后缀数组。"
+description: "从候选窗口、滚动指纹到前缀边界，理解单模式查找与重复查询的算法取舍。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+practiceMode: simulation
+sourceMode: independent-rewrite
+qualityVersion: 2
+officialUnitId: clrs4-32
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter32StringMatchingLab } from "@/components/mdx/introduction-to-algorithms/v2/32-string-matching";
 
-## 从“失配前已经知道了什么”开始
+<Objectives>
 
-先预测：pattern前6个characters都匹配，第7个失配。朴素法把pattern右移一位并从头重比，等于丢掉前6次比较提供的信息。高效string matcher的共同问题是：如何把“已匹配prefix”压成state，用它排除不可能的shifts？
+- 能在给定文本与模式上列出所有匹配起点，并解释朴素法每个对齐位置的比较过程。
+- 能解释 Rabin–Karp 的滚动哈希为何只筛候选，以及 KMP 如何用前缀函数复用已比较信息。
+- 能回答：模式 `aaaa` 在文本 `aaaaaa` 中有哪些起点？KMP 在报告一次命中后为什么不能把状态简单清零？
 
-设$n=|T|$、$m=|P|$。Valid shifts为0到$n-m$；若
+</Objectives>
+
+## 为什么匹配时要记住刚才比较过什么
+
+在一段文本里找短词，最直接的做法是把词贴到每个可能的位置逐字符比较。问题出现在“前面一长段都对，最后才错”：下一次移动时，刚才确认过的字符并没有消失；如果全部重比，就白白丢掉信息。算法设计的关键不是神奇地跳过字符，而是证明哪些候选位置不可能，或把可复用的部分保存下来。
+
+先预测：文本是 `ababcababac`，模式是 `ababac`。从位置 0 开始时，前五个字符相等，第六个失配。下一次可能的起点是每个位置吗？哪些已经比较过的前缀/后缀能帮助我们？先在下面的实验中看真实轨迹，再读各方法的保证。
+
+## 问题合同：什么叫一次匹配
+
+令文本为 $T[0..n)$，模式为 $P[0..m)$。合法起点只有 $0$ 到 $n-m$；若
 
 $$
-P[0\mathinner{\ldotp\ldotp}m)
-=
-T[s\mathinner{\ldotp\ldotp}s+m),
+T[s..s+m)=P[0..m),
 $$
 
-则$s$是occurrence。算法必须明确返回first、any还是all occurrences，以及是否保留overlaps。
+则 $s$ 是一个出现位置。本文讨论报告**所有**出现位置，因此允许重叠：`aaaaaa` 中模式 `aaaa` 出现在 0、1、2。算法返回的是索引；实际 API 还必须说明索引按字节、Unicode 码点还是用户感知字符计数，并统一大小写折叠与规范化规则。若预处理和扫描采用不同的字符表示，即使算法推导正确，位置也可能错误。
 
+空模式的结果取决于接口约定（例如每个边界都算一次或只算一次），实现应显式处理，不能把它交给下面要求 $m>0$ 的循环。模式长于文本时没有合法窗口，应立即返回空结果。
 
-### Contract before complexity
+## 32.1 朴素法：逐个检查对齐
 
-Index按bytes、Unicode code points还是grapheme clusters？Case folding和normalization是否先做？Empty pattern匹配0个、1个还是每个boundary？这些都是API semantics，不是算法细节。若preprocessing与scan使用不同encoding，复杂度再好也会返回错误positions。
-
-## 32.1 The naive string-matching algorithm
-
-枚举所有$n-m+1$ alignments：
+朴素算法依次枚举起点 $s$，从模式首字符开始比较；一旦失配，就尝试 $s+1$。它不需要预处理，容易实现，也是验证优化版本的小输入参照：
 
 ```text
-NAIVE-STRING-MATCHER(T, P)
-1  for s = 0 to n-m
-2      j = 0
-3      while j < m and T[s+j] == P[j]
-4          j = j + 1
-5      if j == m, report shift s
+NAIVE-MATCH(T, P)
+  for s = 0 .. n-m:
+    j = 0
+    while j < m and T[s+j] = P[j]:
+      j = j + 1
+    if j = m: report s
 ```
 
+最坏情况下，每个窗口都先匹配很长的前缀才失败。例如文本全是 `a`，模式是许多 `a` 后接 `b`。窗口数为 $n-m+1$，每个最多比较 $m$ 个字符，时间为 $O((n-m+1)m)$，空间（不计输出）为 $O(1)$。这不是“永远慢”：一次性查找、小模式或已有高度优化的库函数，可能更适合直接扫描而不是支付预处理成本。
 
-Worst case每个shift都匹配很长prefix后才失败，例如repetitive text与pattern，因此time为
+**不要把报告命中当作可以跳过整个模式。**若下一起点增加 $m$，就会漏掉重叠结果；本章所有算法的报告语义都是继续寻找下一个允许重叠的出现。
 
-$$
-\Theta((n-m+1)m).
-$$
+## 32.2 Rabin–Karp：先比较指纹，再核对字符
 
-但naive不是“永远不可用”：small pattern、rare first character、SIMD-optimized library search或one-off input时，低setup cost与simple control flow可能胜过复杂preprocessing。它也应作为small-input correctness oracle。
+<Term def="用多项式滚动指纹筛选文本窗口，并逐字符核验哈希相等候选的精确匹配算法。">
+  Rabin–Karp
+</Term>
+将长度为 $m$ 的窗口当作以基数 $d$ 表示的数，并对大素数 $q$
+取模。模式与当前窗口的哈希不等，就能确定二者不同；哈希相等则只说明“值得核验”，因为不同字符串可能发生碰撞（spurious
+hit）。逐字符复核后，结果仍然精确。
 
-### Overlap handling
-
-报告match后下一shift仍应是$s+1$，除非contract明确只要nonoverlapping results。Pattern `aaa`在text `aaaaa`中有shifts 0、1、2；直接跳$m$会漏掉2个合法occurrences。
-
-## 32.2 The Rabin-Karp algorithm
-
-### Fingerprints and rolling update
-
-把alphabet symbols视作radix-$d$ digits。Pattern hash $p$与shift-$s$ window hash $t_s$ modulo prime $q$：
+记 $h=d^{m-1}\bmod q$。相邻窗口只差一个离开字符和一个进入字符，因此无需从头算哈希：
 
 $$
-p=\sum_{j=0}^{m-1}P[j]d^{m-1-j}\bmod q.
+t_{s+1}=\bigl(d(t_s-T[s]h)+T[s+m]\bigr)\bmod q.
 $$
 
-从$t_s$更新$t_{s+1}$时，减去leaving character的high-place contribution，乘$d$，再加entering character：
+可以把这一步想成数字窗口左移一位：去掉最高位、整体乘基数，再加新末位。实现时需把负余数规范到 $0..q-1$，并让字符到数字的映射与哈希参数一致。
+
+用一个故意很小的参数看清“指纹不等即可排除、相等仍要核验”：令字符映射为 $a\mapsto0,b\mapsto1,c\mapsto2$，基数 $d=3$、模数 $q=5$，在文本 `aabc` 中查找 `bc`。模式指纹为 $(1\cdot3+2)\bmod5=0$；第一个窗口 `aa` 的指纹也是 0，但字符不相等，所以它只是伪命中。窗口从 `aa` 滚到 `ab` 时，$h=3$，新指纹为 $[3(0-0\cdot3)+1]\bmod5=1$；再滚到 `bc` 得 $[3(1-0\cdot3)+2]\bmod5=0$，此时逐字符核验才确认起点 2。这个小模数专为展示碰撞，不能据此推断实际参数的碰撞率；精确性来自候选核验。
+
+若出现 $r$ 次指纹相等，逐个核验最多额外花 $O(rm)$；滚动扫描本身为 $O(n)$。因此最坏情况仍可达 $O(nm)$，期望表现取决于基数/模数选择、输入分布与随机化假设，不能把“哈希相等”误当作证明。该方法在同时搜索多个等长模式时尤其有用：文本窗口的滚动指纹可以共享，再按模式指纹分组核验。
+
+## 32.3 有限自动机：把已读前缀压成状态
+
+对固定模式 $P$，<Term def="把模式匹配进度编码成状态，并按输入字符转移的预计算状态机。">有限自动机</Term> 的状态 $q\in\{0,\ldots,m\}$ 表示：到目前为止读过的文本中，**最长的、同时也是模式前缀的后缀**长度是 $q$。读入字符 $a$ 后，状态转移为
 
 $$
-t_{s+1}
-=
-\bigl(d(t_s-T[s]h)+T[s+m]\bigr)\bmod q,
-\qquad
-h=d^{m-1}\bmod q.
+\delta(q,a)=\max\{k: P[0..k)\text{ 是 }P[0..q)a\text{ 的后缀}
+\}.
 $$
 
+状态的含义是不变量：它只保留继续匹配所需的信息。预先建好转移表后，每个文本字符只需一次查表，扫描耗时 $O(n)$；代价是转移表可能需要 $O(m|\Sigma|)$ 空间，且构造表本身并非免费。字母表很大或模式只用一次时，密集表可能不划算。
 
-```ts
-for (let s = 0; s <= text.length - pattern.length; s += 1) {
-  if (windowHash === patternHash &&
-      text.slice(s, s + pattern.length) === pattern) {
-    matches.push(s);
-  }
-  windowHash = roll(windowHash, text[s], text[s + pattern.length]);
-}
-```
+到达状态 $m$ 就报告以当前字符结尾的匹配。之后的转移仍须保留模式的边界（同时为前缀和后缀的部分），才能接住重叠命中；直接回到 0 并不总正确。
 
-Hash mismatch可安全排除shift；hash equality只产生candidate。Character verification把algorithm变成Las Vegas-style exact matcher：collisions增加time，不改变answer。
+## 32.4 <Term def="Knuth–Morris–Pratt 的缩写；借助模式前缀函数在线性时间内完成精确匹配。">KMP</Term>：沿边界链回退，不让文本倒退
 
+<Term def="一个串同时作为某个串的真前缀和后缀时，它就是这个串的边界。">
+  边界
+</Term>
+给出失配后仍可能成立的候选。对模式前缀 $P[0..q]$，
+<Term def="pi[q] 是 P[0..q] 的最长真前缀、同时也是后缀的长度。">
+  前缀函数 $\pi[q]$
+</Term>
+记录最长边界长度。若已有 $q$ 个字符匹配、下一字符失配，原来的 $q$
+个字符不必重读：最长边界之后的候选由 $\pi[q-1]$ 给出，再沿同一链继续回退。
 
-Worst case若每个window都collide并触发$m$ comparisons，仍为$\Theta(nm)$。Expected bound依赖random modulus/base或hash assumption；固定small modulus面对adversarial input没有“碰撞很少”的保证。Multiple patterns of equal length可共享text rolling hashes，这是Rabin–Karp的实际优势之一。
-
-
-## 32.3 String matching with finite automata
-
-### Prefix state
-
-states为$0,\ldots,m$。State $q$表示processed text prefix的suffix中，最长与$P[0\mathinner{\ldotp\ldotp}q)$相等者长度为$q$。
-
-
-Transition function
-
-$$
-\delta(q,a)
-=
-\max\{k:P[0\mathinner{\ldotp\ldotp}k)
-\text{ is a suffix of }
-P[0\mathinner{\ldotp\ldotp}q)a\}.
-$$
-
+以模式 `ababaca` 为例，前缀函数是 `[0, 0, 1, 2, 3, 0, 1]`。其中 `ababa` 的最长真前后缀是 `aba`，长度 3。若它之后失配，KMP 保留这 3 个字符代表的匹配状态，而不是把文本指针退回去重新比较。
 
 ```text
-FINITE-AUTOMATON-MATCHER(T, delta, m)
-1  q = 0
-2  for i = 0 to n-1
-3      q = delta[q, T[i]]
-4      if q == m, report i-m+1
+COMPUTE-PI(P)
+  pi[0] = 0; k = 0
+  for q = 1 .. m-1:
+    while k > 0 and P[k] != P[q]: k = pi[k-1]
+    if P[k] = P[q]: k = k + 1
+    pi[q] = k
+
+KMP(T, P, pi)
+  q = 0
+  for i = 0 .. n-1:
+    while q > 0 and P[q] != T[i]: q = pi[q-1]
+    if P[q] = T[i]: q = q + 1
+    if q = m:
+      report i-m+1
+      q = pi[m-1]
 ```
 
-Precomputed table后scan为$\Theta(n)$，每character一个lookup。Naive transition construction可能对每$(q,a)$测试多个prefix，cost较高；alphabet大时完整$(m+1)|\Sigma|$ table也浪费space。Sparse transitions、failure links或KMP prefix function在不同reuse pattern下更合适。
+前缀函数预处理耗时 $O(m)$，扫描耗时 $O(n)$，总时间 $O(n+m)$，额外空间 $O(m)$。内层 `while` 虽然嵌套，但每读入一个文本字符，状态至多增加一次；每次回退都让状态严格变小，因此整个过程中增加与回退的总次数都是线性的。
 
-Correctness invariant是state始终等于processed text的longest pattern-prefix suffix。Accept state到达$m$时，当前text position结束了一个occurrence；下一character transition也必须允许overlap，而不是清零所有state。
+命中后令 $q=\pi[m-1]$，保留模式的最长边界。这既让文本指针继续前进，也让下一次扫描接续可能重叠的匹配。实验里的“命中后清零”是有意注入的错误：它可能看似正常，却会在 `aaaaaa` / `aaaa` 上漏报位置 1 和 2。
 
-## 32.4 The Knuth-Morris-Pratt algorithm
+<Clrs4Chapter32StringMatchingLab />
 
-### Prefix function
+## 32.5 如何选择：复用的是模式，还是文本
 
-（KMP）不存完整alphabet table。Prefix function $\pi[q]$是$P[0\mathinner{\ldotp\ldotp}q]$的longest proper prefix，同时也是suffix的长度。
+| 使用情形                           | 合适的起点 | 需要记住的成本                               |
+| ---------------------------------- | ---------- | -------------------------------------------- |
+| 一次性、小输入                     | 朴素法     | 无预处理，最坏可能重复比较大量字符           |
+| 一个模式扫描一个或多个文本         | KMP        | $O(m)$ 模式预处理，扫描 $O(n)$，确定性线性界 |
+| 多个等长模式扫描同一文本           | Rabin–Karp | 共享窗口哈希；候选仍须验证，最坏可退化       |
+| 模式固定、反复扫描文本且字母表可控 | 有限自动机 | 扫描快，但转移表空间/预处理可能大            |
+| 文本固定、反复查询许多模式         | 后缀数组   | 预处理文本索引；单次查询需二分比较并报告结果 |
 
+本章以朴素法、Rabin–Karp、有限自动机和 KMP 为核心的在线匹配器。后缀数组代表相反的复用方向：对固定文本，把所有后缀按字典序排列，形成<Term def="按文本各个后缀的字典序保存其起点的索引结构。">后缀数组</Term>。以模式为前缀的后缀在排序结果中形成连续区间，可通过二分搜索定位；若每次比较最多读 $m$ 个字符，基本查询代价为 $O(m\log n)$，输出 $k$ 个位置还需 $O(k)$。构建后缀数组与 LCP 等增强结构属于索引成本，适合多次查询摊销，不应和单次扫描混为一谈。
 
-```text
-COMPUTE-PREFIX-FUNCTION(P)
-1  pi[0] = 0; k = 0
-2  for q = 1 to m-1
-3      while k > 0 and P[k] != P[q]
-4          k = pi[k-1]
-5      if P[k] == P[q], k = k + 1
-6      pi[q] = k
-```
+## 容易踩的坑
 
-当mismatch发生，已经匹配的prefix中只有它的borders可能继续成为new alignment prefix；KMP沿$\pi$ chain回退，而text index不回退。
+<Callout type="trap" title="把指纹相等当成匹配">
 
+现象：Rabin–Karp 一发现哈希相等就返回位置。原因：哈希是压缩表示，不同窗口可能映到同一余数。修法：每个候选都逐字符核验；碰撞只能增加工作，不能改变精确答案。
 
-```text
-KMP-MATCHER(T, P, pi)
-1  q = 0
-2  for i = 0 to n-1
-3      while q > 0 and P[q] != T[i]
-4          q = pi[q-1]
-5      if P[q] == T[i], q = q + 1
-6      if q == m
-7          report i-m+1
-8          q = pi[m-1]
-```
+</Callout>
 
+<Callout type="trap" title="KMP 失配时移动了文本指针">
 
-### Why fallback is linear
+现象：失配后回退 `i`，甚至重新扫描刚读过的文本。原因：把朴素法的对齐循环照搬到 KMP。修法：文本指针只向前；按 `pi[q-1]` 缩短模式状态，直到可继续或回到 0。
 
-Inner `while`看似nested loop，但potential $q$每次successful comparison最多增加1，每次fallback严格降低。整个scan中总increases为$O(n)$，总decreases也为$O(n)$，所以matching time $\Theta(n)$；prefix preprocessing同理为$\Theta(m)$。
+</Callout>
 
-Match后设$q=\pi[m-1]$保留longest border，正是overlapping occurrences所需。设$q=0$可能仍正确找某些nonoverlap inputs，却会漏掉self-overlapping pattern。
+<Callout type="trap" title="命中后清零，丢掉重叠结果">
 
+现象：在 `aaaaaa` 中搜索 `aaaa` 只报出起点 0。原因：报告命中后丢弃了仍是模式前缀的已读后缀。修法：恢复到 `pi[m-1]`，并用周期性模式测试边界情况。
 
-## 32.5 Suffix arrays
-
-### Indexing the text
-
-预处理text而非pattern。若$SA[r]=i$，则rank $r$处suffix为$T[i\mathinner{\ldotp\ldotp}n)$。
-
-
-Naive construction显式materialize并sort所有suffix，可能用quadratic characters。Prefix-doubling construction先按1-character ranks排序，再反复按length $2^k$ prefix rank pairs排序，直到ranks唯一；典型comparison/counting-sort variants给$O(n\log n)$级construction，专门算法还能线性构建。
-
-```text
-PREFIX-DOUBLING-SUFFIX-ARRAY(T)
-1  rank suffixes by their first character
-2  for width = 1, 2, 4, ... while width < n
-3      sort each suffix i by pair (rank[i], rank[i+width])
-4      compress equal pairs into new integer ranks
-5  return suffix starts sorted by final rank
-```
-
-### Pattern query as an interval
-
-所有以pattern $P$开头的suffix在lexicographic order中形成contiguous interval。用two binary searches找lower/upper boundaries，interval中的SA values就是occurrence positions。
-
-
-Basic query每次binary-search comparison最多读$m$ characters，cost $O(m\log n)$；利用known matched prefixes或LCP data可避免重复比较，把query推进到$O(m+\log n)$形式。Output all $k$ positions还需要$\Theta(k)$。
-
-### LCP array
-
-LCP array保存adjacent sorted suffixes的longest common prefix lengths：
-
-
-它支持longest repeated substring、accelerated search与range-minimum-based suffix LCP queries。LCP必须与同一suffix array和同一sentinel/encoding构建；若text normalization后只更新SA不更新LCP，index内部会不一致。
-
-## 选择matcher与验收
-
-One pattern/one text常用KMP或verified Rabin–Karp；pattern固定并扫描许多texts，可预建automaton；text固定且有许多pattern queries，suffix array把preprocessing成本摊到queries上。Algorithm name不应先于reuse direction。
-
+</Callout>
 
 ## 小结
 
-Chapter 32 String Matching从naive string-matching algorithm建立shift语义。Rabin–Karp algorithm用rolling fingerprints快速筛候选但必须处理spurious hits；finite automata把longest matched prefix变成state；Knuth–Morris–Pratt用prefix function压缩failure transitions，实现linear preprocessing与scan。
+- 匹配先定义索引、空模式和重叠语义，再讨论复杂度。
+- 朴素法枚举全部对齐；重复长前缀比较会使最坏时间达到 $O(nm)$。
+- Rabin–Karp 用滚动哈希排除窗口，但哈希相等后仍须核验。
+- KMP 用前缀函数保留边界；预处理与扫描分别为 $O(m)$、$O(n)$。
+- 固定模式与固定文本是不同的复用方向；后缀数组服务重复文本查询。
 
-Suffix arrays反转复用方向：预处理text的所有suffix lexicographic order，用binary-search interval回答许多pattern queries，并以LCP减少重复prefix work。五种方法的共同正确性核心是保留恰好足够的prefix/suffix信息，同时明确index、overlap、empty pattern与encoding contract。
+## 练习
 
+<Exercises>
 
+1. 文本 `aaaaaa`、模式 `aaaa`：列出全部起点。若 KMP 命中后把状态清零，会漏掉哪些结果？
+
+<Answer>
+  全部起点为 0、1、2。模式的最长边界长度为 3；命中后清零会漏掉 1、2，恢复到状态
+  3 则可继续找到它们。
+</Answer>
+
+2. 模式 `ababaca` 的前缀函数为 `[0,0,1,2,3,0,1]`。扫描时已匹配 `ababa`，下一字符与模式中 `c` 不同。KMP 下一候选状态是多少？为什么不必回到 0？
+
+<Answer>
+  回到长度 3，因为 `ababa` 的最长真前后缀是
+  `aba`。这段后缀已在文本中读过，仍与模式开头一致；文本指针无需后退。
+</Answer>
+
+3. 选择一种方法并说明理由：只查一次短模式；同一个模式反复扫描许多文本；同一文本上查询大量模式。
+
+<Answer>
+  一次短模式可从朴素扫描开始以免预处理；同一模式反复扫描可预处理
+  KMP（若字母表小且模式固定，也可考虑自动机）；固定文本的许多查询可建立后缀索引。若是许多等长模式共享一次文本扫描，可考虑
+  Rabin–Karp 指纹筛选并核验候选。
+</Answer>
+
+4. 动手题：在实验中选择 `P = aaaa`，先预测关闭故障时的命中数，再打开“命中后清零”。预设文本为 `aaaaaabaaaaaa`；分别写出正确命中起点、故障下命中起点和漏报位置，重置后解释 `pi[m-1]` 保住了什么。
+
+<Answer>
+  正确起点为 0、1、2、7、8、9。清零故障下只报告 0 和 7，漏掉
+  1、2、8、9：两段连续的 `a` 各有三个长度为 4
+  的重叠窗口，但第一次命中后清零会丢掉后缀 `aaa`。对
+  `aaaa`，$\pi[m-1]=3$；恢复到 3
+  表示末尾三个已读字符仍是模式前缀，下一字符可以继续验证下一个重叠窗口。
+</Answer>
+
+</Exercises>
+
+## 资料与范围核对
+
+本章范围按 CLRS 第四版目录核对：第 32 章列出朴素匹配、Rabin–Karp、有限自动机、Knuth–Morris–Pratt 与后缀数组；因此这里不把 Boyer–Moore 当作本章内容。算法性质另参阅原始论文：Knuth、Morris 与 Pratt 对线性时间模式匹配的论述，以及 Karp 与 Rabin 对随机化指纹匹配的研究。目录只负责界定章节单元，论文作为算法事实的核查入口；正文为独立教学重写。
+
+- [CLRS 第四版官方目录（第 32 章及各节）](https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf)
+- [Knuth、Morris、Pratt：Fast Pattern Matching in Strings，SIAM Journal on Computing](https://doi.org/10.1137/0206024)
+- [Karp、Rabin：Efficient Randomized Pattern-Matching Algorithms，IBM Journal of Research and Development](https://ieeexplore.ieee.org/document/5390135)
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="边界">
+  一个串同时出现在某个串的开头和结尾，且不是整个串本身。
+</GlossaryItem>
+<GlossaryItem term="Rabin–Karp">
+  用滚动哈希筛选窗口、再检查候选字符的精确字符串匹配算法。
+</GlossaryItem>
+<GlossaryItem term="有限自动机">
+  把已读字符压成状态，并用转移表更新匹配进度的状态机。
+</GlossaryItem>
+<GlossaryItem term="KMP">
+  Knuth–Morris–Pratt 字符串匹配算法，用前缀函数避免回退文本位置。
+</GlossaryItem>
+<GlossaryItem term="后缀数组">
+  按文本所有后缀的字典序排列后缀起点，用于复用固定文本并回答多次模式查询。
+</GlossaryItem>
+<GlossaryItem term="前缀函数">
+  对模式每个前缀，记录其最长真前缀且为后缀的长度；KMP 用它安排失配后的候选状态。
+</GlossaryItem>
+<GlossaryItem term="滚动哈希">
+  从一个窗口的哈希用常数次算术更新到相邻窗口哈希的技巧。
+</GlossaryItem>
+<GlossaryItem term="伪命中">
+  哈希相等但实际字符串不同的候选；需要精确比较排除。
+</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 32: String Matching"
+  }
+  adaptedUrl={frontmatter.sourceUrl}
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

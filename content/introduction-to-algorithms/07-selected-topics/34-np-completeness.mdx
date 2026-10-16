@@ -1,222 +1,294 @@
 ---
 title: "Chapter 34 · NP-Completeness"
-type: C
+type: B
 section: "CLRS4 · 专题"
 order: 34
-description: "按CLRS第四版第34章重建多项式时间、验证、归约、NP完全性证明与经典NP完全问题。"
+description: "按 CLRS 第四版第 34 章重建多项式时间、多项式时间验证、归约、NP 完全性证明方法与经典 NP 完全问题。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-34
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter34NpCompletenessLab } from "@/components/mdx/introduction-to-algorithms/v2/34-np-completeness";
 
-## 从“答案难找，为什么却容易检查”开始
+{/* 可视化决策：证书与验证器=6 城道路图+声称顶点序列 chips+三段路径着色（绿过/红败/黄跳过）+三项检查清单面板（Stage1）；验证vs搜索=判定读数卡片+720 排列 vs 6 步对照条（Stage2）；归约方向=A盒→f箭头→B盒方向图，故障时箭头反置标红（Stage3）；故障注入=漏查闭合边（假证书被放行）+归约方向画反。组件=clrs4-34-np-completeness-lab.tsx（Clrs4Chapter34NpCompletenessLab），概念异构度高→本章独立组件。知识点：决策问题(公式)、多项式时间(公式+误区)、证书与验证器(Stage0/1)、NP(公式)、多项式时间归约(Stage3+公式)、NP完全(公式+误区)、经典问题清单(正文)，进名词解释：决策问题/多项式时间/证书/多项式时间归约/NP完全。 */}
 
-先预测：给定一个大型图，直接找到Hamiltonian cycle可能要搜索大量排列；但如果有人提交一条cycle，只需检查每个vertex是否恰好出现一次、相邻vertex是否有edge、末尾是否回到起点。这里的关键差别不是“人聪不聪明”，而是**从零求解**与**给定certificate后验证**是两个不同计算任务。
+<Objectives>
 
-研究这条差别能否被普遍消除。我们知道$P\subseteq NP$，但截至目前没有证明$P=NP$，也没有证明$P\ne NP$。因此本章的目标不是宣称某个problem“绝对没有fast algorithm”，而是建立条件性结论：若任一NP-complete problem有polynomial-time algorithm，则所有NP problems都有。
+- 能解释"求解难、验证易"的差别如何用证书与验证器形式化，并说明 P 与 NP 的包含关系以及 P versus NP 至今未解决。
+- 能判断一段归约书写的方向是否正确（A≤ₚB 表示 B 至少和 A 一样难），并列出 NP-completeness 证明必须同时交付的两个义务。
+- 自测：对一张 6 顶点图和序列 0-1-2-3-5-4，能手算验证器三项检查并给出接受/拒绝；再回答"给出从 B 到 SAT 的归约，能否证明 B 是 NP-hard？"
 
-复杂度讨论必须先固定problem、input encoding、input length、computation model和decision question。省略其中任何一项，都可能把数值大小当成输入长度，或把optimization output与decision language混在一起。
+</Objectives>
 
-## 34.1 Polynomial time
+## 直觉：查地图与验地图
 
-### Decision problems and languages
+先预测：给你一张地图，要求找出一条恰好经过每座城市一次、最后回到起点的路线——和你拿着别人画好的一条路线逐段核对，哪件事更费事？两者看似都在解决同一个问题，工作量却可能差出几百倍。
 
-Complexity class通常以decision problem定义：每个instance只回答yes或no。Optimization problem可通过bound转成decision version，例如TSP optimization问minimum tour cost，TSP decision问“是否存在cost至多$B$的tour”。
+差别不在聪不聪明，而在任务本身：从零找路线，最坏情况下要把所有排法都试一遍；而核对一条路线，只需拿着图一段段问"这两城之间有路吗"。一个负责"找到答案"，一个负责"验证答案"，后者通常便宜得多。
 
+本章研究的就是这条差别能不能被普遍消除：哪些问题的"验证"可以很快完成、它们的"求解"是否也同样快；以及如何证明一个新问题和某个已知难题"一样难"——靠的是一张方向绝对不能画反的箭头图。没有这套语言，面对一个死活做不快的问题，你既说不出它为什么难，也说不出该换什么策略。
 
-把instance编码成binary string后，decision problem可视为language $L\subseteq\{0,1\}^*$；algorithm accepts属于$L$的strings，rejects不属于$L$的strings。Encoding必须reasonable：不同常见encoding之间能在polynomial time互相转换，复杂度分类才不会依赖排版细节。
+## 权威目录定位
 
-类$P$包含可由deterministic algorithm在polynomial time内决定的languages：
+本章按 CLRS 第四版第 34 章的官方目录限定范围：多项式时间（polynomial time）、多项式时间验证（polynomial-time verification）、NP 完全性与可归约性（NP-completeness and reducibility）、NP 完全性证明（NP-completeness proofs）、NP 完全问题（NP-complete problems）。本章来源访问级别为 outline-only（仅官方目录），写作方式是以权威目录限定范围、以公开学术资料核对事实、不复现原书正文；所有示例数值、图和代码均为独立重写，实验结论由本章自带 oracle 复核。
+
+## 决策问题：只回答是或否
+
+<Term def="只要求对每个输入回答“是”或“否”的问题；优化问题可通过对目标值设一个阈值，改写成等价的决策版本。">
+  决策问题
+</Term>
+（decision
+problem）把讨论收窄到最简单的问答形态：每个输入要么属于这个问题、要么不属于。很多实际问题天然是优化形态——"最短路线多少钱？"——但可以改写："是否存在一条总费用不超过
+B
+的路线？"若可行解代价是整数、最优值的二进制位数有多项式上界，并且阈值版能在多项式时间判定，就可用二分搜索在多项式次查询内确定最优值；要恢复一份具体最优解，通常还需逐步固定选择并继续调用判定器（自归约）。因此复杂度理论常以决策语言定义
+P、NP 与 NP-complete，但“判定最优值”和“输出最优解”仍须区分。
+
+把输入编码成二进制串后，一个决策问题就是一个语言 L：所有"答案为是"的串构成的集合。求解算法读入串 x，输出 x 是否属于 L。这里有一个容易忽略的纪律：复杂度一律按**编码后的长度** n 计量，而不是按输入里某个整数的数值计量。整数 N 的二进制编码只有约 log₂N 位；一个跑 N 步的程序，相对于编码长度是指数级的。第五节实验里的验证器严格按"查表次数"计数，就是在守这条纪律。
+
+## 多项式时间：稳定的可解边界
+
+<Term def="运行步数不超过输入规模某个固定次幂（n^k，k 与输入无关）的算法；这里的输入规模指编码后的二进制长度。">
+  多项式时间
+</Term>
+（polynomial time）是"高效可解"的理论边界。选它不是因为每个多项式算法都快——n¹⁰⁰
+并不实用——而是因为它对组合运算稳健：两段多项式程序首尾相接仍是多项式；多项式次调用多项式子程序仍是多项式；常见计算模型互相模拟也只需多项式开销。这个边界在"复合"和"换机器"这两件事上都不容易失真，所以适合做分类的锚点。
+
+与之相对的是 pseudo-polynomial（拟多项式）算法：它按输入中数值的大小跑多项式，却可能按编码长度跑指数。背包问题的经典动态规划以目标值为表宽，就是拟多项式——它不能作为"该问题已落入 P"的证据，除非输入改用一元编码。判断一个算法到底是不是多项式，永远先问"输入规模按位算有多大"。
+
+## 证书与验证器：NP 的工作定义
+
+<Term def="能被快速核验的“答案证据”：yes-实例存在长度不超过输入多项式的串 y，验证器可在多项式时间内确认它。">
+  证书
+</Term>
+（certificate，也称
+witness）就是那张"别人画好的路线"。现在形式化直觉引入里"验地图"的那一侧：验证器
+V 是一个确定性的多项式时间程序，它同时拿到输入 x 和证书 y，输出 1（认可）或
+0（不认可）。一个语言属于 NP，当且仅当存在一个多项式 p 和这样的 V，使得：x 属于
+L 时，至少存在一个长度 ≤ p(|x|) 的证书让 V 输出 1；x 不属于 L 时，任何 y 都让 V
+输出 0。
+
+注意两个不对称。其一，NP 只要求 yes-实例存在证书，不要求有人能快速找到它——找到是求解者的负担，验证器只负责核验。其二，no-实例不需要这类证书；co-NP 讨论的是"no 也有短证书"的语言类，它与 NP 是否相等同样未解决。NP 里的 N 来自一种"先猜证书再验证"的抽象计算模型，它既不是"非多项式"，也不是"随机"。
+
+若一个问题本身就在 P 里，验证器可以干脆忽略证书、直接运行那个多项式求解算法，所以 P 是 NP 的子集。反方向——每个能快速验证的问题是否也能快速求解——正是 P versus NP 问题，至今悬而未决。第五节实验把这一切落到了一张 6 顶点的图上：两张声称的证书、三项检查、一个判定读数。
+
+## 数学：P、NP 与归约的精确定义
+
+本节符号：x 为编码后的输入串，n = |x| 为其二进制长度；L 为语言（决策问题）；y 为证书；p 为多项式界；V 为验证器；f 为归约映射；A、B 为两个决策问题；TIME(nᵏ) 为 O(nᵏ) 步内可判定的语言类。
+
+P 类的定义是所有多项式时间界的并集：
 
 $$
-P
-=
-\bigcup_{k\ge 1}
-\operatorname{TIME}(n^k).
+P=\bigcup_{k\ge 1}\operatorname{TIME}(n^k).
 $$
 
-这里$n=|x|$是encoded length，不是input中某个integer的数值。Integer $N$的binary encoding只有$\Theta(\log N)$ bits；一个运行$N$ steps的algorithm相对于bit length可能是exponential。
+这个式子在说：只要存在一个固定的幂 k，让某台确定型机器在 nᵏ 步内判定 L，L 就属于 P——k 不能随输入变化，n 永远是编码长度而不是数值大小。
 
-
-```text
-DECISION-ALGORITHM(instance x)
-1  parse and validate the declared encoding
-2  compute a yes/no predicate on x
-3  accept exactly when x belongs to language L
-4  report work as a function of encoded length |x|
-```
-
-### Why polynomial is the boundary
-
-Polynomial bounds具有三项工程上有用的closure。第一，两个polynomial-time procedures顺序执行仍是polynomial。第二，polynomial次调用polynomial subroutine仍是polynomial。第三，常见deterministic machine models之间的simulation通常只产生polynomial overhead。它不是“所有polynomial都快”的承诺，$n^{100}$并不实用；它是一条对composition与encoding较稳健的理论边界。
-
-
-Pseudo-polynomial algorithm按numeric value多项式运行，却可能按encoding length指数运行。Subset sum的某些dynamic programming算法用target value作为table width，必须明确称为pseudo-polynomial，不能据此把一般binary-encoded decision problem放入$P$。
-
-## 34.2 Polynomial-time verification
-
-### Certificates and verifiers
-
-把NP定义为可验证yes-certificates的languages。存在polynomial $p$和polynomial-time verifier $V$，使得
+NP 类用证书存在量词定义：
 
 $$
 x\in L
-\quad\Longleftrightarrow\quad
-\exists y,\ |y|\le p(|x|)
-\text{ 且 }V(x,y)=1.
+\ \Longleftrightarrow\
+\exists\,y\ \bigl(|y|\le p(|x|)\ \wedge\ V(x,y)=1\bigr).
 $$
 
-$y$是certificate或witness。等价定义使用nondeterministic polynomial-time machine；certificate view更适合设计和审计proof。
+这个式子在说：x 是 yes-实例，等价于"存在一张个头不超过输入多项式的证书，能被验证器认可"；是 no-实例时，所有证书都过不了验证器。
 
+归约是本章第二个核心定义。
 
-Hamiltonian-cycle certificate是vertex ordering。Verifier检查length、每个vertex唯一出现、每对consecutive vertices有edge并包含closing edge。用adjacency matrix时可在$O(|V|^2)$内完成，certificate本身也只有polynomial length。
+<Term def="A≤ₚB：存在多项式时间可计算的函数 f，使 x∈A 当且仅当 f(x)∈B；含义是“若 B 能快速求解，则 A 也能”。">
+  多项式时间归约
+</Term>
+（polynomial-time reduction，记作 A≤ₚB）写作：
 
+$$
+x\in A\ \Longleftrightarrow\ f(x)\in B.
+$$
 
-```text
-VERIFY-HAMILTONIAN-CYCLE(G, order)
-1  reject unless order contains exactly |V| vertex labels
-2  reject unless every vertex of G appears exactly once
-3  for i = 1 to |V| - 1
-4      reject unless (order[i], order[i + 1]) is an edge
-5  reject unless (order[|V|], order[1]) is an edge
-6  accept
+这个式子在说：把 A 的任意输入 x 用多项式时间翻译成 B 的一个输入 f(x)，使得答案完全保持——x 是 yes 当且仅当 f(x) 是 yes。于是 B 的任何高效求解器立刻成为 A 的高效求解器：先算 f(x)，再交给它。
+
+由此得到 <Term def="同时满足“属于 NP”（有短证书可快速验证）和“NP 里所有语言都能多项式归约到它”（至少和任何 NP 问题一样难）的问题。">NP完全</Term> 的定义：
+
+$$
+B\text{ 是 NP-complete}
+\ \Longleftrightarrow\
+B\in NP\ \wedge\ \forall L\in NP,\ L\le_p B.
+$$
+
+这个式子在说：一个问题是 NP 完全的，要同时满足两条——它自己在 NP 里（有短证书可验），并且 NP 里所有语言都能归约到它（它至少和任何 NP 问题一样难）。只满足后者的问题叫 <Term def="所有 NP 问题都能多项式归约到它；它不必自身属于 NP。">NP-hard</Term>：优化版本、甚至不可判定问题都可能是 NP-hard，但它们不是决策语言，谈不上"属于 NP"。两条混淆是常见误区，见后面"常见误区"。
+
+## 经典问题与归约工具箱
+
+Cook–Levin 定理给出这条工具链的根：布尔可满足性问题 SAT 是 NP-complete。之后每一条箭头都必须是一个保持 yes/no 答案的多项式时间映射；归约的传递性允许把链首的 NP-hardness 逐段传到链尾。代表性链条是 SAT → 3-CNF-SAT → CLIQUE → VERTEX-COVER → HAMILTONIAN-CYCLE → TSP。这里不展开 gadget 的完整证明，但要知道每条箭头各自需要证明什么，不能仅凭“它们看起来相似”就跳过。
+
+其中 CLIQUE 到 VERTEX-COVER 可写得精确些：CLIQUE(G,k) 等价于 COMPLEMENT-INDEPENDENT-SET(补图 Ḡ,k)，再等价于 VERTEX-COVER(Ḡ, |V|−k)；因为集合 S 是独立集，当且仅当 V\S 是顶点覆盖。Hamiltonian-cycle 到 TSP 决策版可给原图边成本 1、非边成本 |V|+1，并设界 B=|V|：成本不超过 |V| 的巡回恰好只能使用原图边。
+
+选源问题的原则是结构贴近：源越贴近目标，构造零件（gadget）越少、双向等价越容易证明。实验第四步把“难度沿箭头传染”的方向画出来，并演示方向画反的错误。
+
+这些经典问题为什么属于 NP，可以直接检查各自的 yes-证书：
+
+| 决策问题                                              | yes-证书     | 多项式验证内容                                               |
+| ----------------------------------------------------- | ------------ | ------------------------------------------------------------ |
+| CLIQUE：图中是否有至少 k 个两两相邻的顶点？           | k 个顶点     | 检查顶点互异，并检查每一对之间都有边，至多检查 k(k−1)/2 对。 |
+| VERTEX-COVER：是否存在大小至多 k 的顶点覆盖？         | 顶点集合 C   | 检查\|C\| ≤ k，并逐边确认至少一个端点在 C 中。               |
+| HAMILTONIAN-CYCLE：是否有经过每个顶点恰好一次的回路？ | 顶点序列     | 检查长度、互异性、每段边及最后回到起点的边。                 |
+| TSP（决策版）：是否有总成本至多 B 的巡回？            | 一个巡回顺序 | 检查每个城市恰好一次，累加巡回边成本并与 B 比较。            |
+
+证书长度都被输入图/矩阵的规模多项式界定；验证器只做有限次查表、比较和加法。对于 TSP，成本采用二进制编码时，成本和的位数也至多比输入中的成本位数多 O(log n)，所以这些算术操作仍是输入长度的多项式时间。这个表说明的是这些决策问题在 NP 中；NP 完全还要另证 NP-hard，不能从“证书好验”直接推出。
+
+也要说清 NP-complete 标签**不**意味着什么：它是针对最坏情形、渐进意义的分类，不表示每个具体实例都难，更不禁止特判、参数化算法、近似算法、随机化或启发式在实际规模上奏效。它要求的是：在 P versus NP 解决之前，不要指望存在一个对所有实例都已证明的一般多项式精确求解器。
+
+## 交互实验：验证器审计台
+
+先预测：在下面的实验里把证书换成 B（0-1-2-3-5-4），推进到判定步，验证器会输出什么？再注入"漏查闭合边"故障重看一遍，读数变了吗、错在哪？把你的预测写在纸上再核对。
+
+<Clrs4Chapter34NpCompletenessLab />
+
+## 代码对照：一个诚实的验证器
+
+第五节实验背后的 oracle 可以写成二十行以内的结构化代码。注意第 10 行的绕回 `(i + 1) % n`：它就是被"漏查闭合边"故障删掉的那一行——删掉它，验证器对末位回到起点这一段不查表，假证书立刻漏网。
+
+```ts
+function verifyCycle(
+  edges: Set<string>, // 无向边集，规范序 "u-v"（u < v）
+  order: number[], // 声称的顶点序列（证书）
+  n: number, // 顶点总数
+): boolean {
+  if (order.length !== n) return false; // 检查①长度
+  if (new Set(order).size !== n) return false; // 检查①唯一
+  for (let i = 0; i < n; i++) {
+    // 检查②+③
+    const u = order[i];
+    const v = order[(i + 1) % n]; // 末位绕回起点
+    if (!edges.has(u < v ? `${u}-${v}` : `${v}-${u}`)) return false;
+  }
+  return true;
+}
 ```
 
-Membership in NP只要求yes-instance至少存在一个short certificate；它不要求algorithm能快速找到certificate，也不要求no-instance有同类certificate。后者与co-NP有关，但“尚不知道一个problem是否在co-NP”不能被写成“不在co-NP”。
+这段代码还体现一个工程纪律：验证器返回布尔判定，不返回"confidence"。NP 的数学定义里，验证器对每个证书必须给出确定的 0/1；把概率或分数混进判定，就不再是同一个概念。
 
-### P is contained in NP
+## 常见误区
 
-若$L\in P$，verifier可忽略certificate，直接运行polynomial decision algorithm，所以$P\subseteq NP$。反方向是否成立正是$P$ versus $NP$问题。NP名称中的nondeterministic不是“non-polynomial”，也不是“randomized”；它描述一种可以guess certificate再验证的abstract computation。
+<Callout type="trap">
+  **现象**：声称"证明"了新问题 B 很难，给出的却是从 B 到 SAT
+  的归约。原因：难度只沿归约箭头正向传染——B≤ₚSAT 说的是"B 不比 SAT
+  难"，方向反了什么都证明不了。修法：从已知 NP-complete 的 A 构造
+  A≤ₚB，并同时交付映射的多项式时间界与双向等价证明；第五节实验第四步的故障开关演示的就是这个错误。
+</Callout>
 
+<Callout type="trap">
+  **现象**：把 NP 读成"非多项式"或"随机多项式"，进而以为"NP 完全 =
+  绝对没有快算法"。原因：NP 的 N
+  来自"先猜后验"的非确定型计算模型，与随机无关；NP-complete
+  是条件性结论——若有一个 NP-complete 问题落入 P，则 P=NP，所有 NP
+  问题全部有高效算法。修法：引用 NP-complete 结论时永远带上"除非 P=NP"的前提。
+</Callout>
 
-## 34.3 NP-completeness and reducibility
+<Callout type="trap">
+  **现象**：看到按数值跑得很快的动态规划，就宣称对应判定问题"已是多项式时间"。原因：复杂度按编码长度
+  n 计量，数值 N 只占 log₂N 位；以 N 为表宽的算法相对 n
+  是指数。修法：先声明编码（二进制还是一元），再核算运行时间是 n 的多项式还是 N
+  的多项式——后者只能叫拟多项式。
+</Callout>
 
-### Polynomial reductions
-
-写作$A\le_p B$。存在polynomial-time function $f$，满足
-
-$$
-x\in A
-\quad\Longleftrightarrow\quad
-f(x)\in B.
-$$
-
-若已有B的polynomial-time solver，就先算$f(x)$再解B，于是得到A的polynomial-time solver。因此要证明新problem B很难，必须从known hard problem A归约到B。
-
-
-Direction是最常见错误。$A\le_p B$表示B至少和A一样hard；它不表示A比B拥有更多instances，也不表示B能被“简化”为A。证明中必须同时交付mapping algorithm、output size bound、runtime bound和双向equivalence。
-
-```text
-REDUCE-A-TO-B(instance x)
-1  construct B-instance f(x) using polynomially many objects
-2  prove: if x is a yes-instance of A, f(x) is yes for B
-3  prove: if f(x) is yes for B, x was yes for A
-4  return f(x)
-```
-
-Polynomial reductions可传递：若$A\le_p B$且$B\le_p C$，组合两个mappings即可得到$A\le_p C$。这使已知NP-complete problems形成可复用的hardness chain。
-
-
-### NP-hard and NP-complete
-
-要求对每个$L\in NP$都有$L\le_p H$。则同时满足membership和hardness：
-
-$$
-B\text{ is NP-complete}
-\quad\Longleftrightarrow\quad
-B\in NP
-\text{ 且 }
-\forall L\in NP,\ L\le_p B.
-$$
-
-NP-hard范围可以更大：某些optimization versions是NP-hard但不是decision languages；undecidable problems也可能是NP-hard，却不属于NP。不能把NP-hard和NP-complete当作同义词。
-
-若某个NP-complete problem $B$属于$P$，则任意$L\in NP$先reduce到B再运行B solver，所以$NP\subseteq P$，结合$P\subseteq NP$得到$P=NP$。反之，只要$P=NP$，所有NP-complete problems都在$P$。
-
-
-## 34.4 NP-completeness proofs
-
-### Two proof obligations
-
-通常遵循固定recipe：
-
-1. 把target B写成精确decision problem，说明encoding。
-2. 给出polynomial-length certificate与polynomial verifier，证明$B\in NP$。
-3. 选择结构接近B的known NP-complete source A。
-4. 构造mapping $f$并证明construction time与output size均为polynomial。
-5. 分别证明$x\in A$推出$f(x)\in B$，以及$f(x)\in B$推出$x\in A$。
-
-
-只写“显然可归约”没有完成proof。Forward direction经常负责把source witness变成target witness；reverse direction负责从任意target witness恢复source structure，通常更容易暴露construction允许的伪解。Reduction diagram必须标出instance、witness对应、yes/no preservation，而不是只画两个problem names之间的一支箭头。
-
-### Establishing the first complete problem
-
-CIRCUIT-SAT问一个Boolean combinational circuit是否存在使output为1的input assignment。Assignment可以沿topological gate order在linear-in-circuit-size时间验证，因此CIRCUIT-SAT属于NP。Cook-Levin-style theorem进一步表明任意NP verifier computation都可编码成polynomial-size satisfiability instance，从而建立第一个NP-complete foundation。
-
-
-实际写proof时通常不从任意Turing-machine computation重新开始，而是从已经建立的CIRCUIT-SAT、SAT、3-CNF-SAT、CLIQUE、VERTEX-COVER等problem中选择最贴近target结构的一项。Source越贴近，gadgets越少，equivalence与size proof越容易审计。
-
-### A proof certificate, not only a conclusion
-
-高质量proof artifact至少包括：source theorem及适用版本、target decision statement、mapping pseudocode、construction size、runtime、forward implication、reverse implication、edge cases。若problem含weights，还要声明binary或unary encoding；若含threshold，要说明threshold如何编码。
-
-
-Reduction只对decision answers负责，不自动保留optimal value、number of solutions或approximation ratio。需要这些性质时，必须定义更强的reduction并逐项证明，不能从many-one decision reduction自行推断。
-
-## 34.5 NP-complete problems
-
-### SAT and 3-CNF-SAT
-
-SAT问Boolean formula是否有satisfying assignment。3-CNF-SAT把formula限制为clauses的conjunction，每个clause含三个literals。限制input shape不意味着problem必然变容易；通过引入auxiliary variables，可把一般formula的gate relations编码为polynomially manyconstant-width clauses。
-
-
-3-CNF assignment是certificate，verifier逐clause求值。Reduction correctness需要证明两边：原formula有assignment时可扩展auxiliary variables满足new formula；new formula有assignment时，限制到original variables会使原formula成立。Auxiliary variables不能创造与原computation无关的伪解。
-
-### CLIQUE
-
-CLIQUE instance为undirected graph $G=(V,E)$与integer $k$，问题是是否存在$k$ vertices pairwise adjacent。Certificate是vertex subset，verifier检查$\binom{k}{2}$ pairs。
-
-
-从3-CNF-SAT到CLIQUE的典型construction为每个clause创建literal vertices，只连接来自different clauses且彼此不矛盾的literals，询问是否存在size等于clause count的clique。Satisfying assignment可每clause选一个true literal；反向上，clique从每clause选一个pairwise consistent literal，形成可扩展assignment。
-
-### VERTEX-COVER
-
-VERTEX-COVER问是否存在至多$k$ vertices touching every edge。Certificate verification是逐edge检查至少一个endpoint被选。Independent set与vertex cover互补：$C$ covers all edges，当且仅当$V-C$中没有internal edge；而graph complement中的clique对应原graph的independent set。
-
-
-因此可通过complement关系在CLIQUE、INDEPENDENT-SET、VERTEX-COVER之间转移hardness，但必须同步变换parameter，例如size-$k$ independent set对应size-$|V|-k$ vertex cover。漏掉parameter transformation会使yes/no equivalence失效。
-
-### Hamiltonian cycle
-
-HAMILTONIAN-CYCLE问graph是否有一条恰好访问每个vertex一次并回到起点的cycle。它与Euler tour不同：Euler约束每条edge，Hamiltonian约束每个vertex；后者是NP-complete，不能因Euler tour有linear-time characterization就类推。
-
-
-Hamiltonian reductions常用vertex/edge gadgets强制route作局部选择，再由connector保证选择能拼成global cycle。每个gadget都要证明合法traversals与source choices一一对应，并排除cycle从非预期端口进入或提前闭合。
-
-### Traveling-salesperson decision problem
-
-TSP decision接收complete weighted graph与bound $B$，询问是否存在total cost至多$B$的tour。Tour是polynomial certificate，求和并比较bound即可验证。
-
-
-从Hamiltonian cycle到TSP可令原graph edge cost为1、nonedge cost为较大值，并令bound等于vertex count。Hamiltonian cycle给出全1-cost tour；任何达到bound的tour都不能使用nonedge，故恢复原graph中的Hamiltonian cycle。Weights和bound只需polynomial bits，construction也为polynomial size。
-
-### What an NP-complete label does and does not say
-
-NP-complete是worst-case asymptotic classification，不表示每个instance都难，也不禁止special cases、parameterized algorithms、approximation、randomization、heuristics或exponential algorithms在实际规模上有效。它要求的是：不要期待在未解决$P$ versus $NP$前，为所有instances提供已证明的general polynomial exact solver。
-
-工程决策应先识别required output：若必须exact answer，可利用small input、treewidth、bounded parameters或branch-and-bound；若允许near-optimal answer，可进入approximation algorithms；若只需frequent practical success，可使用heuristic，但应报告失败模式、optimality gap或independent lower bound。
-
-## 归约与验证的审计流程
-
+<Callout type="trap">
+  **现象**：归约证明只写"显然等价"，或只证了 x∈A ⇒ f(x)∈B 一个方向。原因：反向
+  f(x)∈B ⇒ x∈A 负责排除 f 引入的伪解（目标 witness
+  不对应任何源实例的情形），经常更难、却最容易漏。修法：按固定清单审计——映射算法、输出规模界、运行时间界、正向、反向，五项缺一即打回。
+</Callout>
 
 ## 小结
 
-Chapter 34 NP-Completeness从polynomial time建立稳定的tractability boundary，并用polynomial-time verification定义NP。$P$中的problem可忽略certificate直接验证，所以$P\subseteq NP$；反方向是否成立未知。
+- 决策问题只答是/否，优化版可借阈值改写。
+- 复杂度按编码长度计，不按数值大小计。
+- 证书短、验证快 = NP；P⊆NP，反向未决。
+- A≤ₚB 表示 B 至少和 A 一样难，箭头别画反。
+- NP-complete = 属于 NP + 承受所有 NP 归约。
 
-Polynomial reducibility用$A\le_p B$表达“若B容易则A也容易”，因此hardness proof必须从known hard A指向target B。NP-hard只表示承受所有NP problems的hardness，NP-complete还必须属于NP。完整NP-completeness proofs同时交付membership、mapping、polynomial size/time和if-and-only-if correctness。
+## 练习
 
-CIRCUIT-SAT、SAT、3-CNF-SAT、CLIQUE、VERTEX-COVER、HAMILTONIAN-CYCLE与TSP构成典型reduction toolkit。使用这些结论时，必须区分decision与optimization、vertex与edge约束、certificate与search，并把NP-complete理解为worst-case conditional evidence，而不是对每个instance或每种工程策略的否定。
+<Exercises>
 
+1. 整数 N 的二进制编码长度是多少位？某算法对输入 N 恰运行 N 步，它相对于编码长度是多项式还是指数？把同样的输入改为一元编码后结论如何变化？
 
+   <Answer>
+
+   编码长度为 ⌊log₂N⌋+1 位，即 Θ(log N)。运行 N 步 = 2^Θ(log N) 步，相对编码长度是指数级，因此该算法不是多项式时间（最多称拟多项式）。改为一元编码后输入长度变为 N 位，"N 步"相对新长度就是线性的——这说明"是否多项式"必须先说编码；同一算法在二进制编码下不计入 P，在一元编码下可以。
+
+   </Answer>
+
+2. 在第五节实验中选择证书 B 并推进到判定步：验证器输出什么、拒绝原因对应哪一项检查？然后注入"漏查闭合边"故障重放：读数变成什么、这个验证器违反了哪条健全性要求？
+
+   <Answer>
+
+   正常流程输出 REJECT：证书 B 的检查①（顶点唯一）与检查②（相邻边逐段，含弦 3-5 与边 5-4）全部通过，唯独检查③失败——闭合边 4-0 不在图上。注入故障后读数变成"接受"，但这是错误放行：x 是 no-实例却存在"能通过验证"的证书，违反"no-实例的所有证书都必须被验证器拒绝"这条健全性要求。修法不是给判定打个折扣，而是把跳过的检查补回来——三项检查缺一不可。
+
+   </Answer>
+
+3. 某同学为证明新问题 B 是 NP-hard，构造了一个从 B 到 3-CNF-SAT 的多项式归约，并指出"3-CNF-SAT 是 NP-complete，所以 B 很难"。这个论证错在哪？要写出一个合格的 hardness 证明，归约应该长什么样？
+
+   <Answer>
+
+   错在方向：B≤ₚ3-CNF-SAT 的含义是"若 3-CNF-SAT 能快速求解，则 B 也能"，即 B 不比 3-CNF-SAT 难——这正是要证明的结论的反面。合格的证明应选定一个已知 NP-complete 的 A（结构上越贴近 B 越好，如顶点覆盖或哈密顿回路），构造 A≤ₚB 的多项式映射 f，并交付五项证据：映射算法、输出规模多项式界、运行时间多项式界、x∈A⇒f(x)∈B、f(x)∈B⇒x∈A。若 B 本身还在 NP 里（给出证书与验证器），才能进一步称 B 是 NP-complete。
+
+   </Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="决策问题">
+  只回答"是"或"否"的问题。大白话：不许问"最好的方案值多少钱"，只能问"有没有不超过
+  500 块的方案"——优化问题都能改成这种问法。详见"决策问题"节。
+</GlossaryItem>
+<GlossaryItem term="多项式时间">
+  运行步数不超过输入规模的某个固定次幂；输入规模是编码后的位数。大白话：输入翻一倍，耗时最多按"倍的固定次方"涨，而不是翻倍再翻倍。详见"多项式时间"节。
+</GlossaryItem>
+<GlossaryItem term="证书">
+  一张能被快速核验的"答案证据"，比如一条声称的回路。yes-实例必有一张证书能过验证，no-实例的所有证书都过不了。详见"证书与验证器"节与第五节实验。
+</GlossaryItem>
+<GlossaryItem term="多项式时间归约">
+  把问题 A 的输入在多项式时间内翻译成问题 B 的输入，且两边答案始终一致，记作
+  A≤ₚB。大白话：B 的任何解法都能借来解 A，所以 B 至少和 A
+  一样难——箭头从已知难的指向目标。详见"数学"节与实验第四步。
+</GlossaryItem>
+<GlossaryItem term="NP-hard">
+  至少和 NP 中每个问题一样难：所有 NP 问题都能多项式归约到它。它不要求自身属于
+  NP，因此 NP-hard 不自动等于 NP-complete；还要证明它在 NP
+  中才够完整。详见“数学”节。
+</GlossaryItem>
+<GlossaryItem term="NP完全">
+  同时满足"自己在 NP 里"和"NP
+  里所有问题都能归约到它"的问题。大白话：这类问题里只要有一个被找到高效解法，所有可快速验证的问题全会变成可快速求解的。详见"数学"节与"经典问题与归约工具箱"节。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 34 章的官方目录定位与核心主题进行独立教学重写：来源访问级别为 outline-only（仅官方目录），以公开学术资料核对事实、不复现原书正文。多项式时间、多项式时间验证、NP 完全性与可归约性、NP 完全性证明、NP 完全问题的主题归属第 34 章目录；交互实验、6 顶点验证器 oracle、TS 验证器代码、练习答案与故障注入演示是本项目新增材料。
+
+本章的 6 顶点图、两张证书与全部数值结论由本章自带 oracle 逐段复核；CIRCUIT-SAT、SAT、3-CNF-SAT、CLIQUE、VERTEX-COVER、HAMILTONIAN-CYCLE、TSP 之间的具体归约构造在正文中只作定位性叙述，未展开完整证明。定义与归约方向可对照 [MIT 6.046J 算法分析课程讲义（第 17 讲）](https://ocw.mit.edu/courses/6-046j-design-and-analysis-of-algorithms-spring-2012/b1e5ac3c8f7d60db9b8d5b66c40bc55e_MIT6_046JS12_Notes.pdf)，Cook–Levin 定理可对照 [MIT 18.404J 课程资料](https://ocw.mit.edu/courses/18-404j-theory-of-computation-fall-2020/resources/lecture-16-cook-levin-theorem/)。P versus NP 仍是未解决问题；可查 [Clay 数学研究所的问题说明](https://www.claymath.org/millennium/p-vs-np/)。这些资料用于独立事实核对，本章不复现其讲义或原书表达。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 34: NP-Completeness"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

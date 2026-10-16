@@ -1,215 +1,217 @@
 ---
-title: "Chapter 33 · Machine-Learning Algorithms"
+title: "第 33 章 · 机器学习算法"
 type: C
 section: "CLRS4 · 专题"
 order: 33
-description: "按CLRS第四版第33章重建聚类、乘法权重算法与梯度下降的目标、更新、证明和验收。"
+description: "比较聚类、乘法权重与梯度下降如何定义目标、更新状态并给出可验证的保证。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+officialUnitId: clrs4-33
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+draft: true
 ---
 
+import { Clrs4Chapter33MachineLearningAlgorithmsLab } from "@/components/mdx/introduction-to-algorithms/v2/33-machine-learning-algorithms";
 
-## 从“算法究竟学到了什么”开始
+{/* 知识点清单：聚类→点云分配/均值移动；乘法权重与 regret→损失输入/归一化权重柱；梯度、步长与凸性保证→等高线及按 η 计算的迭代轨迹。 */}
 
-先预测：把六个points分成两组、每天从三个experts中选一个、沿function slope找minimum，看起来是三类不同任务。它们的共同结构是：先定义可计算objective或loss，再反复更新state，并用单调性、regret或convexity证明“更新不是盲走”。
+> **本章可视化决策卡**：K-means 用平面点云呈现样本分配与质心移动；乘法权重用归一化专家权重柱呈现损失更新；梯度下降用等高线与迭代路径呈现步长效果。交互分别推进真实的分配/均值更新、编辑损失并重算权重、调节步长并重算轨迹。组件 `src/components/mdx/introduction-to-algorithms/clrs4-33-machine-learning-algorithms-lab.tsx`；三类概念结构不同，因此使用本章专属图形。;
 
-在本章只聚焦三种基础方法：clustering发现unlabeled geometry；multiplicative weights在online feedback下组合experts；gradient descent最小化differentiable objective。
+<Objectives>
 
-算法优化training objective不等于模型在未来data上表现好。教材中的algorithmic guarantees需要和data sampling、held-out evaluation、robustness与deployment constraints分层说明。
+- 能写出 K-means 的平方误差目标，并解释分配与均值更新为何不增加目标值。
 
-## 33.1 Clustering
+- 能用权重更新和 regret 比较在线学习者与事后最佳固定专家。
 
-### K-means objective
+- 能判断梯度下降的步长、凸性假设分别支持什么结论，并回答：目标下降是否足以证明模型能泛化到新数据？
 
-不是一个唯一答案；必须先给distance、cluster count与objective。Euclidean $k$-means选择centers $\mu_1,\ldots,\mu_k$，使within-cluster sum of squares最小：
+</Objectives>
 
-$$
-J(C,\mu)
-=
-\sum_{i=1}^{n}
-\lVert x_i-\mu_{C(i)}\rVert_2^2.
-$$
+## 为什么需要这些算法
 
+面对一批没有标签的点，我们想找出紧凑的分组；面对一组会随时间表现不同的预测者，我们要逐轮调整信任；面对一个可微的代价函数，我们想找到较低的位置。这就是三种不同的**机器学习算法**任务：聚类比较几何距离，在线专家法比较累计损失，梯度法比较当前目标值。对象和证据不同，不能把其中一种方法的保证挪给另外两种。
 
-也称Lloyd's algorithm。它把joint optimization拆成两个容易的blocks。
+若没有明确目标，算法就无从判断一次调整是进步还是退步。反过来，目标变小也只说明它优化了这个目标，不自动说明数据代表性、预测准确性或真实应用效果。阅读每个算法时，依次追问状态是什么、观察到什么、一次更新改变什么、保证需要哪些假设，以及结论没有覆盖什么。
 
-### Assignment step
+具体来说，**聚类**用距离和簇内误差组织无标签样本，**乘法权重算法**根据在线损失重新分配专家权重，**梯度下降**沿目标函数的负梯度更新参数。它们分别回答“哪些点相近”“当前应信任谁”“怎样降低当前函数值”；每个问题的状态、反馈和比较基准都不同。
 
-Centers fixed时，每个point独立选择nearest center：
+## 33.1 聚类：交替降低平方误差
 
-$$
-C(i)\leftarrow
-\arg\min_{j\in\{1,\ldots,k\}}
-\lVert x_i-\mu_j\rVert_2^2.
-$$
+### 先定义什么叫“聚得好”
 
-
-这个选择逐point最优，所以不会增加$J$。Equal-distance ties要有stable rule，否则同一input在不同iteration order下可能产生不同empty clusters。
-
-### Center-update step
-
-Assignments fixed时，每个nonempty cluster的optimal center是arithmetic mean：
+给定点 $x_1,\ldots,x_n\in\mathbb{R}^d$ 和预先指定的簇数 $k$，欧氏 <Term def="交替分配样本并更新簇中心，以降低簇内平方误差的方法">K-means</Term> 同时寻找分配 $C(i)\in\{1,\ldots,k\}$ 与中心 $\mu_1,\ldots,\mu_k$，使簇内平方距离总和最小：
 
 $$
-\mu_j
-\leftarrow
-\frac{1}{|C_j|}
-\sum_{i:C(i)=j}x_i.
+J(C,\mu)=\sum_{i=1}^{n}\lVert x_i-\mu_{C(i)}\rVert_2^2.
 $$
 
+这里的平方欧氏距离不是无关紧要的实现选项，而是目标定义的一部分。它会偏好紧凑、近似球状的簇，也会让远离中心的点产生较大影响。聚类的结果因此依赖表示和尺度：若一个特征以千计、另一个以小数计，前者会主导距离；标准化特征可能改变分组，而不是只改变显示。
 
-Mean最小化squared Euclidean distances，可由展开quadratic或令gradient为0证明。若使用Manhattan distance，representative应转为median；更换distance却仍更新mean，objective proof会失效。
+### Lloyd 迭代：两种条件最优更新
 
-```text
-LLOYD-K-MEANS(points, k, initial_centers)
-1  centers = initial_centers
-2  repeat
-3      assign each point to a nearest center
-4      replace each nonempty center by its assigned-point mean
-5      repair empty clusters by a declared policy
-6  until assignments stabilize or a stopping rule fires
-7  return assignments, centers, objective trace
-```
+联合选择全部分配和中心通常很难。Lloyd 算法固定一部分、优化另一部分，并交替重复：
 
+1. **分配**：中心不动时，每个点选最近中心，令 $C(i)\leftarrow\arg\min_j\lVert x_i-\mu_j\rVert_2^2$。逐点选择最近者使这一阶段的平方误差不增加。
+2. **更新中心**：分配不动时，把每个非空簇的中心移到其中所有点的算术平均值。平方距离和在均值处最小，因此此阶段也不增加目标值。
 
-每个phase nonincreasing，finite assignments下eventually stabilizes；但$J$ nonconvex，结果通常只保证local optimum。Initialization、feature scaling、outliers和chosen $k$都会改变答案。
+这是两个交替优化步骤的直觉。均值最优可由平方和分解看出：对簇内点 $x_i$ 和均值 $\bar{x}$，$\sum_i\|x_i-\mu\|^2=\sum_i\|x_i-\bar{x}\|^2+m\|\mu-\bar{x}\|^2$，第二项非负，并在 $\mu=\bar{x}$ 时取零。平局规则和空簇处理策略应明确记录；空簇没有均值可算，可保留旧中心或按预先声明的策略重新初始化，但不同策略可能改变后续路径。交互图逐步展示分配与更新，并报告当前目标值，而不把最后的彩色分组误当作全局最优证明。
 
+### 保证的边界
 
-K-means++-style spread seeding与multiple restarts可降低bad basin风险；它们不把local algorithm变成global optimizer。验收应同时报告seed、all restart objectives、best run与cluster sizes，不能只展示最好的一张图。
+因为目标在每一步不增加，且有限个分配状态，标准实现会在稳定分配或停止条件触发时结束；但目标对分配与中心的联合选择并非凸优化，算法一般只保证到达局部稳定结果，而非全局最优。初始中心、$k$、特征尺度和离群点都可能改变结果。多次随机初始化并比较目标值有助于发现较好的解，却不能把局部搜索变成全局保证。
 
+若改用曼哈顿距离，簇内距离和的最优代表通常是坐标中位数而非均值。因此不能只换距离度量，却仍沿用“均值更新使同一目标下降”的论证。
 
-## 33.2 Multiplicative-weights algorithms
+## 33.2 乘法权重：在线组合专家
 
-### Experts and losses
+### 每轮看到的东西
 
-（multiplicative weights update，MWU）处理$N$个experts、$T$ rounds。Round $t$开始有weights $w_i^{(t)}$，形成distribution
-
-$$
-p_i^{(t)}
-=
-\frac{w_i^{(t)}}{\sum_j w_j^{(t)}}.
-$$
-
-Learner按$p^{(t)}$混合experts，随后观察每个expert loss $\ell_i^{(t)}\in[0,1]$。
-
-
-一个常见update为
+<Term def="依据专家逐轮损失乘法缩放权重、再归一化以组合其建议的在线方法">
+  乘法权重算法
+</Term>
+适合在线组合多位专家：设有 $N$ 位专家和 $T$ 轮。第 $t$ 轮开始时，算法持有正权重
+$w_i^{t}$，并将其归一化为概率
 
 $$
-w_i^{(t+1)}
-=
-w_i^{(t)}\bigl(1-\epsilon\ell_i^{(t)}\bigr),
-\qquad 0\lt\epsilon\le\frac12.
+p_i^{(t)}=\frac{w_i^{(t)}}{\sum_{j=1}^{N}w_j^{(t)}}.
 $$
 
-```text
-MULTIPLICATIVE-WEIGHTS(losses, epsilon)
-1  initialize every expert weight to 1
-2  for each round t
-3      normalize weights into probabilities p
-4      incur expected loss dot(p, losses[t])
-5      for each expert i
-6          weight[i] *= 1 - epsilon * losses[t][i]
-```
-
-
-Loss high的expert按multiplicative factor下降，zero-loss expert保持。Normalization不是update本身，却是把relative weights转成合法probability distribution的必要步骤。若loss范围不是$[0,1]$，必须rescale或改用相应bound。
-
-### Regret, not hindsight accuracy
-
-（regret）定义为
+学习者用这个分布组合专家建议；随后观察这一轮每位专家的损失 $\ell_i^{(t)}\in[0,1]$。这不是在每轮事后挑选正确答案：第 $t$ 轮的分布只能由此前可用信息决定。一个针对有界损失的乘法权重更新为
 
 $$
-R_T
-=
-\sum_{t=1}^{T}\langle p^{(t)},\ell^{(t)}\rangle
--
-\min_i\sum_{t=1}^{T}\ell_i^{(t)}.
+w_i^{(t+1)}=w_i^{(t)}(1-\epsilon\ell_i^{(t)}),\qquad 0<\epsilon\le\frac12.
 $$
 
+损失越大，权重相对缩减越多；零损失则不缩减。归一化产生合法概率，乘法因子才是学习更新。限定损失范围是该更新与常见界限的假设；若原始损失不在 $[0,1]$，要先说明缩放或采用与范围相符的分析。
 
-适当选择$\epsilon$可得到
+### 比较对象是“事后最佳固定专家”
 
-$$
-R_T=O\bigl(\sqrt{T\log N}\bigr),
-\qquad
-\frac{R_T}{T}\longrightarrow0.
-$$
-
-这表示average loss渐近接近best fixed expert in hindsight，不表示每round预测正确，也不和每round都选择不同best expert的dynamic oracle比较。
-
-### Potential proof
-
-令total weight potential $\Phi^{(t)}=\sum_iw_i^{(t)}$。Update给出由learner cumulative loss控制的upper bound；任意fixed expert $i$保留的weight给$\Phi$ lower bound。对两边取log并使用elementary inequalities，就把learner loss与best expert loss连接。
-
-
-Adversary可自适应选择difficult loss sequence，regret guarantee仍是sequence-wise comparator statement。若algorithm按probability随机抽一个expert，分析expected loss；工程日志应区分distribution expected loss与一次sampled action loss。
-
-
-## 33.3 Gradient descent
-
-### Gradient as a local direction
-
-对$f:\mathbb{R}^d\to\mathbb{R}$迭代
+累计 <Term def="在线学习者累计损失与事后最佳固定专家累计损失之间的差">regret</Term> 定义为学习者的累计期望损失，减去事后表现最好的**单一固定专家**的累计损失：
 
 $$
-x^{(t+1)}
-=
-x^{(t)}-\eta_t\nabla f(x^{(t)}).
+R_T=\sum_{t=1}^{T}\langle p^{(t)},\ell^{(t)}\rangle-\min_{i\in[N]}\sum_{t=1}^{T}\ell_i^{(t)}.
 $$
 
-Gradient收集所有partial derivatives；在Euclidean norm下，$-\nabla f$是local steepest-descent direction。
+在上述损失条件下，适当选择学习率，可得到随轮数增长次线性的 regret，典型阶为 $O(\sqrt{T\log N})$（忽略常数与具体参数条件）。除以 $T$ 后，平均差距随时间趋近于零。它不保证每轮都预测正确，也不承诺胜过每轮都能事后挑选不同专家的动态基准。
 
+为什么能比较总损失？令总权重 $\Phi^{(t)}=\sum_i w_i^{(t)}$。对上界，$\Phi^{(t+1)}=\Phi^{(t)}(1-\epsilon\langle p^{(t)},\ell^{(t)}\rangle)$，用 $1-z\le e^{-z}$ 可把乘积上界化为学习者累计损失的指数；对下界，任一固定专家 $i$ 的最终权重满足 $w_i^{(T+1)}=\prod_t(1-\epsilon\ell_i^{(t)})$，取对数并用有界损失条件，可联系该专家的累计损失。比较两边并选择与 $T,N$ 匹配的 $\epsilon$，得到次线性 regret 界。交互图展示的是归一化权重；额外显示的 regret 才是本例中学习者累计期望损失减去最佳固定专家累计损失，不是准确率或胜率。
 
-```ts
-for (let t = 0; t < maxIterations; t += 1) {
-  const g = gradient(x);
-  if (norm(g) <= gradientTolerance) break;
-  x = subtract(x, scale(stepSize(t), g));
-  objectiveTrace.push(f(x));
-}
-```
+## 33.3 梯度下降：沿局部下降方向移动
 
+### 更新式与步长
 
-### Step size and smoothness
-
-Direction正确不代表任意distance都安全。$\eta$太小收敛慢；太大会overshoot、oscillate或diverge。
-
-
-若$f$有$L$-Lipschitz gradient，常数step不超过$1/L$可用descent lemma保证objective下降。Backtracking line search可从trial step缩小，直到observed decrease满足condition；stochastic gradients则需要不同noise-aware schedule。
-
-### Convexity and convergence
-
-满足
+对可微目标 $f:\mathbb{R}^d\to\mathbb{R}$，<Term def="由函数对各坐标的变化率组成的向量">梯度</Term>由各坐标的偏导数组成。在欧氏几何下，负梯度给出当前位置下降最快的局部方向。梯度下降更新为
 
 $$
-f(\lambda x+(1-\lambda)y)
-\le
-\lambda f(x)+(1-\lambda)f(y),
-\qquad 0\le\lambda\le1.
+x^{(t+1)}=x^{(t)}-\eta_t\nabla f(x^{(t)}).
 $$
 
+<Term def="每次梯度更新沿负梯度移动的尺度">步长</Term> $\eta_t$ 决定沿该方向走多远：太小会让进展缓慢，太大可能越过低谷、震荡，甚至发散。因此“方向朝下”本身不等于“这一步一定更好”。在实验所用 $f(x,y)=x^2+2y^2$ 中，$\nabla f=(2x,4y)$，故两坐标分别乘上 $(1-2\eta)$ 与 $(1-4\eta)$。只有 $0<\eta<1/2$ 时两方向都收缩；$\eta=1/2$ 会让 $y$ 分量翻转但不缩小，$\eta>1/2$ 则使它放大。此例让“过大步长”的后果可由更新式直接核验。
 
-Differentiable convex function的任何zero-gradient point都是global minimizer。Smooth convex gradient descent可给objective-gap convergence bounds；strong convexity进一步给linear/geometric convergence。在nonconvex objectives中，small gradient通常只证明接近stationary point，不证明global optimal。
+若梯度满足 <Term def="梯度的变化幅度受距离乘以常数 L 约束的光滑性条件">Lipschitz 连续性</Term>（即目标足够光滑，梯度不会在很短距离内任意跳变），下降引理给出 $f(x-\eta\nabla f(x))\le f(x)-\eta(1-L\eta/2)\|\nabla f(x)\|^2$。因此 $0<\eta<2/L$ 是非零梯度处下降的充分范围，$\eta\le1/L$ 是常见的保守选择。回溯线搜索则先试较大步长，若未满足下降条件便缩小再试。随机梯度还受到采样噪声影响，不能把确定性梯度的逐步轨迹保证直接照搬过去；保证的对象与假设必须一并说明。
 
-### Stopping evidence
+### 凸性决定能否把驻点称为全局最优
 
-Fixed iteration count是budget，不是单独的convergence proof。应同时记录objective trace、gradient norm、step norm、relative objective change、constraint violation（若有）和best-known lower bound。
+<Term def="任意两点连线上的函数值不低于函数在对应插值点的值的函数">凸函数</Term>
+满足：对任意 $x,y$ 及 $\lambda\in[0,1]$，
 
+$$
+f(\lambda x+(1-\lambda)y)\le\lambda f(x)+(1-\lambda)f(y).
+$$
 
-Training data上的objective下降也可能伴随validation performance恶化。Optimization certificate与generalization evidence分层：前者证明“这个objective被如何优化”，后者评估“learned result是否适用于unseen data”。
+对可微凸函数，梯度为零的点是全局最小点；在非凸函数中，梯度很小通常只说明接近一个驻点，可能是局部极小点、鞍点或其他平坦区域。凸性不是让每一步自动正确的魔法：步长、光滑性等条件仍需满足，才能推出相应收敛界。
 
-## 三类算法的共同审计框架
+停止时应检查目标变化、梯度范数、步长或迭代预算，并说明使用了哪些条件。训练目标持续下降也可能伴随验证集表现变差；优化证据与对未见数据的<Term def="模型在未参与拟合的新样本上仍保持有用表现的能力">泛化</Term>证据是不同问题。
 
-Clustering交付final objective与restart distribution；MWU交付cumulative learner loss、best expert loss和regret；gradient descent交付objective/gradient traces与assumptions。它们都需要明确initial state、hyperparameters和comparison baseline。
+## 三种更新，不同的比较基准
 
+| 方法     | 状态如何变                 | 优化/比较的对象  | 典型保证与边界                             |
+| -------- | -------------------------- | ---------------- | ------------------------------------------ |
+| K-means  | 交替更新点的簇分配和簇中心 | 簇内平方距离和   | 每阶段不增；依赖初始化，通常只到局部稳定解 |
+| 乘法权重 | 按观察到的损失缩放专家权重 | 事后最佳固定专家 | 合适参数下 regret 次线性；不保证逐轮正确   |
+| 梯度下降 | 沿负梯度乘步长移动参数     | 可微函数值       | 需步长与光滑性条件；凸性影响最优性结论     |
 
-## 小结
+> 先预测：在乘法权重实验中，把某位专家的损失调高并执行一步，它的权重会增加还是减少？观察柱状图后，再用更新因子解释原因。
 
-Chapter 33 Machine-Learning Algorithms以三种update patterns建立基础。Clustering中的k-means交替做nearest-center assignment与mean update，objective单调不增但依赖initialization并只保证local result。Multiplicative-weights algorithms按loss调整expert weights，以total-weight potential证明$O(\sqrt{T\log N})$ regret。
+<Clrs4Chapter33MachineLearningAlgorithmsLab />
 
-Gradient descent沿negative gradient移动，step size由smoothness控制；convexity决定stationary point能否升级为global optimum。三者的高质量交付都要包含objective、initialization、update trace、baseline和对应的regret/convergence证据，并避免把optimization success误写成generalization success。
+## 容易混淆的保证
 
+- **把 K-means 结果叫作全局最优**：单调下降只说明每步没变差；不同初始化可能落入不同局部结果。应报告初始化和最终目标值。
+- **把低 regret 说成每轮都赢**：regret 比的是累计损失和最佳固定专家，不是逐轮准确率，也不是动态专家基准。
+- **把小梯度说成全局最优**：非凸目标的驻点不一定是全局最小值；先核对凸性等假设。
+- **把训练目标下降说成泛化改善**：这只证明对训练目标的优化行为。还需用独立验证数据和合适评估设计检验泛化。
 
+## 小结与练习
+
+- K-means 交替进行最近中心分配与均值更新，平方误差不增但结果受初始化影响。
+- 乘法权重按损失调整相对权重，regret 对照事后最佳固定专家。
+- 梯度下降用负梯度和步长更新；步长、光滑性及凸性共同限定保证。
+- 目标优化与未见数据上的泛化评估不可混为一谈。
+
+<Exercises>
+1. **计算**：两个一维点为 $0$ 与 $4$，固定在一个簇中。平方误差目标下最优中心是多少？若中心从 $1$ 移到这个最优值，目标从多少降到多少？
+2. **解释**：三位专家本轮权重为 $(1,1,1)$，损失为 $(0,0.5,1)$，学习率 $\epsilon=0.4$。执行一次更新并归一化，哪位专家的概率最大？为什么？
+3. **操作与诊断**：在实验室的梯度下降视图中改变 $\eta$ 并逐步推进。指出步长过大时应观察什么现象；再说明仅凭目标下降能否推出泛化更好。
+
+<Answer>中心为 $2$；中心 $1$ 时误差平方和为 $1+9=10$，中心 $2$ 时为 $4+4=8$。均值使平方误差最小。</Answer>
+<Answer>更新后未归一化权重为 $(1,0.8,0.6)$，总和 $2.4$，概率为约 $(0.417,0.333,0.250)$；零损失专家保留全部权重，概率最高。</Answer>
+<Answer>过大步长会越过低谷、震荡或使目标上升。训练目标下降不能单独推出泛化更好，还需独立数据上的评估和与任务匹配的证据。</Answer>
+</Exercises>
+
+## 版本、来源与范围
+
+本章依据 [CLRS 第四版官方目录](https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf) 中第 33 章及其三个小节标题（聚类、乘法权重算法、梯度下降）限定范围；该目录只用于核对章节与小节边界，是提纲，不是正文授权或开放许可证。本页采用 `independent-rewrite`：独立组织解释、例子、图示与练习，不声称获得原书改编许可，也不复现其正文。Lloyd 的平方误差量化论文、Littlestone 与 Warmuth 的加权多数算法论文，以及关于光滑凸梯度法的课程讲义用于交叉核对算法背景；它们不改变本章的 CLRS 目录范围。官方目录不能单独证明本章全部解释与原书逐段一致。
+
+本章只展开三项支持范围：K-means 型聚类、乘法权重/专家 regret、梯度下降。不覆盖神经网络架构、分类器家族、深度学习训练工程或泛化理论的完整课程。交互点云、权重条、等高线路径及全部练习为本项目原创教学材料；点云是固定的六点确定性样例，权重序列是固定损失序列，梯度图使用 $f(x,y)=x^2+2y^2$ 的解析更新，均不代表经验数据或性能基准。
+
+### 事实核对资料
+
+- Lloyd, “Least Squares Quantization in PCM,” _IEEE Transactions on Information Theory_ 28(2), 129–137 (1982), [doi:10.1109/TIT.1982.1056489](https://doi.org/10.1109/TIT.1982.1056489)：用于核对平方误差量化与交替优化背景；本章示例不复现论文实验。
+- Littlestone & Warmuth, “The Weighted Majority Algorithm,” _Information and Computation_ 108(2), 212–261 (1994), [doi:10.1006/inco.1994.1009](https://doi.org/10.1006/inco.1994.1009)：用于核对加权多数/事后最佳专家比较的背景；本章给出的更新式与 regret 说明仅限已声明的损失范围。
+- Stanford MS&amp;E 318, [Notes on first-order methods for minimizing smooth functions](https://web.stanford.edu/class/msande318/notes/notes-first-order-smooth.pdf)：用于交叉核对光滑性、步长与函数下降条件。教材目录仅用于章节范围映射，不替代这些技术事实来源。
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="聚类">
+    把相似的数据点分组；这里的“相似”由所选距离和目标函数定义。
+  </GlossaryItem>
+  <GlossaryItem term="K-means">
+    交替分配样本和更新簇均值、以降低簇内平方距离和的方法。
+  </GlossaryItem>
+  <GlossaryItem term="乘法权重算法">
+    在线算法按每位专家观察到的损失乘法缩放其正权重，再归一化成下一轮的组合分布。
+  </GlossaryItem>
+  <GlossaryItem term="regret">
+    在线学习者累计损失与事后最佳固定专家累计损失之间的差。
+  </GlossaryItem>
+  <GlossaryItem term="Lipschitz 连续性">
+    梯度变化幅度受距离乘以常数 $L$ 约束的性质，可推出给定步长下的函数下降界。
+  </GlossaryItem>
+  <GlossaryItem term="步长">
+    梯度更新沿负梯度移动的尺度；其稳定范围由目标的光滑性等条件决定。
+  </GlossaryItem>
+  <GlossaryItem term="梯度">
+    由函数对各坐标的变化率组成的向量，指向局部上升最快方向。
+  </GlossaryItem>
+  <GlossaryItem term="光滑性">
+    梯度变化受 Lipschitz 常数约束的性质，可用于推导给定步长下的函数下降界。
+  </GlossaryItem>
+  <GlossaryItem term="凸函数">
+    函数图像不会高于任意两点连线的函数；对可微凸函数，零梯度点是全局最小点。
+  </GlossaryItem>
+  <GlossaryItem term="泛化">
+    模型在未参与拟合的新样本上仍能保持有用表现的能力。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Introduction to Algorithms, 4th Edition, Chapter 33: Machine-Learning Algorithms"
+  adaptedUrl={frontmatter.sourceUrl}
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

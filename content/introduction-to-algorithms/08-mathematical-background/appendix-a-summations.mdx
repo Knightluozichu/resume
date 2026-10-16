@@ -3,233 +3,274 @@ title: "Appendix A · Summations"
 type: B
 section: "CLRS4 · 数学基础"
 order: 36
-description: "按CLRS第四版附录A重建求和公式、级数变换、逐项界、区间拆分与积分夹逼。"
+description: "按 CLRS 第四版附录 A 大纲独立重建求和记号、求和公式与性质、求和的界：逐项清单、closed-form 对账、积分夹逼与紧界判定。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-A
+qualityVersion: 2
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4AppendixASummationsLab } from "@/components/mdx/introduction-to-algorithms/v2/appendix-a-summations";
 
-## 从“循环执行了多少总工作”开始
+{/* 知识点清单：求和记号(Σ/range/空和/换元)→直方图+实验台step1；线性性(常数提出/合并)→公式+例题；等差与幂和(配对/Θ(n^{p+1}))→closed-form对账；等比级数(有限/无穷/收敛半径)→实验台参数r；调和级数(H_n与ln夹逼)→实验台shape；裂项相消(相邻相消/边界u_{b+1})→误区+练习；逐项比较与拆段(单调性/dyadic分组)→公式；积分夹逼(矩形与曲线/increasing反转)→实验台step3；主导项与紧界(最大项×项数为何松)→实验台step4。 */}
 
-先预测：一个loop第$i$轮做$i$次操作，总成本不是“最后一轮的$i$”，而是$1+2+\cdots+n$；一个divide-and-conquer level的工作按ratio变化，常变成geometric series；hashing或randomized analysis中的平均代价又常出现harmonic sum。是把逐步成本变成总成本的语言。
+{/* 可视化决策卡：概念=逐项成本清单→图表=逐项直方图(柱高=项值,末项高亮)→交互=shape/n/r参数;概念=累加总账→图表=累加阶梯+closed-form虚线对账→交互=故障注入丢末项;概念=上下界夹逼→图表=积分曲线+单位矩形sandwich(递增/递减双形态)→交互=播放/单步;概念=紧界判定→图表=Θ判定+配对界+故障witness三卡→交互=Reset。组件=clrs4-appendix-a-summations-lab.tsx 组件名=Clrs4AppendixASummationsLab 概念异构度=高→独立组件 */}
 
-高质量derivation不能只写最终$\Theta$。要先检查index从0还是1开始、upper bound是否inclusive、term是否nonnegative、infinite series是否convergent，再选择identity或bound。Off-by-one通常不改变asymptotic class，却会破坏exact count、probability normalization和后续telescoping boundary。
+<Objectives>
 
-## A.1 Summation formulas and properties
+- 能写出 $\sum_{k=a}^{b} f(k)$ 的逐项展开，并说明空和约定、上下界闭开、换元时上下界如何同步平移。
+- 能推导或手算 $\sum k$、有限与无穷等比和、裂项求和，并为 $\sum 1/k$ 写出积分上下界。
+- 能回答：为什么“最大项 × 项数”对几何增长给不出紧界，而丢末项的 off-by-one 又会破坏什么？
 
-### Sigma notation and ranges
+</Objectives>
 
-（summation formulas and properties）从记号开始：
+## 直觉引入：流水线上的总账
 
-$$
-\sum_{k=a}^{b} f(k)
-=
-f(a)+f(a+1)+\cdots+f(b).
-$$
+一条流水线有 n 个工位，第 k 个工位要花 k 分钟。问“做完一批货总共多久”，答案既不是“最慢的工位”，也不是“最后一站”，而是把每一站的时间全部加起来。这个“全部加起来”的动作，就是本章的主角。
 
-当$b<a$时，finite empty sum约定为0，使range split和recurrence边界无需特殊分支。Index variable是bound variable，重命名不改变value；但上下界和term中的index必须同步替换。
+没有这门手艺，分析循环和递归时只能停在“大概挺快”。有了它，你能回答“恰好多少次”“最多多少”“至少多少”，并用两条不等式从两侧夹出可信的总数。
 
+它还管另一件事：当项数多到写不完时，如何用一个简单式子管住总数的上限和下限——既不给得太松，也不给出一个其实会发散的“有限值”。
 
-Variable substitution要跟踪new endpoints。例如令$j=k-a$，则$k=a,\ldots,b$对应$j=0,\ldots,b-a$：
+## 权威目录定位
 
-$$
-\sum_{k=a}^{b}f(k)
-=
-\sum_{j=0}^{b-a}f(j+a).
-$$
+本章对齐 CLRS 第四版附录 A（Summations），官方概念包括：
 
-只改term不改range会悄悄增加或丢失terms。检查方法是展开first two和last two terms，确认两边逐项对应。
+- summations / 求和；
+- summation formulas and properties / 求和公式与性质；
+- bounding summations / 求和的界。
 
-### Linearity
+正文是独立教学重构：只按官方目录限定范围，不复现原书正文；公式与结论以标准数学事实为准。
 
-Finite sums满足linearity：
+## 求和公式与性质 / summation formulas and properties
 
-$$
-\sum_{k=a}^{b}
-\bigl(\alpha f(k)+\beta g(k)\bigr)
-=
-\alpha\sum_{k=a}^{b}f(k)
-+
-\beta\sum_{k=a}^{b}g(k).
-$$
+### 记号：先写清单，再求总数
 
-
-Linearity允许把constant factor移出sigma，也允许把同range的sums合并。若ranges不同，应先补齐、拆分或显式处理boundary terms；不能直接把两个不同upper bounds的sigma合成一个。
-
-### Arithmetic series and polynomial sums
-
-可用首尾配对：
+<Term def="用 Σ 把一串同型项 f(a)+f(a+1)+…+f(b) 压缩写成 ∑ₖ₌ₐᵇ f(k) 的规范记法，k 是约束变元">
+  求和记号
+</Term>
+是整章的“记账格式”。本节符号表：$a,b$ 为整数上下界，$k$ 为求和指标，$f(k)$ 为第
+$k$ 项，$\alpha,\beta$ 为常数，$r$ 为公比，$H_n$ 为前 $n$ 项调和和，$u_k$
+为可裂项的数列。
 
 $$
-\sum_{k=1}^{n}k
-=
-\frac{n(n+1)}2.
+\sum_{k=a}^{b} f(k) = f(a)+f(a+1)+\cdots+f(b).
 $$
 
+这个式子在说：从第 $a$ 项到第 $b$ 项逐项列出再相加，上下界都是闭区间；当 $b<a$ 时约定空和为 0，于是拆段和递推边界不需要特判。
 
-常用power sums还包括
+换元时上下界必须同步平移：令 $j=k-a$，则 $k=a,\ldots,b$ 对应 $j=0,\ldots,b-a$，项里凡是用到 $k$ 的地方都要改写成 $j+a$。最稳的核对法是展开两边首尾各两项，确认逐项对应。
 
-$$
-\sum_{k=1}^{n}k^2
-=
-\frac{n(n+1)(2n+1)}6,
-\qquad
-\sum_{k=1}^{n}k^3
-=
-\left(\frac{n(n+1)}2\right)^2.
-$$
-
-Exact formulas可由induction或finite differences验证。做asymptotic analysis时更常使用一般结论：fixed nonnegative integer $p$下，$\sum_{k=1}^{n}k^p=\Theta(n^{p+1})$。但若$p$随$n$变化，就不能把hidden constants视为固定。
-
-### Geometric series
-
-满足$r\ne1$时
+### 线性性：合并与拆开
 
 $$
-\sum_{k=0}^{n}r^k
-=
-\frac{1-r^{n+1}}{1-r}.
+\sum_{k=a}^{b} \bigl(\alpha f(k)+\beta g(k)\bigr)
+= \alpha\sum_{k=a}^{b} f(k) + \beta\sum_{k=a}^{b} g(k).
 $$
 
-Proof把sum乘$r$后与原式相减，中间terms全部cancel。$r=1$时sum是$n+1$，不能代入分母为0的formula。
+这个式子在说：常数因子可以提出 Σ，同一范围内的两个 Σ 可以合并成一个。范围不同时先补齐、拆段或显式处理边界项，不能把上界不同的两个 Σ 硬合成一个。
 
+### 多项式与等比：两个最常用的精确账本
 
-Infinite geometric series只在$|r|<1$时converges：
-
-$$
-\sum_{k=0}^{\infty}r^k
-=
-\frac1{1-r}.
-$$
-
-当$r>1$时finite sum由last term主导；当$0<r<1$时tail可显式控制。Algorithms中前者常描述递归树从root到leaves增长，后者常描述error或probability快速衰减。
-
-
-从index $m$开始的tail为$r^m/(1-r)$。这不仅给asymptotic class，也给“截断多少terms才能使error低于tolerance”的可计算certificate。
-
-### Harmonic series
-
-定义$H_n=\sum_{k=1}^{n}1/k$。Integral comparison给出
+首尾配对（第 1 项配第 n 项，第 2 项配第 n−1 项，每对都是 n+1）给出
 
 $$
-\ln n
-\le H_n
-\le 1+\ln n.
+\sum_{k=1}^{n} k = \frac{n(n+1)}{2}.
 $$
 
+这个式子在说：$1+2+\cdots+n$ 有精确闭式，不是只有“大约 $n^2$”。配对证明的边界也解释了常见的因子 2：把正序和倒序相加，每一列都是 $n+1$，共有 $n$ 列，所以原和为 $n(n+1)/2$。
 
-因此$H_n=\Theta(\log n)$。它出现在random permutation records、coupon collector、quicksort average analysis、set cover approximation等地方。这里的log base只差constant，但exact formula中的natural logarithm来自integral of $1/x$。
-
-Harmonic sum diverges，不能因为growth很慢就把infinite sum当作constant。对finite algorithmic input，它的partial sum有限；对limit statement，则必须承认它无finite limit。
-
-### Telescoping series
-
-的标准形式是
+平方和可以从恒等式 $(k+1)^3-k^3=3k^2+3k+1$ 推出。对 $k=1,\ldots,n$ 求和，左侧望远镜相消为 $(n+1)^3-1$，因此
 
 $$
-\sum_{k=a}^{b}
-\bigl(u_k-u_{k+1}\bigr)
-=
-u_a-u_{b+1}.
+3\sum_{k=1}^{n}k^2+3\sum_{k=1}^{n}k+n=(n+1)^3-1,
 $$
 
+代入已知的 $\sum k=n(n+1)/2$ 并整理，得到 $\sum_{k=1}^{n}k^2=n(n+1)(2n+1)/6$。这也说明“闭式”不是背诵清单：望远镜恒等式能从低阶和构造更高阶和。一般地，固定非负整数 $p$ 时 $\sum_{k=1}^{n}k^p=\Theta(n^{p+1})$；这是阶数结论，不代表所有 $p$ 共用同一个隐含常数。
 
-例如$1/(k(k+1))=1/k-1/(k+1)$，于是大量fractions相消。风险在boundary：last negative term是$u_{b+1}$而不是$u_b$。最稳妥的方法是展开前三项和最后两项，再写剩余boundaries。
+**范围核对例。** 若循环变量从 $i=0$ 到 $i=n-1$，成本为 $i+1$，则令 $k=i+1$，新范围是 $1\le k\le n$，故总数为 $\sum_{i=0}^{n-1}(i+1)=\sum_{k=1}^{n}k=n(n+1)/2$。若误写成 $\sum_{k=0}^{n}k$，就多计一项 $n$；精确计数不同，即使两者在 $n\to\infty$ 时同为 $\Theta(n^2)$。
 
-### Differentiating and integrating power series
-
-Finite polynomial可逐项differentiate或integrate。对geometric identity操作可生成weighted sums：
-
-$$
-\frac{d}{dx}
-\sum_{k=0}^{n}x^k
-=
-\sum_{k=1}^{n}kx^{k-1}.
-$$
-
-
-Infinite power series则必须在convergence radius内操作，并区分pointwise与uniform convergence等分析条件。算法教材通常在$|x|<1$内使用geometric series derivations；越过boundary后照搬formula会得到错误finite value。
-
-Products也能转成sums分析：positive terms下对数满足$\log\prod_i a_i=\sum_i\log a_i$。这对probability product、multiplicative weights和factorial growth很有用，但必须保证每个$a_i>0$并说明log base。
-
-## A.2 Bounding summations
-
-### Termwise comparison
-
-（bounding summations）首先使用monotonicity：若对range内每个$k$都有$0\le a_k\le b_k$，则
+<Term def="相邻项之比恒为 r 的级数：|r|<1 时无穷和收敛于 1/(1−r)，r>1 时末项主导总和">
+  等比级数
+</Term>
+的有限和用“错位相减”得到：把 $S$ 乘 $r$
+再与原式相减，中间项全部消掉，只剩首尾。$r\neq1$ 时
 
 $$
-\sum_k a_k
-\le
-\sum_k b_k.
+\sum_{k=0}^{n} r^k = \frac{1-r^{n+1}}{1-r}.
 $$
 
+这个式子在说：有限等比和由末项主导——$r>1$ 时它和 $r^n$ 同阶，多出来的部分只有一个常数因子。$r=1$ 时和为 $n+1$，不能往分母为 0 的式子里代。
 
-Uniform bound是特殊情况：$n$个nonnegative terms每个至多$M$，总和至多$nM$。这是安全但有时很松的bound；若terms跨越多个scale，应按range拆分或使用geometric/integral structure。
-
-Lower bound同样重要。若选定一段包含$m$个terms且每个至少$L$，则sum至少$mL$。证明$\Theta$需要matching upper和lower bounds，只给$O$不能说明bound tight。
-
-### Splitting the range
-
-写作
+令 $n\to\infty$，对实公比 $r$，只有在 $|r|<1$ 时部分和序列才收敛：$|r|>1$ 时部分和无界，$r=-1$ 时部分和振荡而不收敛（$r=1$ 已在上面单独处理）。本章实验台为突出衰减与增长两种形状，交互范围限制为正公比 $0.5\le r\le2$。
 
 $$
-\sum_{k=a}^{b}f(k)
-=
-\sum_{k=a}^{m}f(k)
-+
-\sum_{k=m+1}^{b}f(k).
+\sum_{k=0}^{\infty} r^k = \frac{1}{1-r}, \qquad |r|<1.
 $$
 
+这个式子在说：衰减足够快的无穷级数有有限极限；$r\ge1$ 时部分和无界，写出一个“有限值”就是错误证书。从第 $m$ 项起的尾部为 $r^m/(1-r)$，还能回答“截断到第几项误差低于容忍度”。
 
-Threshold可取$n/2$、$\sqrt n$、某个power-of-two boundary或function改变monotonicity的位置。拆分本身是exact identity，approximation发生在各subrange的bound中；因此certificate要分别记录每段使用的inequality。
+### 调和与裂项：增长速度的两种极端
 
-Dyadic grouping把indices按$[1,2),[2,4),[4,8),\ldots$分组。每组内terms相近，group count为$O(\log n)$，常用于调和和、bit levels与doubling arguments。
-
-### Integral comparison
-
-对positive decreasing $f$给出一种常用形态：
-
-$$
-\int_{1}^{n+1} f(x)\,dx
-\le
-\sum_{k=1}^{n}f(k)
-\le
-f(1)+\int_{1}^{n}f(x)\,dx.
-$$
-
-
-若$f$ increasing，rectangles相对curve的位置改变，bound方向也要相应调整。不要只背公式；先画unit-width rectangles，判断left endpoint或right endpoint rectangle位于curve上方还是下方。
-
-Integral test还能判断infinite positive series convergence。例如$\sum 1/k^p$在$p>1$时converges，在$p\le1$时diverges。算法中常用finite partial sum bound，但同一comparison也解释tail error。
-
-### Dominant terms and asymptotic tightness
-
-对geometrically increasing nonnegative terms特别有效：
+<Term def="∑1/k 的和 Hₙ：增长像 log 一样慢，但无穷项没有有限极限">
+  调和级数
+</Term>
+描述“越往后越便宜、但便宜得不够快”的成本。它和曲线下面积比较可得
 
 $$
-\sum_{k=0}^{n}2^k
-=
-2^{n+1}-1
-=
-\Theta(2^n).
+\ln n \le H_n = \sum_{k=1}^{n}\frac1k \le 1+\ln n.
 $$
 
+这个式子在说：$H_n$ 被 $\ln n$ 从两侧夹住，因此 $H_n=\Theta(\log n)$。它出现在记录期望、优惠券收集、快速排序平均分析里；注意无穷调和和仍然发散，“涨得慢”不等于“有有限极限”。
 
-“取最大项乘term count”给$O(n2^n)$，虽然正确却不tight；geometric identity把extra $n$去掉。相反，若terms变化缓慢，例如$k$或$1/k$，只看last term可能丢失factor $n$或$\log n$。
+<Term def="把每项拆成相邻两项之差、使中间全部相消、只剩首尾边界的求和技巧">
+  裂项相消
+</Term>
+的标准形态是
 
-Bounding workflow应先识别shape：polynomial、geometric、harmonic、telescoping或mixed。Mixed sums可split range、factor dominant scale、change index或比较integral。不要在看清term behavior前机械套一个formula。
+$$
+\sum_{k=a}^{b} \bigl(u_k-u_{k+1}\bigr) = u_a-u_{b+1}.
+$$
 
+这个式子在说：大量中间项互相抵消后只剩首尾两个边界。例如 $\frac{1}{k(k+1)}=\frac1k-\frac1{k+1}$。最大的坑在边界——最后一个负项是 $u_{b+1}$ 而不是 $u_b$，展开首尾各两项再合并是稳妥做法。
 
-## 求和推导的审计流程
+## 求和的界 / bounding summations
 
+### 逐项比较与拆段
+
+若范围内每个 $k$ 都有 $0\le a_k\le b_k$，则 $\sum_k a_k\le\sum_k b_k$。特殊情况是 $n$ 个非负项每个至多 $M$，总和至多 $nM$——安全但常常很松；要更紧就把范围按阈值拆开：$\sum_{k=a}^{b}f(k)=\sum_{k=a}^{m}f(k)+\sum_{k=m+1}^{b}f(k)$，每段用各自的结构分别给界。拆段本身是恒等式，近似只发生在各段的界上，所以证书里要逐段记录用了哪个不等式。按 $[1,2),[2,4),[4,8),\ldots$ 分组的二分分组法则常用于调和和与倍增论证。
+
+### 积分夹逼：用曲线夹住阶梯
+
+<Term def="用函数图像下的面积给出总和上下界的方法：递减函数左矩形在曲线上方、右矩形在下方，递增时方向反转">
+  积分夹逼
+</Term>
+把“求和”翻译成“面积”。对正且递减的 $f$
+
+$$
+\int_{1}^{n+1} f(x)\,dx \le \sum_{k=1}^{n} f(k) \le f(1)+\int_{1}^{n} f(x)\,dx.
+$$
+
+这个式子在说：把单位宽度的矩形画出来，递减时左端点矩形盖住曲线、右端点矩形被曲线盖住，总和就被积分从两侧夹住。以 $f(x)=1/x$ 为例，直接代入得到 $\ln(n+1)\le H_n\le1+\ln n$；由于 $\ln(n+1)\ge\ln n$，也得到常用形式 $\ln n\le H_n\le1+\ln n$。$f$ 递增时同样比较每个区间 $[k,k+1]$，但上下端点角色反转：
+
+$$
+f(1)+\int_1^n f(x)\,dx\le\sum_{k=1}^n f(k)\le\int_1^{n+1}f(x)\,dx.
+$$
+
+方向不能凭记忆照搬；先在单个区间上判断 $f(x)$ 与矩形高度的大小，再求和。比如 $f(x)=x$，下界为 $1+\int_1^n x\,dx=(n^2+1)/2$，上界为 $\int_1^{n+1}x\,dx=n(n+2)/2$，都与 $\sum k=n(n+1)/2$ 同阶，从而再次得到 $\Theta(n^2)$。同一比较用于 $1/x^p$：正项递减时，积分尾部 $\int_1^\infty x^{-p}dx$ 在且仅在 $p>1$ 有限，故该级数在 $p>1$ 收敛、$p\le1$ 发散。
+
+### 主导项与紧界
+
+对几何增长的项，“最大项 × 项数”给出 $O(n\,r^n)$——正确但不紧；等比恒等式能把多余的 $n$ 消成常数因子。反过来，对变化缓慢的项（如 $k$ 或 $1/k$），只看末项会丢掉一个 $n$ 或 $\log n$。工作流是先看形状（多项式、几何、调和、裂项或混合），再选工具：拆段、提主导因子、换元或积分比较，不要在看清行为前机械套公式。
+
+## 交互实验：求和夹逼实验台
+
+先在心里预测：把等比的 $r$ 从 2 调到 0.5，末项占总额的比例会怎么变？把项数 $n$ 从 10 拉到 24，夹逼的上下界会靠得更近还是更远？再推进时间线核对四步：逐项清单 → 累加对账 → 积分夹逼 → 判型给界。实验台没有预测输入框；可先口头或在纸上记录猜测，再用读数检验。
+
+<Clrs4AppendixASummationsLab />
+
+时间线每一步都有独立图形：第 1 步的直方图看清末项是否主导；第 2 步用累加阶梯和 closed-form 虚线对账；第 3 步把单位矩形与积分曲线叠在一起看 sandwich；第 4 步给出紧界判定证书。打开“把上界当开区间”的故障开关，亲眼看 off-by-one 如何让对账不平——这类错误在几何增长下最致命，因为丢掉的末项可能占总额一半。
+
+## 常见误区
+
+<Callout type="trap" title="陷阱：把上界当成开区间，丢末项">
+
+现象：逐项累加的结果比 closed-form 公式差一截，概率分布的归一化常数对不上 1。
+
+原因：$\sum_{k=1}^{n}$ 的最后一项被悄悄丢掉；项数从 $n$ 变成 $n-1$，而后续裂项边界、exact count 都建立在正确的 $n$ 上。
+
+修复：展开首尾各两项核对；写证书时明确上下界闭开、项数是 $n$ 还是 $n+1$、指标从 0 还是从 1 开始。实验台的故障开关就是复现这个坑。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：把“最大项 × 项数”当紧界">
+
+现象：对 $\sum 2^k$ 给出 $O(n\,2^n)$，论文或复杂度表里的紧界却是 $\Theta(2^n)$，自己算“多出来”的 $n$ 找不到去向。
+
+原因：几何增长的相邻项差常数倍，总和与末项同阶；而 $n$ 个项乘最大项把同阶关系错当成了线性叠加。
+
+修复：几何项用等比恒等式消掉多余因子；变化缓慢的项改用积分夹逼或拆段。判断标准是上下界是否同阶，而不是“式子看起来够大”。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：裂项写错边界，或把调和和当常数">
+
+现象：裂项求和的结果差一个 $u_b$ 与 $u_{b+1}$ 的尾项；或因为 $H_n$ 增长慢，就把无穷调和和当作有界量代进极限。
+
+原因：裂项相消的最后负项是 $u_{b+1}$ 不是 $u_b$；调和和虽为 $\Theta(\log n)$，无穷项仍发散，没有有限极限。
+
+修复：裂项后展开前三项和最后两项再合并；涉及极限时先判收敛（积分比较），再谈有限值。
+
+</Callout>
 
 ## 小结
 
-Appendix A Summations把循环、递归层和概率事件的逐项成本转换为总成本。Summation formulas and properties包括index substitution、linearity、arithmetic与power sums、geometric series、harmonic series、telescoping和power-series transformations。每条identity都附带range、boundary与convergence条件。
+- 求和记号先固定上下界闭开与空和约定，换元必须同步平移 range。
+- 等差、等比、裂项给精确账本；调和和用 $\ln n$ 与 $1+\ln n$ 夹出 $\Theta(\log n)$。
+- 求和的界靠逐项比较、拆段与积分夹逼；上下界同阶才是紧界。
+- “最大项 × 项数”对几何增长偏松，对缓慢项又可能丢 log 因子。
+- 证书要同时写 exact count 与渐近类——off-by-one 破坏前者却常伪装成无害。
 
-Bounding summations从termwise comparison开始，并通过range splitting、dyadic grouping、integral comparison和dominant-term arguments得到tight asymptotic bounds。可靠推导要展开boundary terms、区分exact identity与inequality、说明monotonicity或ratio前提，并同时寻找upper与lower bounds。
+<Exercises>
 
+1. 求和公式与性质 / 计算题：手算 $n=16$ 时的 $\sum_{k=1}^{16}k$ 与 $\sum_{k=1}^{16}k^2$，再切换到实验台的等差与平方形状、设 $n=16$，核对阶梯终点与 closed-form 是否一致。
 
+   <Answer>
+
+   $\sum k = 16\cdot17/2 = 136$，$\sum k^2 = 16\cdot17\cdot33/6 = 1496$。实验台第 2 步的阶梯终点应停在 136 与 1496，且与 closed-form 虚线重合；若不重合，先检查故障开关是否把上界当成了开区间。
+
+   </Answer>
+
+2. 求和的界 / 推导题：用有限等比公式求最小的 $n$，使 $\sum_{k=1}^{n}2^k \ge 1000$，并写出夹住 $H_{16}$ 的积分上下界。
+
+   <Answer>
+
+   $\sum_{k=1}^{n}2^k = 2^{n+1}-2$。$n=8$ 时为 $510<1000$，$n=9$ 时为 $1022\ge1000$，故最小 $n=9$——这正是“末项主导”的账本：和大约是末项的两倍。调和侧：$\ln 17\le H_{16}\le 1+\ln 16$，数值约为 $2.83\le H_{16}\le3.77$（实际 $H_{16}\approx3.38$），两侧同阶 $\Theta(\log n)$，界是紧的。
+
+   </Answer>
+
+3. summations / 实验台故障题：打开“把上界当开区间”开关，分别取 $r=2$ 与 $r=0.5$（$n=12$），读出被丢末项占正确总额的百分比，解释为什么一个接近 50% 而另一个接近 0%，并说明这对应哪一类分析风险。
+
+   <Answer>
+
+   $r=2$ 时 $\sum_{k=1}^{12}2^k = 2^{13}-2 = 8190$，末项 $2^{12}=4096$，约占 $50\%$——精确计数立刻崩坏，任何依赖 exact count 的概率归一、摊还记账都会出错。$r=0.5$ 时首项主导，末项 $0.5^{12}\approx0.00024$，占完整总和约 $0.024\%$（约 $0.02\%$），账目几乎看不出差别——但 off-by-one 依然破坏了裂项边界与 exact 证书。结论：渐近类相同的两个模型，对边界错误的容忍度完全不同，所以证书必须写 exact count 而不只是 $\Theta$。
+
+   </Answer>
+
+</Exercises>
+
+## 核查资料
+
+- [MIT OpenCourseWare：6.042J《Mathematics for Computer Science》第 9 章 Sums and asymptotics](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-fall-2010/resources/mit6_042jf10_chap09/)：用于交叉核对求和记号、closed form、等比和、渐近界与求和估界等数学事实；它不替代 CLRS 的章节范围依据。
+- [CLRS 第四版官方目录 PDF](https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf)：仅用于确认本章对应的 Appendix A「Summations」范围，不作为正文内容或授权改编来源。
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="求和记号">用 Σ 把一串同型项压缩成一个式子的记账格式：$\sum_{k=a}^{b}f(k)$ 就是 $f(a)+f(a+1)+\cdots+f(b)$，上下界都是闭区间，$b<a$ 时约定为 0。详见“求和公式与性质”。</GlossaryItem>
+<GlossaryItem term="等比级数">相邻两项之比恒为 $r$ 的级数。对实公比，$|r|<1$ 时无穷和收敛到 $1/(1-r)$；$|r|>1$ 时部分和无界，$r=-1$ 时振荡不收敛。本文实验台限于正公比；其中 $r>1$ 时有限和由末项主导，且与末项只差常数倍。详见“求和公式与性质”。</GlossaryItem>
+<GlossaryItem term="调和级数">$1+\frac12+\frac13+\cdots$ 的和 $H_n$。它涨得像 $\log n$ 一样慢，但无穷项加起来仍然没有有限极限——“慢”不等于“有界”。详见“求和公式与性质”。</GlossaryItem>
+<GlossaryItem term="裂项相消">把每项拆成相邻两项之差（如 $\frac1{k(k+1)}=\frac1k-\frac1{k+1}$），让中间全部抵消、只剩首尾的求和技巧；边界最后一项是 $u_{b+1}$ 而不是 $u_b$。详见“求和公式与性质”。</GlossaryItem>
+<GlossaryItem term="积分夹逼">把求和看成单位宽度矩形的面积，用函数曲线下的积分从两侧夹住总和：递减函数有 $\int_1^{n+1}f\le\sum f(k)\le f(1)+\int_1^{n}f$，递增时方向反转。详见“求和的界”。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Appendix A: Summations"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

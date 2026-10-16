@@ -1,271 +1,292 @@
 ---
 title: "Chapter 31 · Number-Theoretic Algorithms"
-type: C
+type: B
 section: "CLRS4 · 专题"
 order: 31
-description: "按CLRS第四版第31章重建初等数论、Euclid、模算术、CRT、快速幂、RSA与素数测试。"
+description: "用最大公约数、模运算与余数结构构造可验证的数论算法，并辨认它们的效率和安全边界。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-31
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4NumberTheoreticAlgorithmsLab } from "@/components/mdx/introduction-to-algorithms/v2/31-number-theoretic-algorithms";
 
-## 从“输入有一千位，循环到n不算快”开始
+{/* 可视化决策：Euclid 与扩展 Euclid=逐行余数阶梯，展示商、余数如何成为下一次除数，并在终点给出 Bézout 证书；交互改变输入和已展开的除法行。知识点：整除与互素（算例）；gcd 与 Euclid 不变量（阶梯图）；Bézout、逆元与线性同余（推导）；CRT（余数重建算例）；二进制幂、RSA 与 Miller–Rabin（算法流程与边界）。术语进名词解释：gcd、Bézout 恒等式、模逆元、中国剩余定理、模幂、RSA、Miller–Rabin。 */}
 
-先预测：整数$n$若用binary表示，input length只有$\Theta(\log n)$ bits。一个循环执行$n$次，看似“线性于n”，实际上对input bits是exponential。数论算法的cost必须围绕bit length、big-integer arithmetic和modular reduction来理解。
+<Objectives>
 
-把elementary identities转成可执行证书：Euclid给gcd与Bézout coefficients，Bézout给inverse和linear congruences，CRT组合residues，repeated squaring支撑RSA与primality testing。
+- 能证明 Euclid 替换保持 gcd，并用扩展 Euclid 的系数验证 Bézout 证书。
 
+- 能判断模逆元是否存在，列出线性同余的全部解，并构造互素模数下的 CRT 解。
 
-## 31.1 Elementary number-theoretic notions
+- 能逐轮计算模幂与 Miller–Rabin 平方链，并说明复杂度、前提和安全边界。
 
-### Divisibility and primes
+</Objectives>
 
-从$a\mid b$开始：存在integer $k$使$b=ak$。Prime只有positive divisors 1与自身；composite有nontrivial factor。Fundamental theorem of arithmetic说明大于1的integer有唯一prime factorization（忽略factor顺序）。
+## 为什么要研究整数的余数
 
-GCD把共同divisors压成一个最大positive representative，LCM与GCD满足
+有些问题只关心整数除以某个数后还剩多少，却仍要处理极大的输入。若按整数本身逐个尝试，输入只增加一位，工作量就可能大幅增长。
 
-$$
-\gcd(a,b)\operatorname{lcm}(a,b)=|ab|
-$$
+我们需要把“整除、余数、重复平方”变成能快速执行、还能检查答案的步骤。缺少这些结构，求因子、解同余式或计算大幂都容易退化成漫长枚举；误用它们，则会把不存在的逆元当成普通除法。
 
-（非零情形）。但直接factor large inputs再算gcd是错误依赖：factorization可能困难，Euclid无需factor即可高效求gcd。
+## 31.1 初等数论概念：整除、素数与余数
 
-### Residue classes and groups
+### 整除把问题变成可检查的关系
 
-若$n$整除$a-b$，记$a\equiv b\pmod n$。Congruence与addition、subtraction、multiplication相容，因此可在classes $\mathbb{Z}_n$上运算。可逆classes形成
+本章的数论算法利用整除、余数与整数分解的性质，快速求解整数上的计算问题。若存在整数 $k$ 使 $b=ak$，就说 $a$ 整除 $b$，记作 $a\mid b$。例如 $7\mid 35$，因为 $35=7\cdot5$。大于 1 且正因数只有 1 和自身的整数是素数；其余大于 1 的整数是合数。算术基本定理说明，每个大于 1 的整数都能唯一分解为素数乘积（忽略因子次序）。
 
-$$
-\mathbb{Z}_n^*=\{[a]_n:\gcd(a,n)=1\},
-$$
+不过，知道这个分解并不是求最大公约数的前提。下面的算法直接利用余数，避免先做可能昂贵的因数分解。
 
-在multiplication modulo $n$下构成finite group，size为Euler totient $\phi(n)$。Group structure会在element powers、RSA与primality testing中反复出现。
+### 模数把整数按余数分组
 
-## 31.2 Greatest common divisor
+若 $n\mid(a-b)$，则 $a$ 与 $b$ 模 $n$ 同余，记作 $a\equiv b\pmod n$。例如 $17\equiv2\pmod5$：两数相差 15。加、减、乘都与这种等价关系相容，因此计算时可在每一步把结果约回 $0,1,\ldots,n-1$。
 
-### Euclidean algorithm
+满足 $\gcd(a,n)=1$ 的余数才有乘法逆元；这些可逆余数在模 $n$ 乘法下组成有限群 $\mathbb Z_n^*$。这一区分会决定模除法是否有意义，也支撑后面的幂运算与 RSA。
 
-保持invariant：
+## 31.2 Euclid：用余数链求 <Term def="同时整除两个整数的最大正整数；也记作 gcd">最大公约数 gcd</Term>
+
+### 为什么替换不会改变答案
+
+令 $a=qb+r$，其中 $0\le r\lt b$。一个整数同时整除 $a,b$，当且仅当它同时整除 $b,r$：从 $r=a-qb$ 可推出一个方向，从 $a=qb+r$ 可推出反方向。因此
 
 $$
 \gcd(a,b)=\gcd(b,a\bmod b).
 $$
 
+这个等式在说：把较大的数换成余数，公因数集合没有变化。余数严格小于除数，所以不断重复必然终止；终止时第二个数为 0，第一个数就是 gcd。
 
 ```text
-EUCLID(a, b)
-1  while b != 0
-2      (a, b) = (b, a mod b)
-3  return |a|
+EUCLID(a, b)                 // 输入非负整数，且不同时为 0
+while b ≠ 0
+    r ← a mod b
+    a ← b
+    b ← r
+return a
 ```
 
-Remainders快速缩小；Lamé analysis把worst case与Fibonacci numbers联系起来，division step数量为$O(\log b)$。实际bit complexity还要乘上division cost，不能把large-integer division当unit operation。
+例如 $(252,105)\to(105,42)\to(42,21)\to(21,0)$，所以 gcd 是 21。最坏情况下除法次数为 $O(\log b)$；这是除法步数，不是位运算成本。对大整数，实际运行时间还取决于多精度除法实现。
 
-### Extended Euclid
+## 31.3 扩展 Euclid：把答案变成证书
 
-Extended version同时维护linear combination，返回$d,x,y$满足
+仅返回 gcd 还不够。扩展算法同时求整数 $x,y$，使
 
 $$
 d=\gcd(a,b)=ax+by.
 $$
 
+这个等式叫 <Term def="把最大公约数写成输入两数整数线性组合的等式">Bézout 恒等式</Term>。它是可独立检查的证书：把系数代回去即可验证结果。
 
-```ts
-function extendedGcd(a: bigint, b: bigint): [bigint, bigint, bigint] {
-  if (b === 0n) return [a, 1n, 0n];
-  const [d, x1, y1] = extendedGcd(b, a % b);
-  return [d, y1, x1 - (a / b) * y1];
-}
-```
-
-Bézout identity不仅解释gcd，还提供modular inverse：若$\gcd(a,n)=1$，则$ax+ny=1$，取mod $n$便有$ax\equiv1\pmod n$。
-
-## 31.3 Modular arithmetic
-
-### Canonical residues
-
-实现时应把residue规范到$0,\ldots,n-1$。许多languages的remainder保留dividend sign，所以negative input需要二次normalization。
-
-
-Addition与multiplication可以随时reduce：
-
-$$
-(a+b)\bmod n
-=
-\bigl((a\bmod n)+(b\bmod n)\bigr)\bmod n,
-$$
-
-乘法同理。但fixed-width type中先算$a b$可能在mod之前overflow；需要wider intermediate、Montgomery/Barrett reduction或overflow-safe multiply。
-
-### Inverses and cancellation
-
-$a^{-1}\pmod n$存在当且仅当$\gcd(a,n)=1$。Extended Euclid给Bézout coefficient，再canonicalize为inverse。
-
-
-Modular division不是ordinary integer division。Congruence两侧能否“约掉$a$”取决于$a$是否是unit；若$\gcd(a,n)>1$，cancellation可能丢解或制造错误结论。
-
-
-## 31.4 Solving modular linear equations
-
-
-$$
-ax\equiv b\pmod n
-$$
-
-有解当且仅当$d=\gcd(a,n)$整除$b$。若有解，则modulo $n$恰有$d$个solutions。
-
-
-把$a,b,n$同时除以$d$，得到coprime equation
-
-$$
-\frac{a}{d}x\equiv\frac{b}{d}\pmod{n/d}.
-$$
-
-Reduced coefficient有inverse，得到一个base solution $x_0$ modulo $n/d$；全部solutions为
-
-$$
-x_0+k(n/d)\pmod n,\qquad k=0,\ldots,d-1.
-$$
+对 $252,105$，余数链倒推：$21=105-2\cdot42$，且 $42=252-2\cdot105$，所以 $21=-2\cdot252+5\cdot105$。扩展 Euclid 正是系统化这次回代，而不是另一个因数分解算法。
 
 ```text
-MODULAR-LINEAR-EQUATION(a, b, n)
-1  (d, x, _) = EXTENDED-GCD(a, n)
-2  if b is not divisible by d, return no solutions
-3  x0 = x * (b/d) mod n
-4  return x0 + k*(n/d) mod n for k = 0..d-1
+EXTENDED-EUCLID(a, b)
+if b = 0: return (a, 1, 0)
+(d, x1, y1) ← EXTENDED-EUCLID(b, a mod b)
+return (d, y1, x1 - floor(a/b)·y1)
 ```
 
-Verification应逐个检查$a x\bmod n=b\bmod n$，并确认solution count为$d$；只返回第一解会丢失合法classes。
+返回 $(d,x,y)$ 后，务必检查 $ax+by=d$。负输入时应先约定 gcd 取非负值并相应规范系数；本章实验限定正输入，避免把符号约定藏在实现细节里。
 
-## 31.5 The Chinese remainder theorem
+## 31.4 模算术：模逆元与模线性方程
 
-设$n_1,\ldots,n_k$ pairwise coprime，$N=\prod_i n_i$。System
+### 逆元存在的精确条件
 
-$$
-x\equiv a_i\pmod{n_i}
-$$
+若 $ax\equiv1\pmod n$，则存在整数 $y$ 使 $ax+ny=1$。由 Bézout 定理，这样的 $x$ 存在当且仅当 $\gcd(a,n)=1$。这个 $x$ 称为 $a$ 的 <Term def="在模 n 乘法下与 a 相乘得到余数 1 的数">模逆元</Term>，写作 $a^{-1}\pmod n$。
 
-在modulo $N$下有唯一solution。
+例如 $3^{-1}\pmod7=5$，因为 $3\cdot5=15\equiv1\pmod7$。反之，$6$ 在模 9 下无逆元，因为 gcd 为 3。模除法只有在除数可逆时才可进行，不能照搬实数除法。
 
+### 模线性方程（线性同余）可能有零个或多个解
 
-Constructive formula令$N_i=N/n_i$，求$M_i=N_i^{-1}\pmod{n_i}$：
-
-$$
-x\equiv\sum_{i=1}^{k}a_iN_iM_i\pmod N.
-$$
-
-每一term在自己的modulus等于$a_i$，在其他moduli因含对应factor而为0。CRT可把large-modulus arithmetic拆成independent smaller moduli，也可重建exact integer coefficients；若moduli不pairwise coprime，需检查residues在共同gcd上的compatibility。
-
-## 31.6 Powers of an element
-
-### Square-and-multiply
-
-不能执行$e-1$次multiplication来算$a^e$。Binary expansion把exponent halved at every step：
-
-```text
-MODULAR-EXPONENTIATION(a, e, n)
-1  result = 1; base = a mod n
-2  while e > 0
-3      if e is odd, result = result * base mod n
-4      base = base * base mod n
-5      e = floor(e/2)
-6  return result
-```
-
-
-算法做$O(\log e)$ modular squarings/multiplications。Cryptographic implementation还要处理timing与power side channels；data-dependent branch的教学伪代码不应直接用于secret exponent。
-
-### Order and Euler theorem
-
-在finite group中，element $a$的order是最小positive $t$使$a^t=1$。Lagrange theorem说明order整除group size。
-
-
-因此对$a\in\mathbb{Z}_n^*$：
+考虑 $ax\equiv b\pmod n$，令 $d=\gcd(a,n)$。若有解，$d$ 必须整除 $b$；若 $d\nmid b$，方程无解。若 $d\mid b$，同时除以 $d$ 后，系数 $a/d$ 与模数 $n/d$ 互素，故可求逆，得到一个解 $x_0$。模 $n$ 的全部解为
 
 $$
-a^{\phi(n)}\equiv1\pmod n.
+x=x_0+k(n/d)\pmod n,\quad k=0,1,\ldots,d-1.
 $$
 
-当$n=p$为prime时，$\phi(p)=p-1$，得到Fermat little theorem。它们解释exponent reduction与RSA correctness，也提供primality tests的necessary condition，但necessary不等于sufficient。
+这个式子在说：有解时恰有 $d$ 个不同余数类，而非只要找到一个就算完成。例如 $6x\equiv9\pmod{15}$，$d=3$，化简为 $2x\equiv3\pmod5$，得 $x\equiv4\pmod5$，所以模 15 的解是 $4,9,14$。
 
-## 31.7 The RSA public-key cryptosystem
+## 31.5 中国剩余定理：从小模数拼回去
 
-### Key arithmetic
+若 $n_1,\ldots,n_k$ 两两互素，则系统 $x\equiv a_i\pmod{n_i}$ 在模 $N=\prod_i n_i$ 下恰有一个解。<Term def="把互素模数下的一组余数唯一拼成模数乘积下的一个余数">中国剩余定理</Term>不仅断言解存在，也给出构造方法。
 
-选择distinct large primes $p,q$，令$n=pq$、$\phi(n)=(p-1)(q-1)$。选择$\gcd(e,\phi(n))=1$，再以extended Euclid求
-
-$$
-d\equiv e^{-1}\pmod{\phi(n)}.
-$$
-
-Public key为$(n,e)$，private information包括$d$及通常保留的$p,q$。
-
-
-Textbook arithmetic对message representative $m$计算
+取 $N_i=N/n_i$，再求 $M_i=N_i^{-1}\pmod{n_i}$，则
 
 $$
-c\equiv m^e\pmod n,
-\qquad
-m'\equiv c^d\pmod n.
+x=\sum_{i=1}^{k}a_iN_iM_i\pmod N.
 $$
 
+对每个 $j$，除第 $j$ 项外的其他项都含因子 $n_j$，模 $n_j$ 为 0；第 $j$ 项因 $N_jM_j\equiv1\pmod{n_j}$，恰好留下 $a_j$。因此构造值满足全部余数条件。比如 $x\equiv2\pmod3,\ x\equiv3\pmod5$，检查 $x=8$ 即可；模 15 下其解唯一。
 
-因为$ed=1+k\phi(n)$，对coprime messages由Euler theorem有$m^{ed}\equiv m$；一般message可分别mod $p,q$证明后用CRT合并。Encryption/decryption都用square-and-multiply；private operation常用CRT分别mod $p,q$加速。
+若模数不互素，不能直接套用此结论；各组余数必须先在共同因数上相容。例如模 6 余 1 与模 8 余 2 相容，因为二者对 gcd 2 的余数同为 1；模 6 余 1 与模 8 余 3 则不相容。
 
-### Security boundary
+## 31.6 模幂：平方，把指数逐位读完
 
-Textbook RSA是algebra lesson，不是secure protocol。Deterministic encryption泄漏equality且可被malleate；production encryption必须使用标准方案如RSA-OAEP，signatures使用RSA-PSS，并使用成熟library、constant-time private operations、large approved key sizes与secure randomness。不要自己生成primes、padding或side-channel defenses。
+### 重复平方
 
+直接做 $a^e$ 需要约 $e$ 次乘法。把指数写成二进制后，平方可逐位生成幂：若当前位为 1，就把当前底数乘入结果；每轮把底数平方，并将指数右移一位。模运算允许每次乘法后立刻取余，不必保存巨大的完整幂。
 
-## 31.8 Primality testing
+<Term def="每轮平方当前底数、按指数当前位累乘结果的模幂算法">重复平方</Term>
+（square-and-multiply）执行 $O(\log e)$ 次模乘。例：$3^{13}\bmod7$，指数
+$13=(1101)_2$；依序平方并累乘，结果为
+3。这里是模乘次数的渐近分析；固定宽度整数仍要防止乘法溢出，大整数库则要选择合适的约减算法。
 
-### Fermat is not enough
+### 元素的幂、阶、Euler 定理与 Fermat 定理
 
-不能对所有potential divisors逐一trial divide到$\sqrt n$，因为相对bit length仍是exponential。
+在有限乘法群中，元素的阶是使其幂等于单位元的最小正整数。这里“元素的幂”是重复执行群运算；对模乘法来说，就是反复相乘并约回模数。若 $a$ 与 $n$ 互素，Euler 定理给出 $a^{\phi(n)}\equiv1\pmod n$；当 $n=p$ 为素数时，$\phi(p)=p-1$，于是得到 Fermat 小定理 $a^{p-1}\equiv1\pmod p$。
 
-Fermat test随机选与$n$ coprime的$a$，检查
+这些结论有前提：底数必须与模数互素。Fermat 检验中通过一次测试不等于证明素数，因为合数也可能通过；后面要用更强的见证结构。
+
+## 31.7 RSA 公钥密码系统：数论构造，不等于完整安全方案
+
+RSA 公钥密码系统是一种把模幂与互逆指数结合起来的公钥构造。选取不同大素数 $p,q$，令 $n=pq$、$\phi(n)=(p-1)(q-1)$。选择与 $\phi(n)$ 互素的公开指数 $e$，再用扩展 Euclid 求 $d=e^{-1}\pmod{\phi(n)}$。公钥为 $(n,e)$；私钥核心是 $d$，实际系统也会安全保存 $p,q$ 以加速运算。这里的关键依赖是 $p,q$ 保密：知道它们即可得到 $\phi(n)$，继而计算私钥指数。
+
+加密和解密的教科书关系为
 
 $$
-a^{n-1}\equiv1\pmod n.
+c\equiv m^e\pmod n,\qquad m'\equiv c^d\pmod n.
 $$
 
-Failure直接证明composite，但pass只说明$a$不是Fermat witness。Carmichael numbers对所有coprime bases都pass。
+这个式子在说：先把消息映射成模 $n$ 的余数，再用互逆的指数变换；它本身没有描述编码、填充或密钥管理。
 
+因为 $ed\equiv1\pmod{\phi(n)}$，当 $m$ 与 $n$ 互素时，Euler 定理直接说明解密还原；一般消息需分别模 $p,q$ 论证再用 CRT 合并。实现中的幂运算可用重复平方，CRT 也能拆成两个较小模数的运算。
 
-### Miller–Rabin witnesses
+<Callout type="warning" title="安全边界">
+  裸 RSA 是代数教学模型，不是可直接部署的加密协议。真实加密需要标准填充方案（如
+  RSA-OAEP），签名需要
+  RSA-PSS；私钥运算还要考虑常数时间、随机性、密钥管理与侧信道。不要自行设计填充或生产级密钥生成。
+</Callout>
 
-对odd $n>2$，写
+## 31.8 素数测试：见证与概率界
+
+### Fermat 测试为何会误判
+
+对候选奇数 $n$ 选取与 $n$ 互素的底数 $a$，若 $a^{n-1}\not\equiv1\pmod n$，则 $n$ 一定合数；若等式成立，只能说这次没有找到反例。Carmichael 数会对所有与它互素的底数通过 Fermat 条件，因此“通过”不是素数证明。
+
+### Miller–Rabin 的平方链
+
+把 $n-1$ 写成 $2^s d$，其中 $d$ 为奇数。先检查 $a$ 与 $n$：若 $1<\gcd(a,n)<n$，该公因数已证明 $n$ 合成；否则计算 $x_0=a^d\bmod n$。若 $x_0=1$ 或 $n-1$，本轮未找到见证；否则依次计算 $x_i=x_{i-1}^2\bmod n$（$i=1,\ldots,s-1$），任何一步出现 $n-1$ 都表示本轮未找到见证。若都没有，$a$ 是合数见证。
+
+<Term def="通过分解 n−1 并检查平方链，寻找合数见证的概率素数测试">
+  Miller–Rabin 测试
+</Term>
+若实现遵守上述范围，对素数不会错误报合数。对奇合数，独立均匀随机选取合法底数时，强伪素数通过单轮的比例至多为
+$1/4$；重复 $r$ 轮后，合数全部通过的概率至多为 $4^{-r}
+$。这是随机底数下的错误界，不是候选数“成为素数”的概率；底数选择、独立性和小数边界处理都属于实现前提。
+
+以 Carmichael 数 $561$ 为例，Fermat 检验会误导：$561=3\cdot11\cdot17$，且对所有与它互素的底数都有 $a^{560}\equiv1\pmod{561}$。Miller–Rabin 取底数 $a=2$：$560=2^4\cdot35$，平方链为
 
 $$
-n-1=2^s d,\qquad d\text{ odd}.
+2^{35}\equiv263,\quad 263^2\equiv166,\quad166^2\equiv67,\quad67^2\equiv1\pmod{561}.
 $$
 
-先算$x=a^d\bmod n$。若$x=1$或$x=n-1$，本轮non-witness；否则反复square至$s-1$次，若途中出现$n-1$则non-witness，否则$a$证明$n$ composite。
+初值不是 $1$ 或 $560$，后续平方也未出现 $560$，所以 $2$ 是合数见证。这一例显示更强测试如何拒绝 Fermat 伪装；通过一轮仍只是“本轮未找到见证”。需要证明时，应使用适用范围明确的确定性检验或素数证书。
 
+## 交互实验：展开余数链，检查 Bézout 证书
 
-```text
-MILLER-RABIN-WITNESS(a, n)
-1  write n-1 = 2^s * d with d odd
-2  x = a^d mod n
-3  if x is 1 or n-1, return non-witness
-4  repeat s-1 times
-5      x = x^2 mod n
-6      if x is n-1, return non-witness
-7  return composite witness
-```
+先预测：把 $(252,105)$ 换成 $(105,42)$ 后，gcd 会改变吗？逐次展开除法，观察除数怎样成为下一步的被除数、余数怎样成为下一步的除数；终点出现后，再检查线性组合证书是否真的等于 gcd。
 
-Prime总是pass。对odd composite，随机base成为strong liar的fraction至多$1/4$；独立重复$r$轮，错误upper bound为$4^{-r}$。这概率来自random base selection，不是说number本身“有某概率为prime”。若需要deterministic proof，应使用适合范围的proved base set或certifying primality algorithm。
+<Clrs4NumberTheoreticAlgorithmsLab />
 
-## 数论证书与实现边界
+输入为两个最多 9 位的正整数。修改任一输入会从第一步重算；“展开下一次除法”逐步揭示商、余数及其线性组合系数，“收起上一行”可回看预测。完成后可直接代回验证 Bézout 证书；重置回到 $252,105$。表格保留完整状态，阶梯图聚焦前四次状态转移。
 
-Number-theory bug经常藏在domain mismatch：negative remainder、nonexistent inverse、fixed-width overflow、non-coprime CRT moduli、secret-dependent branches。每个algorithm应先check preconditions，再用independent identity验证output。
+## 常见误区
 
+<Callout type="trap" title="把模逆元当成普通除法">
+  现象：在模 12 下把 6 约掉。原因：$\gcd(6,12)=6$，6
+  没有逆元，约分可能丢掉解。修法：先计算 gcd；解线性同余时按 gcd
+  分情况，而不是直接两边除以系数。
+</Callout>
+
+<Callout type="trap" title="只报告一个同余解">
+  现象：$6x\equiv9\pmod{15}$ 只写 $x=4$。原因：gcd 为 3，模 15
+  有三个解。修法：化简后枚举 $x_0+k(n/d)$ 的 $d$ 个余数类，并逐一代回原式。
+</Callout>
+
+<Callout type="trap" title="把通过测试说成素数证明">
+  现象：Fermat 或 Miller–Rabin
+  一轮通过，就断言是素数。原因：概率测试的通过只表示本轮未找到见证。修法：准确报告轮数、随机底数策略和错误上界；需要证明时使用确定性方法或证书。
+</Callout>
+
+<Callout type="trap" title="把 textbook RSA 直接用于生产">
+  现象：直接对消息整数做 $m^e\bmod n$。原因：裸 RSA
+  确定且可塑，不具备协议需要的安全性质。修法：仅用成熟密码库与标准填充方案，不手写私钥运算。
+</Callout>
 
 ## 小结
 
-Chapter 31 Number-Theoretic Algorithms从elementary notions进入greatest common divisor：Euclid无需factorization，extended Euclid给Bézout coefficients。Modular arithmetic中的inverse存在性由gcd决定；modular linear equations可能无解或有多个解；Chinese remainder theorem把coprime residue systems与product modulus一一对应。
+- Euclid 以 gcd 不变量和严格递减余数求最大公约数；扩展版返回可代入验证的线性组合。
+- 模逆元存在当且仅当系数与模数互素；线性同余解数由 gcd 决定。
+- 两两互素的模数可由 CRT 唯一重建；非互素时先检查相容性。
+- 重复平方按指数位执行模乘；RSA 的教科书关系不能替代安全协议。
+- Miller–Rabin 用平方链寻找合数见证；通过是有明确错误界的概率结论。
 
-Powers of an element用binary repeated squaring降到logarithmic group operations。RSA public-key cryptosystem把public exponent和private modular inverse结合，但textbook arithmetic不等于secure protocol。Primality testing从Fermat necessary condition推进到Miller–Rabin strong witnesses，以可量化的一侧错误概率快速筛除composites。所有结果都应以identity、solution set或witness而非单个数字交付。
+<Exercises>
+  1. 用交互实验处理 $a=391,b=299$：预测第一步余数，逐步展开到终点，并写一组
+  $x,y$ 使 $391x+299y=\gcd(391,299)$。
+  <Answer>
+    余数链：$391=1\cdot299+92$，$299=3\cdot92+23$，$92=4\cdot23$，故 gcd 为
+    23。回代：$23=299-3(391-299)=4\cdot299-3\cdot391$，所以 $x=-3,y=4$。
+  </Answer>
+  2. 求解 $14x\equiv8\pmod{20}$；若无解说明原因，若有解列出模 20 的全部解。
+  <Answer>
+    $d=\gcd(14,20)=2$ 且 $2\mid8$。化简得 $7x\equiv4\pmod{10}$。因 $7^{-1}
+    \equiv3\pmod{10}$，$x\equiv2\pmod{10}$，故模 20 的解为 $2,12$。
+  </Answer>
+  3. 求唯一的 $x\pmod{15}$，满足 $x\equiv2\pmod3$ 且
+  $x\equiv3\pmod5$；再说明为何只试 $0$ 到 $14$ 足以检查唯一性。
+  <Answer>
+    $x=8$ 满足两式。模 3 与模 5 互素，CRT 保证模 $3\cdot5=15$
+    恰有一个余数类解，所以在 $0$ 到 $14$ 中检查得到 8 后，已覆盖所有模 15
+    的候选类。
+  </Answer>
+</Exercises>
 
+## 名词解释
 
+<Glossary>
+  <GlossaryItem term="gcd">
+    最大公约数：能同时整除两个整数的最大正整数。
+  </GlossaryItem>
+  <GlossaryItem term="Bézout 恒等式">
+    把 gcd 写成两个输入整数倍数之和的等式；系数让答案可以直接验算。
+  </GlossaryItem>
+  <GlossaryItem term="模逆元">
+    在指定模数下，乘上它会得到余数 1 的数；只有 gcd 为 1 时才存在。
+  </GlossaryItem>
+  <GlossaryItem term="中国剩余定理">
+    互素模数下的余数信息，可以唯一拼成模数乘积下的一个余数。
+  </GlossaryItem>
+  <GlossaryItem term="重复平方">
+    按指数的二进制位逐轮平方并选择性累乘，避免逐次乘指数那么多次。
+  </GlossaryItem>
+  <GlossaryItem term="RSA">
+    用模幂和互逆指数构造公钥密码的数学方案；教科书裸形式不是安全的生产协议。
+  </GlossaryItem>
+  <GlossaryItem term="Miller–Rabin 测试">
+    检查 $n-1$ 的平方链来寻找合数见证；多轮通过仍是带错误界的概率结论。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与边界
+
+本章按 CLRS 第四版第 31 章官方目录确定范围，采用独立教学重写，不复现原书段落或图表。内容覆盖初等数论、Euclid 与扩展 Euclid、模算术、线性同余、CRT、模幂、RSA 和素数测试；余数阶梯交互、数值练习与逐步答案是本项目原创教学材料。目录只能证明章节主题归属，不能代替对教材全文的访问；生产级密码实现应采用经过审查的标准与成熟库。RSA 加密和签名编码的标准化定义可查阅 [RFC 8017：PKCS #1 v2.2](https://www.rfc-editor.org/rfc/rfc8017)；该规范用于核对 OAEP 与 PSS 等方案的定义，不应被理解为本章完整覆盖部署安全要求。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 31: Number-Theoretic Algorithms"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

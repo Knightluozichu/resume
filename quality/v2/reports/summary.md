@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-16T16:20:27.477Z；旧版分数不迁移。
+> 2026-10-16T21:05:25.528Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1730
+- failed：1722
 - queued：196
-- passed：1730
+- passed：1738
 - published：953
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -99,10 +99,10 @@
 | 86 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
 | 87 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 88 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 89 | introduction-to-algorithms | 39 | 10 | 0 | 29 | 34 |
-| 90 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 91 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 92 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 89 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 90 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 91 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 92 | introduction-to-algorithms | 39 | 2 | 0 | 37 | 8 |
 | 93 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 94 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
 | 95 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |

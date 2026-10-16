@@ -1,213 +1,290 @@
 ---
 title: "Chapter 30 · Polynomials and the FFT"
-type: C
+type: B
 section: "CLRS4 · 专题"
 order: 30
-description: "按CLRS第四版第30章重建多项式表示、DFT/IFFT、radix-2 FFT、多项式乘法与FFT电路。"
+description: "按 CLRS 第四版第 30 章重建多项式的两种表示、DFT/逆 DFT、奇偶拆分与蝶形网络、FFT 多项式乘法与补零陷阱。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-30
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter30PolynomialsFftLab } from "@/components/mdx/introduction-to-algorithms/v2/30-polynomials-and-the-fft";
 
-## 从“乘法在哪种表示里更便宜”开始
+{/* 可视化决策：两种表示=系数条(左)+复平面上的DFT点值散点(右)，并标明单位圆仅作参考范围（Stage0）；奇偶拆分=原系数条按奇偶虚线箭头映射到A⁰/A¹两组半长条（Stage1）；FFT=真实蝶形网络拓扑图：5列节点、位反转输入标注、3层各4只蝴蝶24条连线、旋转因子ω₂⁰/ω₄/ω₈标注、ω₈⁴=−ω₈⁰高亮（Stage2）；乘法流水线=朴素卷积条 vs FFT恢复条逐系数对账，故障注入补零8→4显示循环卷绕红条（Stage3）。组件=clrs4-30-polynomials-fft-lab.tsx（Clrs4Chapter30PolynomialsFftLab），内置真实radix-2 FFT/IFFT/卷积oracle，概念异构度高→本章独立组件。知识点：系数表示(Stage0)、点值表示(Stage0)、单位根(Stage0复平面)、离散傅里叶变换(Stage0/公式)、快速傅里叶变换(Stage2网络)、蝶形运算(Stage2高亮)、补零与循环卷绕(Stage3+故障)，进名词解释：系数表示/点值表示/单位根/离散傅里叶变换/蝶形运算。 */}
 
-先预测：两个degree为$n-1$的polynomials按coefficients直接相乘，需要把每对coefficients组合到相同degree，工作量为quadratic；若先知道它们在足够多points上的values，product只需逐点相乘。真正的问题变成：能否快速来回转换这两种表示？
+<Objectives>
 
-不是单独一个transform调用，而是representation change。完整pipeline为coefficient $\to$ point values $\to$ pointwise product $\to$ coefficients。
+- 能解释多项式系数表示与点值表示各自的运算代价，说明为什么"先求值、逐点相乘、再插值"能把乘法从 Θ(n²) 降到 Θ(n log n)。
+- 能手算 n=4 的 DFT 与一次蝶形合并（由 E、O 写出 yₖ 与 yₖ₊₂），并说明 ωₙ 的哪两条性质让奇偶拆分成立。
+- 自测：A = 1 + 2x + 3x² + 2x³ 与 B = 1 − x + x²，朴素卷积结果是哪 6 个数？若只补零到 n = 4 就进 FFT 流水线，哪几个系数会被卷绕污染？
 
+</Objectives>
 
-## 30.1 Representing polynomials
+## 直觉：换一种记账方法，乘法就便宜了
 
-### Coefficient representation
+先预测：两个各有几百项的式子相乘，朴素做法要逐项交叉配对，工作量随项数平方增长；但如果换一本"账"——先在固定若干个位置上记下两个式子的取值——乘积在这每个位置上的取值只需一次乘法。真正贵的只剩下一个问题：能不能快速在两本账之间来回转换？
 
-最常见的是coefficient vector：
+这一章回答"能"。来回转换的算法叫快速傅里叶变换，它把平方级的配对工作量压到接近线性对数级。没有它，大到信号处理、整数乘法、卷积神经网络里的卷积层，都要为同一个平方级瓶颈付出实打实的算力账单；工程上几乎所有"频域"工具的背后都是这个换账 trick。
+
+代价是必须小心记账规则：转换时取的"位置"有特殊对称性，数量必须不少于乘积的项数；补零不够不会丢尾巴，而是让高位数字循环绕回低位，安静地污染结果——第五节实验的故障注入演示的就是这个坑。
+
+## 权威目录定位
+
+本章按 CLRS 第四版第 30 章的官方目录限定范围：多项式的表示（representing polynomials）、离散傅里叶变换与快速傅里叶变换（the DFT and FFT）、FFT 电路（FFT circuits）。原书正文未获授权获取；目录只用于界定主题，不作为正文事实的证明。正文事实以公开学术资料交叉核对，示例数值、图示、代码与练习均为独立重写，结论由本章自带 oracle（朴素卷积与 radix-2 FFT 实现）逐点复核，不复现原书表述。
+
+## 多项式的两种表示
+
+<Term def="把多项式存成一列系数 a₀, a₁, …, aₙ₋₁；相加按位对应相加，相乘则是系数之间的卷积。">
+  系数表示
+</Term>
+是最常见的写法：一个次数界为 n 的多项式 A(x) 由 n 个系数 a₀ 到 aₙ₋₁
+完全确定。加法按位相加只要线性时间；麻烦在乘法——每个 cₖ 都是若干对 aⱼ 与 b
+系数的乘积之和，朴素实现要平方级次数值运算。
+
+<Term def="把多项式存成若干个点上的取值对（xₖ, A(xₖ)）；只要点数不少于次数界且 xₖ 互不相同，多项式就被唯一确定。">
+  点值表示
+</Term>
+换了一本账：不记系数，记 A 在一组取样点上的取值。若 A 与 B
+用同一组取样点，乘积在每个点上的取值就是两个取值各自相乘——乘法退化成逐点相乘，线性时间完成。难的两头变成了"多点求值"和"由点值插值回系数"。
+
+对任意互异取样点，朴素地逐点代入、再用直接插值公式恢复系数，通常都要平方级时间；这不是所有算法的下界。本章的突破口是选取有代数对称性的取样点——单位根——让这两个操作可用 FFT 加速。第五节实验第一步把两种表示并排画出：左边是系数条，右边是在 8 个单位根处取得的 DFT 值，绘于复平面；散点是函数值，不是取样点本身。
+
+## 单位根：有对称性的取样点
+
+<Term def="满足 ωⁿ = 1 的复数 ω；本原 n 次单位根 ωₙ = e^{2πi/n} 的幂 ωₙ⁰, …, ωₙⁿ⁻¹ 均匀分布在复平面的单位圆上。">
+  单位根
+</Term>
+是整套算法的支点。把 n 个取样点取成 ωₙ 的 n
+个幂，它们均匀分布在单位圆上；之所以选它们，是因为两条对称性质让大问题能拆成两个等形状的小问题。
+
+第一条：把取样点平方，点的个数减半——ωₙ² 恰好是 n/2 次单位根 ωₙ/₂。第二条：相对的两个点互为相反数——ωₙ 的幂中，后半圈恰好是前半圈的负值，即 ωₙ^(k+n/2) = −ωₙᵏ。前一条让"对 n 个点求值"递归成"对 n/2 个点求值"，后一条让每一层的合并只需一次加法一次减法再复用一遍。
+
+## 离散傅里叶变换：换账的动作本身
+
+<Term def="把系数列 a₀, …, aₙ₋₁ 换成 n 个点值 yₖ = A(ωₙᵏ) 的线性变换；逆变换把点值换回系数（除以 n）。">
+  离散傅里叶变换
+</Term>
+（DFT）就是"从系数表示到点值表示"的正式名字：它给出 n
+个取样点处的取值。逆变换方向相反，把点值插值回系数。两个方向的公式结构几乎一样——只差旋转因子的符号和最后除以
+n——所以同一个计算内核稍加包装就能双向使用。
+
+务必分清数学对象与算法：<Term def="计算 DFT 的快速算法（本章为 radix-2 分治版本），不是另一种变换；它算出的就是上面定义的同一个 DFT。">快速傅里叶变换</Term>（FFT）不是另一个变换，而是计算同一个 DFT 的快速算法。按定义直接算要平方级时间；FFT 用奇偶拆分把它压到 Θ(n log n)。评价一段实现时，"变换定义对不对"与"算法快不快"是两个独立的问题。
+
+## 奇偶拆分与蝶形运算
+
+把 A 的系数按下标奇偶分成两组：偶数项组成 A⁰，奇数项组成 A¹，则 A(x) = A⁰(x²) + x·A¹(x²)。由于取样点平方后减半，对 A 在 n 个单位根上求值，恰好归约为对 A⁰、A¹ 各自在 n/2 个单位根上求值——两个半规模的同类型子问题，递归到底。
+
+合并两半结果时，每对输出共享一次计算。设 E、O 分别是 A⁰、A¹ 的半规模变换结果，则对每个 k：
+
+- 前半输出：Eₖ + ωₙᵏ·Oₖ
+- 后半输出：Eₖ − ωₙᵏ·Oₖ
+
+这个"一次乘旋转因子、一次加、一次减、产出两个结果"的小结构叫<Term def="FFT 合并阶段的基本计算单元：由两个半规模变换的输出 Eₖ、Oₖ 经 t = ωₙᵏ·Oₖ 的一次加减，同时产出 yₖ 与 yₖ₊ₙ/₂。">蝶形运算</Term>。n 个点的变换共 log₂n 层，每层 n/2 只蝴蝶，总工作量 Θ(n log n)。第五节实验第二步画出拆分映射，第三步画出 n = 8 的完整蝶形网络：输入按位反转排列，旋转因子逐层加密。
+
+## 数学：从卷积到 Θ(n log n)
+
+本节符号：`aⱼ`、`bⱼ` 为两个输入多项式的系数，`cₖ` 为乘积系数，`n` 为变换长度（2 的幂），`ωₙ = e^{2πi/n}` 为本原 n 次单位根，`yₖ` 为 DFT 输出，`Eₖ`、`Oₖ` 为偶、奇子问题的半规模 DFT 输出，`u`、`v` 为蝶形中的中间量，`T(n)` 为 FFT 的递归工作量。
+
+系数表示下的乘法（离散卷积）逐项展开为：
 
 $$
-A(x)=\sum_{j=0}^{n-1}a_jx^j.
+c_k=\sum_{j=\max(0,k-q)}^{\min(p,k)}a_jb_{k-j},\qquad 0\le k\le p+q.
 $$
 
-Addition按index相加，花$\Theta(n)$；evaluation by Horner花$\Theta(n)$；两个length-$n$ vectors的naive multiplication会生成length $2n-1$ output：
+这个式子在说：乘积的第 k 项系数，是所有下标之和恰好为 k 且仍落在输入范围内的 aⱼ 与 b 系数两两乘积之和。若两边各有 Θ(n) 个系数，直接计算所有输出需 Θ(n²) 次数值运算，这就是朴素乘法的平方级来源。
+
+DFT 把系数列换成在 n 个单位根处的取值：
 
 $$
-c_k=\sum_{j=0}^{k}a_jb_{k-j}.
+y_k=A(\omega_n^k)=\sum_{j=0}^{n-1}a_j\omega_n^{jk},\qquad 0\le k<n.
 $$
 
-这就是discrete convolution。所有合法index pairs总数为quadratic，因此direct method需要$\Theta(n^2)$ scalar operations。
+这个式子在说：第 k 个点值，是系数列与旋转因子序列 ωₙ⁰, ωₙᵏ, ωₙ²ᵏ, … 的对应乘积之和——按定义逐项算仍是平方级，它只是"换账"的定义，还不是快的方法。
 
-
-Coefficient form保留degree、sparsity和exact integer coefficients，适合small或sparse operands。FFT并非所有输入都更快：transform overhead、padding和floating-point conversion可能在small sizes超过naive或Karatsuba-like methods。
-
-### Point-value representation
-
-Degree-bounded polynomial由足够多distinct points上的values唯一确定。Point-value representation保存pairs $(x_k,A(x_k))$。若$A$和$B$使用同一evaluation points，则
-
-$$
-C(x_k)=A(x_k)B(x_k)
-$$
-
-对每个$k$独立成立，product只需linear个pointwise multiplications。之后通过interpolation恢复$C$ coefficients。
-
-任意points上的multipoint evaluation与interpolation仍可能昂贵。FFT选择有algebraic symmetry的roots of unity，使$n$-point evaluation和inverse interpolation都能在$\Theta(n\log n)$完成。
-
-### Degree bound and zero padding
-
-若$\deg A=p$、$\deg B=q$，则product最多有$p+q+1$个coefficients。Transform length必须至少为这个数量；radix-2 implementation通常取不小于它的next power of two。
-
-
-Padding不足不会只丢末尾zeros，而会把high-degree coefficients circularly wrap到low degrees，得到cyclic convolution。测试若只看transform round-trip而不和naive linear convolution比较，可能漏掉这个semantic error。
-
-## 30.2 The DFT and FFT
-
-### Roots of unity
-
-令primitive $n$th root
-
-$$
-\omega_n=e^{2\pi i/n},
-\qquad
-\omega_n^n=1.
-$$
-
-它的powers $\omega_n^0,\ldots,\omega_n^{n-1}$均匀分布在complex unit circle。Primitive意味着更小positive power不会先回到1。
-
-
-Roots的两个性质驱动radix-2 split。若$n$为even，$\omega_n^2=\omega_{n/2}$；同时$\omega_n^{k+n/2}=-\omega_n^k$。前者把evaluation points平方后减半，后者让后半outputs由一次sum/difference复用。
-
-### Discrete Fourier transform
-
-（DFT）定义为
-
-$$
-y_k=A(\omega_n^k)
-=\sum_{j=0}^{n-1}a_j\omega_n^{jk},
-\qquad 0\le k<n.
-$$
-
-
-直接按definition计算$n$个outputs，每个sum有$n$项，仍是$\Theta(n^2)$。Fast Fourier Transform不是另一种transform；（FFT）是计算同一个DFT的fast algorithm。
-
-Inverse DFT使用inverse root并除以$n$：
+逆变换把点值换回系数，结构相同只差符号与缩放：
 
 $$
 a_j=\frac{1}{n}\sum_{k=0}^{n-1}y_k\omega_n^{-jk}.
 $$
 
-所以同一FFT kernel可通过root sign与final scaling实现inverse。Libraries对forward sign和normalization的约定不同，adapter必须写清，不能从function name猜。
+这个式子在说：换回系数时旋转因子取共轭方向（负号），并把总和除以 n；因此同一套 FFT 内核改个符号、最后除以 n 就能当逆变换用——但库的归一化约定（谁负责除以 n）各不相同，调用前必须读文档。
 
-
-### Even-odd decomposition
-
-把$A$按coefficient index parity拆成half-size polynomials：
+奇偶拆分是递归的拆解依据，对任意 x 恒成立：
 
 $$
-A(x)=A^{[0]}(x^2)+xA^{[1]}(x^2),
+A(x)=A^{[0]}(x^2)+xA^{[1]}(x^2).
 $$
 
-其中$A^{[0]}$收集$a_0,a_2,\ldots$，$A^{[1]}$收集$a_1,a_3,\ldots$。
+这个式子在说：把偶数项打包成 A⁰、奇数项打包成 A¹ 后，原多项式在 x 处的值等于"偶部在 x² 处的值"加上"x 乘以奇部在 x² 处的值"；因为取样点平方后点集减半，两个子问题都是同形状的更小 DFT。
 
-
-递归计算两组DFT后，对$k$从0到$n/2-1$，令$u$为even transform output，$v$为odd transform output：
+设 u = Eₖ，v = ωₙᵏ·Oₖ，蝶形合并把两个半规模的答案拼成整规模的答案：
 
 $$
-y_k=u+\omega_n^kv,
-\qquad
-y_{k+n/2}=u-\omega_n^kv.
+y_k=u+v,\qquad y_{k+n/2}=u-v.
 $$
 
-这对sum/difference称为。
+这个式子在说：前半输出是"偶部贡献加旋转后的奇部贡献"，后半输出把同一项取负即可——ωₙ^(k+n/2) = −ωₙᵏ 让一次乘法服务两个输出，这是每层工作量只有线性的原因。
 
-
-```ts
-type Complex = { re: number; im: number };
-
-function fft(values: Complex[], root: Complex): Complex[] {
-  const n = values.length;
-  if (n === 1) return values;
-  const even = fft(values.filter((_, i) => i % 2 === 0), square(root));
-  const odd = fft(values.filter((_, i) => i % 2 === 1), square(root));
-  const out = Array<Complex>(n);
-  let twiddle = { re: 1, im: 0 };
-  for (let k = 0; k < n / 2; k += 1) {
-    const t = multiply(twiddle, odd[k]);
-    out[k] = add(even[k], t);
-    out[k + n / 2] = subtract(even[k], t);
-    twiddle = multiply(twiddle, root);
-  }
-  return out;
-}
-```
-
-伪代码中的`root`必须对应current problem size；recursive call使用squared root。Real implementation还要避免每层`filter` allocation，可用stride/index ranges或iterative in-place circuit。
-
-### Work recurrence
-
-FFT生成两个half-size transforms，并在combine做$\Theta(n)$ work：
+逐层累加工作量得到整算法的规模：
 
 $$
 T(n)=2T(n/2)+\Theta(n)=\Theta(n\log n).
 $$
 
+这个式子在说：每层 log₂n 层中的合并共做线性工作，几何级数求和后总量是 n log n 级——log₂n 层、每层 n/2 只蝴蝶，正是实验第三步那张网络的总账。
 
-每一recursion level总共有$n/2$ butterflies，一共$\log_2 n$ levels。对independent butterflies并行执行时，ideal circuit depth为logarithmic，但实际performance受memory traffic、vector width、cache blocking和twiddle access影响。
+## 交互实验：一条 FFT 乘法流水线
 
-### Polynomial multiplication
+先预测：把多项式对换成第三组，或注入"补零不足"故障把变换长度从 8 砍到 4——恢复出的乘积系数会在哪里偏离真值？先写下你的预测，再推进时间线：第一步看两种表示，第二步看奇偶拆分，第三步沿蝶形网络走一遍，第四步核对与朴素卷积的逐条对账。
 
-```text
-FFT-POLYNOMIAL-MULTIPLY(a, b)
-1  choose n >= length(a) + length(b) - 1, convenient for the FFT
-2  zero-pad both coefficient vectors to n
-3  A = FFT(a), B = FFT(b)
-4  for k = 0 to n-1, set C[k] = A[k] * B[k]
-5  c = INVERSE-FFT(C)
-6  trim to the required product length and validate rounding
+<Clrs4Chapter30PolynomialsFftLab />
+
+## 代码对照：蝶形合并的核心十一行
+
+实验背后的 oracle 用同一逻辑段实现蝶形合并：半规模结果进来，一次乘旋转因子、一次加、一次减，产出整规模的两个输出。输入按位反转排列后，这就是迭代版 FFT 的全部内层循环。
+
+```ts
+function butterfly(E: Cx[], O: Cx[], root: Cx): Cx[] {
+  const n = E.length * 2;
+  const out: Cx[] = new Array(n);
+  let w: Cx = { re: 1, im: 0 }; // ω_n^0，逐次乘 root 得 ω_n^k
+  for (let k = 0; k < n / 2; k += 1) {
+    const t = cmul(w, O[k]); // v = ω_n^k · O_k
+    out[k] = cadd(E[k], t); // 前半输出
+    out[k + n / 2] = csub(E[k], t); // 后半输出 = 前半 − 同一项
+    w = cmul(w, root); // 推进到下一个旋转因子
+  }
+  return out;
+}
 ```
 
+工程上与教学伪代码的两点差异：递归版按奇偶 filter 会每层分配新数组，热路径应改用下标步长或迭代位反转 + 原地蝶形；复数乘法的定标、旋转因子的查表或逐次累乘，决定了数值误差随层数增长的形状，实现后必须按第七节的对拍清单验收。
 
-两次forward transforms、一次inverse transform各$\Theta(n\log n)$，pointwise multiply为$\Theta(n)$，总work为$\Theta(n\log n)$。Integer coefficients用complex FFT时需round near-integers并控制error；需要exactness时可使用适合modulus的number-theoretic transform和Chinese remainder reconstruction。
+## 常见误区
 
+<Callout type="trap">
+  **现象**：把 FFT 当成"另一种变换"，写文档或测验收敛性时与 DFT
+  混为一谈。原因：DFT 是数学定义（线性映射），FFT
+  只是计算它的快速算法；两者一个是"账本的格式"，一个是"翻账本的熟练工"。修法：评审时分两问——变换定义对吗（拿朴素
+  DFT 对拍）？算法复杂度对吗（数蝴蝶层数与每层规模）。
+</Callout>
 
-## 30.3 FFT circuits
+<Callout type="trap">
+  **现象**：FFT
+  乘法出来的低阶系数莫名出错，有时还恰好抵消看起来像对的。原因：补零长度 n 小于
+  deg A + deg B + 1，乘积高阶系数在模 n
+  下循环卷绕回低阶——不是"丢掉尾巴"而是绕圈污染，实验故障注入中 c₀ = 6 + (−6) = 0
+  就是被吞掉的真值。修法：两条输入都补零到 ≥ p+q+1，radix-2 再取不小于它的 2
+  的幂，并永远拿朴素卷积对拍。
+</Callout>
 
-### Unrolling recursion
-
-把recursion tree按levels重排。每stage包含$n/2$ independent butterflies，stage之间有data dependencies；这既是hardware pipeline图，也是iterative software loop的dependency graph。
-
-
-Decimation-in-time iterative implementation常先把inputs放成bit-reversed order，再按butterfly width 2、4、8逐stage扩大。Index的binary digits反转，是因为recursive even/odd splits依次抽取原index的least-significant parity bits。
-
-```text
-ITERATIVE-FFT(a)
-1  permute a into bit-reversed index order
-2  for width = 2, 4, 8, ..., n
-3      root_step = primitive root for this width
-4      for every block of this width
-5          run width/2 butterflies with successive twiddles
-6  return a in natural output order
-```
-
-另一些convention保留natural input而返回bit-reversed output，或使用decimation-in-frequency。任何一种都可以正确，但调用方必须与layout contract一致。一个FFT与另一个IFFT如果恰好犯了互相抵消的ordering bug，round-trip test可能通过，而frequency bins仍对外错位。
-
-### Circuit cost and verification
-
-Circuit有$\log_2n$ stages，每stage$n/2$ butterflies，因此size $\Theta(n\log n)$、dependency depth $\Theta(\log n)$。Hardware可为每stage分配units形成高throughput pipeline，也可fold同一组butterflies节省area；latency、throughput与area是不同metrics。
-
-
-FFT测试至少包含四类oracle：
-
-1. small vectors与direct $O(n^2)$ DFT逐bin比较；
-2. forward再inverse的round-trip与scale检查；
-3. polynomial multiplication与naive convolution比较；
-4. impulse、constant、single-frequency等能暴露sign/order的structured cases。
-
-Error tolerance应按input magnitude、$n$和numeric type缩放；用固定tiny epsilon比较所有sizes既可能误报，也可能放过large relative error。
-
+<Callout type="trap">
+  **现象**：round-trip
+  测试（正变换再逆变换）通过，接入系统后频谱或乘积却整体错位。原因：库的约定各不相同——正变换符号、归一化谁除以
+  n、输入输出是否位反转，都可能不同；恰好两个库的位反转 bug 互相抵消时
+  round-trip
+  照样过。修法：用已知答案的结构化用例验收（冲激、常数列、单频正弦、与朴素卷积对拍），不要只信
+  round-trip。
+</Callout>
 
 ## 小结
 
-Chapter 30 Polynomials and the FFT先比较representing polynomials的coefficient与point-value forms：前者让加法直接但乘法成为convolution，后者让乘法逐点完成。DFT在roots of unity上完成evaluation，inverse DFT完成interpolation；radix-2 FFT利用even-odd split和cancellation symmetry，以$\Theta(n\log n)$ work计算它们。
+- 系数表示让加法直接、乘法变成卷积；点值表示相反，乘法只需逐点相乘。
+- DFT/逆 DFT 是两种表示之间的双向换账，选单位根作取样点才拆得动。
+- 奇偶拆分 + ωₙ^(k+n/2) = −ωₙᵏ 让每层合并线性，总工作量 Θ(n log n)。
+- 蝶形网络共 log₂n 层、每层 n/2 只蝴蝶；位反转是递归拆分的输入排列副作用。
+- 补零不足导致循环卷绕；验收要拿朴素卷积与结构化用例对拍，不能只信 round-trip。
 
-FFT circuits把recursion展开为$\log n$ butterfly stages，bit reversal解释iterative layout。完整多项式乘法还必须正确zero-pad、pointwise multiply、inverse-scale并处理numeric error。只有同时通过direct DFT、round-trip、known spectra和naive convolution，才能把transform实现与其调用语义一起证实。
+## 练习
 
+<Exercises>
 
+1. 手算 a = (1, 2, 3, 4) 的 n = 4 DFT（ω₄ = i）：直接按定义求 y₀ 到 y₃；再用奇偶拆分核对——先算 E = DFT(a₀, a₂) 与 O = DFT(a₁, a₃)，然后用蝶形合并公式拼回 y。
+
+   <Answer>
+
+   按定义：y₀ = 1+2+3+4 = 10；y₁ = 1+2i−3−4i = −2−2i；y₂ = 1−2+3−4 = −2；y₃ = 1−2i−3+4i = −2+2i。奇偶核对：偶部 (1, 3) 的二点 DFT 是 E = (1+3, 1−3) = (4, −2)；奇部 (2, 4) 是 O = (6, −2)。蝶形合并（ω₄¹ = i）：y₀ = E₀ + O₀ = 10，y₂ = E₀ − O₀ = −2；y₁ = E₁ + i·O₁ = −2−2i，y₃ = E₁ − i·O₁ = −2+2i。两组结果一致。
+
+   </Answer>
+
+2. 在实验中换到第三组多项式（A = 2−x+3x²，B = 3+4x−2x²），注入"补零 8 → 4"故障并推进到第四步：预测 c₀ 的恢复值会是多少？用循环卷绕解释它与真值 6 的关系。
+
+   <Answer>
+
+   朴素卷积为 (6, 5, 1, 14, −6)，共 5 项，需求 n ≥ 5。n = 4 时 c₄ = −6 模 4 卷绕回 c₀：恢复值 = 6 + (−6) = 0，真值 6 被完全吞掉；其余 c₁、c₂、c₃ 不受影响。这正是"循环卷绕"的字面意思：变换长度不够时，乘积系数按模 n 绕圈相加，而不是丢掉尾巴。修法：补零到 n ≥ 5 并取 2 的幂，即 n = 8。
+
+   </Answer>
+
+3. 某库的 IFFT 输出整体偏大 n 倍，且 round-trip（FFT 后再 IFFT）恰好完全正确。写出两种可能的原因，并说明为什么 round-trip 测试抓不住第二种。
+
+   <Answer>
+
+   可能一：该库的约定是 IFFT 不除以 n（归一化全压给正向调用方），round-trip 同样正确，但单次 IFFT 的尺度就错了 n 倍——按文档核对归一化约定即可发现。可能二：库 A 的输入要求位反转序而调用方给自然序，同时库 B 的输出恰好也错位，两步错位互相抵消，round-trip 完美通过，但每个频点对应的频率都标错了——round-trip 只验证"逆能抵消正"，验证不了"每个桶的含义对不对"。修法：用已知频谱的结构化用例（如常数列只应点亮 y₀）验收每个桶的位置与尺度。
+
+   </Answer>
+
+</Exercises>
+
+## 参考资料
+
+- Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein, _Introduction to Algorithms_, 4th ed., Chapter 30 目录（范围依据；本章未使用或改写原书正文）：[MIT Press 官方目录 PDF](https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf)。
+- James W. Cooley and John W. Tukey, “An Algorithm for the Machine Calculation of Complex Fourier Series,” _Mathematics of Computation_ 19(90), 1965, pp. 297–301, [doi:10.1090/S0025-5718-1965-0178586-1](https://doi.org/10.1090/S0025-5718-1965-0178586-1)。用于核对快速分治傅里叶计算的历史与算法背景。
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="系数表示">
+  把多项式存成一列数字（各项的系数）。大白话：像存一个数组，第 j 个格子存 x 的 j
+  次方前面的数。相加很容易，相乘就变成两两配对的繁重活。详见"多项式的两种表示"节与实验第一步。
+</GlossaryItem>
+<GlossaryItem term="点值表示">
+  不记系数，改记这个式子在若干个点上的取值。大白话：不记菜谱，直接尝
+  八个位置的咸淡；只要位置够多且互不重复，菜谱就能被唯一还原。乘法在这个账本里只要对应位置相乘。详见"多项式的两种表示"节与实验第一步。
+</GlossaryItem>
+<GlossaryItem term="单位根">
+  自乘 n 次等于 1 的复数；本原 n 次单位根的 n
+  个幂均匀躺在单位圆上。大白话：把圆周 n
+  等分的那些点。选它们当取样点，是因为平方后点集减半、前后半圈互为相反数，这两条对称性让快速算法得以成立。详见"单位根"节与实验第一步的复平面。
+</GlossaryItem>
+<GlossaryItem term="离散傅里叶变换">
+  把系数列换成单位根处取值的固定换账动作，逆变换换回来（最后除以
+  n）。大白话：一本"翻译词典"的正反两页——不是算得快的方法，只是翻译规则本身。详见"离散傅里叶变换"节与"数学"节。
+</GlossaryItem>
+<GlossaryItem term="快速傅里叶变换">
+  用快速分治算法计算离散傅里叶变换；本章讲的是 radix-2
+  奇偶拆分，不是新的变换定义。详见“奇偶拆分与蝶形运算”节与实验第三步。
+</GlossaryItem>
+<GlossaryItem term="蝶形运算">
+  FFT
+  里把两个半规模答案拼成整规模答案的小零件：一次乘旋转因子、一次加、一次减，同时产出前半和后半两个输出。大白话：一对蝴蝶翅膀共用一根骨架，算一遍顶两遍。详见"奇偶拆分与蝶形运算"节与实验第三步的蝶形网络。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 30 章的目录定位与核心主题进行独立教学重写：以权威目录限定范围、以公开学术资料核对事实、不复现原书正文。第 30 章主题归属由官方目录支持；DFT/FFT 的算法背景另参 Cooley–Tukey 原始论文（见“参考资料”）；交互实验、蝶形网络图示、数值 oracle、代码示例、练习答案与故障注入演示是本项目新增材料。
+
+本章全部数值结论（卷积真值、DFT 点值、恢复系数、卷绕污染）由章内自带 oracle 计算复核：朴素卷积与递归 radix-2 FFT/IFFT 独立实现后逐点对比，符号约定（$\omega_n=e^{2\pi i/n}$、逆变换除以 $n$）在正文中显式写明。三组示例多项式是为教学构造的最小用例，不代表任何具体数值库的约定或误差特性。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 30: Polynomials and the FFT"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

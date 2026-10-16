@@ -19613,6 +19613,76 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Clrs4Chapter29LinearProgrammingLab,
       } as ChapterMdxComponents;
     },
+  "introduction-to-algorithms/07-selected-topics/30-polynomials-and-the-fft":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/30-polynomials-and-the-fft");
+      return {
+        Clrs4Chapter30PolynomialsFftLab:
+          module0.Clrs4Chapter30PolynomialsFftLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/31-number-theoretic-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/31-number-theoretic-algorithms");
+      return {
+        Clrs4NumberTheoreticAlgorithmsLab:
+          module0.Clrs4NumberTheoreticAlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/32-string-matching":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/32-string-matching");
+      return {
+        Clrs4Chapter32StringMatchingLab:
+          module0.Clrs4Chapter32StringMatchingLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/33-machine-learning-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/33-machine-learning-algorithms");
+      return {
+        Clrs4Chapter33MachineLearningAlgorithmsLab:
+          module0.Clrs4Chapter33MachineLearningAlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/34-np-completeness":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/34-np-completeness");
+      return {
+        Clrs4Chapter34NpCompletenessLab:
+          module0.Clrs4Chapter34NpCompletenessLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/35-approximation-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/35-approximation-algorithms");
+      return {
+        Clrs4Chapter35ApproximationAlgorithmsLab:
+          module0.Clrs4Chapter35ApproximationAlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/08-mathematical-background/appendix-a-summations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/appendix-a-summations");
+      return {
+        Clrs4AppendixASummationsLab: module0.Clrs4AppendixASummationsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/08-mathematical-background/appendix-b-sets-etc":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-appendix-b-sets-etc-lab");
+      return {
+        Clrs4AppendixBSetsEtcLab: module0.Clrs4AppendixBSetsEtcLab,
+      } as ChapterMdxComponents;
+    },
   "langchain-programming/00-map/lcp-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/langchain-programming/v2/lcp-official-learning-map");

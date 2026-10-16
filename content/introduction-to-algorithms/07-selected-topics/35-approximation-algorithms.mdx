@@ -1,250 +1,295 @@
 ---
 title: "Chapter 35 · Approximation Algorithms"
-type: C
+type: B
 section: "CLRS4 · 专题"
 order: 35
-description: "按CLRS第四版第35章重建近似保证、顶点覆盖、旅行商、集合覆盖、随机化/线性规划与子集和FPTAS。"
+description: "按 CLRS 第四版第 35 章重建近似算法的保证结构：近似比、顶点覆盖 2-近似、度量旅行商、集合覆盖对数近似、随机化/线性规划与子集和 FPTAS。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-35
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter35ApproximationAlgorithmsLab } from "@/components/mdx/introduction-to-algorithms/v2/35-approximation-algorithms";
 
-## 从“求不到最优，怎样仍给出可证明答案”开始
+{/* 可视化决策：近似证书=上下界夹逼结构（比率条对比 |C| / 2|M| / |C*|，Stage3）；顶点覆盖 2-近似=图结构+极大匹配逐条选边动画（Stage1 三槽位 stagger）+ 端点入选标记（Stage2 逐边 ✓/漏盖检查）；故障注入=每轮只选一个端点→漏盖边红色虚线+证书失效。组件=clrs4-35-approximation-algorithms-lab.tsx（Clrs4Chapter35ApproximationAlgorithmsLab），概念异构度：图为匹配/覆盖结构、比率为夹逼条→本章独立组件。知识点：近似算法(公式)、近似比(公式+条图)、PTAS/FPTAS(文字)、顶点覆盖问题(图动画+代码)、度量旅行商(公式)、集合覆盖问题(公式)、随机化(公式)、线性规划松弛(公式)、子集和与FPTAS(公式)。进名词解释：近似算法/顶点覆盖问题/旅行商问题/集合覆盖问题/子集和问题。 */}
 
-先预测：面对NP-hard optimization problem，输出一个feasible solution并不困难，真正困难的是回答“它离最优有多远”。不以“看起来不错”为验收标准，而是把solution、bound与proof一起交付。
+<Objectives>
 
-近似结论至少包含四层：problem version、feasibility、performance ratio、running time。Randomized algorithm还要说明保证是expectation还是high probability；scheme还要说明accuracy parameter如何进入runtime。遗漏这些限定，经验结果再漂亮也不能替代理论保证。
+- 能写出一份近似结果的完整证书——可行解、最优值下界、比率推导、运行时间与前提假设——并指出一个"近似算法"声明缺了哪一块。
+- 能手算顶点覆盖 2-近似的一次完整运行：构造极大匹配、给出下界、推出近似比，并说明选边顺序改变什么、不改变什么。
+- 自测：一张星形加路径的图（8 个顶点 6 条边，最优覆盖大小为 3），按顶点编号顺序逐条取未覆盖边，匹配大小、覆盖大小、实测比率各是多少？2 倍保证靠什么成立？
 
-### Approximation ratio
+</Objectives>
 
-通常取$\rho(n)\ge1$。Minimization要求$C_A\le\rho(n)C^*$；maximization要求$C_A\ge C^*/\rho(n)$。也可统一写为
+## 直觉：答不上"还能更好吗"时，交出一份带误差条的答卷
+
+先预测：有些挑选方案的问题，候选组合多到数一辈子也数不完，要拿到"绝对最好的那个"往往等不起。但如果你交出的不只是一个方案，还有一份"我离最好的最多差多远"的证明，这件事就变得可行了——你同意接收一个有明确上限的差距吗？
+
+本章解决的正是这件事。对一类"短时间内求不到最优"的问题，我们不假装找到了最好的答案，而是规定一种新的交卷格式：先给出一个肯定合法的方案，再给出一个任何人都不可能超过的基准线，两个数一夹，差距就有了上界。没有这个格式，"算法跑得挺快、结果看着不错"就只是经验之谈，无法复查、无法比较、无法信任。
+
+下面每一节都在回答同一个问题：对不同的经典问题，那条可证明的差距上界究竟从哪里来。
+
+## 权威目录定位
+
+本章按 CLRS 第四版第 35 章的官方目录限定范围：近似算法（approximation algorithms）与近似比、顶点覆盖问题（35.1）、旅行商问题（35.2）、集合覆盖问题（35.3）、随机化与线性规划（35.4）、子集和问题（35.5）。写作方式是以权威目录限定范围、以公开学术资料核对事实、不复现原书正文；所有示例数值、图、伪代码与练习均为独立重写，示例结论可用本章自带实验逐步复核。
+
+## 近似算法与近似比
+
+<Term def='在最优解短时间内求不到时，于可接受时间内输出一个合法解，并附带 "它离最优有多远" 的可证明上界的算法。'>
+  近似算法
+</Term>
+（approximation
+algorithm）不改变问题本身，改变的是验收标准：从"必须最优"放宽为"合法解 +
+可证明的比率"。一份完整的近似结论至少包含五层信息：问题版本、解的合法性、近似比、运行时间、前提假设。随机化算法的保证还要说明是期望意义还是高概率意义；近似方案还要说明精度参数怎样进入运行时间。漏掉任何一层，经验结果再漂亮也不能替代理论保证。
+
+本节符号约定：
+
+| 符号      | 含义                      |
+| --------- | ------------------------- |
+| $C_A$     | 算法 $A$ 输出的解的目标值 |
+| $C^*$     | 最优解的目标值            |
+| $\rho(n)$ | 近似比，恒不小于 1        |
+| $n$       | 输入规模                  |
+
+近似比通常记作 $\rho(n)\ge 1$。以下乘法保证针对目标值非负、算法输出可行解的实例：最小化问题要求 $C_A\le\rho(n)\,C^*$，最大化问题要求 $C_A\ge C^*/\rho(n)$。当最优值为 0 时，最小化保证强制算法也必须输出 0；这时不能用除法定义比率，但乘法不等式仍然有意义。最大化问题同理直接用乘法式，不把两个零相除。
+
+当 $C_A,C^*>0$ 时，也可将两种方向合写为
 
 $$
-\max\left(
-\frac{C_A}{C^*},
-\frac{C^*}{C_A}
-\right)
-\le \rho(n).
+\max\left(\frac{C_A}{C^*},\,\frac{C^*}{C_A}\right)\le \rho(n).
 $$
 
+这个式子在说：无论最优值比输出大还是小，"较大的数除以较小的数"都不超过 $\rho(n)$——比率是一个相对差距，与最优值本身多大无关。
 
-Ratio是multiplicative，不等同于absolute error。若optimal value接近0，additive error小也可能对应巨大ratio；反过来，大规模instance上的constant ratio可能容许很大absolute gap。交付时最好同时报告objective、proven ratio、independent lower bound与observed gap。
+比率是乘性的，不等同于绝对误差：若最优值接近 0，很小的绝对差也可能对应巨大的比率；反过来，大规模实例上 2 的比率可能容忍很大的绝对差距。交付时最好同时报告目标值、可证明比率、独立的下界和实测差距。
 
-### Schemes
+沿精度继续细分：多项式时间近似方案（PTAS）对每个固定的 $0<\epsilon<1$ 给出 $1+\epsilon$（最小化）或 $1-\epsilon$（最大化）的保证，并要求固定 $\epsilon$ 后，运行时间关于输入编码长度为多项式；多项式的次数可以依赖 $\epsilon$。完全多项式时间近似方案（FPTAS）进一步要求运行时间关于输入编码长度和 $1/\epsilon$ 的联合规模都是多项式。PTAS 的运行时间可以是 $n^{1/\epsilon}$，所以 PTAS 不一定是 FPTAS——精度每提高一点，代价怎样增长，必须写进证书。
 
-Polynomial-time approximation scheme（PTAS）对任意fixed $\epsilon>0$给出$1+\epsilon$ minimization guarantee或$1-\epsilon$ maximization guarantee，且对fixed $\epsilon$按input size为polynomial。Fully polynomial-time approximation scheme（FPTAS）进一步要求runtime同时对input size和$1/\epsilon$为polynomial。
+## 顶点覆盖：匹配下界撑起的 2-近似
 
-PTAS的runtime可以是$n^{1/\epsilon}$，所以不是FPTAS。Accuracy越高通常越慢；用户选定$\epsilon$后，certificate必须记录该值、实际runtime和最终bound。
-
-## 35.1 The vertex-cover problem
-
-### Maximal matching construction
-
-（vertex-cover problem）是minimum vertex cover。一个简单algorithm反复选择任意uncovered edge $(u,v)$，把两个endpoints都放入cover，并删除所有incident edges。
+<Term def="在一张图中选出最少数量的顶点，使每条边至少有一个端点被选中。">
+  顶点覆盖问题
+</Term>
+（vertex-cover problem）是 NP
+难的组合优化问题，但它的一个朴素算法有漂亮的全局保证。算法反复做一件事：随便挑一条还没有被碰到的边，把它的两个端点都放进覆盖集，然后删掉这两个端点关联的所有边，直到没有边剩下。
 
 ```text
 APPROX-VERTEX-COVER(G)
-1  C = empty set
-2  E' = copy of G.edges
-3  while E' is not empty
-4      choose any edge (u, v) from E'
-5      add u and v to C
-6      delete every edge incident on u or v from E'
+1  C = 空集
+2  E' = G 的边集副本
+3  while E' 非空
+4      从 E' 任选一条边 (u, v)
+5      把 u 和 v 都加入 C
+6      从 E' 删除所有与 u 或 v 关联的边
 7  return C
 ```
 
-
-Selected edges彼此不共享endpoint，因此形成matching $M$。Algorithm输出两个endpoints，所以$|C|=2|M|$。任意vertex cover必须触碰$M$中的每条edge；matching edges disjoint，至少需要$|M|$个different vertices。
+被选中的边彼此不共享端点（共享的早已被删掉），因此它们构成一个匹配 $M$；算法输出两个端点，所以 $|C|=2|M|$。匹配给出下界：任何顶点覆盖都必须触碰 $M$ 中的每条边，而匹配边两两不交，至少需要 $|M|$ 个不同的顶点。于是
 
 $$
-|M|
-\le |C^*|
+|M|\le |C^*|
 \quad\Longrightarrow\quad
-|C|=2|M|
-\le 2|C^*|.
+|C|=2|M|\le 2|C^*|.
 $$
 
+这个式子在说：最优覆盖再小也小不过匹配的大小 $|M|$，而我们的输出恰好是 $2|M|$，所以永远不会超过最优值的 2 倍——上下一夹，2-近似成立。
 
-这是2-approximation。Proof的核心不是“每轮看起来合理”，而是algorithm同时构造了一个可验证lower bound $|M|$。Matching只需maximal，不需maximum；选择顺序可改变具体cover和实际size，但worst-case factor保持2。
+证明的核心不是"每轮看起来合理"，而是算法顺手构造了一个可验证的下界 $|M|$。注意匹配只需极大（无法再添加边）而不需最大（边数最多）；选边顺序能改变具体覆盖和实测大小，但最坏情形的因子保持 2。第五节的实验把这条证明链完整跑了一遍。带权重的顶点覆盖不能直接沿用基数证明，需要线性规划松弛、舍入或原始-对偶方法重新建立界。
 
+## 度量旅行商：三角不等式是证明的一部分
 
-Weighted vertex cover不能直接按“两个endpoint都选”沿用同一cardinality proof。可使用LP relaxation、rounding或primal-dual方法，但bound必须按weights重新建立。
-
-## 35.2 The traveling-salesperson problem
-
-### Why metric structure matters
-
-（traveling-salesperson problem，TSP）在arbitrary nonnegative costs下很难获得一般finite factor：missing graph edges可被编码为极大cost，任何承诺较小factor的algorithm都会区分是否存在Hamiltonian cycle。
-
-Metric TSP要求complete undirected graph、nonnegative symmetric costs并满足triangle inequality：
+<Term def="找一条经过每个城市恰好一次并回到起点的最短回路；输入是城市两两之间的旅行代价矩阵。">
+  旅行商问题
+</Term>
+（traveling-salesperson
+problem）若不要求代价满足三角不等式，则除非 $P=NP$，不存在多项式时间常数因子近似算法。以完全无向图为例，把原图中的边赋代价 $1$、非边赋代价 $M$：若原图有哈密顿回路，最优代价为 $n$；若没有，任何旅行回路至少经过一条代价为 $M$ 的边。对任意声称的常数近似因子 $\rho$，取 $M>\rho n$，近似算法输出值即可区分两种情况。能得到常数保证的经典版本要求度量结构——完全无向图、非负对称代价，并满足三角不等式
 
 $$
-c(u,v)
-\le c(u,w)+c(w,v).
+c(u,v)\le c(u,w)+c(w,v).
 $$
 
+这个式子在说：从 $u$ 直接到 $v$ 永远不会比"绕道 $w$"更贵——现实中的直线距离满足它，受转向限制或随时间变化的代价未必。
 
-Triangle inequality允许shortcut repeated vertices而不增加cost，这是MST-based proof的关键，不是可省略的数据“常识”。现实distance若asymmetric、受turn restrictions影响或随time变化，就不能直接套用metric guarantee。
-
-### MST preorder 2-approximation
-
-先求minimum spanning tree $T$。任意optimal tour删除一条edge后是spanning tree，因此
+度量版本的经典算法分三步：先求一棵最小生成树 $T$；最优回路删掉一条边就是一棵生成树，所以 $c(T)\le c(C^*)$；把 $T$ 的每条边翻倍得到一条可遍历的欧拉回路，代价 $2c(T)$；再按首次出现顺序访问顶点、用直达边跳过重复顶点。三角不等式保证"抄近路"不增加代价，最终回路满足
 
 $$
-c(T)\le c(C^*).
+c(C)\le 2c(T)\le 2c(C^*).
 $$
 
-把$T$中每条edge走两次得到Eulerian walk，cost为$2c(T)$。按preorder或Euler walk首次出现顺序访问vertices，跳过already visited vertices，并用direct edge shortcut；triangle inequality保证cost不增加。
+这个式子在说：生成树给出下界、翻倍给出可走的回路、度量结构把回路修成合法旅行方案，三段证据缺一不可——少了三角不等式，捷径反而可能变贵。更精细的方法能把 2 改进到 1.5，但本节要带走的是"下界 + 可行变换"的证明模板，而不是某个常数。
 
+## 集合覆盖：贪心 + 收费论证
 
-最终tour $C$满足
+<Term def="给定一个全集和一族子集，选出最少数量的子集，使它们的并覆盖整个全集。">
+  集合覆盖问题
+</Term>
+（set-covering
+problem）的贪心策略每轮选择"边际收益"最大的集合：覆盖最多尚未覆盖元素的集合（带权版本则选"代价除以新覆盖元素数"最小的）。关键是收益只算未覆盖部分——一个很大的集合若大部分内容已被覆盖，当前边际收益可能很小；按原始集合大小排序会破坏后面的证明。
 
-$$
-c(C)
-\le 2c(T)
-\le 2c(C^*).
-$$
-
-Algorithm的三个证据互相独立：MST提供lower bound，doubling提供可遍历walk，metric shortcut把walk转成Hamiltonian tour。若只报告最终tour，无法确认factor；若没有triangle inequality，shortcut甚至可能使cost变大。
-
-```text
-APPROX-METRIC-TSP(G)
-1  compute a minimum spanning tree T
-2  walk an Euler tour of the graph formed by doubling every T edge
-3  list vertices in order of first appearance
-4  shortcut repeated vertices using direct metric edges
-5  close the tour and return it
-```
-
-更精细的metric TSP方法可改善2这个factor，但本节要掌握的是lower bound加feasible transformation的证明模板，而不是只记一个常数。
-
-## 35.3 The set-covering problem
-
-### Greedy by uncovered gain
-
-（set-covering problem）给定universe $X$和subsets family $\mathcal{F}$。Unweighted greedy每轮选择覆盖最多uncovered elements的set；weighted version选择cost除以newly covered count最小的set。
-
-```text
-GREEDY-SET-COVER(X, F)
-1  U = copy of X
-2  C = empty collection
-3  while U is not empty
-4      choose S in F maximizing |S intersect U|
-5      add S to C
-6      remove every element of S from U
-7  return C
-```
-
-
-注意gain只计算尚未覆盖的elements。一个large set如果大部分内容已covered，当前marginal gain可能很小；按original set size排序会破坏greedy proof。
-
-### Charging proof
-
-当greedy选择覆盖$k$个new elements的set时，向每个new element收取$1/k$。每个selected set的charges总和为1，所以总charge就是algorithm选取sets数量。
-
-考虑optimal solution中的任意set $S$，按其中elements被greedy覆盖的顺序观察。覆盖第$i$个remaining element时，$S$本身仍能覆盖至少$|S|-i+1$个new elements，因此greedy选择的set gain不小于它，该element charge至多$1/(|S|-i+1)$。于是一个optimal set承担的charges至多harmonic number。
+证明用收费论证：当贪心选中覆盖了 $k$ 个新元素的集合时，向每个新元素收取 $1/k$。每个选中集合的收费总和为 1，总收费就是算法选用的集合数。考察最优解中任意集合 $S$：按其中元素被贪心覆盖的次序观察，覆盖第 $i$ 个剩余元素时，$S$ 自己至少还能覆盖 $|S|-i+1$ 个新元素，所以贪心当轮的收益不小于它、该元素的收费至多为 $1/(|S|-i+1)$，$S$ 承担的全部收费至多为调和数
 
 $$
-H_n
-=
-\sum_{i=1}^{n}\frac1i
-\le \ln n+1.
+H_n=\sum_{i=1}^{n}\frac{1}{i}\le \ln n+1.
 $$
 
+这个式子在说：单个最优集合"背上"的收费最多是 $\ln n+1$，而总收费恰好等于贪心的答案——所以贪心答案不超过 $H_{|X|}\cdot OPT$，是对数级而非常数级保证，这个差距是本质的，不是分析不够努力。
 
-把optimal sets的charges相加，得到greedy使用至多$H_{|X|}\cdot OPT$个sets。更紧的bound可用maximum set size，但$\ln|X|+1$已清楚显示：set cover有logarithmic而非constant guarantee。
+## 随机化与线性规划：两件通用工具
 
-## 35.4 Randomization and linear programming
+这两件工具不针对某个特定问题，而是制造近似界的通用机床。
 
-### Random assignment for MAX-3-CNF
-
-（randomization and linear programming）提供两类通用工具：随机化让global objective等于local indicator expectations之和；LP relaxation把discrete feasible region扩展为fractional region，得到可计算bound，再通过rounding恢复integral solution。
-
-在MAX-3-CNF中，目标是满足尽量多clauses。若每个clause含三个distinct variables且无trivial tautology，uniform independent assignment使特定clause失败的概率为$1/8$，满足概率为$7/8$。Linearity of expectation不要求clauses彼此independent：
+随机化把全局目标拆成局部指示变量的期望之和。以最大三元合取范式满足问题（MAX-3-CNF）为例：每个子句含三个不同变量，独立均匀地随机赋值，特定子句失败的概率是 $1/8$，满足概率 $7/8$。期望的线性性质不要求子句之间独立：
 
 $$
 \mathbb{E}[X]
-=
-\sum_{j=1}^{m}\Pr[\text{clause }j\text{ satisfied}]
-=
-\frac78m
-\ge
-\frac78OPT.
+=\sum_{j=1}^{m}\Pr[\text{第 }j\text{ 个子句被满足}]
+=\frac78 m
+\ge \frac78 OPT.
 $$
 
+这个式子在说：随机一次满足的子句数期望就是 $7m/8$，而期望的意义是"平均而言"——单次的运气可能更差，这是期望保证而不是每次保证。想提高成功率可以独立重启多轮保留最好结果；也可以用条件期望法逐个固定变量，每步选不降低条件期望的一侧，把随机算法去随机化成确定解。
 
-这是expected guarantee，不表示每次sample都满足至少$7m/8$ clauses。可做independent restarts并保留best run提高success probability；也可用method of conditional expectation依次固定variables，每步选择不降低conditional expected value的一侧，得到deterministic solution。
-
-
-### LP relaxation and rounding
-
-Integer program用$x_i\in\{0,1\}$表达选择；LP relaxation把它改为$0\le x_i\le1$。对于minimization，relaxed feasible region更大，所以LP optimum是integer optimum的lower bound。Rounding不是任意取整：必须证明rounded result feasible，并证明cost相对LP bound至多扩大某factor。
+线性规划走另一条路：先用 $0\le x_i\le 1$ 替换整数约束 $x_i\in\{0,1\}$ 得到松弛，对最小化问题，松弛的可行域更大，其最优值是整数最优值的下界：
 
 $$
-OPT_{\mathrm{LP}}
-\le
-OPT_{\mathrm{integer}}
-\le
-C_{\mathrm{rounded}}.
+OPT_{\mathrm{LP}}\le OPT_{\mathrm{integer}}\le C_{\mathrm{rounded}}.
 $$
 
+这个式子在说：松弛解给出的数不可能比真正的整数最优更大，而任何合法整数解（包括我们舍入后的）都不可能比最优更小——三者排成一条链，松弛值就是夹在中间的证书。以顶点覆盖为例：每条边约束 $x_u+x_v\ge 1$，选出所有 $x_v\ge 1/2$ 的顶点必能盖住每条边，代价至多为分数目标值的 2 倍，于是又一个 2-近似诞生——松弛既指导选择规则，又提供与未知最优值相连的下界。随机舍入把分数坐标当作选中概率：期望代价由期望线性性容易计算，但可行性只以某概率成立，需要重复、修补或集中不等式，报告必须写清期望代价、失败概率与修补步骤。
 
-Vertex cover LP含每条edge constraint $x_u+x_v\ge1$。选择所有$x_v\ge1/2$的vertices会cover每条edge，cost至多fractional objective的2倍，从而得到2-approximation。这个proof也说明LP的价值：它既指导selection rule，又提供与未知OPT相连的lower bound。
+## 子集和：裁剪出 FPTAS
 
-Randomized rounding把fractional coordinate解释为selection probability。Expected cost容易由linearity计算，但feasibility可能只以某个probability成立，需要repetition、alteration或concentration bound。报告必须写清expected cost、failure probability和repair step。
+<Term def="给定一组正整数和一个目标值，找出不超过目标值、能由某些物品之和达到的最大数。">
+  子集和问题
+</Term>
+（subset-sum problem）可以维护所有不超过目标值的可达和：处理物品 $x_i$
+时，把旧表 $L_{i - 1}$ 与每项加 $x_i$
+后的新表合并、去重、排序、删掉超过目标的值。问题是精确表可能每轮接近翻倍，最终指数级膨胀；若改按目标值建布尔表，运行时间对"数值"是多项式、对二进制编码长度却是伪多项式。两种现象指向同一个出路：有控制地丢掉近似重复的候选。
 
-
-## 35.5 The subset-sum problem
-
-### Exact list dynamic programming
-
-（subset-sum problem）可维护所有不超过target $t$的reachable sums。处理item $x_i$时，把旧list $L_{i-1}$与每项加$x_i$后的list合并、去重、排序，并删除超过$t$的values。
-
-
-Exact list可能每轮接近翻倍，最终包含exponentially many sums。若按target建boolean table，runtime又可能对numeric target polynomial、对binary encoding pseudo-polynomial。这两种现象解释了为什么需要controlled approximation。
-
-### Trimming near-duplicate sums
-
-TRIM按sorted order保留第一个value，之后只保留比last retained value大超过multiplicative factor $1+\delta$的values。每个discarded value都有一个不大于它、又在multiplicative neighborhood内的representative。
-
-```text
-APPROX-SUBSET-SUM(S, target, epsilon)
-1  L = [0]
-2  delta = epsilon / (2 * |S|)
-3  for each item x in S
-4      L = sorted unique merge of L and [y + x for y in L]
-5      L = TRIM(L, delta)
-6      delete values greater than target
-7  return the largest value in L
-```
-
-
-每轮trimming引入small multiplicative loss；选择$\delta=\epsilon/(2n)$控制$n$轮累计误差。最终output $z$保持feasible且
+裁剪操作按递增序保留第一个值，之后只保留比上一个保留值大出超过因子 $1+\delta$ 的值；每个被丢掉的值都有"不比它大、又在乘性邻域内"的代表。完整算法每轮合并后做一次裁剪，取 $\delta=\epsilon/(2n)$ 控制 $n$ 轮累计误差，最终输出 $z$ 保持合法且
 
 $$
-z
-\ge
-\frac{OPT}{1+\epsilon}.
+z\ge \frac{OPT}{1+\epsilon}.
 $$
 
-（FPTAS）要求list length也被polynomially bounded。Positive sums在multiplicative buckets中逐步增长，bucket count依赖$\log t$和$1/\delta$，所以runtime对binary input length与$1/\epsilon$为polynomial。
+这个式子在说：输出与最优的差距是乘性的、由 $\epsilon$ 直接控制，而裁剪让表长在乘性桶中被多项式地压住——桶数只依赖 $\log t$ 和 $1/\delta$，所以运行时间对二进制输入长度和 $1/\epsilon$ 都是多项式，这正是 FPTAS 的定义。裁剪的顺序有讲究：必须先保证代表值不大于被丢弃值，再删除超过目标的值，用更大的"不可行代表"换掉较小的可行值会直接破坏合法性；零、重复物品与空集也要定义清楚。
 
+## 交互实验：把证明链跑给你看
 
-Trimming不能保留大于target的representative代替较小feasible value；因此先保证representative不大于被discarded value，再删除超过target的values。Zeros、duplicate items和empty set也要定义清楚。
+猜一猜：下面这张图里，换一个选边顺序，覆盖集会变小吗？实测比率呢？最坏情形的 2 倍保证会跟着变吗？先写下你的预测，再推进时间线逐步核对——特别注意第四步那张"上下夹逼"的比率条。
 
-## 一份可复查的近似证书
+<Clrs4Chapter35ApproximationAlgorithmsLab />
 
-不同算法的bound来源不同：vertex cover用matching lower bound，metric TSP用MST lower bound与triangle inequality，set cover用charging，MAX-3-CNF用expectation，LP rounding用relaxation bound，subset sum用trimming invariant。统一交付模板是feasible output、OPT proxy、ratio derivation、runtime和assumptions。
+这张实验图（左侧星形、右侧路径，最优覆盖已由穷举复核为
+3）演示了本节最重要的读法：**下界来自匹配、上界来自"两个端点都选"的构造**，两边相除才是比率。打开"每轮只选一个端点"的故障开关再重播：覆盖可能变小，但漏盖的边说明它根本不合法——省掉一个端点不是优化，是偷换了验收标准。
 
+## 常见误区
+
+<Callout type="trap">
+  **现象**：把近似比读成"误差不超过
+  ρ"。**原因**：近似比是乘性的相对量，最优值接近 0
+  时，极小绝对误差也对应巨大比率；大规模实例上 2
+  的比率也可能容忍很大绝对差。**修法**：同时报告目标值、可证明比率、独立下界与实测差距四个数，让复查者自己换算。
+</Callout>
+
+<Callout type="trap">
+  **现象**：实现顶点覆盖近似时"每轮只选一个端点"，结果漏边（在实验中打开故障开关即可亲眼看翻车）。**原因**：2
+  的证明依赖"选中边的两个端点都进 C"，单侧选点既不保证可行，匹配下界与 |C|
+  的换算也随之断裂。**修法**：两个端点都加入；想要更小的覆盖，换用有独立证明的方法（如
+  LP 舍入），而不是偷掉一个端点。
+</Callout>
+
+<Callout type="trap">
+  **现象**：随机算法期望满足 $7m/8$ 个子句，就声称"每次运行至少满足
+  $7m/8$"。**原因**：期望的保证是平均意义，单次运行可能整体更差；去随机化需要条件期望法等额外构造，不是把随机数换成固定数就自动成立。**修法**：报告写明期望代价、失败概率与修补/重启策略；需要确定性保证时给出完整的去随机化证明。
+</Callout>
 
 ## 小结
 
-Chapter 35 Approximation Algorithms把“polynomial time内求不到exact optimum”转成“polynomial time内交付可证明距离”。Approximation ratio需要feasible solution与OPT bound；PTAS对fixed accuracy polynomial，FPTAS还对$1/\epsilon$ polynomial。
+- 近似结果 = 可行解 + 下界 + 比率推导 + 运行时间 + 前提假设。
+- 近似比是乘性相对量，不能读成绝对误差。
+- 顶点覆盖：极大匹配给下界，两端都选给 2 倍上界。
+- 度量旅行商与集合覆盖：下界来源不同，一个是 MST，一个是收费论证。
+- 子集和：乘性裁剪把指数表压成多项式，得到 FPTAS。
 
-Vertex-cover problem通过maximal matching构造2-approximation。Metric traveling-salesperson problem通过MST、doubling与triangle-inequality shortcut得到2-approximation。Set-covering problem的greedy algorithm用charging得到$H_n$ bound。Randomization用linearity of expectation分析MAX-3-CNF，conditional expectation可derandomize；linear programming用relaxation和rounding连接fractional lower bound与integral solution。Subset-sum problem用multiplicative trimming控制state explosion并形成FPTAS。
+## 练习
 
-所有结论都依赖明确前提。没有metric就不能shortcut，没有lower bound就没有ratio，只给expectation不能声称每次成功，只说“用了LP”不能保证rounded feasibility。完整近似结果必须同时交付solution、checker、bound、proof、runtime和assumptions。
+<Exercises>
 
+1. 在实验图中改用"顺序 B：先取路径中段"：列出被选中的匹配边，写出 $M$、$C$、实测比率 $|C|/|C^*|$，并用匹配下界验证 2-近似证书仍然闭合。
 
+   <Answer>
+
+   扫描顺序先遇到 $(5,6)$：两端都未触碰，选为匹配边 1，端点 5、6 进 $C$；继续扫描，$(0,1)$ 两端未触碰，选为匹配边 2，端点 0、1 进 $C$；其余边 $(0,2),(0,3),(4,5),(6,7)$ 的端点均已被触碰，跳过。于是 $M=\{(5,6),(0,1)\}$，$|M|=2$，$C=\{0,1,5,6\}$，$|C|=4$，实测比率 $4/3\approx1.33$。证书：$|M|=2\le|C^*|=3$，$|C|=4=2|M|\le 2|C^*|=6$，闭合。对比顺序 A 的 $|C|=6$、比率 2.00：选边顺序改变实测大小，最坏保证不变。
+
+   </Answer>
+
+2. 全集 $X=\{a,b,c,d\}$，集合族 $S_1=\{a,b\}$（代价 1）、$S_2=\{b,c,d\}$（代价 1）、$S_3=\{a,d\}$（代价 1）。按"覆盖最多未覆盖元素"的贪心运行，然后对每个被覆盖元素标出收费 $1/k$，验证总收费等于选中集数、且不超过 $H_4\cdot OPT$。
+
+   <Answer>
+
+   第 1 轮：$S_2$ 覆盖 3 个新元素（$b,c,d$），选中；向 $b,c,d$ 各收 $1/3$。第 2 轮：$S_1$ 覆盖 1 个新元素（$a$；$b$ 已覆盖），$S_3$ 同样覆盖 1 个（$a$），平局任选 $S_1$；向 $a$ 收 $1$。总收费 $1/3+1/3+1/3+1=2$，恰等于选中集数 2。最优解是 $\{S_1,S_2\}$ 或 $\{S_2,S_3\}$，$OPT=2$，贪心恰最优；校验 $H_4=1+1/2+1/3+1/4=25/12\approx2.08$，$2\le 2.08\times2$ 成立。注意第 2 轮 $S_1$ 的"原始大小"是 2 但边际收益只有 1——按原始大小排序会先选 $S_1$ 再选 $S_2$，结果同样是 2 个集合，但收费论证的证明链已被破坏。
+
+   </Answer>
+
+3. 物品集 $S=\{1,4,5\}$，目标 $t=10$，取 $\delta=0.2$ 运行近似子集和：写出每轮合并、裁剪后的表 $L_i$（保留规则：比上一个保留值大出超过 $1.2$ 才保留），给出最终输出，并与精确最优比较。
+
+   <Answer>
+
+   $L_0=\{0\}$。裁剪时把 0 单独保留；对正数从小到大扫描，只在当前值严格大于 $1.2$ 倍的上一个已保留正数时保留它。第 1 轮（物品 1）：合并得 $\{0,1\}$，故 $L_1=\{0,1\}$。第 2 轮（物品 4）：合并得 $\{0,1,4,5\}$；保留 0、1；$4>1.2\cdot1$，保留 4；$5>1.2\cdot4=4.8$，也保留，故 $L_2=\{0,1,4,5\}$。第 3 轮合并得 $L_2\cup(L_2+5)=\{0,1,4,5,6,9,10\}$；保留 0、1、4、5；$6\le1.2\cdot5=6$，丢弃 6、由 5 代表；$9>1.2\cdot5=6$，保留 9；$10\le1.2\cdot9=10.8$，丢弃 10、由 9 代表。因此 $L_3=\{0,1,4,5,9\}$，所有值都不超过 10，输出最大值 $z=9$。精确可达和为 $\{0,1,4,5,6,9,10\}$，$OPT=10$（$1+4+5$），本例实测比率为 $OPT/z=10/9\approx1.11$。注意，$\delta=0.2$ 是本题指定的裁剪阈值；不能据此宣称一般的 $1.2$-近似保证。一般保证需按物品数设置 $\delta=\epsilon/(2n)$。零值单独保留是必要的：不能用正数分桶的乘性比较规则处理 0。
+
+   </Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="近似算法">
+  在最优解短时间内求不到时，于可接受时间内输出合法解，并附带"离最优最远差多少"的可证明上界的算法。大白话：交不出满分答卷，就交答卷加一张有上限的误差条。详见"近似算法与近似比"节。
+</GlossaryItem>
+<GlossaryItem term="顶点覆盖问题">
+  在图中选最少的点，让每条边至少有一个端点被选中。像用最少的哨兵看住所有通道：每条通道两端至少站一个哨兵。详见"顶点覆盖"节与第五节实验。
+</GlossaryItem>
+<GlossaryItem term="旅行商问题">
+  找一条每个城市恰好到访一次并回家的最短路线。只有城市间代价满足"直达不比对角线贵"（三角不等式）时，才有有限近似比保证。详见"度量旅行商"节。
+</GlossaryItem>
+<GlossaryItem term="集合覆盖问题">
+  用尽可能少的子集拼出整个全集。像订最少的几份套餐把一组菜全吃到：贪心每轮点"能覆盖最多还没吃到菜"的套餐，代价是对数级保证。详见"集合覆盖"节。
+</GlossaryItem>
+<GlossaryItem term="子集和问题">
+  从一组数里挑一些相加，使其和不超过目标值且尽量大。FPTAS
+  用"丢掉近似重复的中间和"把指数级搜索表压成多项式大小，误差由你选的精度参数控制。详见"子集和"节。
+</GlossaryItem>
+
+</Glossary>
+
+## 事实核对与原书边界
+
+本章依据 CLRS 第四版第 35 章的目录限定范围，以公开课程讲义交叉核对算法事实；这是独立教学重写，不复现原书正文。近似算法、顶点覆盖、旅行商、集合覆盖、随机化与线性规划、子集和 FPTAS 的主题归属以官方目录为准；交互实验、八顶点教学图及其穷举复核、练习答案与故障注入演示是本项目新增材料。以下课程资料仅用于事实核对，不表示原书或讲义采用开放改编许可；该课程讲义依据 CLRS 第三版，故本章的范围仍以第四版官方目录为准。
+
+- [剑桥大学 Advanced Algorithms 课程资料](https://www.cl.cam.ac.uk/teaching/1718/AdvAlgo/materials.html)：第 7 讲覆盖顶点覆盖与集合覆盖，第 8 讲覆盖子集和，第 10 讲覆盖度量 TSP，第 11 讲覆盖随机化与 MAX-3-CNF；用于交叉核对算法框架和推导前提。
+- [Dana Moshkovitz, “The Projection Games Conjecture and the NP-Hardness of ln n-Approximating Set-Cover”](https://theoryofcomputing.org/articles/v011a007/)：用于核对一般集合覆盖的对数近似困难性阈值；正文明确将其写成“除非 $P=NP$”的条件结论。
+
+本章的全部示例数值为教学构造的最小模型：实验图的 $OPT=3$ 由全部 $2^8$ 个子集穷举复核；PTAS 与 FPTAS 的运行时间结论在正文中只作界定性叙述，未展开完整证明。集合覆盖的近似困难性表述依据 Moshkovitz 的阈值结果，并保留其 $P\ne NP$ 条件。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 35: Approximation Algorithms"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
