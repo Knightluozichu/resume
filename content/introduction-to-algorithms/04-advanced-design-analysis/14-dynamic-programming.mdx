@@ -3,172 +3,364 @@ title: "Chapter 14 · Dynamic Programming"
 type: C
 section: "CLRS4 · 高级设计与分析"
 order: 14
-description: "按CLRS第四版第14章重建钢条切割、矩阵链乘法、动态规划原理、最长公共子序列与最优二叉搜索树。"
+description: "按 CLRS 第四版第 14 章重建钢条切割、矩阵链乘法、动态规划原理、最长公共子序列与最优二叉搜索树。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-14
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Clrs4Chapter14DynamicProgrammingLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch14-dynamic-programming";
 
-## 从“递归树为何重复算同一格”开始
+{/* 本章可视化决策：状态与依赖图=DP 表逐格填充+左向依赖箭头 → 图表=钢条切割 r 表逐格账本 → SVG特征=表格格阵+候选第一刀明细+回溯分段条 → 交互=价格预设/长度切换/播放步进/每段扣费故障注入；组件=src/components/mdx/introduction-to-algorithms/clrs4-ch14-dynamic-programming.tsx（Clrs4Chapter14DynamicProgrammingLab）；概念异构度=低（全书同构为"目录单元教学"），但本章概念结构为 DP 表格账本，按每章独立组件执行。知识点清单：钢条切割=Lab 动画+计算练习；矩阵链乘法=公式推导+手算练习；LCS=公式推导+回溯说明；最优二叉搜索树=公式推导；最优子结构/重叠子问题=概念讲解+Lab 调用数对比；记忆化=Lab 对比条；选择表=Lab 回溯分段；四步流程=小结核对。 */}
 
-先预测：长度10的钢条，尝试第一刀后会递归求多个剩余长度；不同切法是否会反复请求“长度4的最优收益”？会。朴素递归把相同状态复制成许多树节点，动态规划把每个不同状态只计算一次。
+<Objectives>
 
-不是“填二维表”的同义词。核心是找到足以决定未来的state和无环dependency。
+- 能为一个优化问题写出状态、转移、base 与依赖顺序，并判断它是否适合动态规划。
+- 能手算钢条切割与矩阵链乘法的 DP 表，并用选择表回溯出具体方案。
+- 自测：带固定切割成本的钢条问题里，转移式应在什么条件下扣这笔成本？读完本章后你应该能立即回答。
 
+</Objectives>
 
-## 14.1 Rod cutting
+## 先问：同一段钢条，为什么会被重复计算成百上千次？
 
-### Recurrence
+工厂把一根原料切成若干段出售，每段有标价。 naive 的做法是：先试第一刀在哪里，再递归地替剩下的部分找最优切法。问题是——长度为 6 的那一段，可能在"第一刀切 4"的方案里出现，也可能在"第一刀切 3"的方案里出现；每出现一次，你就把同样的计算重新做一遍。原料长度越长，这种重复越夸张：调用数按 2 的幂增长，而真正不同的子问题只有长度那么多个。
 
-长度$n$钢条的价格表为$p_i$。选择第一段长度$i$后，剩余$n-i$必须取得自身最优收益，否则替换成更优切法就能改进原方案。定义$r_0=0$：
+本章解决的就是这个浪费：把"每个不同的子问题只算一次，并把怎么得到它的选择记下来"。不这样做，指数级的重复计算会让看似正确的递归在稍大规模上彻底不可用；这样做之后，复杂度变成"状态数 × 每个状态试几个选择"，从指数降为多项式。
+
+先预测：把钢条长度 n 调大一格，朴素递归的调用数会翻几倍？不同子问题的个数又会增加几个？带着这两个数字去读下面的实验，你会明白动态规划的加速来自哪里。
+
+## 权威目录定位
+
+本章对应 CLRS 第四版第 14 章，官方概念包括：
+
+- dynamic programming / 动态规划；
+- rod cutting / 钢条切割；
+- matrix-chain multiplication / 矩阵链乘法；
+- elements of dynamic programming / 动态规划原理；
+- longest common subsequence / 最长公共子序列；
+- optimal binary search trees / 最优二叉搜索树。
+
+正文是独立教学重构：钢条切割建立"状态 + 缓存 + 选择表"的完整闭环，矩阵链乘法展示区间型状态，动态规划原理抽象出最优子结构与重叠子问题的判定标准，最长公共子序列与最优二叉搜索树则展示两类不同的二维表结构。所有公式、表格数值与代码均为独立推导和实现，不复现原书正文。
+
+## 交互 Demo：钢条切割 DP 账本
+
+猜一猜：价格预设切到"近线性（整根越长越划算）"时，最优切法的段数会变多还是变少？先写下预测和理由，再切换预设核对——注意看"调用数账本"和"回溯分段"两个视图各发生了什么。
+
+<Clrs4Chapter14DynamicProgrammingLab />
+
+实验给出了动态规划的完整账本：状态是"剩余长度"，转移是"枚举第一刀"，base 是长度 0，依赖顺序是从短到长。故障注入按钮展示本章最常见的建模错误之一——把切割成本扣在错误的条件上。
+
+## dynamic programming / 动态规划：状态、转移与依赖图
+
+<Term def="对历史的一种压缩摘要：两个历史若映射到同一状态，它们未来的可行选择与代价必须完全等价。">
+  状态
+</Term>
+是动态规划的起点。设计 DP
+时第一件事不是想表格有几行几列，而是问：决定未来还需要知道的全部信息是什么？对钢条切割，"已经切下哪几段"不重要，重要的是"还剩多长"；对矩阵链，是"还剩哪个区间"；对最长公共子序列，是"两个前缀各走到哪"。
+
+选定状态后，问题变成一张有向图：每个状态是一个节点，每个合法决策是一条出边，边权是这一步的代价加上终点状态的已知最优值。动态规划能成立的前提之一是这张图**无环**——总能给节点排一个顺序，使得每条边都指向"更后面"的节点。钢条切割里短长度指向长长度，矩阵链里短区间指向长区间，这个顺序就是填表顺序。
+
+第二步是写出转移：对每个状态，枚举它的全部出边，取最优。转移必须覆盖所有合法选择，否则你优化的就不是原问题；base 必须完整，否则最短的依赖链断在半途。第三步才是选实现：自底向上按拓扑序填表，或者自顶向下递归加缓存。两者在相同状态与转移下渐近等价，差别在常数与工程习惯。
+
+## rod cutting / 钢条切割
+
+### 问题与状态
+
+给定长度 $n$ 的钢条和价格表 $p_i$（长度 $i$ 的整段售价），目标是最大化总收益，允许任意刀数、也允许整根出售。状态取"当前长度 $l$"，转移枚举第一刀切下长度 $i$：剩下 $l-i$ 必须取得它自己的最优收益，否则把剩余部分换成更优切法就能改进整个方案。
+
+填表顺序从 $r_0$ 到 $r_n$。每个长度尝试 $O(n)$ 个第一刀，共 $\Theta(n^2)$ 时间、$\Theta(n)$ 空间。朴素递归之所以是指数级，是因为它把"长度为 4"这个状态在递归树里复制了许许多多次——这正是<Term def="同一个子问题被原问题的多个不同递归路径反复请求的性质；它是缓存能生效的前提。">重叠子问题</Term> 的定义。
+
+### 选择表与 witness
+
+只保存最大收益 $r$ 能回答"最多赚多少"，却不能回答"具体怎么切"。<Term def="与值表平行维护的表格：记录每个状态最优值是由哪个选择得到的，用于事后回溯出完整方案。">选择表</Term>（本章称 `first_cut`）记录每个长度取得最大值的第一段长度。从 $n$ 出发反复减去 `first_cut[n]` 即可重构切法——这条可复现的路径就是 witness。值最优不等于方案已交付：合同里如果包含"输出切法"，选择表就是必需的交付物。
+
+并列最优时由 tie policy 决定输出：选更少段、更长首段或字典序方案，价值相同但 witness 不同。工程上必须固定 tie policy，否则同样的输入可能给出两种切法，让下游测试和对账系统困惑。
+
+### 切割成本往哪扣
+
+若每次下刀有固定成本 $c$，转移只在"确实产生切口"时扣费：第一刀为 $i$ 且 $i<l$ 的候选值是 $p_i + r_{l-i} - c$；而 $i=l$（整根出售、一刀未下）的候选值就是 $p_l$，不扣。把 $c$ 对每段都扣，会把 $k$ 段的合法方案按 $k+1$ 次切口计费——上面的故障注入开关演示的正是这个错误，它会系统性压低最优收益并扭曲分段。
+
+## matrix-chain multiplication / 矩阵链乘法
+
+### 顺序改变成本
+
+矩阵乘法满足结合律：$A_1A_2A_3$ 先乘前两个还是先乘后两个，结果相同。但标量乘法次数不同：若 $A_i$ 的形状是 $p_{i-1}\times p_i$，一个 $p\times q$ 矩阵乘 $q\times r$ 矩阵需要 $pqr$ 次标量乘法。链越长，括号化方案数的卡特兰增长与成本差异都越可观。
+
+### 区间状态与依赖顺序
+
+状态是区间：$m[i,j]$ 表示计算 $A_i\cdots A_j$ 的最少乘法次数。转移枚举最后一次合并的位置 $k$，左右两段先各自最优地算出，最后花 $p_{i-1}p_kp_j$ 合并。填表按区间长度从小到大，保证用到 $m[i,k]$ 与 $m[k+1,j]$ 时它们都已知。共 $\Theta(n^2)$ 个状态、每个状态 $O(n)$ 个分割点，总时间 $\Theta(n^3)$、空间 $\Theta(n^2)$。
+
+与钢条切割对照：那里的状态是一维的"长度"，这里的是二维的"区间"；那里的依赖沿长度方向无环，这里的依赖沿区间长度方向无环。结构不同，填表顺序的论证方式完全相同。
+
+`s[i,j]` 保存最优分割点 $k$，递归打印括号即可输出方案，不必真的去乘矩阵。维度数组必须首尾衔接：$A_i$ 的列数必须等于 $A_{i+1}$ 的行数，否则问题实例本身非法，填出的任何表都没有意义。
+
+## longest common subsequence / 最长公共子序列
+
+子序列不要求连续：删除若干元素后保持相对顺序即可。令 $c[i,j]$ 为前缀 $X[1..i]$ 与 $Y[1..j]$ 的最长子序列长度。末字符相等时，存在一个最优解包含这一对字符，问题收缩到两个更短的前缀；不相等时，最优解至少丢弃其中一个末字符，取"删 $X$ 末"与"删 $Y$ 末"的较大者。
+
+表有 $(m+1)(n+1)$ 格，时间空间都是 $O(mn)$。从 $c[m,n]$ 回溯：字符相等就输出并走对角，否则走向值更大的上格或左格，回溯路径本身就是一条 LCS。只求长度时每行只依赖上一行，空间可压到 $O(\min(m,n))$，但代价是丢掉普通回溯所需的信息——空间优化是合同变更，必须连同"不再交付 witness"一起评估。
+
+## optimal binary search trees / 最优二叉搜索树
+
+### 成功与失败搜索一起计费
+
+静态搜索场景里，查询可能命中某个键 $k_i$（概率 $p_i$），也可能落在键之间的空隙、命中"失败节点"（概率 $q_i$）。节点每深一层，子树内所有查询都多一次比较，所以期望成本按深度加权。
+
+令 $e[i,j]$ 为键 $k_i,\ldots,k_j$ 组成的最优子树的期望成本，$w[i,j]$ 是该区间全部 $p$ 与 $q$ 的和。转移枚举根 $k_r$：左右子树各自最优后挂到 $k_r$ 下方，其中每个节点的深度都增加 1，正好体现为多出来的 $w[i,j]$。空区间的 base 是 $e[i,i-1]=q_{i-1}$——失败概率必须进表，漏掉它就优化了错误的目标。按区间长度填 $e$、$w$、$root$ 三表，朴素实现 $O(n^3)$ 时间、$O(n^2)$ 空间，`root[i,j]` 用于重建树形方案。
+
+它与矩阵链共享区间状态与按长度填表的结构，但转移多一层"概率权重累加"的语义：矩阵链的合并成本只取决于形状，最优二叉搜索树的成本取决于落在每个节点上的查询频率。
+
+## elements of dynamic programming / 动态规划原理
+
+### 最优子结构需要证明
+
+<Term def="问题的最优解中，固定一个合法选择后，剩余部分仍可由同类子问题的最优解组成。">
+  最优子结构
+</Term>
+不是"能写出递归"的同义词，它需要 cut-and-paste
+证明：假设已知最优解的某个结构选择，刻画它产生的子问题，证明其中的子解若不最优就能被替换从而改进原解，最后枚举所有合法选择取最优。最短路径拥有最优子结构；但给最短路径加上"必须走过某颜色的边"这类约束后，只用当前顶点做状态可能不够——历史信息（最后颜色、已用资源）必须并入状态，否则两个历史会被错误地压成同一个状态。
+
+### 重叠子问题区分 DP 与分治
+
+归并排序的子数组互不重叠，缓存没有收益；钢条切割、矩阵链、LCS 反复请求同一状态，缓存才有收益。判断线索是递归树的高度重复，而不是问题"看起来递归"。若子问题基本不重叠，分治已经是终点，不要为它硬造表格。
+
+### 四步工作流
+
+1. 刻画最优解的结构（最优子结构在哪）；
+2. 递归定义最优值（状态 + 转移 + base）；
+3. 自顶向下带缓存或自底向上按拓扑序计算；
+4. 从保存的选择重构最优方案。
+
+<Term def="自顶向下的 DP 实现：用递归表达转移，第一次计算某个状态时把结果存入哈希表或数组，之后直接查表。">
+  记忆化
+</Term>
+适合只访问部分状态的场景——用递归表达转移，首次计算时缓存；自底向上省掉递归开销、便于空间压缩，但必须先找到拓扑序。省略第
+4
+步只能交付分数、不能交付方案；若确定只要分数，可以压缩掉不再使用的历史行，但那是合同允许的省略，不是默认行为。
+
+## 数学推导
+
+本节符号：$p_i$ 为长度 $i$ 的整段售价；$r_n$ 为长度 $n$ 的最优收益；$m[i,j]$ 为矩阵链区间 $A_i..A_j$ 的最少乘法次数，$p_k$ 同时表示链的维度衔接点；$c[i,j]$ 为两前缀的 LCS 长度；$e[i,j]$、$w[i,j]$ 分别为最优 BST 子树的期望成本与概率权重和。
+
+钢条切割的转移：
 
 $$
 r_n=\max_{1\le i\le n}\{p_i+r_{n-i}\}.
 $$
 
+这个式子在说：第一刀切下长度 $i$ 后，剩下 $n-i$ 必须按它自己的最优方案处理，遍历所有第一刀取最大。base 是 $r_0=0$；若引入切割成本 $c$，仅当 $i<n$ 时在候选值上减 $c$。
 
-朴素递归枚举所有第一刀，调用数指数增长。Top-down memoization在第一次请求$r_n$时递归计算并缓存；bottom-up按长度1到$n$填表，保证使用$r_j$时$j$更小且已知。
-
-```cpp
-for (int length = 1; length <= n; ++length) {
-    revenue[length] = -INF;
-    for (int first = 1; first <= length; ++first) {
-        int candidate = price[first] + revenue[length - first];
-        if (candidate > revenue[length]) {
-            revenue[length] = candidate;
-            first_cut[length] = first;
-        }
-    }
-}
-```
-
-状态数$n+1$，每个长度尝试$O(n)$个first cut，总时间$\Theta(n^2)$、空间$\Theta(n)$。
-
-
-只保存revenue能回答最优值，却不能输出切法。`first_cut[length]`记录达到最大值的第一段；从$n$反复减去该长度即可重构。并列最优时，tie policy决定输出更少段、更长首段或字典序方案，价值相同但witness不同。
-
-若每次切割有固定成本$c$，transition应在确实产生切口时扣费；把$c$对每段都扣会多算或少算边界。state和transition必须与问题contract同步。
-
-## 14.2 Matrix-chain multiplication
-
-### Parenthesization changes cost
-
-矩阵链$A_1A_2\cdots A_n$乘积顺序不改变结果，却改变标量乘法次数。若$A_i$形状为$p_{i-1}\times p_i$，区间$i..j$在$k$处分裂，最后合并成本$p_{i-1}p_kp_j$。
-
-
-令$m[i,j]$为$A_i\cdots A_j$最少乘法数，base为$m[i,i]=0$：
+矩阵链乘法的转移：
 
 $$
-m[i,j]=
-\min_{i\le k\lt j}
-\{m[i,k]+m[k+1,j]+p_{i-1}p_kp_j\}.
+m[i,j]=\min_{i\le k<j}\{m[i,k]+m[k+1,j]+p_{i-1}p_kp_j\}.
 $$
 
-按链长$\ell=2,\ldots,n$计算，短区间先于长区间。共有$\Theta(n^2)$状态，每状态尝试$O(n)$分割，总时间$\Theta(n^3)$、空间$\Theta(n^2)$。
+这个式子在说：最后一次合并发生在 $k$ 与 $k+1$ 之间，左右两半各自最优，最后花 $p_{i-1}p_kp_j$ 把两个结果矩阵乘起来；base 是 $m[i,i]=0$（单个矩阵无需乘法）。
 
-
-`s[i,j]`保存最优split $k$。打印括号时递归输出`(i,k)`与`(k+1,j)`；不必实际乘矩阵就能规划顺序。维度数组必须首尾衔接，若$A_i$列数不等于$A_{i+1}$行数，问题实例本身非法。
-
-```text
-PRINT-OPTIMAL-PARENS(s, i, j)
-1  if i == j, print Ai
-2  else print "("
-3       PRINT-OPTIMAL-PARENS(s, i, s[i,j])
-4       PRINT-OPTIMAL-PARENS(s, s[i,j]+1, j)
-5       print ")"
-```
-
-矩阵链展示了区间DP典型结构：state由两个端点定义，transition枚举最后一次合并位置，计算顺序按区间长度，choice表重建树形方案。
-
-## 14.3 Elements of dynamic programming
-
-### Optimal substructure
-
-需要证明，不是看到递归就自动成立。标准证明流程：
-
-1. 假设已知最优解的某个结构选择。
-2. 刻画该选择产生的子问题。
-3. 用cut-and-paste证明最优解中的子解也必须最优。
-4. 枚举所有合法选择取min或max。
-
-
-最短路拥有最优子结构，但带“必须访问不同颜色边”约束时，仅用当前顶点作为state可能不足；需要把最后颜色或已用资源加入state。状态充分性要求：两个历史若映射到同一state，它们未来可行选择和成本必须等价。
-
-### Overlapping subproblems
-
-区分DP与普通分治。Merge sort子数组基本不重叠，缓存无收益；rod cutting、LCS和matrix chain反复请求相同长度或区间。
-
-Memoization适合只访问部分state：用递归表达transition，第一次计算后缓存。Bottom-up省递归开销并容易压缩空间，但必须找到topological order。两者在相同state/transition下通常有相同渐近上界。
-
-### Four-step workflow
-
-动态规划原理可归纳为：
-
-1. Characterize optimal solution structure.
-2. Recursively define optimal value.
-3. Compute value top-down or bottom-up.
-4. Construct an optimal solution from stored choices.
-
-省略第4步只能交付score，不能交付witness。若只需score，可以压缩掉不再使用的历史行；若需重构，要保存choice、重新计算路径，或采用Hirschberg等分治重构方法。
-
-
-## 14.4 Longest common subsequence
-
-### Prefix states
-
-不同于substring，不要求元素连续。令$c[i,j]$为$X[1..i]$与$Y[1..j]$的LCS长度：
+最长公共子序列的转移：
 
 $$
-c[i,j]=
-\begin{cases}
-0,&i=0\text{ or }j=0,\\
-c[i-1,j-1]+1,&x_i=y_j,\\
-\max\{c[i-1,j],c[i,j-1]\},&x_i\ne y_j.
+c[i,j]=\begin{cases}
+0, & i=0\text{ 或 }j=0,\\
+c[i-1,j-1]+1, & x_i=y_j,\\
+\max\{c[i-1,j],\,c[i,j-1]\}, & x_i\ne y_j.
 \end{cases}
 $$
 
+这个式子在说：某个前缀长度为 0 时 LCS 为空；末字符相等时存在一个最优解以这一对字符结尾；不相等时最优解至多保留一个末字符，取删左或删右的较大值。
 
-相等末字符存在某个最优LCS包含该字符，可转到双前缀；不等时最优解至少丢弃一个末字符，因此取上或左。表有$(m+1)(n+1)$格，时间和空间$O(mn)$。
+最优二叉搜索树的转移：
+
+$$
+e[i,j]=\min_{i\le r\le j}\{e[i,r-1]+e[r+1,j]+w[i,j]\}.
+$$
+
+这个式子在说：以 $k_r$ 为根时，左右子树各取最优，而整棵子树的每个查询深度都加 1，恰好等于把区间权重和 $w[i,j]$ 再加一次；base 是空区间 $e[i,i-1]=q_{i-1}$，即失败概率本身。
+
+## 代码对照：bottom-up 钢条切割
+
+同一段 bottom-up 逻辑的两种实现。对照时关注三件事：`dp` 数组对应值表 $r$、`choice` 数组对应选择表、切割成本只在 `i < length` 时扣除。
+
+<CodeTabs>
+
+<Tab label="C++">
 
 ```cpp
-for (int i = 1; i <= m; ++i)
-    for (int j = 1; j <= n; ++j)
-        c[i][j] = x[i - 1] == y[j - 1]
-            ? c[i - 1][j - 1] + 1
-            : std::max(c[i - 1][j], c[i][j - 1]);
+int cut_rod(const vector<int>& price, int n, int cut_cost) {
+    vector<int> dp(n + 1, 0);      // 值表 r
+    vector<int> choice(n + 1, 0);  // 选择表 first_cut
+    for (int len = 1; len <= n; ++len) {
+        int best = numeric_limits<int>::min();
+        for (int i = 1; i <= len; ++i) {
+            int revenue = price[i - 1] + dp[len - i];
+            if (i < len) revenue -= cut_cost;  // 仅下刀才扣费
+            if (revenue > best) {
+                best = revenue;
+                choice[len] = i;
+            }
+        }
+        dp[len] = best;
+    }
+    return dp[n];
+}
 ```
 
-从`c[m][n]`回溯：字符相等就输出并走对角；否则走值更大的上或左。tie可能产生不同但同长LCS，应明确政策。
+</Tab>
 
+<Tab label="Python">
 
-只求长度时，每行只依赖上一行和当前行左格，可压到$O(\min(m,n))$空间；这会丢掉普通回溯路径。重构需求是空间优化contract的一部分。
+```python
+def cut_rod(price, n, cut_cost):
+    dp = [0] * (n + 1)       # 值表 r
+    choice = [0] * (n + 1)   # 选择表 first_cut
+    for length in range(1, n + 1):
+        best = float("-inf")
+        for i in range(1, length + 1):
+            revenue = price[i - 1] + dp[length - i]
+            if i < length:               # 仅下刀才扣费
+                revenue -= cut_cost
+            if revenue > best:
+                best = revenue
+                choice[length] = i
+        dp[length] = best
+    return dp[n]
+```
 
-## 14.5 Optimal binary search trees
+</Tab>
 
-### Successful and unsuccessful searches
+</CodeTabs>
 
-不仅考虑搜索键$k_i$成功，还考虑落在键间dummy $d_i$的失败搜索。节点深度每增加1，该子树所有查询都多一次比较。
+两个实现逐行对应：`dp` 从索引 1 填到 n，内层枚举第一刀 `i`，`choice` 只在严格更优时更新——这固定了"取首个最优候选"的 tie policy。需要输出切法时，从 `choice[n]` 开始反复减去首段长度即可回溯 witness，无需改动求值部分。
 
+## 常见误区与故障注入
 
-令$e[i,j]$为包含$k_i,\ldots,k_j$子树的最小期望成本，$w[i,j]$为该区间所有$p$与$q$概率和。空区间base为$e[i,i-1]=q_{i-1}$：
+<Callout type="trap" title="陷阱：动态规划就是“填一张二维表”">
 
-$$
-e[i,j]=
-\min_{i\le r\le j}
-\{e[i,r-1]+e[r+1,j]+w[i,j]\}.
-$$
+现象：先画表格再硬想格子含义，填完也不知道对不对。
 
-$w[i,j]$加一次是因为把左右最优子树挂到root $k_r$下面后，其中每项深度都增加1。漏掉失败概率$q_i$或这次权重，会优化错误目标。
+原因：表格是状态的投影；状态、转移、base、依赖顺序没定义清楚时，表格的行列语义都是猜测，错一格就全错。
 
-按区间长度填$e,w,root$三表，朴素时间$O(n^3)$、空间$O(n^2)$。`root[i,j]`重建最优树。概率不必总和恰好1才能决定同一最优形状，但必须非负且尺度一致；归一化便于解释期望成本。
+修复：先写转移方程和 base，证明依赖无环并给出拓扑序，再决定表的结构；钢条切割只需要一维表，硬升成二维只会掩盖状态定义的空洞。
 
+</Callout>
+
+<Callout type="trap" title="陷阱：只求出最优值就算交付完成">
+
+现象：`dp[n]` 算出来就返回，调用方问"方案呢"时再补一个近似。
+
+原因：值表只记录分数，不记录选择；没有 `first_cut` 之类的选择表，回溯路径根本不存在。
+
+修复：值表与选择表同时维护，tie policy 写进合同；本章实验的"回溯分段"视图演示了从选择表还原 witness 的完整过程。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：切割成本对每段都扣">
+
+现象：转移写成 `p_i - c + dp[len - i]`，所有候选无差别扣费。
+
+原因：模型把"整根出售、一刀未下"也算成一次切割，k 段方案被按 k+1 次切口计费，最优值被系统性压低。
+
+修复：只有 `i < len`（确实留下剩余、产生切口）的候选才减 c；打开 Demo 的故障注入开关，直接对比两种模型的收益与分段。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：并列最优不做决定，witness 随机漂移">
+
+现象：多个候选同值时取哪个取决于容器遍历顺序或浮点细节。
+
+原因：tie 不是错误，但未声明的 tie policy 会让同输入产生不同 witness，下游 diff、测试与对账随之 flaky。
+
+修复：显式声明并固定 tie policy（如取首个最优、取更长首段），写进实现与文档，把"价值相同"和"witness 唯一"分开验收。
+
+</Callout>
 
 ## 小结
 
-Chapter 14 Dynamic Programming用钢条切割建立缓存与choice重构，用矩阵链乘法展示区间state和split，用动态规划原理抽象optimal substructure、overlapping subproblems、依赖顺序和witness。LCS用前缀二维表处理序列对齐，optimal BST把成功与失败概率按深度加权。
+- dynamic programming / 动态规划 = 无环依赖图上每个状态只算一次，外加选择表回溯 witness。
+- rod cutting / 钢条切割：状态是剩余长度，转移枚举第一刀，$\Theta(n^2)$；切割成本只在下刀时扣。
+- matrix-chain multiplication / 矩阵链乘法：区间状态 + 按长度填表，$\Theta(n^3)$；`s[i,j]` 记录分割点。
+- longest common subsequence / 最长公共子序列与 optimal binary search trees / 最优二叉搜索树共用二维表骨架，但转移语义一个是序列对齐、一个是深度加权的概率计费。
+- elements of dynamic programming / 动态规划原理：最优子结构要 cut-and-paste 证明，重叠子问题区分 DP 与分治，四步流程缺一不可。
 
-DP正确性来自state sufficient、base完整、transition覆盖和dependency acyclic；效率来自不同state数量乘每state转移数。值最优不等于方案已交付，choice与tie policy必须纳入contract。
+## 练习
 
+<Exercises>
 
+1. 价格表 $p=[1,5,8,9,10]$，无切割成本。手算 $n=5$ 的 $r$ 表与 `first_cut` 表，并给出回溯出的切法；若并列最优，说明你采用的 tie policy。
+
+   <Answer>
+
+   $r_1=1$，$r_2=5$（整段卖），$r_3=8$，$r_4=\max(1+8,\ 5+5,\ 8+1,\ 9)=10$（第一刀 2 或 3）。$r_5$ 的候选：$1+r_4=11$、$5+r_3=13$、$8+r_2=13$、$9+r_1=10$、$p_5=10$。取"首个最优"的 tie policy 时第一刀 $i=2$，`first_cut[5]=2`；回溯：$5\to2$，剩 3，`first_cut[3]=3$，切法为 2+3，总收益 13。若 tie 取更长首段则切法为 3+2，收益相同。
+
+   </Answer>
+
+2. 三个矩阵 $A_1$ 为 $10\times30$、$A_2$ 为 $30\times5$、$A_3$ 为 $5\times60$。手算 $m[1,3]$ 与最优分割点 $k$，并验证另一种括号化多花多少。
+
+   <Answer>
+
+   $m[1,2]=10\cdot30\cdot5=1500$，$m[2,3]=30\cdot5\cdot60=9000$。$k=1$：$0+9000+10\cdot30\cdot60=27000$；$k=2$：$1500+0+10\cdot5\cdot60=4500$。故 $m[1,3]=4500$，分割点 $k=2$，即 $(A_1A_2)A_3$。另一种括号化 $A_1(A_2A_3)$ 需要 27000 次标量乘法，多花 22500 次——6 倍的差距来自先乘 $A_2A_3$ 造出了一个 $30\times60$ 的中间矩阵。
+
+   </Answer>
+
+3. 修改上方 Python 实现，把 `if i < length: revenue -= cut_cost` 改成无条件扣费，再用价格表 `[1,5,8,9,10]`、$n=4$、$c=2$ 分别运行两种版本。哪个结果被压低、压低了多少？为什么无条件扣费是错的？
+
+   <Answer>
+
+   正确版本：$r_1=1$、$r_2=5$、$r_3=8$；$r_4=\max(1+8-2,\ 5+5-2,\ 8+1-2,\ 9)=9$，最优方案是不切、整根出售。故障版本每个候选都减 2：$r_1=1-2=-1$，$r_2=\max(1+(-1)-2,\ 5-2)=3$，$r_3=\max(1+3-2,\ 5+(-1)-2,\ 8-2)=6$，$r_4=\max(1+6-2,\ 5+3-2,\ 8+(-1)-2,\ 9-2)=7$，因此被压低 2。原因：长度 4 的正确最优解"整根出售"根本没有下刀；无条件扣费却凭空扣掉 2。切割成本只能加在产生剩余长度的候选上，即 `i < length` 的分支。
+
+   </Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="状态">
+  决定未来所需的全部历史摘要：两个历史若状态相同，未来的选择和代价必须等价。详见"动态规划"一节。
+</GlossaryItem>
+<GlossaryItem term="最优子结构">
+  固定一个合法选择后，剩余部分仍可由同类子问题的最优解组成；需要 cut-and-paste
+  证明，不是递归的同义词。
+</GlossaryItem>
+<GlossaryItem term="重叠子问题">
+  同一子问题被多条递归路径反复请求的性质；它区分动态规划与普通分治，也是缓存收益的来源。
+</GlossaryItem>
+<GlossaryItem term="记忆化">
+  自顶向下 DP
+  的实现方式：递归表达转移，首次计算时缓存结果，后续直接查表。适合只访问部分状态的场景。
+</GlossaryItem>
+<GlossaryItem term="选择表">
+  与值表平行维护、记录每个状态最优选择来源的表格（如
+  first_cut、s[i,j]、root[i,j]），用于回溯出完整方案。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 14 章的目录定位与核心论证进行独立教学重写。钢条切割、矩阵链乘法、动态规划原理、最长公共子序列与最优二叉搜索树的主题范围来自官方目录；交互实验、故障注入、数值示例、代码实现与练习答案均为本项目新增材料。
+
+原书目录仅界定范围，正文表述未获授权复现；章节中的公式为标准算法学知识，数值示例（如价格表、矩阵维度）为教学演示独立构造。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 14: Dynamic Programming"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

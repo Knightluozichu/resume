@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-16T10:51:55.884Z；旧版分数不迁移。
+> 2026-10-16T16:20:27.477Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1738
+- failed：1730
 - queued：196
-- passed：1722
+- passed：1730
 - published：953
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -54,52 +54,52 @@
 | 41 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
 | 42 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
 | 43 | unity5 | 18 | 18 | 0 | 0 | 64 |
-| 44 | introduction-to-algorithms | 39 | 18 | 0 | 21 | 60 |
-| 45 | shaderx | 18 | 18 | 0 | 0 | 60 |
-| 46 | python-ops | 18 | 18 | 0 | 0 | 54 |
-| 47 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
-| 48 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
-| 49 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
-| 50 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
-| 51 | effective-java | 17 | 17 | 0 | 0 | 73 |
-| 52 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 53 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 54 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 55 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 56 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 57 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 58 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
-| 59 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
-| 60 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
-| 61 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
-| 62 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
-| 63 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
-| 64 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
-| 65 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 66 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 67 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 68 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 69 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 70 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 71 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 72 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 73 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 74 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 75 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 76 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 77 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 78 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 79 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 80 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 81 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 82 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 83 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 84 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 85 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 86 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 87 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 88 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 89 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 44 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 45 | python-ops | 18 | 18 | 0 | 0 | 54 |
+| 46 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
+| 47 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 48 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
+| 49 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
+| 50 | effective-java | 17 | 17 | 0 | 0 | 73 |
+| 51 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 52 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 53 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 54 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 55 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 56 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 57 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 58 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
+| 59 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
+| 60 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
+| 61 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
+| 62 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
+| 63 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
+| 64 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 65 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 66 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 67 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 68 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 69 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 70 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 71 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 72 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 73 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 74 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 75 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 76 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 77 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 78 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 79 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 80 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 81 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 82 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 83 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 84 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 85 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 86 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 87 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 88 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 89 | introduction-to-algorithms | 39 | 10 | 0 | 29 | 34 |
 | 90 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 91 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 92 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |

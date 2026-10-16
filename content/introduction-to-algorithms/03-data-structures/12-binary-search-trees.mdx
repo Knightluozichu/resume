@@ -3,138 +3,133 @@ title: "Chapter 12 · Binary Search Trees"
 type: C
 section: "CLRS4 · 数据结构"
 order: 12
-description: "按CLRS第四版第12章重建二叉搜索树性质、查询与中序遍历、successor/predecessor，以及INSERT、DELETE和TRANSPLANT。"
+description: "按 CLRS 第四版第 12 章重建二叉搜索树的全子树范围约束、查询与中序遍历、successor/predecessor，以及 INSERT、TRANSPLANT 与 DELETE 的边缝合。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-12
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Clrs4Chapter12BstLab } from "@/components/mdx/introduction-to-algorithms/v2/12-binary-search-trees";
 
-## 从“每次比较能丢掉哪一半树”开始
+{/* 可视化决策卡：BST 全子树范围约束 → 树形结构图+区间标注 → SVG 特征=节点圆+父子边+(low,high) 区间标签 → 交互=场景切换+只查父子对故障+步进时间线；删除/TRANSPLANT → 手术台边重接图 → SVG 特征=槽位树+重接边高亮+失联子树红虚线 → 交互=删除目标切换+忘记接左子树故障+步进时间线；组件=src/components/mdx/introduction-to-algorithms/clrs4-ch12-binary-search-trees.tsx；组件名=Clrs4Chapter12BstLab；概念异构度=高（区间验证+边缝合两种结构）→ 独立组件 */}
+{/* 知识点清单：二叉搜索树=树形结构图(Demo)；全子树范围约束=区间标注动画(Lab1)；中序遍历=中序序列条(Lab1)；查询路径=搜索路径高亮(Lab2)；后继=successor 下探路径(Lab2)；TRANSPLANT=边重接高亮(Lab2)；树高与退化=公式+误区；重复键政策=正文+练习；以上术语全部进 <Term> 与 <Glossary> 一一对应 */}
 
-先预测：根为15，目标键13，小于根后进入左子树；这一步是否保证丢掉的整个右子树都不含13？只有当树满足“右子树所有键不小于根”的全局性质时才保证。BST正确性不是每个父子对看起来有序，而是每个节点的整棵左右子树都满足范围约束。
+<Objectives>
 
+- 能写出二叉搜索树的全子树范围约束，用带 (low, high) 区间的递归验证器判断一棵树是否合法，并指出“只查父子对”为什么不够。
+- 能逐步执行 search、minimum、successor、insert 与 delete，说明每个操作的代价为什么是 O(h)，以及 h 最坏如何随插入顺序退化到 Θ(n)。
+- 自测：删除一个有两个孩子的节点时，为什么要取右子树的最小值 successor 来顶替，而不是直接取右孩子？successor 原来的位置由谁接管？
 
-## 12.1 What is a binary search tree?
+</Objectives>
 
-节点通常保存`key`、satellite data、`left`、`right`与`parent`。空树root为nil。
+## 先问：查一本全书为什么不用翻遍每一页？
 
-可写为：
+想象一座档案馆：每张卡片只有一个编号，馆员把它们挂成一张层层分叉的地图——每张卡片左边挂的不大于它，右边挂的不小于它。查一个编号时，每到一张卡片只需比一次大小就能排除一个方向的整棵子树，像走迷宫时每个路口都立着“往左都更小”的路标。先预测：如果树形足够匀称、每一步都能排除约一半候选，查 n 张卡片要比多少次？
+
+这张地图有个隐患：它只保证“每个路口的路标规则成立”，不保证地图长得匀称。如果编号恰好从小到大依次挂进地图，每一层都只剩一个分叉，地图就退化成一条走廊，路标规则依然成立，却一步也甩不掉。本章的两个实验分别盯住这两件事：验证规则是否全局成立，以及在摘掉一张卡片后怎样把地图的岔路重新接好。
+
+没有这张地图，要么每次查找翻遍全部卡片，要么为维持全序不断挪动大量卡片。二叉搜索树每次比较都能排除一个方向的子树；只有树形足够匀称时，候选规模才会近似减半、查找才是对数级。普通 BST 必须自己管理形状——这正是下一章红黑树要接手的问题。
+
+<Clrs4Chapter12BstLab />
+
+## 权威目录定位
+
+本章对应 CLRS 第四版第 12 章 `Chapter 12 · Binary Search Trees`，官方概念包括：
+
+- binary search trees / 二叉搜索树：动态有序集合的树形表示；
+- what is a binary search tree / 二叉搜索树的定义：全子树范围约束与中序遍历；
+- querying a binary search tree / 查询：search、minimum、maximum、successor、predecessor；
+- insertion and deletion / 插入与删除：INSERT、TRANSPLANT 与 DELETE 的三种情形。
+
+正文以独立选取的键值集合、自行重写的代码与交互实验进行教学重构。交互图用于核查结构与轨迹，不替代原书的完整证明、习题与章节上下文。
+
+## 12.1 什么是二叉搜索树
+
+<Term def="每个节点的左子树全部键不大于它、右子树全部键不小于它的二叉树，支持动态有序集合的查找、插入与删除。">
+  二叉搜索树
+</Term>
+（BST）把“有序”从数组的物理相邻搬到树的分岔上：比较一次就能排除一个方向的子树；只有树形平衡时，候选数才会近似减半。形状由插入历史决定。
+
+形式化地，对任意节点 x，其左子树中的每个键 y 与右子树中的每个键 z 满足：
 
 $$
-y\in x.left\text{ subtree}\Longrightarrow y.key\le x.key,
+y\in x.left\text{ 子树}\Rightarrow y.key\le x.key,
 \qquad
-z\in x.right\text{ subtree}\Longrightarrow z.key\ge x.key.
+z\in x.right\text{ 子树}\Rightarrow z.key\ge x.key.
 $$
 
-只检查直接孩子不够。例如一个键20藏在根15的左子树深处，可能仍小于其父25，却违反根的范围。验证器应沿递归传递允许区间，而不是逐边比较。
+这组式子在说：约束作用在**整棵子树**上，不是只约束直接相连的两个节点。每个节点实际被整条祖先链夹在一个开区间里——这就是 Lab 1 里验证器沿递归传递的 (low, high)。
 
-重复键需要统一政策：总放左、总放右、节点记录count，或用复合键`(key, unique_id)`。查询、插入、删除和验证必须采用同一政策，否则旋转或重建后可能无法定位记录。
+<Term def="BST 正确性的全局判据：每个键都落在祖先节点链划定的 (low, high) 区间内，等价于中序序列非降序。">
+  全子树范围约束
+</Term>
+有一个等价镜像：中序遍历输出的键序列非降序，当且仅当树的形状与键分布满足这里采用的非严格
+BST 规则。Lab 1 的“埋雷树”上，节点 4 小于其父
+8、父子对看起来完全正常，但它破坏了祖先 5
+划定的下界——局部检查全部通过，范围检查与中序镜像却同时报警。
 
-### Inorder traversal
+<Term def="按“左子树 → 根 → 右子树”顺序访问每个节点恰好一次的遍历，BST 上输出非降序键序列。">
+  中序遍历
+</Term>
+的成本是
+Θ(n)：每个节点进出递归各一次。递归深度等于树高，退化链上可能撑爆调用栈，工程实现常改用手显栈。
 
-的正确性对树结构归纳：左子树输出有序且不大于根，随后输出根，右子树输出有序且不小于根，连接后整体有序。
-
-
-```cpp
-void inorder(Node* x, std::vector<int>& out) {
-    if (x == nullptr) return;
-    inorder(x->left, out);
-    out.push_back(x->key);
-    inorder(x->right, out);
-}
-```
-
-遍历访问每节点一次，时间$\Theta(n)$，递归栈$O(h)$。平衡树$h=\Theta(\lg n)$；退化链$h=\Theta(n)$，可能需要显式栈避免调用栈溢出。
-
-
-把空子树高度定义为$-1$，节点高度满足：
+把空子树的高度记为 −1，节点高度满足递推：
 
 $$
-h(x)=1+\max\{h(x.left),h(x.right)\}.
+h(x)=1+\max\{h(x.left),\,h(x.right)\}.
 $$
 
-这一递推既可计算树高，也能在调试时验证缓存高度字段。普通BST更新只沿搜索路径改变结构，因此若实现保存height或subtree size，插入和删除后应从修改点向root逐层重算；漏掉某个祖先会让后续秩查询或平衡判断使用陈旧元数据。
+这个式子在说：树高由最深的那条根到叶路径决定，与节点总数无关。n 个节点的树高在最坏情况下是 n−1（每层一个节点的退化链），最矮的近完全树高度为 ⌊lg n⌋，一般平衡树高度为 Θ(lg n)——同一个 n，操作成本可以差一个指数级。
 
-## 12.2 Querying a binary search tree
+## 12.2 查询：沿一条根叶路径走到底
 
-### Search
-
-从root比较目标$k$与`x.key`：相等返回；更小进入left；更大进入right；遇nil表示不存在。每层只访问一个节点，所以：
+search 从根出发：目标更小走左、更大走右、相等即命中、撞空即不存在。minimum 沿 left 一路到底，maximum 沿 right 一路到底；对任意子树都成立，所以它们同时是 delete 与 successor 的组件。每个操作每层只访问一个节点：
 
 $$
-T_{\text{search}}=\Theta(h).
+T_{\text{search}},T_{\text{min}},T_{\text{successor}}=O(h),\quad\text{最坏情形为 }\Theta(h).
 $$
 
+这些操作至多访问一条根到叶路径，最坏情形为 Θ(h)。匀称树 h = Θ(lg n)，最坏操作为对数级；按已排序输入逐个插入，h = Θ(n)，最坏操作为线性——BST 本身不保证任何平衡。
 
-```cpp
-Node* search(Node* x, int key) {
-    while (x != nullptr && x->key != key) {
-        x = key < x->key ? x->left : x->right;
-    }
-    return x;
-}
-```
+<Term def="键大于 x 的最小节点：x 有右子树时取右子树最小值，否则沿 parent 向上找第一个从左边上来的祖先。">
+  后继节点
+</Term>
+（successor）有两种情形：x 有右子树，successor 就是右子树的 minimum；否则沿
+parent 上升，直到第一次从某祖先的左边走上来——那个祖先就是
+successor。上升路上跳过的祖先都把 x 放在右子树里，键都不大于
+x，不可能是答案；一路升到根都没有，则 x 是全树最大，successor 为空。predecessor
+完全对称。
 
-BST并不自动平衡。按已排序顺序插入普通BST可形成长度$n$链，查询$\Theta(n)$；随机插入模型下期望高度$O(\lg n)$，但这是输入分布结论，不是确定保证。下一章红黑树通过颜色和旋转保证高度。
+单次 successor 是 O(h)。从 minimum 出发反复调用 successor 恰好按非降序枚举全部节点，总时间 O(n)：每条边在整个枚举中被向上向下各走常数次，不能简单相乘成 O(nh)。
 
-### Minimum and maximum
+## 12.3 插入与删除：边的缝合手术
 
-最小键沿left直到nil，最大键沿right直到nil，成本均$O(h)$。对任意子树也成立，因此这些过程同时是delete与successor的组件。
+INSERT 复用 search 的路径：保存最后一个非空节点 y，撞空后新节点作为 y 的左或右孩子接上；空树时新节点即根。插入只改路径末端的常数条边，成本 O(h)——但树高也从此被插入顺序塑形。
 
+删除才是这台机器上唯一容易翻车的地方，先把“替换一棵子树根”的动作抽出来：
 
-空树没有minimum/maximum，接口应返回optional、nil或错误。若节点可重复，结果身份还取决于重复键插入政策。
+<Term def="用节点 v 替换节点 u 的原子操作：把 u 的父指向 v 的一侧改接到 v，并同步 v 的 parent 指针；不检查次序、不搬动 u 的孩子。">
+  TRANSPLANT
+</Term>
+不检查 BST 次序，也不自动把 u 的左右孩子接到
+v——调用者必须保证替换后整棵子树仍落在正确的键区间里。DELETE
+分三种情形：零孩子直接用空替换 z；单孩子用其孩子替换 z；双孩子时取 successor y
+顶替 z 的位置。Lab 2 手术台逐步展示这三种情形的边重接。
 
-### Successor and predecessor
-
-有两种情况：
-
-1. 若$x.right$非nil，successor是右子树minimum。
-2. 否则沿parent上升，直到第一次从某祖先的left边上来，该祖先就是successor。
-
-
-第二种情况跳过的祖先都把$x$放在其右子树，因此它们的键不大于$x$，不可能是后继。若一直到root都没找到，$x$为全树最大，successor为nil。Predecessor完全对称：有左子树取maximum，否则向上找第一次从right边上来的祖先。
-
-一次successor成本$O(h)$；从minimum开始反复调用successor枚举全部节点，总时间可做到$O(n)$，因为每条树边在整段遍历中向上向下常数次，而不是简单相乘为$O(nh)$。
-
-
-## 12.3 Insertion and deletion
-
-### Insertion
-
-TREE-INSERT沿search路径保存最后一个非nil节点$y$。到达nil后，新节点$z$成为$y$的左或右孩子并设置parent；空树时$z$成为root。
-
-
-插入只修改路径末端常数条边，查找位置占$O(h)$。若结构缓存subtree size、高度或其他增强字段，还必须沿路径更新，这将在增强数据结构章节系统化。
-
-### TRANSPLANT
-
-封装“替换一棵子树根”的边界分支：
-
-```text
-TRANSPLANT(T, u, v)
-1  if u.parent == NIL, T.root = v
-2  else if u == u.parent.left, u.parent.left = v
-3  else u.parent.right = v
-4  if v != NIL, v.parent = u.parent
-```
-
-
-TRANSPLANT不检查搜索树次序，也不自动把`u.left`或`u.right`接到$v$。调用者必须确保替换子树位于正确键区间并补齐剩余孩子。
-
-### Deletion cases
-
-删除$z$分三类：
-
-1. `z.left`为nil：用`z.right`替换$z$。
-2. `z.right`为nil：用`z.left`替换$z$。
-3. 两孩子都存在：取$y=\operatorname{MINIMUM}(z.right)$，即$z$的successor。
-
-
-第三类中$y$没有left孩子。若$y.parent=z$，让$y$直接替换$z$并接上`z.left`；否则先用`y.right`替换$y$原位置，再让$y.right=z.right$，最后用$y$替换$z$并令`y.left=z.left`。每次孩子连接都要同步parent。
-
-为什么移动successor安全？$y$是右子树最小值，所以：
+双孩子情形为什么安全？y 是 z 右子树的最小键，所以 z 左子树的每个键 a 与右子树剩余节点的每个键 b 满足：
 
 $$
 \forall a\in z.left:\ a.key\le z.key\le y.key,
@@ -142,15 +137,299 @@ $$
 \forall b\in z.right\setminus\{y\}:\ y.key\le b.key.
 $$
 
-因此$y$放到$z$位置后，左、右子树仍满足范围。删除只执行常数次指针更新和至多一次向下找minimum，时间$O(h)$。
+这组不等式在说：y 放进 z 的位置后，左边整棵子树仍不大于 y，右边整棵子树仍不小于 y，全子树范围约束原样保留。而 y 没有左孩子（否则它不是最小值），所以它能干净地接管 z 的两棵子树；y 深在右子树里时，要先把自己的右孩子移交给原父节点，再顶到 z 的位置。
 
-节点身份语义要提前决定：可以把successor节点移动到$z$位置，也可以只复制key/satellite data后删除$y$。复制方案会让外部handle看到对象内容变化；移动方案会改变结构位置但保留记录身份。标准CLRS算法移动节点关系，工程API应明确迭代器失效和所有权。
+## 代码对照：同一逻辑的两种实现
 
+查询三件套在 C++ 与 TypeScript 里是逐行镜像：循环不变量、空指针分支、parent 回跳的条件完全一致。
+
+<CodeTabs>
+
+<Tab label="C++">
+
+```cpp
+Node* search(Node* x, int key) {
+    while (x && x->key != key)
+        x = key < x->key ? x->left : x->right;
+    return x;
+}
+Node* minimum(Node* x) {
+    while (x->left) x = x->left;
+    return x;
+}
+Node* successor(Node* x) {
+    if (x->right) return minimum(x->right);
+    Node* y = x->parent;
+    while (y && x == y->right) { x = y; y = y->parent; }
+    return y;
+}
+```
+
+</Tab>
+
+<Tab label="TypeScript">
+
+```ts
+type Node = {
+  key: number;
+  left: Node | null;
+  right: Node | null;
+  parent: Node | null;
+};
+function search(root: Node | null, key: number): Node | null {
+  let x = root;
+  while (x && x.key !== key) x = key < x.key ? x.left : x.right;
+  return x;
+}
+function minimum(x: Node): Node {
+  while (x.left) x = x.left;
+  return x;
+}
+function successor(x: Node): Node | null {
+  if (x.right) return minimum(x.right);
+  let y = x.parent;
+  while (y && x === y.right) {
+    x = y;
+    y = y.parent;
+  }
+  return y;
+}
+```
+
+</Tab>
+
+</CodeTabs>
+
+实现审核问三件事：循环终止时 x 是命中节点还是空、minimum 在空树上的行为是否被调用方排除、successor 回跳时 `x == y->right` 的比较方向有没有写反。任何一个答错，Lab 2 的搜索路径高亮都会和代码轨迹对不上。
+
+INSERT 与 search 共用同一条比较路径，区别只在撞空后的缝合：
+
+<CodeTabs>
+
+<Tab label="C++">
+
+```cpp
+void insert(Tree& t, Node* z) {
+    Node* y = nullptr;
+    Node* x = t.root;
+    while (x) {
+        y = x;
+        x = z->key < x->key ? x->left : x->right;
+    }
+    z->parent = y;
+    if (!y) t.root = z;
+    else if (z->key < y->key) y->left = z;
+    else y->right = z;
+}
+```
+
+</Tab>
+
+<Tab label="TypeScript">
+
+```ts
+function insert(t: Tree, z: Node): void {
+  let y: Node | null = null;
+  let x = t.root;
+  while (x) {
+    y = x;
+    x = z.key < x.key ? x.left : x.right;
+  }
+  z.parent = y;
+  if (!y) t.root = z;
+  else if (z.key < y.key) y.left = z;
+  else y.right = z;
+}
+```
+
+</Tab>
+
+</CodeTabs>
+
+以上实现假定键互异。若要保存重复键，不能仅把相等键一律向右、同时仍允许后续插入按普通比较向左分叉；应把唯一序号并入比较键（如 `(key, insertionId)`），或在一个节点中记录该键的计数，并让查询、删除和验证遵守同一表示。
+
+DELETE 的全部风险都集中在指针缝合上，TRANSPLANT 把边界分支收拢到一处：
+
+<CodeTabs>
+
+<Tab label="C++">
+
+```cpp
+void transplant(Tree& t, Node* u, Node* v) {
+    if (!u->parent) t.root = v;
+    else if (u == u->parent->left) u->parent->left = v;
+    else u->parent->right = v;
+    if (v) v->parent = u->parent;
+}
+void remove(Tree& t, Node* z) {
+    if (!z->left) transplant(t, z, z->right);
+    else if (!z->right) transplant(t, z, z->left);
+    else {
+        Node* y = minimum(z->right);
+        if (y->parent != z) {
+            transplant(t, y, y->right);
+            y->right = z->right;
+            y->right->parent = y;
+        }
+        transplant(t, z, y);
+        y->left = z->left;
+        y->left->parent = y;
+    }
+}
+```
+
+</Tab>
+
+<Tab label="TypeScript">
+
+```ts
+function transplant(t: Tree, u: Node, v: Node | null): void {
+  if (!u.parent) t.root = v;
+  else if (u === u.parent.left) u.parent.left = v;
+  else u.parent.right = v;
+  if (v) v.parent = u.parent;
+}
+function remove(t: Tree, z: Node): void {
+  if (!z.left) transplant(t, z, z.right);
+  else if (!z.right) transplant(t, z, z.left);
+  else {
+    const y = minimum(z.right);
+    if (y.parent !== z) {
+      transplant(t, y, y.right);
+      y.right = z.right;
+      y.right.parent = y;
+    }
+    transplant(t, z, y);
+    y.left = z.left;
+    y.left.parent = y;
+  }
+}
+```
+
+</Tab>
+
+</CodeTabs>
+
+`y->left = z->left` 与它前面的 parent 同步是深缝合分支最容易漏的一行——Lab 2 的故障开关专门演示漏掉它之后左子树失联的样子。删除共执行常数次 TRANSPLANT 加至多一次向下找 minimum，总时间 O(h)。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：用“只查父子对”验证 BST">
+
+现象：写了个校验函数逐条边比较父子大小，埋雷树上报告 0 违例，自信地判定合法。
+
+原因：BST 约束作用在整棵子树上，每个节点要满足的是整条祖先链划定的 (low, high) 区间；只看父亲一个数，等于把祖父以上的所有约束整段跳过。
+
+修复：验证器递归传递区间——进左子树把 high 换成父键，进右子树把 low 换成父键，再检查节点是否越界。打开 Lab 1 的“只查父子对”故障开关，看完整验证与局部验证的结论怎样相反。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：以为 BST 的高度天然是 lg n">
+
+现象：算出操作成本 O(h) 后，直接把 h 写成 ⌊lg n⌋，宣称所有操作对数时间。
+
+原因：⌊lg n⌋ 是匀称形状的高度；按已排序输入依次插入普通 BST 会得到一条 n 个节点的退化链，h = Θ(n)。随机插入的期望高度 O(lg n) 是输入分布的结论，不是结构保证。
+
+修复：分析时保留 h，只在结构有平衡机制（下一章的红黑树）时才替换成 lg n。Lab 2 换不同的删除目标，观察树高随操作历史的变化。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：双孩子删除漏接 successor 的左子树">
+
+现象：删除根这类深 successor 情形后，z 的左子树从根不可达——遍历结果少了一截，或更糟，悬空的子树被后续操作重复接入。
+
+原因：y.parent ≠ z 的缝合顺序是“先摘除 y、移交 y 的右孩子、再把 y 顶到 z 的位置”，其中 y 接管 z 左子树的 `y.left = z.left` 与 parent 同步是独立的一步，不是 TRANSPLANT 的副作用。
+
+修复：对照 Lab 2 时间线第 4 步逐条边核对：y 的原位置由 y.right 接管，y 接管 z 的左右子树，三条 parent 指针同步更新。打开“忘记接左子树”故障开关，失联子树以红虚线现形。
+
+</Callout>
+
+## 练习
+
+<Exercises>
+
+1. 对 Lab 2 手术台上那棵树（根 12，右子树 20 → 15 → 13/17）手算：search(13) 依次比较哪些键？minimum(根) 呢？successor(15) 与 successor(17) 各是谁？每步给出走的边。
+
+   <Answer>
+
+   search(13)：12 → 20 → 15 → 13，比较 4 次，路径 12 的右边、20 的左边、15 的左边。minimum(根)：沿 left 到底，12 → 5 → 3，结果是 3。successor(15)：15 有右孩子 17，取右子树 minimum，结果是 17。successor(17)：17 无右孩子，沿 parent 上升——17 是 15 的右孩子，继续；15 是 20 的左孩子，首次从左边上来的祖先是 20，结果是 20。
+
+   </Answer>
+
+2. 下面的 `transplant` 漏掉了对 `v` 的 parent 赋值。先预测症状会先在哪个操作里暴露、树会变成什么样，再修复它。
+
+   ```cpp
+   void transplant(Tree& t, Node* u, Node* v) {
+       if (!u->parent) t.root = v;
+       else if (u == u->parent->left) u->parent->left = v;
+       else u->parent->right = v;
+       // bug：v->parent 没有同步
+   }
+   ```
+
+   <Answer>
+
+   症状在 successor/predecessor 这类沿 parent 上升的操作里最先暴露：以 Lab 2 的树删除叶子 25 后一切正常，但删除单孩子节点 5（其孩子 3 被顶到 5 的位置）后，3 的 parent 仍指向已释放/已摘除的 5；对 3 调用 successor 会沿一条悬挂引用向上，行为未定义或进入死循环。修复：在函数末尾补上 `if (v) v->parent = u->parent;`——每条边的修改必须双向同步，这正是 Lab 2 “splice”一步逐条高亮的内容。
+
+   </Answer>
+
+3. 依次插入 8、3、10、1、6、14、13 到空 BST（相等放右）。画出最终树，给出树高 h 与 search(13) 的比较次数；再回答：若把插入顺序换成 1、3、6、8、10、13、14，h 与 search(13) 的比较次数各是多少？两次结果差多少，说明什么？
+
+   <Answer>
+
+   第一种顺序得到根 8，左子树 3（左 1、右 6），右子树 10（右 14，14 的左 13）；最长路径为 8 → 10 → 14 → 13，因此 h = 3（按边计），search(13) 比较 4 次。第二种顺序每个新键都更大，全部挂右：1 → 3 → 6 → 8 → 10 → 13 → 14 的退化链；h = 6（按边计），search(13) 比较 6 次。同一组键、同一操作集，只因为插入顺序不同，树高与操作成本就可从对数级退化到线性级——说明普通 BST 的 h 由输入历史塑形，没有任何结构保证，这正是需要平衡机制（下一章红黑树）的原因。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-Chapter 12 Binary Search Trees以全子树搜索性质支持动态有序集合。中序遍历按非降序输出键；search、minimum、maximum、successor、insert和delete都沿常数条根叶路径，成本$O(h)$，但普通BST高度最坏为$\Theta(n)$。
+对照学习目标逐条回收本章证据，应当能独立复述以下内容：
 
-插入在search终点连接新叶。删除用TRANSPLANT处理零/单孩子，用右子树minimum作为双孩子节点的successor并修复两侧。正确性依赖全局键范围、parent/child互逆、无环性、重复键政策与节点身份；只看局部父子大小不足以验证整棵树。
+- BST 性质是全局约束：每个键落在祖先划定的 (low, high) 区间内，中序非降序是其等价镜像。
+- search、minimum、successor、insert、delete 至多沿单条根叶路径工作，最坏成本 Θ(h)。
+- h 由插入历史塑形：匀称 Θ(lg n)，退化为 Θ(n)；结构本身不保证平衡。
+- 删除 = TRANSPLANT 缝合：零/单孩子一次替换，双孩子用 successor 顶替并移交。
+- successor 无左孩子，顶到 z 位置后范围约束原样保留；每条边修改都要双向同步。
 
+## 名词解释
 
+<Glossary>
+
+<GlossaryItem term="二叉搜索树">
+  左子树全部键不大于它、右子树全部键不小于它的二叉树；比较一次排除一个方向的子树；只有平衡时查找才按对数级缩小，形状由插入历史决定。
+</GlossaryItem>
+<GlossaryItem term="全子树范围约束">
+  BST 正确性的全局判据：每个键都落在祖先链划定的 (low, high)
+  区间内；等价于中序序列非降序，只看父子对会漏检。
+</GlossaryItem>
+<GlossaryItem term="中序遍历">
+  按“左子树 → 根 → 右子树”的顺序访问每个节点一次；在 BST
+  上输出非降序键序列，本身也是一棵树的“排序视图”。
+</GlossaryItem>
+<GlossaryItem term="后继节点">
+  键大于 x 的最小节点：有右子树就取右子树最小值，否则沿 parent
+  向上找第一个从左边上来的祖先；全树最大者的后继为空。
+</GlossaryItem>
+<GlossaryItem term="TRANSPLANT">
+  用 v 替换 u 的原子操作：把 u 父节点指向 u 的一侧改接到 v 并同步 v 的
+  parent；不检查次序、不搬动 u 的孩子，边界分支全在这里。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 12 章的目录定位与核心论证进行独立教学重写。BST 定义与全子树性质、查询操作族、INSERT、TRANSPLANT 与 DELETE 三种情形、successor 安全论证来自本章的官方主题；所有示例键值、交互实验、故障注入、代码实现、练习答案与验收清单是本项目独立新增材料，未复现原书正文、习题或图表。
+
+本章代码统一 0 基式的指针表达（原书伪代码的 NIL 对应这里的 `nullptr`/`null`）。“随机插入下的期望操作成本为 O(lg n)”为概率分析结论，仅作背景说明；平衡结构保证属于下一章范围。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 12: Binary Search Trees"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

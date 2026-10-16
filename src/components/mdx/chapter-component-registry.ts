@@ -19436,6 +19436,51 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[2].Clrs4Chapter09MediansOrderStatisticsWorstCaseLab,
       } as ChapterMdxComponents;
     },
+  "introduction-to-algorithms/03-data-structures/10-elementary-data-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch10-elementary-data-structures");
+      return {
+        Clrs4Chapter10ElementaryDataStructuresLab:
+          module0.Clrs4Chapter10ElementaryDataStructuresLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/03-data-structures/11-hash-tables": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/introduction-to-algorithms/v2/11-hash-tables"),
+      import("@/components/mdx/introduction-to-algorithms/v2/11-hash-tables"),
+    ]);
+    return {
+      Clrs4Chapter11OpenAddressingLab:
+        modules[0].Clrs4Chapter11OpenAddressingLab,
+      Clrs4Chapter11ChainingLoadLab: modules[1].Clrs4Chapter11ChainingLoadLab,
+    } as ChapterMdxComponents;
+  },
+  "introduction-to-algorithms/03-data-structures/12-binary-search-trees":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/12-binary-search-trees");
+      return {
+        Clrs4Chapter12BstLab: module0.Clrs4Chapter12BstLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/03-data-structures/13-red-black-trees":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch13-red-black-trees");
+      return {
+        Clrs4Chapter13RedBlackTreesLab: module0.Clrs4Chapter13RedBlackTreesLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/04-advanced-design-analysis/14-dynamic-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch14-dynamic-programming");
+      return {
+        Clrs4Chapter14DynamicProgrammingLab:
+          module0.Clrs4Chapter14DynamicProgrammingLab,
+      } as ChapterMdxComponents;
+    },
   "introduction-to-algorithms/04-advanced-design-analysis/15-greedy-algorithms":
     async () => {
       const module0 =
@@ -19471,6 +19516,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Clrs4Chapter18BTreesLab: module0.Clrs4Chapter18BTreesLab,
       } as ChapterMdxComponents;
     },
+  "introduction-to-algorithms/05-advanced-data-structures/19-data-structures-for-disjoint-sets":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/19-data-structures-for-disjoint-sets");
+      return {
+        Clrs4Chapter19DisjointSetsLab: module0.Clrs4Chapter19DisjointSetsLab,
+      } as ChapterMdxComponents;
+    },
   "introduction-to-algorithms/06-graph-algorithms/20-elementary-graph-algorithms":
     async () => {
       const module0 =
@@ -19487,6 +19540,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       return {
         Clrs4Chapter21MinimumSpanningTreesLab:
           module0.Clrs4Chapter21MinimumSpanningTreesLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/06-graph-algorithms/22-single-source-shortest-paths":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/22-single-source-shortest-paths");
+      return {
+        Clrs4Chapter22SingleSourceShortestPathsLab:
+          module0.Clrs4Chapter22SingleSourceShortestPathsLab,
       } as ChapterMdxComponents;
     },
   "introduction-to-algorithms/06-graph-algorithms/23-all-pairs-shortest-paths":
@@ -19540,6 +19602,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       return {
         Clrs4Chapter28MatrixOperationsLab:
           module0.Clrs4Chapter28MatrixOperationsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/29-linear-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/v2/29-linear-programming");
+      return {
+        Clrs4Chapter29LinearProgrammingLab:
+          module0.Clrs4Chapter29LinearProgrammingLab,
       } as ChapterMdxComponents;
     },
   "langchain-programming/00-map/lcp-official-learning-map": async () => {

@@ -3,157 +3,298 @@ title: "Chapter 19 · Data Structures for Disjoint Sets"
 type: C
 section: "CLRS4 · 高级数据结构"
 order: 19
-description: "按CLRS第四版第19章重建不相交集合操作、链表表示、集合森林，以及按秩合并与路径压缩分析。"
+description: "按 CLRS 第四版第 19 章重建不相交集合操作、链表表示、集合森林，以及按秩合并与路径压缩的序列界分析。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-19
+sourceAccess: outline-only
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter19DisjointSetsLab } from "@/components/mdx/introduction-to-algorithms/v2/19-data-structures-for-disjoint-sets";
 
-## 从“连通性查询为何不必每次重跑图搜索”开始
+{/* 本章可视化决策：不相交集合操作=状态机(MAKE-SET/FIND-SET/UNION 三操作契约)→图示；链表表示与加权合并=逐节点指针重写→并排结构图；按秩合并+路径压缩=父指针森林演化→动画(Stepper)；逆阿克曼界=量级对比条→静态 SVG 图表；组件=src/components/mdx/introduction-to-algorithms/clrs4-ch19-disjoint-sets.tsx；组件名=Clrs4Chapter19DisjointSetsLab；概念异构度=高(状态契约+指针结构+森林动画+界对比)→独立组件 */}
 
-先预测：边不断加入无向图，只需回答两个顶点是否已连通。每次从头BFS会重复探索旧边；若每个connected component维护一个representative，查询只需比较两个FIND-SET结果，加入跨component边时再UNION。
+<Objectives>
 
-也称union-find。它适合只合并、不拆分的动态等价关系；如果需要删除边后拆分component，接口与分析都不足。
+- 能实现带按秩合并与路径压缩的集合森林，并守住「只挂根、秩相等才递增、压缩不改秩」三条不变量。
+- 能推导链表表示的加权合并为何把代表元指针重写压到 $O(n\log n)$，并说明森林版 $O(m\,\alpha(n))$ 界的确切含义。
+- 自测：8 个元素按固定顺序朴素合并 7 次，FIND 最深元素要走几步？打开按秩合并后，为什么同样的合并序列不可能再产生这条链？
 
+</Objectives>
 
-## 19.1 Disjoint-set operations
+## 先问：两个村庄是否已经连通，为什么要查整张地图？
 
-### Partition contract
+想象一张地图上散落着许多村庄，修路队每天宣布「这两段路之间新通了」。你反复被问到同一个问题：某两个村庄现在能不能互相到达？如果每次回答都沿着地图重新走一遍，昨天走过的桥今天还要再走——路越来越多，重复劳动越来越重。
 
-设universe为$S=\{x_1,\ldots,x_n\}$，当前sets构成partition：
+这章解决的问题就是：边不断加入、却从不拆除的动态地图里，如何让人只花「查一次门牌」的代价回答连通性。没有它，判环、最小生成树、图像区域标记这类只增不删的问题，都会被重复的地图遍历拖垮。
+
+先预测：如果给每一片已连通区域发一个唯一的「门牌号」，查询变成比对两个门牌号；那么真正决定速度快慢的，是合并两片区域时**谁挂到谁名下**这个小小的决定。
+
+## 19.1 三项操作与划分契约
+
+本章的主角是<Term def="把元素切成若干互不重叠的组、只支持合并与查询归属的数据结构，也叫并查集。">不相交集合</Term>（union-find）：它维护一个元素全集的划分，任意时刻每个元素恰好属于一个组，组与组之间没有公共元素，且只暴露三项操作：
+
+1. `MAKE-SET(x)`：要求 $x$ 尚不存在，为它创建单元素集合 $\{x\}$。
+2. `FIND-SET(x)`：返回 $x$ 所在集合的<Term def="每个集合选出的唯一发言人：同一集合中任意元素查询都返回同一个代表元。">代表元</Term>。
+3. `UNION(x, y)`：先找到两边代表元，不同才合并，相同则是 no-op。
+
+客户端能依赖的合同只有一条：同一集合的任意两个元素，`FIND-SET` 返回**同一个**代表元。代表元不必是最小元素，也不必在不同操作序列下保持身份稳定——把具体是哪个元素当成业务语义（例如「代表元就是组长」）是后续误区的根源。
+
+在最小生成树（Kruskal 算法）里，`FIND-SET(u) \neq FIND-SET(v)` 同时是「当前不连通」的判定和「加入这条边不成环」的证书；判定通过后再 `UNION` 两个代表元。本章 Demo 的森林演化实验（见第五节）就是围绕这三项操作展开的。
+
+## 19.2 链表表示：先把查询做到 O(1)
+
+第一种实现给每个节点存一个直接指向代表元的指针：头节点同时记录尾指针和集合大小。`MAKE-SET` 和 `FIND-SET` 都是 $O(1)$，代价全部转移给 `UNION`——把一条链表拼到另一条后面时，被拼接链表的**每个**节点都要重写代表元指针。
+
+如果总是把长表接到单元素后面，已有的大量节点会被反复重写，$n-1$ 次合并的累计代价可达 $\Theta(n^2)$。修复办法是<Term def="链表表示合并时总把短表接到长表后面，使任意元素的代表元指针至多被重写 ⌊lg n⌋ 次。">加权合并启发式</Term>：永远把较短的表挂到较长的表后面。于是某个元素每次被重写时，它所在集合的规模至少翻倍，重写次数被对数压住。链表表示的具体指针改写过程，见第五节 Demo 的对比条（链表 + 加权合并那一行）。
+
+## 19.3 森林表示：让根替集合发言
+
+链表方案的 $O(1)$ 查询是用「每个节点都存代表元」买来的。森林表示反过来：每个节点只存一个父指针，<Term def="合并父指针森林时把秩（树高的上界）较小的根挂到较大的根下，仅当两秩相等时新根的秩加一。">按秩合并</Term>决定根与根谁挂谁；树的根就是集合的代表元。`MAKE-SET` 令 `parent[x] = x`；`FIND-SET` 沿父指针走到根；`UNION` 把一棵树的根挂到另一棵树的根下。
+
+问题立刻出现：如果随意挂，连续把根挂成孩子可以形成长度 $n-1$ 的链，`FIND-SET` 退化为 $\Theta(n)$。按秩合并为每个根维护一个「高度上界」标签 `rank`，规则只有两条：低秩根挂到高秩根下；仅当两秩相等时任选一根为父并把它的秩加一。挂完之后树高被 $O(\log n)$ 压住。
+
+第二条武器是<Term def="FIND-SET 返回根之后，把沿途每个节点的父指针直接改指根，让后续查询跳过中间层。">路径压缩</Term>：递归找到根后，在返回路径上把每个访问过的节点直接指向根。划分关系不变，但未来的查询跳数大幅减少。注意压缩只改 `parent`，**不改** `rank`——压缩后秩不再等于实际高度，但它仍是单调的高度上界标签，按秩合并的规则继续有效。这两条规则的交替作用，就是第五节 Demo 时间线里森林从 8 个 singleton 长成一棵矮树的全过程。
+
+## 19.4 序列界：为什么「几乎常数」不是常数
+
+组合两种启发式后，单次 `FIND-SET` 仍可能遇到尚未压缩的长路径；正确的结论是关于**整个操作序列**的总时间。设执行了 $n$ 次 `MAKE-SET`、总计 $m \ge n$ 次操作，则总时间为 $O(m\,\alpha(n))$，其中 $\alpha$ 是逆阿克曼函数——增长极慢，在一切现实输入规模下取值不超过 4，但数学上并不是常数。这个界的推导见下一节数学部分；直观分层是：秩沿父指针严格递增、高秩节点数量指数级稀少、路径压缩让节点按秩区间「批量跳级」，三者叠加后昂贵的遍历几乎不重复。
+
+## 权威目录定位
+
+本章对应 CLRS 第四版第 19 章，官方概念包括：
+
+- data structures for disjoint sets / 不相交集合数据结构；
+- disjoint-set operations / 不相交集合操作；
+- linked-list representation of disjoint sets / 不相交集合的链表表示；
+- disjoint-set forests / 不相交集合森林；
+- union by rank with path compression / 按秩合并与路径压缩。
+
+正文是独立教学重构：三操作契约、链表加权合并、父指针森林与分析分层均按目录主题独立展开；交互实验、故障注入、不变量清单、诊断练习是本项目新增材料。
+
+## 数学推导
+
+符号表：$n$ 为元素总数（`MAKE-SET` 次数）；$m$ 为操作序列总次数（$m \ge n$）；$r$ 为某次重写或秩的值；$\lg$ 为以 2 为底的对数；$\alpha$ 为逆阿克曼函数。
+
+链表表示中，元素每次被重写代表元指针时，其所在集合规模至少翻倍。设某元素被重写了 $r$ 次，则它最终所在集合规模至少为 $2^r$，而它不可能超过全集：
 
 $$
-S_1\cup S_2\cup\cdots\cup S_k=S,
-\qquad
-S_i\cap S_j=\varnothing\quad(i\ne j).
-$$
-
-有三项：
-
-1. `MAKE-SET(x)`要求$x$尚未存在，创建$\{x\}$。
-2. `FIND-SET(x)`返回该set的representative；同set元素结果相同。
-3. `UNION(x,y)`先找两root，不同才合并；相同则no-op。
-
-
-Representative不必是最小元素，也不必在不同版本保持不变。客户端只能依赖“相同集合返回相同代表”，不能把具体root identity写成业务语义。Tie policy可固定root选择以便测试复现。
-
-在connected components或Kruskal算法中，`FIND-SET(u) != FIND-SET(v)`既是“当前不连通”判断，也是加入edge不会成环的certificate；随后UNION两个representatives。
-
-## 19.2 Linked-list representation of disjoint sets
-
-### Direct representative pointers
-
-让MAKE-SET和FIND-SET为$O(1)$。UNION把一条list接到另一条tail，但被追加list的每个node都要重写representative pointer。
-
-若总把large list附到singleton后面，已有大量元素可能反复改pointer，$n-1$次union累计$\Theta(n^2)$。
-
-
-Weighted-union heuristic总把shorter list附到longer list。某个element每次被重写时，其new set size至少翻倍：
-
-$$
-1,2,4,\ldots,2^r\le n
+2^r \le n
 \quad\Longrightarrow\quad
-r\le\lfloor\lg n\rfloor.
+r \le \lfloor \lg n \rfloor .
 $$
 
+这个式子在说：任何单个节点的代表元指针**至多被重写对数级次数**，所以全部重写的总量被 $O(n\log n)$ 管住，而不是 $O(n^2)$。
 
-因此$n$个elements的全部representative rewrites至多$O(n\log n)$。含$n$次MAKE-SET的$m$个操作总时间：
+含 $n$ 次 `MAKE-SET` 的 $m$ 个操作（链表 + 加权合并）总时间：
 
 $$
 T(m,n)=O(m+n\log n).
 $$
 
-```cpp
-void list_union(Set* x, Set* y) {
-    if (x == y) return;
-    if (x->size < y->size) swap(x, y);
-    x->tail->next = y->head;
-    for (Node* node = y->head; node != nullptr; node = node->next)
-        node->representative = x->head;
-    x->tail = y->tail;
-    x->size += y->size;
+这个式子在说：每个操作本身摊下来 $O(1)$，额外再付一笔「所有指针重写」的总额 $O(n\log n)$——重写是**按元素累计**的，不是按操作计费的。
+
+森林表示中，秩为 $r$ 的根，其树内元素数至少为 $2^r$（归纳：秩只在两棵等秩树合并时加一，此时元素数至少翻倍）。因此任意节点的秩满足：
+
+$$
+\operatorname{rank}[x]\le\lfloor\lg n\rfloor .
+$$
+
+这个式子在说：秩本身就是 $O(\log n)$ 的量——即使完全不做路径压缩，按秩合并已经单独把树高压在 $O(\log n)$。
+
+按秩合并 + 路径压缩的组合界（$m \ge n$）：
+
+$$
+T(m,n)=O(m\,\alpha(n)).
+$$
+
+这个式子在说：整个序列**摊还**到每次操作接近常数。它是对序列的陈述，不是对单次调用的承诺；说「单次 FIND 最坏也是常数」是错误读法，$\alpha(n)$ 也不是数学常数。
+
+## 交互 Demo：同一组合并，两种命运
+
+猜一猜：把下面实验的「故障注入」打开（朴素合并：无视秩、按固定顺序挂根、不做压缩），同样 8 个元素、7 次合并之后，最深元素的 `FIND-SET` 要走多少跳？再猜：按秩合并模式下最坏的 `FIND` 是多少跳？带着两个数字推时间线，逐帧核对。
+
+<Clrs4Chapter19DisjointSetsLab />
+
+观察重点：前三个关键帧（make / pair / group）两种模式形状几乎一样——**危险藏在根的选法里**，而不是藏在前几次合并里；到 unite 帧，两种模式的树高才彻底分道扬镳。这就是「合并时压高度」和「查询时压路径」必须成对出现的直接证据。
+
+## 代码对照
+
+三操作的标准写法（伪代码，行内注释标出两条不变量）：
+
+```text
+MAKE-SET(x)   parent[x] ← x
+              rank[x]   ← 0
+
+FIND-SET(x)   if parent[x] ≠ x
+                parent[x] ← FIND-SET(parent[x])  // 路径压缩：只改 parent
+              return parent[x]
+
+LINK(x, y)    if rank[x] > rank[y]  交换 x 与 y   // 保证低秩挂高秩
+              parent[x] ← y
+              if rank[x] = rank[y]
+                rank[y] ← rank[y] + 1            // 仅相等时才递增
+
+UNION(x, y)   rₓ ← FIND-SET(x); rᵧ ← FIND-SET(y)
+              if rₓ ≠ rᵧ then LINK(rₓ, rᵧ)     // 同根时必须 no-op
+```
+
+这个分支不是多余的：若把 `LINK(r, r)` 当作一次普通的等秩合并，代码会把根的秩错误地加一，甚至破坏后续按秩决策；所以「同集合则不变」是正确性边界，不只是省一次写操作。
+
+注意 `LINK` 只接受**根**：`UNION` 先对两个成员各做一次 `FIND-SET`，把「任意成员」翻译成「根」，再进入挂接逻辑。把 `LINK` 直接暴露给调用方、允许对非根节点挂接，是真实实现里最常见的结构破坏。
+
+同一逻辑段的 TypeScript 实现（与上面伪代码逐行对应）：
+
+```ts
+type DNode = { parent: DNode; rank: number };
+
+export function makeSet(x: DNode): void {
+  x.parent = x;
+  x.rank = 0;
+}
+
+export function findSet(x: DNode): DNode {
+  if (x.parent !== x) {
+    x.parent = findSet(x.parent); // 路径压缩，不改 rank
+  }
+  return x.parent;
+}
+
+function link(x: DNode, y: DNode): void {
+  if (x.rank > y.rank) [x, y] = [y, x];
+  x.parent = y;
+  if (x.rank === y.rank) y.rank += 1; // 仅秩相等才递增
+}
+
+export function union(x: DNode, y: DNode): void {
+  const rootX = findSet(x);
+  const rootY = findSet(y);
+  if (rootX !== rootY) link(rootX, rootY); // 同集合是 no-op，不能虚增 rank
 }
 ```
 
-Head/tail empty-state、self-union和size update必须原子保持。实际并发环境还需锁或版本协议，本章分析假定顺序操作。
+生产实现（如网络连通性检测中的并查集）通常还会加按大小合并、迭代版路径压缩（两遍遍历）或路径减半（只指向祖父）等变体；它们改变的是压缩的写指针次数，不改变划分合同与序列界。
 
+## 常见误区与故障注入
 
-## 19.3 Disjoint-set forests
+<Callout type="trap" title="误区：把代表元的具体身份写进业务语义">
 
-### Parent-pointer trees
+现象：代码依赖「FIND-SET 一定返回最小元素」或「某元素永远是根」。原因：合同只保证同集合返回同一代表元，不保证身份稳定——路径压缩和合并顺序都会换根。修法：把代表元当不透明句柄，只比较相等；需要有序信息时改用平衡树或堆。
 
-避免给所有成员保存direct representative。MAKE-SET令`parent[x]=x`；FIND沿parent到root；UNION把一棵root挂到另一棵root。
+</Callout>
 
+<Callout type="trap" title="误区：路径压缩后顺手重算 rank">
 
-若随意link，连续把root挂成child可形成长度$n-1$的chain，使FIND为$\Theta(n)$。Union by rank为root维护height upper bound `rank`，总把低rank root挂到高rank root；仅当ranks相等时任选一root为parent并把它rank加1。
+现象：压缩时把沿途节点 rank 改成真实深度，或清零。原因：秩的角色是合并决策用的单调上界标签，压缩后真实高度下降而秩保持不动，规则依然有效；重算反而破坏了「秩沿父指针严格递增」这一分析前提。修法：压缩只写 `parent`，rank 只在 `LINK` 里、只在相等时递增。
 
+</Callout>
 
-```cpp
-void link_roots(Node* x, Node* y) {
-    if (x->rank > y->rank) swap(x, y);
-    x->parent = y;
-    if (x->rank == y->rank) ++y->rank;
-}
+<Callout type="trap" title="误区：把 O(m·α(n)) 读成单次调用最坏常数">
 
-void unite(Node* x, Node* y) {
-    link_roots(find_set(x), find_set(y));
-}
-```
+现象：宣称「FIND-SET 是 O(1) 操作」。原因：界是对整个操作序列的摊还陈述，单次 FIND 仍可能遇到尚未压缩的长路径（正确实现里最坏接近 Θ(log n)，朴素实现里 Θ(n)）。修法：表述时区分 amortized（序列摊还）与 worst-case per call（单次最坏）。
 
-Rank为$r$的root至少代表$2^r$个elements，因此：
+</Callout>
 
-$$
-rank[x]\le\lfloor\lg n\rfloor.
-$$
+<Callout type="trap" title="误区：UNION 传参必须先找到根">
 
-单独使用union by rank使tree height为$O(\log n)$。Path compression会让rank不再等于实际height，但它仍是单调upper-bound标签，link规则继续有效；不要在compression后重新计算rank。
+现象：调用方先自行 `FIND-SET` 再传入两个根，实现内部又查一遍；或者反过来，把 `LINK` 当公开接口对任意成员调用。原因：`UNION` 的合同接受任意成员，内部「先查根再挂根」缺一不可。修法：公开接口只暴露三操作原语；挂接前断言两参数均为根（parent 指向自身）。
 
-### Path compression
-
-FIND-SET递归找到root后，在return path把每个visited node直接指向root。Partition不变，后续queries更短。
-
-
-```cpp
-Node* find_set(Node* x) {
-    if (x->parent != x)
-        x->parent = find_set(x->parent);
-    return x->parent;
-}
-```
-
-
-Compression只改parent，不改rank。Iterative版本需要先找到root，再第二次遍历path执行rewire；若只把起点指向grandparent，是path halving，仍是有效变体但证明与具体writes不同。
-
-## 19.4 Analysis of union by rank with path compression
-
-### Sequence bound
-
-组合后，单次FIND仍可能遇到较长的尚未压缩path；正确结论是长度$m$操作序列的总时间。
-
-对$n$次MAKE-SET及总计$m\ge n$次operations：
-
-$$
-T(m,n)=O(m\,\alpha(n)),
-$$
-
-其中$\alpha$是inverse Ackermann function，增长极慢但不是数学上的常数。
-
-
-分析核心可分三层：
-
-1. Rank只在相等rank roots合并时增加，故rank沿parent path严格增加。
-2. Rank为$r$的node需要至少$2^r$规模，high-rank nodes数量迅速减少。
-3. Path compression让一个node跨过大量中间rank；按rank区间为这些跳跃收费后，重复昂贵traversal极少。
-
-完整证明使用快速增长函数对rank分层，并把FIND path成本分给nodes。不能用“第一次压平后全是常数”替代：不同union会把roots重新link，且一段序列中仍会创建新的未压缩paths。
-
+</Callout>
 
 ## 小结
 
-Chapter 19 Data Structures for Disjoint Sets先定义disjoint-set operations与partition contract；linked-list representation用weighted union和size doubling把pointer rewrites压到$O(n\log n)$。Disjoint-set forests用parent roots表示集合，union by rank控制height，path compression降低未来FIND成本。
+- 不相交集合把「只合并、不拆分」的归属查询压成代表元比对。
+- 链表 + 加权合并：指针重写按元素累计 $O(n\log n)$。
+- 森林表示：根即代表元，按秩合并单独管住 $O(\log n)$ 树高。
+- 路径压缩只改 parent；rank 是高度上界，不是实际高度。
+- 序列总界 $O(m\,\alpha(n))$：摊还近常数，但 α 不是数学常数。
 
-Analysis of union by rank with path compression给出$O(m\alpha(n))$总序列界。正确实现必须保持forest acyclic、只link representatives、相等rank时才递增，并让compression只重写parents；正确说明则要区分amortized practical constant与worst-case per-call constant。
+<Exercises>
 
+1. 改数据题：在 Demo 的按秩模式下，把合并顺序改为 `union(b,a)`、`union(d,c)`、`union(f,e)`、`union(h,g)`（总是先大后小），预测四个两两合并后的根与秩，再推理 group / unite 帧的树根和高度；然后交换参数顺序写成 `union(a,b)` 等重新推理一次，说明 tie policy 对可复现测试的意义。
 
+<Answer>
+
+每次两两合并时两秩相等，tie policy 决定谁当根：`union(b,a)` 使 a 挂到 b 下、根为 b 且 rank(b)=1；同理根为 d、f、h。group 帧 `union(b,d)`：两秩相等，d 挂到 b 下，rank(b)=2；`union(f,h)` 同理 rank(f)=2。unite 帧 `union(b,f)`：rank(b)=rank(f)=2，f 挂到 b 下，rank(b)=3。换成 `union(a,b)` 后所有根身份整体对调，但树形、高度与秩序列完全相同。tie policy 固定后，同一操作序列产生逐字节一致的结构，测试才能稳定复现。
+
+</Answer>
+
+2. 实现题：为上面的 TypeScript 实现补一条运行时断言——`link` 入口处断言 `x.parent === x && y.parent === y`（只挂根），`findSet` 返回后断言返回值的 `parent === 自己`；再写一个包含 8 次 `makeSet`、7 次 `union` 的测试，断言最终只有 1 个根且 `findSet` 对全部 8 个节点返回同一对象。最后重复调用 `union(a, a)` 与 `union(a, h)`，验证它们不改变根的秩。
+
+<Answer>
+
+断言加在 `link` 开头与 `findSet` 返回点即可：
+
+```ts
+function link(x: DNode, y: DNode): void {
+  console.assert(x.parent === x && y.parent === y, "link 只接受根");
+  if (x.rank > y.rank) [x, y] = [y, x];
+  x.parent = y;
+  if (x.rank === y.rank) y.rank += 1;
+}
+```
+
+测试骨架：创建 a…h 八个节点，`makeSet` 全部；按 `union(a,b)`、`union(c,d)`、`union(e,f)`、`union(g,h)`、`union(a,c)`、`union(e,g)`、`union(a,e)` 顺序合并；断言 `findSet(a) === findSet(h)` 且对 `b…h` 逐一相等；再断言根的 `rank === 3`（⌊lg 8⌋）。记录该根秩后调用 `union(a,a)` 与 `union(a,h)`，秩仍应为 3。否则相同集合的合并被错误地当成等秩根合并。该测试覆盖划分合同、只挂根、秩递增和同集合 no-op 四条不变量。
+
+</Answer>
+
+3. 诊断题：某实现把 `findSet` 写成递归返回根之后，沿途节点的 `rank` 同步「修正」为 `parent.rank - 1`（声称让 rank 更精确）。说明这会破坏哪条复杂度证明所需的不变量，并构造一个能让 rank=2 节点过多的操作序列。
+
+<Answer>
+
+被破坏的是「rank 至少为 r 的节点数至多为 n/2ʳ」这一计数界：它依赖 rank 只在两个等秩根合并时增加，因而 rank≥r 的每棵根树至少有 2ʳ 个元素。先按秩合并 8 个 singleton 得到 rank=3 的根，再创建足够多 singleton；逐个执行 `union(singleton, root)`，最后对这些 singleton 分别执行 `findSet`。它们原本 rank=0，若压缩时按 `parent.rank - 1` 重写，就都会升到 rank=2；加入 3 个 singleton 后共有 11 个元素，至少已有根和 3 个节点，即 4 个 rank≥2 的节点（原 rank=3 树中还可能有更多），超过 `⌊11/4⌋=2`。这不再支持标准的指数级 rank 计数证明。注意，rank 沿父指针仍可能严格递增，所以不能把错误归因于该性质；修法是压缩只写 `parent`，rank 只在 LINK 的等秩根合并时递增。
+
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+
+<GlossaryItem term="不相交集合">
+  把元素切成若干互不重叠的组、只支持合并与查询归属的数据结构；也叫并查集（union-find）。
+</GlossaryItem>
+<GlossaryItem term="代表元">
+  每个集合选出的唯一「发言人」：同一集合里任意元素查询都返回同一个代表元；客户端只能比对相等，不能依赖具体是谁。
+</GlossaryItem>
+<GlossaryItem term="加权合并启发式">
+  链表表示的合并规则：总把短表接到长表后面，让任意元素的代表元指针至多被重写 ⌊lg
+  n⌋ 次。详见 19.2 节。
+</GlossaryItem>
+<GlossaryItem term="按秩合并">
+  森林表示的合并规则：把秩（树高上界）较小的根挂到较大的根下，仅当两秩相等时新根的秩加一。详见
+  19.3 节。
+</GlossaryItem>
+<GlossaryItem term="路径压缩">
+  FIND-SET 返回根之后，把沿途每个节点的父指针直接改指根；只改 parent 不改
+  rank，让后续查询跳过中间层。详见 19.3 节。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 19 章的目录定位与核心论证进行独立教学重写。三项操作、链表表示、森林表示与按秩合并/路径压缩分析来自官方主题；交互实验、故障注入、不变量清单、诊断练习与答案是本项目新增材料。
+
+来源可及性为 outline-only：仅以官方目录界定学习范围，事实以公开算法资料交叉核对，未读取、未复现原书正文，不把原书表述当作本文表述。链表加权合并的规模翻倍论证、森林表示和逆阿克曼序列界，分别参照 [MIT 6.046J Lecture 16: Disjoint-Set Data Structures](https://ocw.mit.edu/courses/6-046j-design-and-analysis-of-algorithms-spring-2012/resources/lecture-notes/) 与 [Princeton Algorithms 4/e §1.5: Union-Find](https://algs4.cs.princeton.edu/15uf/) 核对；本章的例子和措辞均为独立重写。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 19: Data Structures for Disjoint Sets"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

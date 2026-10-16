@@ -3,13 +3,33 @@ title: "Chapter 10 · Elementary Data Structures"
 type: C
 section: "CLRS4 · 数据结构"
 order: 10
-description: "按CLRS第四版第10章重建数组与矩阵地址、栈和环形队列、双向哨兵链表，以及二叉树和左孩子右兄弟有根树表示。"
+description: "独立讲解数组与矩阵地址、栈和环形队列、双向哨兵链表，以及二叉树和左孩子右兄弟有根树表示。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+sourceMode: independent-rewrite
+qualityVersion: 2
+officialUnitId: clrs4-10
+practiceMode: code
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter10ElementaryDataStructuresLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch10-elementary-data-structures";
+
+<Objectives>
+
+- 根据元素宽度与矩阵布局计算数组元素的偏移，并解释访问与搜索的复杂度差异。
+- 用栈、环形队列、双向链表和有根树的不变式逐步判断一次操作是否正确。
+- 比较 parent/children 与左孩子右兄弟表示，指出取得第 k 个孩子所需的遍历工作。
+- 修改队列实验中的边界策略，并用 head、tail、size 不变式验证满队列和回绕。
+
+</Objectives>
 
 ## 从“同一组值怎样支持不同操作”开始
 
@@ -21,7 +41,7 @@ Elementary Data Structures先建立最基础的表示不变式。后续散列表
 
 ### Arrays and matrices
 
-的关键不是“可以装很多值”，而是地址可计算。零基数组A中：
+数组的关键不是“可以装很多值”，而是地址可计算。零基数组A中：
 
 $$
 \operatorname{address}(A[i])
@@ -29,7 +49,6 @@ $$
 $$
 
 其中$w$为元素宽度。只要索引已知，访问为$\Theta(1)$；在无序数组中按值搜索仍为$\Theta(n)$。
-
 
 越界索引计算仍能得到某个地址，却不属于数组对象。低层语言中这会触发未定义行为或内存破坏；高层容器可能抛错。复杂度分析假设contract合法，生产接口必须单独验证边界。
 
@@ -39,13 +58,12 @@ $$
 \operatorname{offset}(i,j)=i\cdot n+j.
 $$
 
-
 column-major则为$j\cdot m+i$。两者都能常数定位，但遍历顺序决定缓存局部性：row-major应让列索引在内层连续变化。子矩阵view还需保存stride，不能假设逻辑列数等于物理行跨度。
 
 ### Stacks
 
+<Term def="只允许在同一端插入和删除，遵循后进先出（LIFO）的线性结构。">栈</Term>
 用数组前缀和`top`表示。`PUSH`写入下一个空位并增大top，`POP`先检查非空再缩小top并返回原顶部。
-
 
 ```cpp
 template<class T>
@@ -67,15 +85,16 @@ public:
 
 ### Queues
 
-若每次dequeue都左移数组，成本为$\Theta(n)$。环形数组用模运算让head与tail在容量范围内循环：
+<Term def="遵循先进先出（FIFO）的线性结构；环形数组以模运算复用固定容量中的槽。">
+  环形队列
+</Term>
+把首尾索引解释为环上的位置。若每次dequeue都左移数组，成本为$\Theta(n)$。环形数组用模运算让head与tail在容量范围内循环：
 
 $$
 \operatorname{next}(i)=(i+1)\bmod capacity.
 $$
 
-
 只存head和tail时，二者相等可能表示空，也可能表示满。常见方案是额外存`size`，或永远保留一个空槽；前者用满容量，后者状态判定更简单但可用容量少1。
-
 
 ```cpp
 void enqueue(int value) {
@@ -96,20 +115,20 @@ int dequeue() {
 
 队列不变式是逻辑第$t$个元素位于`buffer[(head+t) mod capacity]`，其中$0\le t\lt size$。每次操作只修改常数个位置和索引，因此$\Theta(1)$；并发队列还需原子顺序与可见性协议，不包含在这个顺序模型中。
 
-
 ## 10.2 Linked lists
 
 ### 指针表达逻辑相邻
 
+<Term def="每个节点显式保存前驱与后继引用的线性结构；节点逻辑相邻，不要求内存地址连续。">
+  双向链表
+</Term>
 不要求节点物理连续。头节点prev为空、尾节点next为空；内部节点$x$满足：
 
 $$
 x.next.prev=x,\qquad x.prev.next=x.
 $$
 
-
 按键搜索从head沿next最坏访问所有节点，$\Theta(n)$。若调用者已经持有节点$x$，在其前后插入或删除$x$只改常数个指针，$\Theta(1)$。因此“链表删除是O(1)”隐含目标handle已知；若先按值定位，总操作仍是$\Theta(n)$。
-
 
 ```cpp
 void erase(Node* x) {
@@ -119,8 +138,7 @@ void erase(Node* x) {
 }
 ```
 
-这段代码假设边界也有有效prev/next。普通nil终点版本需要分别处理head和tail；循环使`sentinel.next`指向首节点、`sentinel.prev`指向尾节点，空表时二者都指回自己。
-
+这段代码假设边界也有有效prev/next。普通nil终点版本需要分别处理head和tail；循环使<Term def="不存放普通数据、用来统一空表与首尾边界处理的特殊节点。">哨兵</Term>的`next`指向首节点、`prev`指向尾节点，空表时二者都指回自己。
 
 哨兵删除公式无需分支，但必须禁止删除sentinel本身。节点所有权也要明确：裸指针版由谁释放、迭代器删除后何时失效、节点是否能属于多个链表。垃圾回收语言省去显式free，却不能自动修复断链或多表别名。
 
@@ -128,13 +146,11 @@ sentinel的生命周期必须覆盖整条链表，移动容器时也要重新建
 
 单链表只存next，空间更小、前向遍历简单；已知前驱时删除为常数，但只有目标节点时通常无法找到前驱。尾插是否常数还取决于是否保存tail指针。
 
-
 ## 10.3 Representing rooted trees
 
 ### Parent and child pointers
 
 有根树给每个非根节点唯一parent。只存parent数组可以常数向上走，却要扫描所有节点才能列出孩子；为每个节点保存children列表可快速向下遍历，但增加容器与维护成本。
-
 
 二叉树节点保存`left`和`right`，可再存parent支持向上导航。表示不变式包括：根parent为空；每条孩子边反向parent指回当前节点；除根外每个节点恰有一个父；从任意节点沿parent最终到根，不能形成环。
 
@@ -142,16 +158,28 @@ sentinel的生命周期必须覆盖整条链表，移动容器时也要重新建
 
 ### Arbitrary-degree rooted trees
 
-每个节点保存动态children数组很直观，但不同节点分配不同大小。让每节点固定两个指针：
+每个节点保存动态children数组很直观，但不同节点分配不同大小。<Term def="用left-child指向最左孩子、right-sibling串起同一父节点其余孩子的有根树表示。">左孩子右兄弟表示</Term>让每节点固定两个指针：
 
 - `left-child`指向最左孩子，没有孩子则为空。
 - `right-sibling`指向下一个兄弟，最后兄弟为空。
-
 
 列出一个节点的全部孩子：先到left-child，再沿right-sibling链走，成本与孩子数量成正比。查找第$k$个孩子不是常数；插入最左孩子可常数完成，按给定兄弟位置插入也可常数完成。
 
 这种编码在形状上像二叉树，但right-sibling边不是“右子树”语义。遍历原树时，访问节点后递归其第一个孩子，再沿兄弟链处理同父节点其余孩子；把二进制树遍历公式机械套用会误读层级。
 
+<Clrs4Chapter10ElementaryDataStructuresLab />
+
+<Callout type="trap">
+
+链表删除“是 Θ(1)”只对已经拿到目标节点 handle 的指针改写成立。若输入是键值，先搜索节点通常要 Θ(n)；不要把定位成本从端到端操作中删掉。
+
+</Callout>
+
+<Callout type="trap">
+
+在左孩子右兄弟表示中，`right-sibling`不是原树的右孩子。把编码结果当普通二叉树，沿 right 边递归会跨到同父兄弟并改变原树语义。
+
+</Callout>
 
 ## 小结
 
@@ -159,4 +187,80 @@ Chapter 10 Elementary Data Structures从表示决定操作成本。数组和矩�
 
 双向链表以next/prev表达逻辑相邻，已有handle时插入删除为常数，按键搜索仍为线性；循环哨兵消除首尾分支。有根树可用parent、二叉孩子指针或左孩子右兄弟编码，选择会改变向上、向下和按序访问成本。正确实现依赖状态不变式、所有权和边界测试，而不只是操作名称。
 
+## 练习
 
+<Exercises>
+
+1. 一个 6×9 的 row-major 矩阵每元素占 4 字节，基址为 1000。求零基元素 A[4, 7] 的字节地址，并说明把内层循环放在列维度的原因。
+
+   <Answer>
+
+   偏移为 4×9+7=43 个元素，字节地址是 1000+43×4=1172。row-major 中列相邻，内层按列递增可顺序读取连续地址，通常有更好的缓存局部性。
+
+   </Answer>
+
+2. 容量为 5 的环形队列初始为空。依次 enqueue(A), enqueue(B), enqueue(C), dequeue(), enqueue(D), enqueue(E)。用 head、tail、size 描述最终状态；若去掉模运算，哪个操作首先无法复用空槽？
+
+   <Answer>
+
+   A 出队后 head=1；C 入队后 tail 从 3 前进至 4；E 写入槽 4 后 tail 回绕至 0。最终逻辑次序为 B,C,D,E，head=1、tail=0、size=4。去掉模运算后，tail 越过末槽时不能回到槽 0，因而无法复用 A 腾出的空位。
+
+   </Answer>
+
+3. 有根树根 R 的孩子按序为 A、B、C，A 的孩子按序为 D、E。写出左孩子右兄弟表示中 R、A、B、D 的 left-child/right-sibling，并求列出 R 的全部孩子需要访问几条 sibling 边。
+
+   <Answer>
+
+   R: left-child=A；A: left-child=D, right-sibling=B；B: left-child=null, right-sibling=C；D: left-child=null, right-sibling=E。列出 R 的孩子需从 A 沿两条 sibling 边到 B、C，因此工作与孩子数成正比；兄弟边不是二叉树语义中的右孩子边。
+
+   </Answer>
+
+4. 修改上方环形队列实验：把“用 `size` 区分空与满”改成“保留一个空槽区分空与满”。写出新的满队列条件，并用容量为 5、依次入队 A、B、C、D 后再尝试入队 E 的状态，说明实际可存元素数。
+
+   <Answer>
+
+   保留空槽时，若 `(tail + 1) % capacity == head` 则队列已满，`head == tail` 表示空。容量为 5 的缓冲区最多存 4 项；入队 A、B、C、D 后 `head=0`、`tail=4`、下一位置为 0，故 E 必须报告 overflow，不能覆盖 A。将实验的入队分支改为先检查、后写入：`if ((tail + 1) % capacity == head) throw overflow_error{};`，只有检查通过才写 `buffer[tail]` 并推进 `tail`；失败操作不得修改数组或索引。
+
+   </Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+
+<GlossaryItem term="栈">
+  只在一端操作的后进先出线性结构；动态数组实现的 push 扩容时可能为
+  Θ(n)，几何增长下摊还为 Θ(1)。
+</GlossaryItem>
+<GlossaryItem term="环形队列">
+  用 head、tail 与模运算复用数组槽的先进先出结构；必须区分满与空状态。
+</GlossaryItem>
+<GlossaryItem term="双向链表">
+  以 prev/next 维护相邻关系的节点结构；搜索为 Θ(n)，已知节点后的局部插入/删除为
+  Θ(1)。
+</GlossaryItem>
+<GlossaryItem term="哨兵">
+  不承载普通元素的特殊节点；循环哨兵让空表也满足首尾互指不变式。
+</GlossaryItem>
+<GlossaryItem term="左孩子右兄弟表示">
+  以 left-child 和 right-sibling
+  两种指针表示任意度有根树；枚举孩子需沿兄弟链遍历。
+</GlossaryItem>
+
+</Glossary>
+
+## 来源范围与边界
+
+本章范围对应 CLRS 第四版第 10 章 _Elementary Data Structures_：10.1 数组、矩阵、栈与队列；10.2 链表；10.3 有根树表示。MIT Press 提供的公开目录用于确认章节与小节范围，不作为正文内容的逐字来源。本页采用独立重写；公式、伪代码和例题用于解释标准数据结构定义与不变式，不复现原书段落或习题。
+
+事实核对参考：MIT Press《Introduction to Algorithms, 4th ed.》[官方书目与目录](https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf)用于确认范围；Open Data Structures 的[数组结构](https://opendatastructures.org/ods-java/2_Array_Based_Lists.html)与[链表](https://opendatastructures.org/ods-java/3_Linked_Lists.html)章节用于交叉核对实现与复杂度。后两项是补充解释来源，不表示 CLRS 授权或逐字依据。本站交互、数值例子及练习为原创教学材料。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 10: Elementary Data Structures"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

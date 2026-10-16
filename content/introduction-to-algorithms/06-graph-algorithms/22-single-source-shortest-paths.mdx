@@ -3,121 +3,153 @@ title: "Chapter 22 · Single-Source Shortest Paths"
 type: C
 section: "CLRS4 · 图算法"
 order: 22
-description: "按CLRS第四版第22章重建Bellman-Ford、DAG、Dijkstra、差分约束与最短路径统一证明。"
+description: "按 CLRS 第四版第 22 章重建单源最短路径：initialize 与 relax 统一 Bellman-Ford、DAG 与 Dijkstra，外加差分约束与最短路径性质证明。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-22
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { CodeTabs, Tab } from "@/components/mdx/mdx-components";
+import { Clrs4Chapter22SingleSourceShortestPathsLab } from "@/components/mdx/introduction-to-algorithms/v2/22-single-source-shortest-paths";
 
-## 从“同一条RELAX为什么能支撑三种算法”开始
+{/* 知识点清单：单源最短路径(图+距离数组Lab)→松弛操作(Lab动画)→Bellman-Ford算法(Lab轮次表)→负权环(Lab故障注入)→有向无环图(Lab拓扑序)→Dijkstra算法(Lab定居序)→差分约束(公式+建边图)→最短路径树(公式+验签)。可视化决策卡：概念1=距离数组演化→图表类型=阶段×顶点d值矩阵→SVG特征=6阶段行×5顶点列+收紧高亮→交互=时间线；概念2=松弛/定居→图表类型=有向图+边高亮→SVG特征=5顶点固定布局+当前松弛边accent+被忽略负权边danger虚线→交互=播放/单步/拖进度；概念3=负权环检测→图表类型=检测见证边→SVG特征=多扫一遍的witness边高亮→交互=故障注入checkbox；组件=clrs4-ch22-single-source-shortest-paths.tsx，概念异构度=高→独立组件。sourceAccess=outline-only，独立重写不复现原书正文。 */}
 
-先预测：当前$d[u]=4$、edge weight为$-2$、$d[v]=7$，经过$u$可给候选2，应更新$v$并令parent为$u$。Bellman-Ford、DAG shortest paths与Dijkstra都执行这个动作；差别只是何时可以确信所有必要edges已按正确顺序relax。
+<Objectives>
 
-令path $p=\langle v_0,\ldots,v_k\rangle$的weight为edges之和，$\delta(s,v)$为所有$s$到$v$ paths的minimum。
+- 能解释 initialize–relax 框架如何把 Bellman-Ford、DAG 单次遍历与 Dijkstra 统一为同一动作的不同顺序保证。
+- 能手算固定边序下两轮全边松弛后的距离数组，并判断图中是否存在源点可达的负权环。
+- 能回答：为什么 Dijkstra 在含负权边的图上不报错，却会给出错误的距离数组？
 
+</Objectives>
 
-### Initialize and relax
+## 直觉：导航软件凭什么敢说"这条路线最省"？
 
-所有算法先令$d[s]=0$、其他$d[v]=\infty$、parents为NIL。$d[v]$始终是某条已发现path的weight upper bound。
+打开导航软件，输入起点，它瞬间给出到每个目的地的"最省路线"。可是地图上有的路段通行费低、有的要绕行，路线之间还能互相拼接——它凭什么确信找到的走法一定最省，而不是漏掉了某种组合？
 
-定义：
+更麻烦的是：如果某段环路绕一圈回来反而更便宜，那么"越走越省"可以无限重复，最省路线根本不存在。此时软件需要如实报告"没有有限答案"，而不是悄悄给你一个看起来合理的数字。
+
+本章解决的就是这件事：从一个起点出发，算出它到所有地点的最省花费；当"绕圈更便宜"时明确报警。下面三个思路不同的做法，核心动作竟然完全相同——先对每个地点猜一个上界，再沿路段逐段改进它。
+
+先预测：在下面实验里打开"注入负权边 b→a = −3"，再切换到 Dijkstra 模式——哪个地点会被过早锁定？最终距离数组里哪一格会与真值不符？
+
+<Clrs4Chapter22SingleSourceShortestPathsLab />
+
+## 权威目录定位
+
+本章对齐 CLRS 第四版第 22 章，官方概念包括：
+
+- single-source shortest paths / 单源最短路径；
+- Bellman-Ford algorithm / Bellman-Ford 算法；
+- shortest paths in directed acyclic graphs / 有向无环图最短路径；
+- Dijkstra's algorithm / Dijkstra 算法；
+- difference constraints / 差分约束；
+- proofs of shortest-paths properties / 最短路径性质证明。
+
+来源访问级别为 outline-only：本站仅依据出版社官方目录限定本章范围与术语，正文为独立教学重写，不复现原书段落与习题；概念定义与算法事实以公开的标准教材共识核对。
+
+## 统一框架：初始化与松弛
+
+<Term def="固定一个起点，求它到图中每个其他顶点的最短路径及距离的问题">
+  单源最短路径
+</Term>
+问题的输入是一张带权有向图和一个源点
+s。每条路径的花费是沿途各路段花费之和，真正的最省花费记作 δ。符号约定：s
+为源点；u、v 表示顶点；w(u,v) 为边 (u,v) 的权值；d[v] 为当前已知的、从 s 到 v
+的某条路径花费（一个上界）；δ(s,v) 为所有 s 到 v 路径花费的下确界。
 
 $$
-d[v]\leftarrow\min\{d[v],d[u]+w(u,v)\}.
+w(p)=\sum_{i=1}^{k} w(v_{i-1},v_i),
+\qquad
+\delta(s,v)=\min\{\,w(p):\text{$p$ 是从 $s$ 到 $v$ 的路径}\,\}.
 $$
 
+这个式子在说：路径花费是逐段累加的；而 δ 是在所有候选走法里取最小——注意"最小"可能不存在（负权环情形），那时 δ 是 −∞。
 
-```cpp
-void relax(Vertex u, Vertex v, Weight w) {
-    if (distance[u] != INF && distance[v] > distance[u] + w) {
-        distance[v] = distance[u] + w;
-        parent[v] = u;
-    }
-}
-```
+所有算法的开场完全相同：d[s] 置 0，其余 d[v] 置无穷大，parent 全部置空。随后反复执行同一个动作——<Term def="用一条边 (u,v) 尝试改进 d[v]：若经 u 绕到 v 更省，就把 d[v] 改成这个更小的候选并记录 parent">松弛操作</Term>：
 
-Guard避免infinity与负weight相加溢出。Integer实现还要检查finite addition overflow；floating point需定义epsilon与tie policy。
+$$
+d[v]\leftarrow\min\{\,d[v],\;d[u]+w(u,v)\,\}.
+$$
 
-## 22.1 The Bellman-Ford algorithm
+这个式子在说：松弛就是拿"目前已知的到 u 的花费"加上"u 到 v 这一段的花费"去和 d[v] 打擂，谁小留谁。任何一个松弛序列都保持 d[v] ≥ δ(s,v)——d 永远是上界，只会下降不会失真。三个算法的差别只有一个：按什么顺序松弛、以及在哪个时刻可以宣布某个 d[v] 已经等于 δ(s,v)。
 
-### Negative edges and cycle detection
+## Bellman-Ford：把"多轮尝试"变成正确性证书
 
-允许negative edges。若不存在source-reachable negative cycle，任一shortest path可取simple path，最多$|V|-1$ edges。
+<Term def="重复 |V|−1 轮全边松弛、再用一轮检测可达负权环的单源最短路径算法">
+  Bellman-Ford 算法
+</Term>
+Bellman-Ford
+算法允许负权边。它的正确性依赖一个观察：若不存在负权环，任何最短路径都可以取成不含重复顶点的简单路径，至多
+|V|−1 条边。因此把全部边按任意固定顺序松弛 |V|−1
+轮，每条最短路径的边都会在某个轮次里按路径顺序被处理到。
 
 ```text
 BELLMAN-FORD(G, w, s)
 1  INITIALIZE-SINGLE-SOURCE(G, s)
-2  repeat |V|−1 times
+2  repeat |V| − 1 times
 3      for each edge (u,v) in G.E
-4          RELAX(u,v,w)
+4          RELAX(u, v, w)
 5  for each edge (u,v) in G.E
-6      if d[v] > d[u] + w(u,v), return false
-7  return true
+6      if d[v] > d[u] + w(u,v), report a reachable negative cycle
+7  return the d array
 ```
 
-第$i$轮后，只要某条shortest path的前$i$条edges已按path order被relax，其endpoint就converge。固定edge iteration可能在一轮传播多条edge，只会提前收敛，不破坏上界。
+第 i 轮结束后，只要某条最短路径的前 i 条边已按路径顺序被松弛过，路径终点的 d 值就已经收敛。固定边序在一轮内可能"顺路"传播多条边，只会提前收敛，不会破坏上界。总时间 O(VE)、额外空间 O(V)。实现上若某轮没有任何更新可以提前退出——这改善具体实例的运行时间，但不改变最坏情况界。
 
+### 可达负权环与检测
 
-时间$O(VE)$、空间$O(V)$。若某轮没有update可early stop；这改善具体实例，不改变worst-case bound。
-
-### Reachable negative cycles
-
-若source可达cycle $c$且$w(c)\lt0$，绕cycle任意多次可让walk weight无界下降，affected vertices没有finite shortest path：
+<Term def="环上所有边权之和为负的环；从源点可达时，相关顶点的最短路不存在有限值">负权环</Term>是"最省路线不存在"的精确刻画：若 s 可达环 c 且 w(c) < 0，绕环任意多圈总花费可以无界下降，环上能到达的每个顶点 v 都有
 
 $$
 \delta(s,v)=-\infty.
 $$
 
-在$|V|-1$轮后仍可relax的edge证明存在reachable negative cycle；unreachable negative cycle因$d[u]=\infty$不影响source problem。
+这个式子在说：不是"算不出来"，而是数学上根本不存在有限的最省花费——算法必须把这个状态和"没有通路"区分开。
 
+检测方法是 Bellman-Ford 的收尾：|V|−1 轮之后再扫一遍所有边，若仍有边可以被松弛，就证明了存在可达负权环；若没有任何边可松弛，则全部距离已收敛且不存在可达负权环。注意两个细节：不可达的负权环不会影响源点问题的答案（d[u] 仍是无穷大，松弛被跳过）；可松弛边的存在同时给出了见证环的线索，可以把见证边反向沿 parent 链回溯取出来。
 
-## 22.2 Single-source shortest paths in directed acyclic graphs
+## 有向无环图：拓扑序的一次遍历
 
-### One topological pass
+若图是无环的（<Term def="不含任何环的有向图；其顶点可以排成拓扑序使每条边都从前指后">有向无环图</Term>，DAG），负权边完全合法——因为没有环可绕，路径长度天然有限。更强的结论是：按拓扑序逐个处理顶点、处理时松弛它的全部出边，每条边恰好松弛一次，总时间 O(V+E)。
 
-允许negative edges，因为没有cycle可反复降低weight。
+正确性来自顺序保证：处理 u 时，所有能进入 u 的边都来自拓扑序中更靠前的顶点，它们已经被处理完毕，所以 d[u] 此刻就等于 δ(s,u)。把正确距离沿出边传向后继，后继拿到的候选自然是对的。对比 Bellman-Ford 的"盲扫 |V|−1 轮"，DAG 模式把"轮次"换成了拓扑序这一结构信息。同一技巧也适用于求关键路径：把松弛的比较方向反过来（或取负权）即可，但要同步改初始化与比较方向。
 
-```text
-DAG-SHORTEST-PATHS(G, w, s)
-1  topologically sort G
-2  INITIALIZE-SINGLE-SOURCE(G, s)
-3  for each vertex u in topological order
-4      for each v in G.Adj[u]
-5          RELAX(u,v,w)
-```
+## Dijkstra：每次锁定最近的顶点
 
+<Term def="每次从未定居顶点中取出当前 d 值最小者并永久锁定的单源最短路径算法；要求所有边权非负">
+  Dijkstra 算法
+</Term>
+Dijkstra 算法维护一个"已定居集合"S。每轮用优先队列 extract-min 取出 V−S 中 d
+值最小的 u，把 d[u] 宣布为最终答案并加入 S，再松弛 u 的出边。
 
-当处理$u$时，所有可能进入$u$的path predecessors都位于topological order之前，因此$d[u]$已是$\delta(s,u)$；relax outgoing edges把正确候选传向后继。总时间$O(V+E)$，也可求critical path：把目标从min改成max或取负weights，但需同步初始化与比较方向。
+为什么可以"一锤定音"？反设存在到 u 的更短路径 p，取 p 上第一个不在 S 中的顶点 y 及其已定居前驱 x。x 定居时边 (x,y) 已被松弛，且 y 到 u 的剩余路段权值非负，于是 d[y] ≤ δ(s,u) < d[u]，与 u 是 extract-min 的结果矛盾。整条推理只用了"尚未走的后半段不会更便宜"，所以非负权是这个算法的硬前提，而不是实现细节。
 
-## 22.3 Dijkstra's algorithm
-
-### Settling the nearest vertex
-
-维护settled set $S$。每轮从$V-S$ extract minimum $u$；证明$d[u]=\delta(s,u)$后永久加入$S$。
-
-
-证明反设存在到$u$更短path。取该path上第一个不在$S$的vertex $y$及其settled predecessor $x$。当$x$被settle时edge $(x,y)$已relax，且nonnegative suffix保证$d[y]\le\delta(s,u)\lt d[u]$，与$u$为extract-min矛盾。
-
-Negative edge会破坏“尚未走的suffix不会降低cost”：一个已settled vertex可能后来经负edge得到更短path，算法却不再修复。
-
-
-Adjacency list加binary heap为：
+配套二叉堆与邻接表，总时间为
 
 $$
-O((V+E)\log V)=O(E\log V)
-\quad\text{for a connected graph}.
+O((V+E)\lg V)=O(E\lg V)
+\quad\text{（对连通图）}.
 $$
 
-Fibonacci heap理论界$O(E+V\log V)$；dense matrix加array为$O(V^2)$。Lazy priority queue可push duplicate entries并在pop时丢弃stale distance，代码简单但heap元素数与常数不同。
+这个式子在说：每条边最多触发一次 decrease-key，每次堆操作花 O(lg V)；理论界的更优版本用 Fibonacci 堆做到 O(E + V lg V)，稠密图配数组则得到 O(V²)。工程上还常用 lazy 堆：松弛时直接插入新条目、弹出时丢弃过期值，代码更简单但堆的体量与常数更大。
 
+## 差分约束：把不等式系统变成一张图
 
-## 22.4 Difference constraints and shortest paths
-
-### Constraints as edges
-
-：
+<Term def="形如 x_j − x_i ≤ b_k 的线性不等式组；可转成图上的单源最短路径求解">
+  差分约束
+</Term>
+系统问：给定一组"两个变量之差至多为 b"的不等式，是否存在一组赋值？关键观察是
 
 $$
 x_j-x_i\le b_k
@@ -125,53 +157,201 @@ x_j-x_i\le b_k
 x_j\le x_i+b_k.
 $$
 
-把constraint转为edge $(v_i,v_j)$ weight $b_k$。新增super-source $v_0$，向每个$v_i$连weight 0 edge，使全部constraint vertices reachable。
+这个式子在说：每个不等式都可以看成图上的一条边——从 v_i 到 v_j、权值为 b_k 的边，含义是"v_j 的距离不能超过 v_i 加 b_k"。再新增一个超级源点 v_0，向每个变量顶点连权值 0 的边，让所有顶点都可达。
 
+对这张图跑 Bellman-Ford：若无负权环，取 x_i = δ(v_0, v_i) 即得一组解，因为三角不等式保证每条边都满足 δ(v_0,v_j) ≤ δ(v_0,v_i) + b_k；若存在负权环，把环上的不等式逐条相加，左侧变量相互抵消为 0，右侧是环权值 w(c) < 0，推出 0 ≤ w(c) < 0 的矛盾，系统无解。解通常不唯一：所有变量同时加一个常数，差值不变，约束照样满足。
 
-若constraint graph无negative cycle，Bellman-Ford distances给一组solution $x_i=\delta(v_0,v_i)$。Triangle inequality保证对每条edge：
+## 证明工具箱与最短路径树
 
-$$
-\delta(v_0,v_j)\le\delta(v_0,v_i)+b_k.
-$$
-
-若存在negative cycle，把cycle对应不等式相加，left变量telescopes为0，right为negative，得到不可能的$0\le w(c)\lt0$，所以system infeasible。
-
-
-Constraint solutions通常不唯一；所有variables同时加常数仍保持differences。Super-source只是建立可达性，不向原system添加业务变量约束。
-
-## 22.5 Proofs of shortest-paths properties
-
-### Reusable proof toolkit
-
-最短路径性质证明共享：
-
-1. Triangle inequality：$\delta(s,v)\le\delta(s,u)+w(u,v)$。
-2. Upper-bound property：任何relax sequence都保持$d[v]\ge\delta(s,v)$。
-3. No-path property：若不可达，$d[v]$保持infinity。
-4. Convergence property：若$d[u]=\delta(s,u)$且$(u,v)$在某shortest path上，relax后$d[v]=\delta(s,v)$。
-5. Path-relaxation property：按某shortest path的edge order relax，endpoint最终converge，中间可穿插其他relax。
-
-
-这些properties把算法差异缩成“何时保证shortest-path edges按可用order被处理”。Bellman-Ford枚举足够轮数，DAG用topological order，Dijkstra用nonnegative weights证明extract-min已converged。
-
-### Predecessor subgraph
-
-若所有reachable vertices的distances正确，且每个非source parent edge满足tightness：
+三个算法看起来差别巨大，但它们的证明共享同一组性质：三角不等式 δ(s,v) ≤ δ(s,u) + w(u,v)；上界性质（任何松弛序列保持 d[v] ≥ δ(s,v)）；无路径性质（不可达顶点 d 保持无穷大）；收敛性质（若 d[u] 已是最短距离且 (u,v) 在某条最短路径上，松弛后 d[v] 也收敛）；路径松弛性质（按某条最短路径的边序松弛，终点必然收敛，中间穿插其他松弛不影响）。
 
 $$
-d[v]=d[\pi[v]]+w(\pi[v],v),
+\delta(s,v)\le \delta(s,u)+w(u,v).
 $$
 
-parents应形成以source为root的shortest-path tree。Equal shortest paths会产生不同合法parents；tie policy决定witness但不改变distances。
+这个式子在说：直接从 s 到 v 的最省花费，不可能比"先到 u、再走 (u,v)"这条组合走法更贵——这是所有松弛正确性的地基。
 
+当所有可达顶点的距离都正确，且每个非源顶点的 parent 边都满足 d[v] = d[parent[v]] + w(parent[v],v)（称为紧边），parent 链就构成以 s 为根的<Term def="由 parent 指针形成、以源点为根、根到每个顶点的唯一路径都是最短路径的树">最短路径树</Term>。等长的最短路径可能有多条，parent 只是其中一组见证，由并列时的取舍策略决定，不影响距离值。
 
-验证结果时可独立检查：$d[s]=0$；每条edge满足$d[v]\le d[u]+w(u,v)$；每个finite非source vertex有tight parent edge；parent chains终止于source且无cycle。对Bellman-Ford还需报告negative-cycle status，对Dijkstra需证明weights nonnegative。
+验证一份输出不必重跑算法：检查 d[s] = 0；逐边检查 d[v] ≤ d[u] + w(u,v)；每个有限距离的非源顶点都有一条紧的 parent 边；parent 链终止于 s 且无环。Bellman-Ford 的调用方还要核对负权环状态位，Dijkstra 的调用方要证明输入权值非负。
 
+## 代码对照：同一段松弛的两种实现
+
+下面两个代码块是同一逻辑段的两种实现：Bellman-Ford 的主循环（初始化 + |V|−1 轮松弛 + 负权环检测）。C++ 版本显式区分了"不可松弛"与"可松弛"，Python 版本用无穷大表达同一语义。
+
+<CodeTabs>
+  <Tab label="C++">
+
+```cpp
+vector<int> bellmanFord(int n, int s, const vector<Edge>& edges) {
+    const int INF = numeric_limits<int>::max();
+    vector<int> d(n, INF), parent(n, -1);
+    d[s] = 0;
+    for (int round = 0; round < n - 1; ++round) {
+        bool changed = false;
+        for (const auto& [u, v, w] : edges) {
+            if (d[u] != INF && d[u] + w < d[v]) {
+                d[v] = d[u] + w;      // relax 成功，记录更省的候选
+                parent[v] = u;
+                changed = true;
+            }
+        }
+        if (!changed) break;          // 提前退出：本轮无更新
+    }
+    for (const auto& [u, v, w] : edges) {
+        if (d[u] != INF && d[u] + w < d[v]) {
+            throw NegativeCycleError{};  // 第 |V| 轮仍可松弛
+        }
+    }
+    return d;
+}
+```
+
+  </Tab>
+  <Tab label="Python">
+
+```python
+def bellman_ford(n, s, edges):
+    INF = float("inf")
+    d = [INF] * n
+    parent = [-1] * n
+    d[s] = 0
+    for _ in range(n - 1):
+        changed = False
+        for u, v, w in edges:
+            if d[u] + w < d[v]:     # INF + w 仍为 INF，天然免溢出
+                d[v] = d[u] + w     # relax 成功，记录更省的候选
+                parent[v] = u
+                changed = True
+        if not changed:
+            break                   # 提前退出：本轮无更新
+    for u, v, w in edges:
+        if d[u] + w < d[v]:
+            raise ValueError("reachable negative cycle")
+    return d
+```
+
+  </Tab>
+</CodeTabs>
+
+两个实现的关键差异在溢出防护：C++ 的整数无穷大加一个负权会绕回成正数，必须先判断 `d[u] != INF`；Python 的 `inf + w` 仍是 `inf`，比较自然失败，但浮点权值仍需另行定义 epsilon 与并列策略。把这段代码对照上方实验的 Bellman-Ford 模式逐步推进，可以看到 `changed` 标志对应"提前退出"那一行表格。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：给 Dijkstra 喂负权边，它不报错但答案是错的">
+
+现象：图里有负权边，Dijkstra 正常结束，距离数组看起来合理。
+
+原因："已定居顶点不再被改进"的证明依赖剩余路段权值非负；负权边让某个已定居顶点之后还能被改进，而 extract-min 已经结束，错误被静默留在数组里。
+
+修复：先在实验里打开"注入负权边 b→a = −3"并切到 Dijkstra 模式，亲眼看到 d[a]=1 被过早锁定；生产代码在入口处校验所有权值非负，或改用 Bellman-Ford。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：以为 Bellman-Ford 能检测图中任意负权环">
+
+现象：图上有个负权环，但 Bellman-Ford 报告"正常收敛"，于是怀疑算法坏了。
+
+原因：检测的是"源点可达"的负权环。不可达环上的顶点 d 值保持无穷大，松弛根本不会被触发，自然检测不到——而这不影响源点问题的正确性。
+
+修复：区分"图中存在负权环"和"存在源点可达的负权环"；若需要前者，对每个连通分量分别跑或先做一次可达性标记。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：松弛时不防无穷大，整数实现直接溢出">
+
+现象：某些顶点不可达，松弛时把无穷大加上一个负数，距离变成巨大的正数，之后算法行为诡异。
+
+原因：无穷大在代码里是一个具体的数（如 INT_MAX），加负权会绕回；无穷大加正权可能溢出未定义行为。
+
+修复：松弛前显式判断 d[u] 是否为无穷大（C++），或采用"无穷大运算仍得无穷大"的表示（Python 的 float('inf')）；浮点实现还要定义 epsilon 与并列策略。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：差分约束的边建反了方向">
+
+现象：不等式 x_j − x_i ≤ b 明明有解，跑出来的距离数组却处处违反约束。
+
+原因：边应当从 x_i 指向 x_j、权值为 b，含义是 d[v_j] ≤ d[v_i] + b；建成 v_j → v_i 就把"上界"关系整个颠倒了。
+
+修复：记住口诀"右边减左边，边从左边指向右边"；建模后用一个小例子（如 x_2 − x_1 ≤ 3 配 x_1 = 0）手验一遍方向。
+
+</Callout>
 
 ## 小结
 
-Chapter 22 Single-Source Shortest Paths以initialize与relax统一算法。Bellman-Ford处理negative edges并检测reachable negative cycle；directed acyclic graph shortest paths用一次topological pass；Dijkstra's algorithm依赖nonnegative weights与extract-min settlement；difference constraints转为constraint graph并复用Bellman-Ford。
+- initialize 与 relax 是三种算法共享的唯一动作。
+- Bellman-Ford 用 |V|−1 轮换取负权边与负权环检测。
+- DAG 用拓扑序把轮次压缩成每条边一次松弛。
+- Dijkstra 用非负权前提把 extract-min 变成定居证书。
+- 差分约束是不等式组到最短路径的机械翻译。
 
-Proofs of shortest-paths properties通过triangle inequality、upper bound、convergence和path relaxation解释不同顺序何时足够。最终交付不只是distance array，还应包含算法前置条件、negative-cycle状态、tight predecessor witness与独立edge-inequality audit。
+<Exercises>
 
+1. 手算题：对实验中的基础图（边序 s→a、s→b、a→c、b→c、c→t、a→t，权值 1、2、3、5、2、8），写出第 1 轮与第 2 轮全边松弛后的 d 数组，并说明能否在第 2 轮后提前停止。
 
+   <Answer>
+
+   第 1 轮：d[s]=0，d[a]=1，d[b]=2，d[c]=4（经 a），d[t]=6（经 c→t）；b→c 的候选 7 不小于 4，a→t 的候选 9 不小于 6。数组为 [0, 1, 2, 4, 6]。第 2 轮所有边都无法再松弛，数组不变。因为没有发生任何更新，可以在第 2 轮后提前停止；该实例的实际代价远小于 O(VE) 的最坏界。
+
+   </Answer>
+
+2. 改 Demo 代码题：把上方实验的默认算法模式改为 Dijkstra，并在"注入负权边 b→a = −3"开启时，让被忽略的那条边在距离表格的当前行旁边额外显示"已忽略"标记（而不是只改图上的虚线）。
+
+   <Answer>
+
+   把 `useState<Mode>("bellman")` 改为 `useState<Mode>("dijkstra")`；在距离表格渲染处（`rows.map` 的单元格循环）读取当前行的 `ignored` 字段，当其非空时在该行首列追加一个 warning 色的"已忽略 edge b→a"文本。同时 `reset` 里的 `setMode("bellman")` 要同步改为 `setMode("dijkstra")`，否则重置后模式会跳回 Bellman-Ford。
+
+   </Answer>
+
+3. 建模题：把差分约束系统 x₂ − x₁ ≤ 3、x₃ − x₂ ≤ −1、x₃ − x₁ ≤ 2 建成约束图（含超级源点 v₀），说明如何用 Bellman-Ford 得到一组解，并解释为什么把所有变量同时加 5 仍然满足约束。
+
+   <Answer>
+
+   每条不等式 x_j − x_i ≤ b 建成边 (v_i, v_j, b)：v₁→v₂ 权 3、v₂→v₃ 权 −1、v₁→v₃ 权 2；再加 v₀ 到三个顶点的 0 权边。对 v₀ 跑 Bellman-Ford：这三条约束边构成有向无环图，因此不存在负权环；取 x_i = δ(v₀, v_i) 即得一组合法解，例如 [0, 3, 2]（满足 2 − 0 ≤ 3、2 − 3 ≤ −1、2 − 0 ≤ 2）。约束只限制变量之间的差，所有变量同加一个常数时差值不变，故仍全部满足；解不唯一。
+
+   </Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="单源最短路径">
+  固定一个起点，求它到图中每个顶点最短路径及距离的问题。
+</GlossaryItem>
+<GlossaryItem term="松弛操作">
+  用一条边尝试改进距离上界：若经 u 绕到 v 更省，就更新 d[v] 并记录
+  parent。三种算法的唯一共享动作。
+</GlossaryItem>
+<GlossaryItem term="Bellman-Ford算法">
+  重复 |V|−1 轮全边松弛、再用一轮扫描检测可达负权环的算法；允许负权边，时间
+  O(VE)。
+</GlossaryItem>
+<GlossaryItem term="负权环">
+  环上权值和为负的环；源点可达时相关顶点不存在有限最短路，距离为 −∞。
+</GlossaryItem>
+<GlossaryItem term="有向无环图">
+  不含环的有向图；顶点可排成拓扑序，使每条边从前指后，从而让最短路径一次遍历求解。
+</GlossaryItem>
+<GlossaryItem term="Dijkstra算法">
+  每次 extract-min
+  并永久锁定当前最小距离顶点的算法；正确性硬前提是所有边权非负。
+</GlossaryItem>
+<GlossaryItem term="差分约束">
+  形如 x_j − x_i ≤ b 的不等式组；每个不等式对应一条权值为 b
+  的边，求解约等于对约束图跑单源最短路径。
+</GlossaryItem>
+<GlossaryItem term="最短路径树">
+  由 parent 指针构成、以源点为根的树，根到每个顶点的唯一路径都是最短路径。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 22: Single-Source Shortest Paths"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

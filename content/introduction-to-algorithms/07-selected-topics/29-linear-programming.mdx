@@ -1,21 +1,99 @@
 ---
 title: "Chapter 29 · Linear Programming"
-type: C
+type: B
 section: "CLRS4 · 专题"
 order: 29
-description: "按CLRS第四版第29章重建线性规划形式、算法族、问题建模、对偶性与最优性证书。"
+description: "按 CLRS 第四版第 29 章重建线性规划的标准形、可行域几何、单纯形法、问题建模与对偶性证书。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: clrs4-29
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter29LinearProgrammingLab } from "@/components/mdx/introduction-to-algorithms/v2/29-linear-programming";
 
-## 从“最优值必须带证明”开始
+{/* 可视化决策：可行域=半平面交多边形（约束线+填充多边形+顶点标注，Stage0）；单纯形=等值线梯度扫掠+沿棱爬坡路径+z 值刻度（Stage1）；对偶=紧约束法线对偶价标注+gap=0 证书+无界时对偶不可行警示（Stage2）；故障注入=≤写成≥→无界射线+solver status 翻转。组件=clrs4-29-linear-programming-lab.tsx（Clrs4Chapter29LinearProgrammingLab），概念异构度高→本章独立组件。知识点：线性规划(公式+代码)、可行域(Stage0)、松弛变量(公式)、单纯形法(Stage1)、对偶问题(Stage2)，进名词解释：线性规划/可行域/松弛变量/单纯形法/对偶问题。 */}
 
-先预测：一个solver返回profit 10，并不自动说明10最优。你至少要确认这个point满足所有resource constraints；更强的做法是再给一个任何可行方案都不可能超过10的upper bound。Primal solution负责“做得到”，dual solution负责“不会更好”，两者相遇才关闭证明。
+<Objectives>
 
-（linear programming，LP）把decision variables组成vector $x$，把constraints组成matrix $A$与vector $b$，把objective coefficients组成$c$。一种常用maximization form为
+- 能写出一个两变量线性规划的决策变量、约束矩阵与目标向量，判断它的结局是唯一最优、整条最优棱、不可行还是无界，并解释 solver 的 status 为什么必须随解返回。
+- 能手算该线性规划的对偶最优值，用弱对偶给出上界，并用互补松弛逐项验证原问题最优解。
+- 自测：`max x+3y`，满足 `x+y≤4`、`x+2y≤6`、`x,y≥0`，最优解、最优值与对偶最优值各是多少？哪条约束在最优点上是紧的？
+
+</Objectives>
+
+## 直觉：利润、原料与"还能更好吗"
+
+先预测：一家工厂用两台机器生产两种产品，每台机器每天的工时有限，每种产品单件利润已知——你会怎么安排产量让总利润最大？如果计算机报了一个利润数字，你凭什么相信没有更好的排法？
+
+把这个问题摊开看：每种产量组合要么满足工时限制、要么不满足；满足的方案里利润有高低。真正难的不是"找一个可行方案"，而是回答"还能更好吗"——要给出证据。本章的核心工具就负责提供这种证据：一个方案说"我做得到"，另一个计算说"任何人都不可能超过这个数"，两个数相遇，问题才算真正解决。
+
+## 权威目录定位
+
+本章按 CLRS 第四版第 29 章的官方目录限定范围：线性规划的形式与算法（linear programming formulations and algorithms）、把问题表述为线性规划（formulating problems as linear programs）、对偶性（duality）。写作方式是以权威目录限定范围、以公开学术资料核对事实、不复现原书正文；所有示例数值、图和代码均为独立重写，示例结论用本章自带 oracle 复核。
+
+## 线性规划：把经营决策写成一张表
+
+<Term def="在一组线性等式或不等式限制下，求一个线性函数最大或最小值的优化问题；变量不能相乘，次数不能高于一。">
+  线性规划
+</Term>
+（linear
+programming）做的事，就是把上一节的工厂问题翻译成一张精确的表：一列"可决策的产量"，若干行"每项资源不许超支"，最后一行"要最大化的总利润"。翻译完成之后，"安排生产"就不再依赖经验，而是一道可以求解、可以证明、可以交给计算机的数学题。
+
+"线性"两个字是严格的：产量不能自己乘自己，两种产量不能相乘出现在利润里，也不能出现"如果超过某量就打折"这类分段规则。很多分段规则可以引入辅助变量改写线性形式，但每一次改写都必须证明与原问题等价——建模的每一步都要留下可核对的依据。
+
+## 可行域与三种结局
+
+<Term def="所有同时满足每条约束的取值的集合；线性约束交出的是凸多边形（高维时为凸多面体），线性函数的最优值一定能在顶点处取得。">
+  可行域
+</Term>
+是这张表的"活动范围"：每条线性不等式切出一个半平面，所有约束的交集就是可行域；二维时它是凸多边形或无界凸多边形，高维时是多面体。第五节实验的第一步把它画了出来——`x+y≤4`、`x+2y≤6`
+与非负限制交出四个顶点
+`(0,0)`、`(4,0)`、`(2,2)`、`(0,3)`。若线性目标在可行域上有有限最优值，至少有一个顶点能取得它；若目标沿可行射线可无限改善，则是无界，不存在有限最优点。
+
+结局必须分三类讨论，solver 的"失败"不能笼统处理：
+
+- **可行且有界**：存在有限最优值，且至少在一个顶点（或整条最优棱）上取得；
+- **不可行**：没有任何取值同时满足所有限制，约束之间互相打架；
+- **无界**：存在一条越走越好的可行射线，目标值没有上限。
+
+调用方应该保存 solver 返回的 status，而不是只读 objective 字段——无界与不可行是两种不同的诊断，处理路径完全不同。
+
+## 标准形与松弛变量
+
+<Term def="为把 ≤ 约束改写成等式而引入的非负辅助变量；sᵢ = bᵢ − aᵢ·x 度量第 i 项资源还剩多少没用。">松弛变量</Term>是连接几何与代数的标准动作：把 `aᵢ·x ≤ bᵢ` 改写成 `aᵢ·x + sᵢ = bᵢ, sᵢ ≥ 0`。`sᵢ = 0` 说明第 i 项资源被用光（约束"紧"），`sᵢ > 0` 说明还有富余。
+
+本章采用 CLRS 这一最大化标准形：`max cᵀx`，满足 `Ax≤b`、`x≥0`；加入松弛变量后写成 `max cᵀx`，满足 `[A I]z=b`、`z=(x,s)≥0`。术语"标准形"在不同教材中也可能专指等式形式，因此这里把约定写明。对例子，两条等式是 `x+y+s₁=4`、`x+2y+s₂=6`；取非基变量 `x=y=0`，得到基变量 `s₁=4,s₂=6`，是初始基可行解。
+
+一般地，若等式约束矩阵有 `m` 个线性独立行，从 `n` 列中选出可逆的 `m×m` 基矩阵 `B`，令其余非基变量为零并解 `Bx_B=b`，得到基解；若所有变量非负，它就是基可行解（BFS），几何上对应可行域的顶点。此例的 `(x,y)=(2,2)` 处 `s₁=s₂=0`，基可取 `x,y`，对应另一个 BFS。若某个基本变量为零则称退化 BFS；这与"存在多组最优解"不同。
+
+转换是双向的：等式约束可拆成两条不等式，大于等于可乘负一，自由变量可写成两个非负变量之差。若右端项为负，乘以 `−1` 后还须同步翻转不等号；等式型问题常需两阶段法或人工变量来找初始 BFS。选择哪种排版服务于要做的推理，而不是背诵唯一"标准形"。
+
+## 单纯形法：沿棱走的爬坡
+
+<Term def="从可行域的一个顶点出发，沿棱移动到目标值更优的相邻顶点，直到所有方向的约化收益都非正的线性规划求解方法。">
+  单纯形法
+</Term>
+（simplex
+method）把"求最优"变成"爬坡"：从一个顶点出发，选一条能让目标值变大的棱走过去，重复直到无路可爬。每一步只需比较当前顶点连出的几条棱，不需要枚举域内无穷多个点。
+
+实验中第二步演示了这条路：等值线沿梯度方向平移，最后碰到可行域的位置就是最优顶点，虚线路径是单纯形走过的棱。注意两个工程事实：目标等值线与某条边平行且该边处在最优边界时，整条边上的点并列最优（多重最优解，不等于退化 BFS）；而约束方向写反时，域内出现"越走越好的射线"——这时 solver 必须报告无界，而不是硬报一个数。
+
+## 数学：从标准形到对偶证书
+
+本节符号：`x` 为决策向量，`c` 为目标系数向量，`A` 为约束矩阵（行 `aᵢ`），`b` 为资源上限向量，`s` 为松弛向量，`y` 为对偶变量向量。
+
+原问题（primal）写成矩阵形式：
 
 $$
 \max\ c^Tx
@@ -23,135 +101,27 @@ $$
 Ax\le b,\qquad x\ge0.
 $$
 
+这个式子在说：在所有不超支的产量组合里，找总利润最大的那个；`Ax≤b` 是"每项资源都不超预算"，`x≥0` 是产量不能为负。
 
-这里的“linear”同时约束objective和constraints：变量不能相乘，不能取平方，也不能由if语句改变coefficient。绝对值、min/max和piecewise cost有时可引入auxiliary variables线性化，但每次转换都要证明新formulation与原问题等价或明确它只是relaxation。
-
-## 29.1 Linear programming formulations and algorithms
-
-### Feasible region与status
-
-是half-spaces、hyperplanes和domain bounds的交。Linear objective的level sets是parallel hyperplanes；沿objective direction平移，最后接触bounded feasible polyhedron的位置给optimum。
-
-
-LP有三类必须区分的outcomes：
-
-- feasible且bounded：存在finite optimum，可能有一个point或整个optimal face；
-- infeasible：没有point同时满足所有constraints；
-- unbounded：存在feasible improving ray，使objective无限改善。
-
-Solver的“失败”不能笼统处理。Infeasibility certificate、unbounded ray与numerical failure含义完全不同，调用方应保存status而不是只读objective field。
-
-### Standard form与slack
-
-不是唯一排版。Equality可拆成两条inequalities；greater-than可乘负一；free variable可写成两个nonnegative variables之差；upper-bound inequality可引入nonnegative slack：
+引入松弛变量后，每条 ≤ 约束等价于一个等式加一条非负限制：
 
 $$
-a_i^Tx\le b_i
-\quad\Longleftrightarrow\quad
 a_i^Tx+s_i=b_i,\qquad s_i\ge0.
 $$
 
+这个式子在说：实际消耗 `aᵢ·x` 加上剩余 `sᵢ` 恰好等于预算 `bᵢ`；`sᵢ` 是这个约束自带的"账目余额"，后面互补松弛要查的就是它。
 
-Slack $s_i=0$说明constraint tight或active；positive slack说明resource尚未用尽。Tight不等于dual price必positive，但complementary slackness会说明positive price只能出现在tight constraint上。
-
-```ts
-type LinearProgram = {
-  objective: number[];
-  sense: "max" | "min";
-  rows: Array<{ coefficients: number[]; relation: "<=" | "=" | ">="; rhs: number }>;
-  lowerBounds: number[];
-  upperBounds: Array<number | null>;
-};
-```
-
-Structured representation比拼接solver text可靠：dimensions可检查，variables有stable ids，domain bounds不会因formatting遗漏，solution也能按ids映射回业务对象。
-
-### Vertices, bases, and simplex
-
-在nondegenerate geometric intuition中，足够多linearly independent constraints同时tight会确定一个vertex；algebraically，对standard-form equalities选择一组basic variables并令nonbasic variables为0，解得basic solution。若它满足nonnegativity，就是。
-
-
-Simplex从一个basic feasible solution出发，选择entering variable与leaving variable做pivot，移动到相邻basis并改善objective，直到reduced costs证明没有improving adjacent direction。Degeneracy可能让pivot后objective不变，bad pivot rules甚至cycle，因此实现需要deterministic anti-cycling policy与tolerances。
-
-```text
-SIMPLEX-SKELETON(slack_form)
-1  construct an initial basic feasible solution or run a feasibility phase
-2  choose an entering nonbasic variable with improving reduced cost
-3  use the ratio test to choose a leaving basic variable
-4  pivot the equations and update the basis
-5  repeat until no improving reduced cost remains
-```
-
-Simplex在实践中极其重要，但存在exponential worst-case examples。Ellipsoid method首先给出LP polynomial-time solvability的理论里程碑；interior-point families沿feasible region内部路径推进，也拥有polynomial guarantees并适合large sparse systems。
-
-
-“Polynomial time”还依赖input coefficients的bit length，不能只按variables和constraints数量计数。Floating-point solver还会使用presolve、scaling、sparse factorization和termination tolerance；理论exact optimum与reported approximate solution之间要用feasibility residual和duality gap连接。
-
-
-## 29.2 Formulating problems as linear programs
-
-### 五步建模
-
-从语义开始，不从matrix开始：
-
-1. 每个variable代表哪个可控decision，单位是什么；
-2. 每条constraint对应哪个law、resource或balance；
-3. objective究竟max profit、min cost还是min worst violation；
-4. variable是continuous、nonnegative、bounded还是本应integer；
-5. solution如何round、deploy并验证原domain invariants。
-
-
-### Resource allocation
-
-生产问题令$x_j$表示product $j$的数量，$a_{ij}$表示一unit product消耗resource $i$，$b_i$为resource budget，$c_j$为unit contribution：
+一个典型的资源分配模型按资源逐行写开：
 
 $$
-\max\sum_j c_jx_j
+\max\ \sum_j c_jx_j
 \quad\text{subject to}\quad
-\sum_j a_{ij}x_j\le b_i\ \text{for every resource }i,
-\qquad x_j\ge0.
+\sum_j a_{ij}x_j\le b_i\ \ (\forall i),\qquad x_j\ge0.
 $$
 
+这个式子在说：`xⱼ` 是产品 j 的产量，`aᵢⱼ` 是每件产品 j 消耗资源 i 的量，每行资源 i 的总消耗不超预算 `bᵢ`，目标累加每件产品的单位贡献。
 
-若$x_j$必须是whole machines或yes/no choices，continuous LP会允许不可部署的fractional result。此时原问题是integer linear program；去掉integrality得到LP relaxation，可提供bound，但不是自动可行解。
-
-### Network formulations
-
-Flow LP为每条directed edge $(u,v)$建variable $f_{uv}$，加入capacity bounds与每个internal vertex的flow conservation，objective maximizes source outflow。它与Chapter 24 combinatorial max-flow算法描述同一optimization problem，却提供了统一建模语言和duality视角。
-
-```text
-variables: f[u,v] for every directed edge
-constraints:
-    0 <= f[u,v] <= capacity[u,v]
-    sum incoming flow = sum outgoing flow for every internal vertex
-objective:
-    maximize total flow leaving source
-```
-
-
-Shortest path也能写成unit-flow min-cost LP：从source发送一unit flow到target，objective求edge costs加权和。LP formulation有助于组合额外linear constraints，但specialized graph algorithm通常更直接、更快，并给出更强integral structure。能写成LP不等于必须调用general solver。
-
-### Relaxation and rounding
-
-对maximization给upper bound，对minimization给lower bound。它可用于branch-and-bound、approximation rounding和integrality-gap分析。
-
-
-Rounding必须重新检查原constraints。把每个fractional variable独立四舍五入，可能同时超出许多resources；正确算法需要问题特定的rounding、alteration或primal-dual construction。Relaxation quality用integrality gap衡量，不能只看solver返回得快。
-
-
-## 29.3 Duality
-
-### Constructing the dual
-
-对primal
-
-$$
-\max\ c^Tx
-\quad\text{subject to}\quad
-Ax\le b,\qquad x\ge0,
-$$
-
-对应dual为
+现在构造 <Term def="对原问题每个约束配一个变量、对原问题每个变量配一条约束得到的配对问题；它的可行值永远是原问题最优值的上界（max 情形）。">对偶问题</Term>：给每条资源约束配一个"影子价格" `yᵢ`，对偶问题在"价格必须抵得上产品贡献"的限制下，最小化资源的总定价：
 
 $$
 \min\ b^Ty
@@ -159,31 +129,25 @@ $$
 A^Ty\ge c,\qquad y\ge0.
 $$
 
-每个primal constraint产生一个dual variable，可解释为resource shadow price；每个primal variable产生一个dual constraint，要求resources的priced cost覆盖该decision的unit contribution。
+这个式子在说：`yᵢ` 是资源 i 的单价；`Aᵀy≥c` 要求每种产品的"资源成本"不低于它的单位利润（否则宁可生产它）；目标是把这批资源的总定价压得越低越好。
 
-
-### Weak and strong duality
-
-首先给weak duality。若$x,y$分别primal/dual feasible，则
+弱对偶是说任何一对可行解都满足不等式链：
 
 $$
 c^Tx\le x^TA^Ty=y^TAx\le y^Tb.
 $$
 
-所以任何dual-feasible $y$都是primal maximization的upper-bound certificate。
+这个式子在说：任何可行方案的利润 `cᵀx`，都不超过任何一组合法资源定价下的总定价 `bᵀy`——所以对偶的任意可行解都是原问题最优值的一张"上界证书"。
 
-
-Strong duality说明，当primal与dual有finite optima时，optimal values相等：
+强对偶进一步说，当两边都有有限最优值时，两个最优值相等：
 
 $$
 c^Tx^*=b^Ty^*.
 $$
 
-这把optimization转成verification：找到primal feasible $x$和dual feasible $y$且objective相等，就无需枚举所有primal points，也能证明二者optimal。Approximate solver使用duality gap $b^Ty-c^Tx$和scaled feasibility violations作为stopping evidence。
+这个式子在说：存在一组定价，其总定价恰好等于某个可行方案的利润——"做得到"和"不会更好"在同一数值处相遇，优化问题就此变成验证问题：找出这一对 `(x, y)` 即可证明最优，无需枚举所有方案。
 
-### Complementary slackness
-
-Primal constraint slack为$b-Ax$，dual constraint slack为$A^Ty-c$。对feasible $x,y$，optimality等价于每对nonnegative terms不同时positive：
+最后，互补松弛给出这对证书的内部结构。对最优解，每个下标处两个非负量必有一个为零：
 
 $$
 y_i\bigl(b_i-(Ax)_i\bigr)=0,
@@ -191,20 +155,128 @@ y_i\bigl(b_i-(Ax)_i\bigr)=0,
 x_j\bigl((A^Ty)_j-c_j\bigr)=0.
 $$
 
+这个式子在说：资源定价为正（`yᵢ>0`）时该资源必被用光（松弛为零）；产量为正（`xⱼ>0`）时该产品的资源成本必恰好等于利润。实验中第三步把这些对账逐项画在最优点上。
 
-解释是：resource有positive price时必须fully used；decision variable为positive时，它的priced resource cost必须恰好等于unit contribution。Complementary slackness既是optimality test，也是从dual结构猜primal support、从primal active set猜dual support的算法设计线索。
+## 交互实验：可行域、爬坡与证书
 
-Dual of dual回到primal。Equality constraints、free variables和不同inequality directions会改变dual variable signs或dual constraint types；最稳妥的方法是先转换到一个明确canonical form，或使用一张逐项对应表，而不是凭记忆翻符号。
+先预测：把目标方向从 `c=(2,2)` 换成 `c=(1,3)`，最优点会移到哪个顶点？换成 `c=(1,1)` 时最优解是一个点还是一条棱？先写下你的答案，再推进时间线核对几何轨迹，最后看对偶证书如何把 gap 压到零。
 
-## LP交付证书
+<Clrs4Chapter29LinearProgrammingLab />
 
-一份可复查结果至少包含variable dictionary、objective sense、每条constraint与domain source、solver status、primal solution和violations。若声称optimal，再给dual solution、dual violations、objective gap与tolerance；若是relaxation，还要给原integral problem的feasible rounded solution和gap。
+## 代码对照：把模型写成结构化数据
 
+solver 的输入不该是拼接出来的文本，而应是带结构的数据：维度可检查、变量有稳定编号、域边界不依赖排版。第五节实验背后的 oracle 就用这种表示：
+
+```ts
+type LinearProgram = {
+  objective: number[]; // c：每个变量的单位贡献
+  sense: "max" | "min";
+  rows: Array<{
+    coefficients: number[]; // a_i：该资源对每个变量的单位消耗
+    relation: "<=" | "=" | ">=";
+    rhs: number; // b_i：该资源预算
+  }>;
+  lowerBounds: number[]; // 域边界 x >= lower
+  upperBounds: Array<number | null>; // 可能存在的上界
+};
+```
+
+结构化表示的回报在交付时兑现：解可以按变量 id 映射回业务对象（哪条产线、哪个仓库），每条约束能追溯到它的业务来源，status、primal 解与对偶证书可以一并入档。
+
+## 常见误区
+
+<Callout type="trap">
+  **现象**：solver 返回一个 objective
+  数值就直接入库，不做任何检查。原因：无界问题返回的往往是射线方向或一个极大的哨兵值，不可行问题直接报错，两者与普通最优解混在一个字段里。修法：永远先读
+  status，再按状态分支处理；声称最优时再核对 feasibility residual 与 duality
+  gap。
+</Callout>
+
+<Callout type="trap">
+  **现象**：整数问题先解 LP
+  松弛，再把分数解四舍五入当整数解用。原因：独立四舍五入可能同时突破多条资源约束，松驰解的
+  bound
+  属性也随之失效。修法：需要整数解就走整数规划（branch-and-bound）或问题特定的舍入/原始对偶构造，并重新检查原约束。
+</Callout>
+
+<Callout type="trap">
+  **现象**：对偶问题的符号与不等号方向靠背表，约束方向一变就翻错。原因：等式约束、自由变量、≥
+  方向都会改变对偶变量的符号约定。修法：先转到一种明确的规范形再机械地构造对偶，或用逐项对应表推导；写完用弱对偶拿一个小例子验算一遍。
+</Callout>
 
 ## 小结
 
-Chapter 29 Linear Programming先建立linear programming formulations and algorithms：可行域是convex polyhedron，slack form暴露active constraints，basic feasible solutions连接vertices与simplex pivots，ellipsoid和interior-point补齐polynomial-time视角。Formulating problems as linear programs要求从domain语义到variables、constraints、objective和domains逐项可追踪，并区分exact LP与integer relaxation。
+- 线性规划把"决策—限制—目标"翻译成变量、约束矩阵与目标向量。
+- 可行域是半平面的交；结局分唯一最优、整条最优棱、不可行、无界。
+- 松弛变量把不等式变等式，紧约束对应零松弛、正的对偶价格。
+- 单纯形沿棱爬坡；方向写反会出现无界射线，status 比数值更重要。
+- 弱对偶给上界，强对偶让两边最优值相等，互补松弛完成逐对对账。
 
-Duality为每个primal方案提供bound。Weak duality保证primal value不超过dual value，strong duality让optimal values相遇，complementary slackness解释哪些resources与decisions必须tight。最终交付物不是“solver说最优”，而是primal feasibility、dual feasibility、zero或small gap以及可部署domain interpretation组成的certificate。
+## 练习
 
+<Exercises>
 
+1. 对自测题 `max x+3y`（`x+y≤4`，`x+2y≤6`，`x,y≥0`）：写出四个顶点的目标值，指出最优解；再解对偶 `min 4y₁+6y₂`，验证强对偶与互补松弛。
+
+   <Answer>
+
+   顶点目标值：`(0,0)→0`，`(4,0)→4`，`(2,2)→8`，`(0,3)→9`。最优解 `(0,3)`，`z*=9`。对偶约束 `y₁+y₂≥1`、`y₁+2y₂≥3`：候选 `(1,0)` 给 `w=4` 但不满足第二条（`1<3`），交点 `(−1,2)` 不可行，`(0,1.5)` 满足全部且 `w=6×1.5=9`。`z*=w*=9`，强对偶成立。互补松弛：约束 2 在 `(0,3)` 处紧（`0+6=6`）且 `y₂=1.5>0`；约束 1 松弛为 1 且 `y₁=0`；`y=3>0` 且其对偶约束 `y₁+2y₂=3` 恰好取等。可对照实验选 `c=(1,3)` 复算。
+
+   </Answer>
+
+2. 在实验中注入"把 ≤ 写成 ≥"故障并推进到第二步：solver 应该返回什么？再用弱对偶解释为什么此时对偶问题不可能有可行解。
+
+   <Answer>
+
+   应返回 status = UNBOUNDED（无界），而不是任何数值：可行域翻到直线另一侧后，沿梯度方向的射线 `x,y→+∞` 保持可行且目标值无限增长。若对偶存在可行 `y`，弱对偶给出 `cᵀx≤bᵀy` 对所有可行 `x` 成立，与目标值无限增长矛盾；所以无界 ⟹ 对偶不可行。工程修法：查约束方向与漏写的约束，修好模型后重解，而不是消费那个"数值"。
+
+   </Answer>
+
+3. 某车间用两台机器生产两种零件：产品 1 每件利润 3，需机器 A 1 小时、机器 B 2 小时；产品 2 每件利润 2，需机器 A 2 小时、机器 B 1 小时；机器 A 每天 8 小时、机器 B 每天 8 小时。写出 LP 求最大日利润；若产品必须整件生产，LP 松弛解提供了什么、不能提供什么？
+
+   <Answer>
+
+   设 `x₁,x₂` 为两种产品的日产量：`max 3x₁+2x₂`，约束 `x₁+2x₂≤8`（A）、`2x₁+x₂≤8`（B）、`x≥0`。顶点 `(8/3, 8/3)` 给 `z=40/3≈13.33`。整件要求下这是整数规划；LP 松弛提供上界 `13.33`（最优整数解利润不超过它）和搜索基准，但松弛解本身 `(8/3, 8/3)` 不可部署，四舍五入到 `(3,3)` 会破坏两条约束（A、B 各需 9 小时）——必须交给整数规划或专门舍入并回检约束。
+
+   </Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="线性规划">
+  在一组线性限制下求线性函数最大/最小值的问题。大白话：限制和要优化的目标都只能是"几倍
+  x 加几倍 y"这种直来直去的式子。详见"线性规划"节。
+</GlossaryItem>
+<GlossaryItem term="可行域">
+  所有合法取值的集合，是若干半平面的交；二维可有界也可无界。若最优值有限，至少一个顶点能取得它；无界问题则没有有限最优值。详见"可行域与三种结局"节与第五节实验第一步。
+</GlossaryItem>
+<GlossaryItem term="松弛变量">
+  把"不超过 b"改写成"用掉的加剩下的等于
+  b"时引入的剩余量；它为零表示资源用光（约束紧），为正表示还有富余。详见"标准形与松弛变量"节。
+</GlossaryItem>
+<GlossaryItem term="单纯形法">
+  从一个顶点出发、沿棱一步步走向更优顶点的求解方法。像在山脊上爬坡：每步只看脚下连出的几条棱，不用枚举整个山坡。详见"单纯形法"节与实验第二步。
+</GlossaryItem>
+<GlossaryItem term="对偶问题">
+  给原问题每条约束配一个"影子价格"配出来的配对问题。它的任意可行值都是原问题最优值的上界，两边最优值相等时证书闭合。详见"数学"节与实验第三步。
+</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 29 章的目录定位与核心主题进行独立教学重写：以权威目录限定范围、以公开学术资料核对事实、不复现原书正文。线性规划形式与算法、把问题表述为线性规划、对偶性的主题归属第 29 章目录；交互实验、两变量 oracle、结构化数据示例、练习答案与故障注入演示是本项目新增材料。
+
+本章的两变量示例（`x+y≤4`、`x+2y≤6` 与四组目标方向）是为教学构造的最小模型，数值结论由本章自带 oracle 逐点复核；它不代表任何具体 solver 的返回格式或 tolerances。单纯形最坏情形、椭球法与内点法的多项式时间结论在正文中只作定位性叙述，未展开证明。
+
+<Attribution
+  adaptedFrom={
+    "Introduction to Algorithms, 4th Edition, Chapter 29: Linear Programming"
+  }
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
