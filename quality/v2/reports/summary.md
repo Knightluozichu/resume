@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-15T22:39:07.196Z；旧版分数不迁移。
+> 2026-10-16T00:29:46.115Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1758
+- failed：1752
 - queued：196
-- passed：1760
+- passed：1766
 - published：895
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -98,11 +98,11 @@
 | 85 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 86 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
 | 87 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 88 | this-is-chatgpt | 24 | 12 | 0 | 12 | 12 |
-| 89 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 90 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 91 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 92 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 88 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 89 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 90 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 91 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 92 | this-is-chatgpt | 24 | 6 | 0 | 18 | 6 |
 | 93 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 94 | blender-3d | 17 | 1 | 0 | 16 | 1 |
 | 95 | blockchain-dev-practice | 17 | 1 | 0 | 16 | 1 |
