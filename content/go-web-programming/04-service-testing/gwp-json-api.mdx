@@ -3,71 +3,509 @@ title: "第7章 Go Web服务"
 type: C
 section: "Go Web编程 · 服务与验证"
 order: 7
-description: "比较SOAP与REST，使用encoding/xml和encoding/json创建、解析并验证Go Web服务。"
+officialUnitId: gwp-07
+description: "分离SOAP协议、REST资源与XML/JSON表示，用真实Go测试追踪输入到状态提交的边界。"
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-7"
-draft: false
+draft: true
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
 
+import { GwpJsonApiLab } from "@/components/mdx/go-web-programming/v2/gwp-json-api";
 
-## 从服务的用户是程序开始
+<Objectives>
 
-先预测：把HTML页面改成JSON就自动成为REST服务吗？不是。Web服务面向软件调用方，契约必须稳定且可机器解释。比响应格式更广。
+- 能比较SOAP协议与REST约束，为“发布文章”选择资源或属性建模。
+- 能修改Go服务，解析和创建XML/JSON，验证错误不会留下半成品状态。
+- 能回答：为什么未知键严格模式仍接受重复键，而XML前缀不同仍可能表示同一个名字？
 
+</Objectives>
 
-## SOAP Web服务
+## 直觉：先看工厂的交接单
 
-SOAP通常以XML envelope、操作和正式描述表达服务。适合严格契约与工具链，但复杂度和互操作要求也更高；协议Fault与业务失败要区分。
+两条生产线交换工单，一边写“把它发布”，另一边只认固定栏位。文字可读并不意味着双方约定了同一件事；出错后重发还可能生产两份。
 
-```xml
-```
+本章把交接拆成三件事：工单指向什么、工单如何装箱、接收方在哪一步真正改变库存。先预测结果，再逐站检查，避免把一张漂亮回执误当作工作已经完成。
 
-## REST Web服务
+## 7.1 Go Web服务：先约定契约，再选择格式
 
-REST以资源、统一接口和表示驱动交互。要求GET安全、PUT与DELETE幂等语义明确，创建通常返回201与Location。
+<Term def="通过网络向软件调用方暴露可机器处理的契约与能力。">Go Web服务</Term>
+不只是把网页换成JSON。调用方需要知道方法、地址、媒体类型、状态码和重试后果。实验把这些约定画成接收门、解码器、候选值、资源提交和响应出口，失败必须能定位到具体一站。
 
+<Term def="可标识的领域对象或概念，不等于它某次传输的字节。">资源</Term>
+是文章7；<Term def="资源状态的一次可传输编码，例如XML或JSON字节。">表示</Term>
+是它的传输副本。数据库行、Go结构体与表示不必一一相同。下面用Post作外部输入/输出模型，State作内存状态；全章Go片段按file标记及出现顺序拼接可组成两个源文件。
 
-## XML解析与创建
+```go file=service.go
+package chapter7
 
-encoding/xml通过导出字段和标签映射元素与属性。要限制输入规模与深度，处理命名空间、未知元素和格式错误，输出前确定编码与Content-Type。
+import (
+	"encoding/json"
+	"encoding/xml"
+	"errors"
+	"io"
+	"mime"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+)
 
-```go
-type ThreadXML struct {
-    XMLName xml.Name `xml:"thread"`
-    ID int `xml:"id,attr"`
-    Title string `xml:"title"`
+const bodyLimit = 256
+const soapNS = "http://www.w3.org/2003/05/soap-envelope"
+
+type Post struct {
+	XMLName   xml.Name `json:"-" xml:"urn:remuse:posts post"`
+	Title     string   `json:"title" xml:"urn:remuse:posts title"`
+	Published bool     `json:"published" xml:"urn:remuse:posts published"`
+}
+type State struct {
+	Exists    bool   `json:"exists"`
+	Title     string `json:"title"`
+	Published bool   `json:"published"`
+	Events    int    `json:"events"`
 }
 ```
 
-## JSON解析与创建
+Service用互斥锁保护一次读改写；这不是数据库事务或多进程一致性。演示只有固定7号槽位，便于看清创建、覆盖和冲突，不用于生产容量设计。
 
-encoding/json按字段和标签编码，Decoder适合stream。要求区分缺失与显式零值，必要时DisallowUnknownFields，并确认首个值后没有意外尾随对象。
-
-```go
-dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-dec.DisallowUnknownFields()
-if err := dec.Decode(&input); err != nil { http.Error(w, "bad json", 400); return }
+```go file=service.go
+type Service struct {
+	mu    sync.Mutex
+	state State
+}
 ```
 
+**材料与版本边界：**原书出版于2016年；本章只据出版社完整目录限定13个主题、6个原始概念，未取得或核验原书正文与全文授权。下文为独立现代示例，实测Go1.26.0；缓存pkg.go.dev页面标1.27.2，不能当作运行版本。这里手工分派方法，不依赖Go1.22+方法路由。
 
-## 创建Go Web服务
+## 7.2 SOAP Web服务：信封是协议结构，不是REST资源
 
-Handler先验证method与Content-Type，再解码DTO、调用用例、映射领域错误，最后编码响应。阻止数据库结构直接成为公开API。
+SOAP Web服务使用<Term def="定义XML消息结构、处理模型及可扩展机制的消息协议。">SOAP</Term>消息协议约定信封结构和处理规则，而不是仅把业务数据换成XML。协议规定Envelope、可选Header、Body及Fault等结构和处理规则。SOAP1.2信封命名空间是
+`http://www.w3.org/2003/05/soap-envelope`；它不是任意起名的外壳。HTTP只是可用的承载之一，SOAP也不能等同“XML版REST”。
 
-## 状态码与错误表示
+实验的“SOAP编解码”模式把Envelope包住Body、再包住应用操作GetTitle。以下模型只提取一个教学操作的文本，并以命名空间辨认它；没有实现Header的mustUnderstand/角色处理、Fault、完整消息合法性、WSDL绑定或互操作服务。
 
-错误响应应稳定包含机器码、消息和可关联ID。要求验证失败、未找到、冲突和内部错误不混成200或500。
+```go file=soap.go
+package chapter7
 
+import (
+	"encoding/xml"
+	"errors"
+)
 
-## 验收实验：同一资源两种表示
+type Envelope struct {
+	XMLName xml.Name `xml:"http://www.w3.org/2003/05/soap-envelope Envelope"`
+	Body    SOAPBody `xml:"http://www.w3.org/2003/05/soap-envelope Body"`
+}
+type SOAPBody struct {
+	Title string `xml:"urn:remuse:posts GetTitle"`
+}
 
-为Thread资源实现JSON与XML读取和创建，发送正常、未知字段、超限body、坏XML、尾随JSON、缺失资源和重复创建。保存method、URI、Content-Type、状态、Location和错误body，确保表示变化不改变领域结果。
+func teachingEnvelope(data []byte) (Envelope, error) {
+	var env Envelope
+	err := xml.Unmarshal(data, &env)
+	if err != nil {
+		return env, err
+	}
+	if env.Body.Title == "" {
+		return env, errors.New("missing teaching operation")
+	}
+```
 
+剩余检查只要求本例操作有文本；它不证明任意SOAP消息已验证。未知结构仍可能被encoding/xml忽略，不能拿这个函数当完整SOAP验证器。
 
-## 本章回顾
+```go file=soap.go
+	return env, nil
+}
+```
 
-本章覆盖Web服务、SOAP、REST、XML、JSON和Go服务创建。可靠契约由资源语义、类型化codec、输入预算、稳定错误映射和协议测试共同形成。
+在实验切换到SOAP模式，逐步展开信封并观察 `A &amp; B` 变为文本 `A & B`，再编码。该模式运行依据是Go codec测试，不伪造HTTP请求、状态码或远端SOAP响应。
 
+## 7.3 REST Web服务：以约束组织交互
 
-## 术语表
+REST Web服务以资源和统一接口等架构约束组织交互，而不是由JSON格式或一组CRUD地址定义。<Term def="以资源和统一接口等约束组织分布式超媒体系统的架构风格。">REST</Term>不是数据格式或框架。客户端—服务器、无状态、缓存、统一接口、分层系统以及可选按需代码共同约束设计。无状态指请求包含理解它所需的信息，不禁止服务器保存文章。统一接口还涉及自描述消息、表示操纵资源和超媒体驱动，单有CRUD地址不等于满足全部REST约束。
+
+本章实现的是资源导向的教学HTTP接口，不声称完整REST系统：未实现超媒体导航、缓存策略、条件更新和完整内容协商。实验的资源树 `/posts → 7` 与表示图分开，说明换XML并不更换资源身份。
+
+### 7.3.1 把动作转换为资源
+
+“发布”需要审计、排队或多次记录时，可把它变为publication子资源：`POST /posts/7/publications` 创建一次发布记录，返回201及Location。实验“资源式发布POST”增加事件点，重复调用会再新增一次，所以不能无条件重试。
+
+教学存储只记录事件计数并返回父文章快照；Location表达新记录的身份，但本例未实现该地址的GET。完整服务还应提供记录读取、权限和必要的去重键。真实序列测试确认两次POST得到两个事件，而不是把这当作幂等更新。
+
+### 7.3.2 把动作作为资源属性
+
+若需求仅是让文章处于已发布状态，可以 `PUT /posts/7` 提交完整可写表示 `{"title":"Draft","published":true}`。<Term def="重复同一请求与执行一次具有相同的预期最终效果，不要求响应码相同。">幂等性</Term> 在这里体现为再次PUT仍是published=true、事件数不增加，而不是“每次都返回相同字节”。
+
+实验对照“属性式发布PUT”和“资源式发布POST”：前者改变状态环，后者新增事件点。不要把完整替换误称局部修改；这个模型未用指针区分缺失与零值，缺失published按false处理。真实DELETE第二次返回404，但资源仍不存在，符合其幂等语义。
+
+## 7.4 XML解析与创建：名字、值与字节分别处理
+
+XML解析与创建连接的是字节表示与Go值：解析按展开名识别元素，创建按编码规则输出命名空间和转义后的文本。<Term def="用元素、属性及命名空间组织数据的标记语言。">XML</Term>的标签层次不自动提供业务规则。`encoding/xml` 将导出字段按标签映射；根元素身份由
+
+<Term def="由命名空间URI和本地名组成的元素身份，前缀仅是缩写。">展开名</Term>
+决定。Post的根与字段标签都指定
+`urn:remuse:posts`，所以换前缀p不改变含义，换URI却不是同一个名字。
+
+### 7.4.1 解析XML
+
+实验“XML创建”把命名空间和字符实体还原为候选Post；“XML标签未闭合”“XML错误命名空间”在提交前停止。未知XML元素默认会被跳过，“XML未知元素”案例特意保留这一行为；要求严格schema时，必须另写Token层允许列表或使用明确的校验方案，不能宣称XMLName检查已覆盖全部结构。
+
+共享decodePost先区分媒体。前半段JSON规则将在7.5解释；XML路径用Decoder解析一个根后继续扫描，避免悄悄接受第二个根或尾随非空文本。
+
+```go file=service.go
+func decodePost(data []byte, media string) (Post, error) {
+	var p Post
+	if media == "application/json" {
+		d := json.NewDecoder(strings.NewReader(string(data)))
+		d.DisallowUnknownFields()
+		if err := d.Decode(&p); err != nil {
+			return p, err
+		}
+		var extra any
+		if err := d.Decode(&extra); err != io.EOF {
+			return p, errors.New("trailing JSON")
+		}
+		return p, nil
+	}
+	d := xml.NewDecoder(strings.NewReader(string(data)))
+	if err := d.Decode(&p); err != nil {
+		return p, err
+	}
+	for {
+		token, err := d.Token()
+		if err == io.EOF {
+			return p, nil
+		}
+		if err != nil {
+			return p, err
+		}
+```
+
+首个XML对象后只允许空白、注释和处理指令直到EOF；遇到其他Token或语法错误即拒绝。字节限制在解码前执行，但不等于完整的深度预算、授权、签名校验或防滥用措施。
+
+```go file=service.go
+		switch t := token.(type) {
+		case xml.CharData:
+			if strings.TrimSpace(string(t)) != "" {
+				return p, errors.New("trailing XML text")
+			}
+		case xml.Comment, xml.ProcInst:
+		default:
+			return p, errors.New("trailing XML value")
+		}
+	}
+}
+```
+
+### 7.4.2 创建XML
+
+创建时使用Marshal，不用字符串拼接。标题 `A & B` 必须转义为 `A &amp; B` 才能保留文本含义；标签前缀与冗余namespace声明可以变化，比较应看解析后的展开名和值，而不是逐字节前缀一致。实验“XML读取”显示真实Go编码输出，往返测试还覆盖尖括号、引号和中文。
+
+```go file=service.go
+func encodePost(p Post, media string) ([]byte, error) {
+	if media == "application/xml" {
+		return xml.Marshal(p)
+	}
+	return json.Marshal(p)
+}
+```
+
+## 7.5 JSON解析与创建：严格度是显式契约
+
+JSON解析与创建连接JSON表示和Go字段；解码、编码与业务校验各有职责，成功解析不等于请求可以提交。<Term def="用对象、数组和标量表达数据的文本格式。">JSON</Term>没有XML命名空间。struct标签定义对外字段，不应直接暴露数据库全部列。语法解析、字段映射与业务校验是三道不同判断；对象里出现title并不保证它是非空标题。
+
+### 7.5.1 解析JSON
+
+默认encoding/json会忽略未映射字段；decodePost显式启用DisallowUnknownFields才拒绝admin。Decoder可连续读取多个JSON值，所以首个Decode成功后还必须要求下一次返回EOF，实验“JSON尾随对象”因此400，而不是悄悄提交第一条。
+
+<Term def="同一个JSON对象内重复出现的成员名称。">重复键</Term>
+不被DisallowUnknownFields拒绝。Go1.26默认encoding/json按顺序处理，后值可能替换或合并到之前值，取决于目标类型；本例string标题被last覆盖。RFC8259建议名称唯一，跨实现行为可能不同。需要拒绝重复键时，应在Token层按对象维护键集合，而不是把后值覆盖误称验证安全。
+
+实验三个相邻案例“未知字段／尾随对象／重复键”分别400、400、201；这是本例有意声明的契约，不是推荐所有服务都接受重复键。数字类型错误、null/缺失标题也必须结合实际目标类型和领域检查处理。
+
+### 7.5.2 创建JSON
+
+encodePost的JSON分支使用json.Marshal。默认编码把 `&`、尖括号等转成Unicode转义，以便嵌入HTML；客户端JSON解码后仍得到原文字。这不是JSON解码器替你消除XSS，更不是业务内容审查。实验“JSON读取”和XML读取对照同一个存储快照。
+
+本例先编码成功再提交状态及响应头；错误编码固定为JSON，使用机器可读error码。不要将用户正文拼进JSON字符串，也不要在WriteHeader之后才试图改成500。网络写出失败仍可能发生在提交之后，客户端重试需要单独设计。
+
+```go file=service.go
+func fail(w http.ResponseWriter, status int, code string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
+}
+```
+
+## 7.6 创建Go Web服务：验证完成后才能提交
+
+创建Go Web服务需要把HTTP入口检查、表示解码、领域校验和状态提交串起来，保证失败请求在提交前终止。入口先检查响应表示、路径和方法；需要写入的请求再检查Content-Type、读取预算、解码及领域规则。<Term def="限制单次消息可读取字节数的预算，不替代其他业务或安全限制。">消息体上限</Term>设为256字节用于实验，实际产品应按资源契约评估。HTTP错误优先级由入口顺序决定，而不是任意多个错误中“最正确”的一个。
+
+### 7.6.1 消息体与领域错误
+
+<Term def="说明传输正文格式的HTTP媒体类型字段。">Content-Type</Term>
+描述请求正文；<Term def="表达客户端期望响应表示的HTTP请求字段。">Accept</Term>
+描述期望响应，二者不能混用。本例请求支持JSON/XML及合法媒体参数，响应只支持单一JSON/XML、缺省或星号；不实现Accept权重列表。错误固定JSON，客户端应读取实际Content-Type。
+
+```go file=service.go
+func requestPost(w http.ResponseWriter, r *http.Request) (Post, bool) {
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || (media != "application/json" && media != "application/xml") {
+		fail(w, 415, "unsupported_media")
+		return Post{}, false
+	}
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, bodyLimit))
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			fail(w, 413, "body_limit")
+		} else {
+			fail(w, 400, "read_body")
+		}
+		return Post{}, false
+	}
+	p, err := decodePost(data, media)
+	if err != nil {
+		fail(w, 400, "decode")
+		return p, false
+	}
+	if strings.TrimSpace(p.Title) == "" {
+		fail(w, 422, "title_required")
+		return p, false
+	}
+	return p, true
+}
+```
+
+400表示解码失败，413表示超出预算，415是不支持的输入媒体，422是语法可解析但标题无效。实验“空标题”PUT保留旧Draft；解析成功不会直接写入。读体失败分支存在，但本轮不伪称已模拟所有网络中断。
+
+### 7.6.2 分派入口与资源所有权
+
+服务拥有自己的State，不依赖全局默认mux。本例手工Allow集合，未实现HEAD；405响应必须明确列出当前允许的方法。路径不存在与资源不存在都可404，但机器码不同。
+
+```go file=service.go
+func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	media := r.Header.Get("Accept")
+	if media == "" || media == "*/*" {
+		media = "application/json"
+	}
+	if media != "application/json" && media != "application/xml" {
+		fail(w, 406, "unsupported_accept")
+		return
+	}
+	allow := map[string]string{"/posts": "POST", "/posts/7": "GET, PUT, DELETE", "/posts/7/publications": "POST"}
+	methods, ok := allow[r.URL.Path]
+	if !ok {
+		fail(w, 404, "route_missing")
+		return
+	}
+	allowed := false
+	for _, m := range strings.Split(methods, ", ") {
+		allowed = allowed || r.Method == m
+	}
+	if !allowed {
+		w.Header().Set("Allow", methods)
+		fail(w, 405, "method")
+		return
+	}
+```
+
+只有创建或PUT需要输入Post。校验在锁外完成，真正读改写在锁内再次检查当前资源是否存在，避免用过时的预检查状态覆盖新数据；本例没有版本号或条件请求，因此两个合法PUT仍可能最后写入者获胜。
+
+```go file=service.go
+	var p Post
+	if r.Method == "POST" && r.URL.Path == "/posts" || r.Method == "PUT" {
+		var valid bool
+		p, valid = requestPost(w, r)
+		if !valid {
+			return
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.apply(w, r, p, media)
+}
+```
+
+### 7.6.3 创建、更新、删除与编码
+
+事务候选next从当前状态复制；创建遇已有槽位是409，非创建操作遇缺失资源是404。删除在本例直接清空并返回204，不能附带响应正文。创建、完整更新与事件新增的分支如下。
+
+```go file=service.go
+func (s *Service) apply(w http.ResponseWriter, r *http.Request, p Post, media string) {
+	next := s.state
+	status, location := 200, ""
+	if r.URL.Path == "/posts" {
+		if next.Exists {
+			fail(w, 409, "already_exists")
+			return
+		}
+		next = State{Exists: true, Title: p.Title, Published: p.Published}
+		status, location = 201, "/posts/7"
+	} else {
+		if !next.Exists {
+			fail(w, 404, "post_missing")
+			return
+		}
+		switch r.Method {
+		case "PUT":
+			next.Title, next.Published = p.Title, p.Published
+		case "DELETE":
+			s.state = State{}
+			w.WriteHeader(204)
+			return
+		case "POST":
+			next.Events++
+			next.Published = true
+			status, location = 201, "/posts/7/publications/"+strconv.Itoa(next.Events)
+		}
+	}
+```
+
+非删除路径先完成表示编码，再把next提交。Location与201表达新身份；200用于读取或替换，204用于无正文删除。锁覆盖响应写出是为教学简化，并不建议慢客户端长时间占用生产状态锁。
+
+```go file=service.go
+	data, err := encodePost(Post{Title: next.Title, Published: next.Published}, media)
+	if err != nil {
+		fail(w, 500, "encode")
+		return
+	}
+	s.state = next
+	w.Header().Set("Content-Type", media)
+	if location != "" {
+		w.Header().Set("Location", location)
+	}
+	w.WriteHeader(status)
+	_, _ = w.Write(data)
+}
+```
+
+### 7.6.4 专属实验：资源—表示—协议流水线
+
+猜一猜：把JSON创建改成“重复键”会失败吗？改成“尾随对象”呢？先选“状态改变／不变”，再点下一步，观察解析候选和资源树在哪里分离。图中结果来自本章真实Go测试的固定输入，不是在浏览器运行Go，也不向外部服务发请求。
+
+<GwpJsonApiLab />
+
+所有HTTP案例都有独立的初始快照，切换案例会清空帧与预测；不是接续上一个案例的存储。GET和删除没有需要解码的输入Post。操作前后树展示相同身份、字段状态与publication计数，红色旁路说明请求在哪一站终止；SOAP模式只展示codec，不冒充协议互操作测试。
+
+### 7.6.5 运行与扩展边界
+
+证据目录 `quality/artifacts/batch-37/ch07/` 保存完整service.go、soap.go及service_test.go。将正文按file标记抽取并与源文件字节比较后，在该目录执行以下命令；仅使用标准库，不安装依赖。
+
+```sh
+env GO111MODULE=off GOTOOLCHAIN=local GOPROXY=off \
+  /opt/homebrew/bin/go test -v -count=1 -timeout=90s .
+```
+
+测试既直接驱动httptest记录器，也用httptest.NewServer发起真实回环HTTP创建请求；SOAP测试只调用XML编解码。教学服务未提供认证、持久化、TLS部署、完整REST超媒体或完整SOAP绑定，不将这些缺口包装成“解析器保障安全”。
+
+## 常见误区
+
+从失败轨迹回看接口契约，比只记成功响应更能发现边界。以下四种误解都能由本章输入或测试直接复现，而不是假想一个看不见的服务器。
+
+<Callout type="trap" title="未知字段检查不等于重复键检查">
+
+**现象 →** 未知JSON键报错，重复title却成功。**原因 →** 严格未知字段与重复键是不同规则。**修法 →** 明确接受策略，或增加对象级重复检测；看实验duplicate。
+
+</Callout>
+<Callout type="trap" title="XML前缀不等于元素身份">
+
+**现象 →** XML换前缀仍成功，换URI却失败。**原因 →** 前缀只是展开名缩写。**修法 →** 对照namespace案例，以URI/local断言，不按p字符串判断。
+
+</Callout>
+<Callout type="trap" title="发布记录与发布属性的重试效果不同">
+
+**现象 →** 两次发布生成两条记录。**原因 →** POST子资源不是PUT属性替换。**修法 →** 依据审计需求选模型，并设计重试去重；看事件点与状态环。
+
+</Callout>
+<Callout type="trap" title="解析成功不等于领域校验通过">
+
+**现象 →** 合法JSON把旧标题变空。**原因 →** 解析与领域规则混为一谈。**修法 →** 验证通过才提交，invalid案例应422且旧状态不变。
+
+</Callout>
+
+## 7.7 小结与练习
+
+把协议结构、资源语义和表示编码分开，才能解释为什么相同字节换一种入口规则会得到不同结果。下面三题分别回收建模、解析和完整服务目标，答案默认折叠。
+
+- SOAP是消息协议，REST是架构约束。
+- 动作可建模为新资源或已有资源属性。
+- XML与JSON都不能代替业务校验。
+- 提交前失败应保持原状态。
+- 真实请求测试必须同时断言响应与状态。
+
+<Exercises>
+
+**问题 1**：设计REST Web服务时，发布文章需要可追溯的多次记录应选哪种模型？只有开关状态时呢？实现SOAP Web服务时，教学信封能否替代完整服务协议？用实验对照POST事件点与PUT状态环。
+
+<Answer>
+
+多次记录用publication子资源，每次POST有新身份，重试可能重复，需要去重策略。只关心最终状态时可PUT完整文章表示，把published作为属性；重复相同PUT不新增事件。SOAP只规定消息处理协议，不替你选择业务状态模型。本例仅测试Envelope/Body/操作文本的codec，没有Header处理、Fault和完整绑定，因此不能宣称互操作SOAP服务或完整REST系统。
+
+</Answer>
+
+**问题 2**：在JSON解析与创建的往返流程中，修改Demo对应Go代码，让重复键拒绝而不是后值覆盖；同时解释未知键、尾随对象与XML未知元素为何不同。在XML解析与创建的往返测试中，怎样验证转义没有改变标题？
+
+<Answer>
+
+在正式Decode前用JSON Token遍历，按每一层对象独立维护键集合；键已经出现就返回400，再执行现有类型解码与业务校验。不能用全局集合，否则不同嵌套对象同名键会误报。新增重复string、嵌套同名、未知字段和尾随对象测试，再生成实验观察值；不能只改前端预期。未知键由DisallowUnknownFields处理，尾随对象由EOF检查处理，XML未知元素默认跳过且本例公开接受。将含尖括号、&、引号、中文的标题Marshal再解析，断言展开名和值相同，不要求前缀或转义写法逐字一致。
+
+</Answer>
+
+**问题 3**：创建Go Web服务时，怎样证明失败分支没有提交状态？独立扩展真实测试，顺序执行创建→XML读取→两次PUT→两次POST发布→两次DELETE，并插入超限、415与422失败。画出每步状态，错误是否允许改变已有标题？
+
+<Answer>
+
+预期创建201有Location；XML读取200且标题等价；两次PUT均200、published=true且事件仍0；两次POST均201、事件依次1和2；删除204无正文，再删404但仍为空。插入超限413、媒体415、空标题422后，状态必须与调用前完全一致；解析400同理。扩展TestSequenceAndIdempotency，把每个ResponseRecorder的Code、Content-Type、Location、Allow（405时）、正文和State一起断言，另保留NewServer真实回环请求。状态图应是“失败分支绕过提交”，不是只画输出数字。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+这些术语分别回答“对象是谁、字节是什么、交互受什么规则约束”。回看实验时先定位对应层，不把协议、表示与数据库状态合成同一个概念。
+
+<Glossary>
+  <GlossaryItem term="Go Web服务">
+    面向软件调用方的网络契约与能力。
+  </GlossaryItem>
+  <GlossaryItem term="资源">可被标识的领域对象或概念。</GlossaryItem>
+  <GlossaryItem term="表示">资源状态的可传输编码。</GlossaryItem>
+  <GlossaryItem term="SOAP">定义XML消息与处理规则的协议。</GlossaryItem>
+  <GlossaryItem term="REST">由统一接口等约束构成的架构风格。</GlossaryItem>
+  <GlossaryItem term="幂等性">
+    重复相同请求的预期最终效果与执行一次相同。
+  </GlossaryItem>
+  <GlossaryItem term="XML">用元素、属性与命名空间组织数据的格式。</GlossaryItem>
+  <GlossaryItem term="展开名">namespace URI与local name的组合。</GlossaryItem>
+  <GlossaryItem term="JSON">对象、数组和标量构成的文本格式。</GlossaryItem>
+  <GlossaryItem term="重复键">一个JSON对象内重复的成员名称。</GlossaryItem>
+  <GlossaryItem term="消息体上限">读取正文的字节预算。</GlossaryItem>
+  <GlossaryItem term="Content-Type">正文所用媒体类型。</GlossaryItem>
+  <GlossaryItem term="Accept">客户端期望的响应媒体类型。</GlossaryItem>
+</Glossary>
+
+## 来源与验收边界
+
+目录核对只证明选题范围，不证明原书正文忠实或授权。以下官方资料支持技术机制；正文、源文件、Go运行与实验固定观察值的哈希绑定保存在本章证据目录，浏览器及生产构建由主控另行独立验收。
+
+- [Manning Chapter 7目录](https://livebook.manning.com/book/go-web-programming/chapter-7)：范围为Go web services；source-preflight冻结13主题与6概念。
+- [SOAP1.2 Part 1](https://www.w3.org/TR/soap12-part1/)：Envelope、Body、Header处理与Fault；本例不实现全部规则。
+- [Fielding REST约束](https://ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm)：REST不是仅用HTTP动词和JSON。
+- [RFC8259 §4](https://www.rfc-editor.org/rfc/rfc8259#section-4)：成员名称唯一性建议与互操作差异。
+- [RFC9110](https://www.rfc-editor.org/rfc/rfc9110)：HTTP方法、媒体类型和状态语义。
+- [Go1.26 JSON源码](https://github.com/golang/go/tree/go1.26.0/src/encoding/json) 与 [XML源码](https://github.com/golang/go/tree/go1.26.0/src/encoding/xml)：字段匹配、重复键、命名空间与转义。以本地1.26.0源码和真实测试为执行证据，非缓存1.27.2文档推断。
+
+当前保持draft:true，qualityVersion已获准升为2。作者未运行真实浏览器、dev或生产构建；主控已核验qV1的360/390/1440真实Chrome交互、键盘、重置、reduced-motion及人工截图，并完成final-qv1-r5工程与原始official检查。最终qV2验收仍待主控执行；本章未发布，草稿在生产排除，上述结果不证明生产章节渲染或整书通过。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Go Web Programming · Chapter 7 Go web services"
+  sourceUrl="https://www.manning.com/books/go-web-programming"
+/>
