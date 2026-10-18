@@ -3,50 +3,415 @@ title: "第6章 I/O复用：select和poll函数"
 type: C
 section: "基本套接字编程"
 order: 6
-description: "第6章 I/O复用：select和poll函数围绕I/O模型、select函数、str_cli函数（修订版）、批量输入、shutdown函数、str_cli函数（再修订版）建立从套接字接口到分组、内核状态与清理结果的证据链。 覆盖13个正式目录层级。"
+description: "用两轮就绪位图、字节组帧和半关闭状态，解释 select/poll 如何同时服务输入与回射，以及为何可读不等于完整消息。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
-draft: false
-qualityVersion: 2
+draft: true
+qualityVersion: 1
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: unp-unit-06
 ---
 
+import { UnpIoMultiplexingLab } from "@/components/mdx/unix-network-programming-vol1/v2/unp-06-io-multiplexing";
 
-## 为什么同时看API、内核状态与分组
+{/* 概念映射先行：6.1–6.12 → 五模型阶段表 / select双轮位图与字节队列 / stdin与stdio缓冲对照 / SHUT_WR双向箭头 / pselect信号竞态表 / select与poll服务器同逻辑代码；完整映射在 quality/artifacts/batch-35/io-multiplexing/concept-map.md。 */}
 
-、、、、共同构成本页坐标。第6章
-I/O复用：select和poll函数围绕I/O模型、select函数、str_cli函数（修订版）、批量输入、shutdown函数、str_cli函数（再修订版）建立从套接字接口到分组、内核状态与清理结果的证据链。
+<Objectives>
 
-在“第6章 I/O复用：select和poll函数”中，第3版覆盖IPv4、IPv6、TCP、UDP、SCTP、路由与密钥管理套接字，并保留STREAMS等历史接口。正文先还原书中标准和测试平台语境；Linux专有工具只用于观测与现代对照，不能冒充POSIX或协议标准保证。SCTP、STREAMS、T/TCP和历史IPv6 API的可用性必须由当前平台实测确认。
+- 能从返回位图、接收队列和应用缓冲，区分可读、短读、完整行与 EOF，并复算两片字节的结果。
+- 能修改双路回射客户端：重建集合、处理 EINTR，并在输入结束后先发完队列、再半关闭、继续接收。
+- 能比较 select/poll 的返回计数与服务器队列责任，并解释 pselect 如何避免检查信号与进入等待之间的竞态。
 
-“第6章 I/O复用：select和poll函数”未取得未获授权的完整中文正文；以 [InformIT 第三版官方目录与合法样章](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 界定 3 部分、31 章和 5 个附录范围，中文解释、代码、实验与练习均为独立教学重写。“第6章 I/O复用：select和poll函数”的接口与协议事实分别以 [POSIX socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)、[RFC 9293 TCP](https://www.rfc-editor.org/rfc/rfc9293.html)、[RFC 768 UDP](https://www.rfc-editor.org/rfc/rfc768.html)、[RFC 9260 SCTP](https://www.rfc-editor.org/rfc/rfc9260.html)、[RFC 6458 SCTP sockets](https://www.rfc-editor.org/rfc/rfc6458.html) 和 [RFC 8200 IPv6](https://www.rfc-editor.org/rfc/rfc8200.html) 核对；现代差异不覆盖第三版历史语境。
+</Objectives>
 
-## 常见误区
+## 6.1 概述
 
+本章要解决的是：一个人同时照看两条工作线时，怎样不因守着一条线等待，就漏掉另一条线已经到来的成品。还要区分“这次能取一点”和“这一整单齐了”，以及“不会再接新单”和“旧订单都收完了”。
 
-## 四类样本与验收
+### 直觉：为什么不能守住一条流水线等到底？
 
-| 样本 | 只改变什么                 | 必查证据              | 通过条件   |
-| ---- | -------------------------- | --------------------- | ---------- |
-| 基线 | 固定网络、地址与输入       | API、状态、队列与分组 | 与预测一致 |
-| 边界 | 缓冲、MTU、并发或时序      | 首个阻塞、截断或拒绝  | 边界可解释 |
-| 故障 | 丢包、复位、信号或路径故障 | errno、首包与责任层   | 故障可定位 |
-| 恢复 | 关闭、回收、撤销网络设置   | 残留端点与同输入重放  | 回到基线   |
+想象工厂有“接新订单”和“收成品”两条入口。如果工人总守在订单入口等下一单，另一侧已经送来的成品就无人接收。我们要让同一位工人先看哪侧有事，再处理那一侧。
+
+但入口亮灯只表示现在可以做一步，不表示整批成品都已送齐。最后一单发走，也不表示此前订购的成品都已收完。本章把这两种误判分开处理。
+
+## 6.2 I/O模型
+
+本章的核心是 <Term def="一次等待多个描述符的状态，再由程序执行相应读写">I/O复用</Term>。在接收路径中，先等待数据或结束状态，再把字节搬到应用缓冲。`select`、`poll` 主要解决前一步，不替程序执行后一步。实验中的“select 返回”和“read 搬运”因此是两帧。[S2][S4]
+
+| 模型         | 等待阶段                                        | 搬运阶段                 | 不应混淆的地方             |
+| ------------ | ----------------------------------------------- | ------------------------ | -------------------------- |
+| 阻塞 I/O     | 调用 read 后等待                                | 就绪后由这次调用返回字节 | 等待和搬运包在一次调用里   |
+| 非阻塞 I/O   | 无数据时返回 EAGAIN/EWOULDBLOCK，由程序安排再试 | 有数据时调用 read        | 不等于反复空转就能提高吞吐 |
+| I/O复用      | select/poll 等多个对象                          | 返回后另行 read/write    | 就绪不是搬运完成           |
+| 信号驱动 I/O | 用信号通知某种就绪状态                          | 程序仍要读取             | 通知到达不代表整行已读完   |
+| 异步 I/O     | 提交操作后由实现推进                            | 完成通知表示该操作已完成 | 与“通知就绪后再 read”不同  |
+
+后三种模型的通知方式不同；不能把“程序可以做别的事”都叫异步 I/O。本章只实现复用，信号驱动和异步接口不展开；它们在这里是两阶段对照，不是对所有系统和文件类型可用性的承诺。[S2][S7]
+
+## 6.3 select函数
+
+select 函数的参数是一份本轮想观察的描述符集合，成功返回后的同一存储空间则变成结果集合。这是一个输入/输出契约：描述符索引决定扫描范围，就绪位决定接下来尝试哪个 I/O；字节数和消息边界仍由读写结果及应用协议决定。
+
+### 可读到底保证什么
+
+这里的 <Term def="一次相应 I/O 可不因等待该条件而阻塞；可能取得数据，也可能取得 EOF 或错误">就绪</Term> 是调用条件，不是应用协议的消息条件。TCP 不保留发送方每次 write 的边界。假设消息以换行结束，只收到 `AB` 时，`select` 可以报告可读，`read` 也可以返回 2；应用还不能声称收到了 `ABC\n`。[S2][S4]
+
+FIN 前的字节必须先读完。对一个仍打开、正长度读取的流套接字，数据排空后的有序 EOF 也使读取不会阻塞，此时 `read` 返回 0。它不是“没有事件”；若不移除这个描述符，下一轮仍可能立即报告可读。错误也可能使描述符就绪，所以必须看实际 I/O 返回值。[S2][S4]
+
+**对应实验**：默认分片场景第三帧只有 2 字节、0 完整行；切换“AB 后收到 FIN”，第二次 read 为 0，而那两个未带换行的字节仍是不完整帧。协议可以选择报截断或允许末尾无换行，但不能由 select 替协议决定。
+
+### 集合与扫描上界
+
+`fd_set` 是描述符集合，使用 `FD_ZERO`、`FD_SET`、`FD_CLR`、`FD_ISSET` 操作，不要依赖其内部布局。成功返回后，传入集合只留下就绪位；它不再是完整订阅表。保存一个持久的 `master`，**每轮复制到临时集合**，或每轮重新清零并登记所有活动描述符。[S2]
+
+`nfds` 是最高监视描述符加一，不是描述符个数。监视 0 和 3 时，检查区间是 `[0,4)`；填 3 会漏掉 fd 3。还必须保证传给 FD 宏的描述符在 `[0, FD_SETSIZE)` 内；连接数少但描述符数值太大，同样不能放入集合。关闭连接后移除其位，并维护正确的最大值。图中对未扫描的输出位标“—”，不声称接口一定把范围外的存储位清零。[S2]
+
+```c
+/* master 只含有效且小于 FD_SETSIZE 的活动描述符。 */
+fd_set ready = master;  /* 不能把上轮输出当下轮全部兴趣 */
+struct timeval wait = { .tv_sec = 2, .tv_usec = 0 };
+int nready = select(maxfd + 1, &ready, NULL, NULL, &wait);
+if (nready < 0) {
+    if (errno == EINTR) continue; /* 回循环顶重建，而非处理 ready */
+    /* 报告 errno，并进入清理路径 */
+    break;
+}
+if (nready == 0) continue; /* 本轮等待期内无事件 */
+/* 每个就绪分支分别处理；两路同时就绪时不能用 else if。 */
+```
+
+上面是循环内片段。返回值是所有结果集合中置位的总数；同一个描述符若同时在读、写集合就绪，可计两次。本实验仅用读集合，才可把 `nready=2` 解释成两路可读。它不是字节数。[S2]
+
+### 超时、非阻塞和信号中断各管一件事
+
+| 配置或结果      | 含义                                         | 每轮行动                       |
+| --------------- | -------------------------------------------- | ------------------------------ |
+| timeout 为 NULL | 没事件就持续等待，信号仍可能中断             | 不凭空解释成返回 0             |
+| timeval 为零    | 立即检查当时的就绪状态                       | 无事件返回 0；避免忙循环       |
+| 正超时          | 最多等待指定间隔；调度使实际返回可能更晚     | 每次重建 timeval               |
+| O_NONBLOCK      | 控制后续 read/write 等调用在不能推进时的行为 | 处理 EAGAIN/EWOULDBLOCK        |
+| `-1` 且 EINTR   | 本次等待被信号打断，不是就绪计数             | 处理标志，再重建集合和等待参数 |
+
+`select` 可以修改超时对象；不要把变小或变零的旧对象无限复用。如果需求是“总共最多等待两秒”，应根据单调时钟的绝对截止时间重算剩余量，而不是每次 EINTR 都重新给两秒。零超时不等于把 socket 设为非阻塞。[S2]
+
+就绪是一个会变化的观察：例如另一个读者先消耗了数据，随后本线程的阻塞读取仍可能等住。因此事件循环通常让连接为非阻塞，并把 EAGAIN 当作“暂时不能推进”，而不是 EOF。实验“就绪后被其他读者取走”专门显示这条防线；它模拟竞态，不声称内核错误报告。[S2][S4]
+
+## 双轮实验：先预测，再动手
+
+> 猜一猜：AB 只有 2 字节而 read 缓冲容量为 4，第一次返回后能显示一行吗？在“stdin EOF”场景中复用返回集合，为什么下一轮会漏掉回射？
+
+<UnpIoMultiplexingLab />
+
+1. **默认**：逐步到第一次 read，确认应用为 `AB`、完整行数 0；到第二次 read 才得到 `ABC\n`、完整行数 1。
+2. **变化**：选“两路同时可读”，第一次 select 返回 2，但 socket 仍只读到 2 字节。位数与字节数是两种单位。
+3. **边界**：选“AB 后收到 FIN”，观察先取数据、再取得 EOF；未完整行不会被自动补齐。
+4. **故障**：选“stdin EOF”加“复用返回集合”，第一轮只留下 fd 0，移除 stdin 后集合为空，第二轮永远等不到 socket 回射。改正重建策略后，fd 3 留在兴趣中。
+5. **等待**：选“无事件”与 NULL，实验停在等待帧；改成 2 秒或零超时，模型显示 0。播放间隔只是教学节拍，不是测量结果。
+6. **恢复**：播放途中按“完整重置”，情景回到分片、等待回到 NULL、故障清除、帧归零、播放停止。减少动态效果模式只允许手动步进。
+
+## 6.4 str_cli函数（修订版）
+
+第一版复用思路是同时登记标准输入与连接。socket 就绪时读取回射；标准输入就绪时读取请求并发送。这解决“用户没打字时，程序也应看见对端结束”的问题。`FD_ISSET` 两个分支都可能成立，因此两个独立 `if` 才能在一次返回中处理两路。上面的“双路”场景就是这段调度的图解。[S2]
+
+但就绪只许可尝试一步，不许可在一个连接上调用阻塞的“读到换行”直到满意。若只来了 `AB`，等待换行会把另外所有连接一起卡住。应把短读结果追加到该连接的应用缓冲，再回到循环。要发送的字节也可能只写出一部分，未发送尾部必须留队，不能丢弃。[S4][S6]
+
+## 6.5 批量输入
+
+标准输入可能是终端、管道或重定向文件。`fgets` 可以一次从内核预取多行，只把一行交给调用者；余下行藏在 stdio 的用户缓冲。select 观察的是描述符对应的内核条件，不观察这个用户缓冲。[S2][S8]
+
+| 位置           | 示例状态                              | 谁能看到它                |
+| -------------- | ------------------------------------- | ------------------------- |
+| 管道的内核队列 | 已被 stdio 预读，暂时空，写端仍打开   | select 可能等待           |
+| stdio 缓冲     | 还有 `b\n`，但上次 fgets 只返回 `a\n` | fgets 能读，select 看不到 |
+| 应用发送队列   | 已提交给业务层、尚未写完的字节        | 事件循环自己维护          |
+
+普通文件在 select 中通常表现为始终就绪，不能机械照搬“管道暂空就等待”的现象。修法是明确缓冲归属：本章示例用 `read` 获取字节并由应用组帧，不在同一路复用中混用隐藏预读。[S2][S8]
+
+另一个陷阱与 stdio 无关：批量输入读到 EOF 只说明“本地不再产生请求”，网络上还可能有未收完的回射。立刻返回并退出会丢掉响应。**stdio 缓冲残留并不等价于 close 必发 RST**；是否复位取决于连接状态与关闭条件，本章不从用户缓冲推断报文。[S3][S4]
+
+## 6.6 shutdown函数
+
+需要的 <Term def="只关闭连接的一个传输方向，另一个方向仍可使用">半关闭</Term> 是 `shutdown(sockfd, SHUT_WR)`：停止后续发送，保留接收方向。它不会释放描述符。`SHUT_RD` 不是此处所需的操作，`close` 也不是“只关闭写方向”的替代品。[S3]
+
+| 顺序           | 客户端 → 服务器                          | 服务器 → 客户端                    |
+| -------------- | ---------------------------------------- | ---------------------------------- |
+| 输入 EOF       | 从兴趣中移除 stdin；先发送完应用待发队列 | 继续收回射                         |
+| 待发队列为空   | SHUT_WR；TCP 在已排队数据之后结束本方向  | 读方向仍开放                       |
+| 服务器观察 EOF | 不会再有新请求                           | 发送完回射后结束其写方向           |
+| 客户端读返回 0 | 无新发送                                 | 回射已排空；检查协议完整性后 close |
+
+图中虚线发送箭头只在批量输入场景的第一次 read 后出现；该场景明确假设应用发送队列已经为空。不能把没提交给内核的队列直接丢掉再 SHUT_WR。[S3][S9]
+
+## 6.7 str_cli函数（再修订版）
+
+客户端至少维护三个事实：`input_open`、`pending_bytes`、`write_shutdown`。下面是非阻塞 socket 循环的半关闭片段；完整独立示例及运行说明位于仓库 `quality/artifacts/batch-35/io-multiplexing/` 下的 `echo-client.c` 和 `README.md`，不是对原书源码的转载，也不是网站已提供的下载路由。
+
+```c
+if (!input_open && pending_bytes == 0 && !write_shutdown) {
+    if (shutdown(sockfd, SHUT_WR) < 0) {
+        /* 报错并清理，不能假定半关闭成功 */
+        break;
+    }
+    write_shutdown = 1;
+}
+/* 每轮重建：输入未结束且队列有容量时才监视 stdin。 */
+FD_ZERO(&readset);
+FD_ZERO(&writeset);
+FD_SET(sockfd, &readset);
+if (input_open && pending_bytes < capacity) FD_SET(0, &readset);
+if (pending_bytes > 0) FD_SET(sockfd, &writeset);
+```
+
+第一段避免多次 shutdown，也避免过早发送结束。第二段按队列容量限制读入，按待发送量订阅写就绪；没有待发内容时不监视写，防止可写事件不断唤醒空循环。socket 的读取分支按以下表推进，而不是把所有非正数都当结束。[S2][S3][S4]
+
+| read 返回                    | 状态动作                                           |
+| ---------------------------- | -------------------------------------------------- |
+| 正数                         | 保存这些字节，解析零个或多个完整帧；剩余半帧留缓冲 |
+| 0（正长度流读取）            | 对端有序结束；验证协议与本地发送状态，再清理       |
+| `-1 / EINTR`                 | 检查信号策略，重试或返回外层循环                   |
+| `-1 / EAGAIN` 或 EWOULDBLOCK | 暂时无进展，回事件循环                             |
+| 其他错误                     | 记录 errno，并移除/关闭该连接                      |
+
+独立示例对 socket 设置非阻塞，但标准输出仍用可靠写出循环；因此它适用于文件或能及时消费的终端，不是能抵御慢 stdout 的生产级全异步客户端。它也未实现全局截止时间、任意地址解析和完整协议解析。把这些边界标清，胜过声称几段 select 代码就是通用服务器。
+
+## 6.8 TCP回射服务器程序（修订版）
+
+监听描述符就绪意味着可以尝试 `accept`，不是“有一条完整请求”。接受得到的连接描述符要独立加入活动集合，并显式设置非阻塞属性；不要假定继承。客户连接就绪才读取字节、加入该连接的回射队列。写就绪时按实际成功长度移除队头。监听和客户的职责不同。[S2][S5][S6]
+
+| 对象          | 兴趣           | 一次推进                    | 退出或暂停条件                       |
+| ------------- | -------------- | --------------------------- | ------------------------------------ |
+| listenfd      | 读             | accept 新连接、检查 fd 范围 | EAGAIN：本轮接完；其他错误按策略处理 |
+| clientfd 读端 | 队列有容量时读 | recv → 对应待发队列         | 0：停止读，待发排空再关闭            |
+| clientfd 写端 | 队列非空时写   | send → 消耗已发送部分       | EAGAIN：等下一轮；空队列取消写兴趣   |
+
+这是实验字节搬运的服务端版本：每个 fd 都有自己的缓冲。教学实现可以限制一次处理的字节/连接数，避免一条繁忙连接占满一轮；队列达到上限时暂停读取，形成 <Term def="下游处理变慢时限制继续读入，用有界队列把压力传回上游">背压</Term>。对全进程 SIGPIPE 的处理也应明确，否则写向已关闭连接可能终止进程。[S6]
+
+## 6.9 pselect函数
+
+处理器可以只设置 `volatile sig_atomic_t` 标志。但“检查标志为假，然后 select”之间如果先收到信号，处理器返回后程序仍可能进入无限等待，没有下一次信号来唤醒它。这里需要 <Term def="在一次操作中替换信号屏蔽集合并进入等待，避免检查与等待之间漏掉信号">原子信号等待</Term>。[S2]
+
+| 不安全时序         | pselect 的安排                     |
+| ------------------ | ---------------------------------- |
+| 检查标志为假       | 先屏蔽相关信号，再检查标志         |
+| 信号到达，标志变真 | 信号保持 pending，不在空窗中处理   |
+| select 开始睡眠    | pselect 原子地装入等待期掩码并等待 |
+| 没新事件就一直等   | 信号可被交付，等待返回后处理标志   |
+
+`pselect(nfds, &rset, NULL, NULL, &timespec, &waitmask)` 的时间单位是秒/纳秒，最后一个参数是等待期间使用的信号掩码，返回时恢复原掩码。单线程示例可用 `sigprocmask`，多线程程序用 `pthread_sigmask` 并明确接收信号的线程。`waitmask` 应从原掩码移除需唤醒的信号，而不是无条件解除所有屏蔽。[S2]
+
+它仍然只报告就绪，不读取数据；仍需重建 fd_set、检查返回值和 EINTR。实验“第一轮被信号中断”展示 `-1` 不可当就绪计数，但没有模拟信号掩码的全部操作系统状态。
+
+## 6.10 poll函数
+
+另一种表示是 <Term def="poll 的一项记录：fd 指定对象，events 写兴趣，revents 读本轮结果">pollfd</Term>。`poll(fds, count, timeout_ms)` 的第二个参数是数组条目数，不是最大 fd 加一。`events` 不因成功等待而缩成结果，`revents` 才是输出，每轮由 poll 填写。负 fd 条目被忽略。[S10]
+
+| 字段/返回          | 读取方式             | 边界                                     |
+| ------------------ | -------------------- | ---------------------------------------- |
+| events=POLLIN      | 关注读就绪           | 未订阅普通写事件不等于屏蔽错误           |
+| revents & POLLIN   | 可尝试读取           | 仍不能保证完整消息                       |
+| POLLHUP            | 挂断状态             | 可与 POLLIN 同时出现，必须先排空残留数据 |
+| POLLERR / POLLNVAL | 错误 / 无效描述符    | 不要当普通数据；按错误策略回收           |
+| 返回正数           | revents 非零的条目数 | 不是事件位数总和                         |
+| timeout=0 / 负值   | 立即检查 / 无限等待  | 正值按毫秒计；零不是 O_NONBLOCK          |
+
+若读事件和 HUP 同时出现，先尝试接收；有正字节数就处理，最终正长度 recv 为 0 才确认有序读尽。直接见 HUP 就 close，会丢掉最后一批数据。poll 避免 fd_set 的固定索引范围，但并非不受资源限制，也不等于不再线性扫描。本章不把 epoll/kqueue 扩展成额外目录单元。[S4][S10]
+
+## 6.11 TCP回射服务器程序（再修订版）
+
+下面两栏是**同一个连接读取动作的伪代码**；`receive_to_queue` 包含上文返回值表，`mark_read_end` 不会在待发队列非空时立刻丢弃它。模型从 select 换成 poll 后，短读、半关闭、背压和逐连接队列仍然存在。
+
+<CodeTabs>
+<Tab label="select：结果位图">
+
+```c
+/* readset 是本轮 select 成功返回后的集合。 */
+for (int fd = 0; fd <= maxfd; ++fd) {
+    if (FD_ISSET(fd, &readset)) {
+        if (fd == listenfd) accept_ready_connections();
+        else receive_to_queue(fd);
+    }
+}
+```
+
+</Tab>
+<Tab label="poll：结果数组">
+
+```c
+/* poll 已成功返回；读与挂断可同时存在。 */
+for (size_t i = 0; i < count; ++i) {
+    if (fds[i].fd < 0) continue;
+    short r = fds[i].revents;
+    if (r & POLLNVAL) { report_invalid_slot(i); continue; }
+    if (fds[i].fd == listenfd) {
+        if (r & POLLIN) accept_ready_connections();
+    } else if (r & (POLLIN | POLLHUP | POLLERR)) {
+        receive_to_queue(fds[i].fd);
+    }
+}
+```
+
+</Tab>
+</CodeTabs>
+
+两栏只比较读取调度，不是完整服务器：写队列推进、监听端错误处理、容量上限、accept 错误和回收都必须实现。移除 poll 连接时可暂时把槽位 fd 置负值，或压紧数组；若压紧，注意不能跳过被移来的下一项。无论哪种方式，都不能仅因为本轮某个连接不就绪就从活动表删除它。[S2][S10]
+
+## 常见误区：用故障定位责任层
+
+<Callout type="trap">
+  **现象 →** 第一轮收到了回射，后续输入却再也不处理。**原因 →** 把 select
+  返回的缩小集合直接复用。**修法 →** 从持久活动集合重建；实验“批量输入 +
+  复用返回集合”显示反方向的漏监视。
+</Callout>
+
+<Callout type="trap">
+  **现象 →** select 返回 1，readline 却卡住所有客户。**原因 →**
+  一个就绪位只保证可以推进读取，不保证换行已到。**修法 →**
+  非阻塞短读，逐连接缓冲，完整帧再分派。
+</Callout>
+
+<Callout type="trap">
+  **现象 →** 批量回射的输出比输入短。**原因 →** stdin EOF
+  后立即退出，尚未收回全部响应。**修法 →** 发送队列排空后 SHUT_WR，继续读取至
+  socket EOF，不把它误写成 SHUT_RD。
+</Callout>
+
+<Callout type="trap">
+  **现象 →** 没有新数据，循环却一直立即返回。**原因 →** EOF fd
+  没移除、空队列仍订阅写，或重复使用已变零的 timeval。**修法 →**
+  分别检查连接生命周期、写兴趣和本轮超时，不能用 sleep 掩盖状态错误。
+</Callout>
+
+## 6.12 小结
+
+- 就绪允许尝试 I/O，不代表完整消息。
+- select 集合每轮重建，nfds 为最高 fd 加一。
+- EOF、EAGAIN、EINTR 属于不同状态。
+- 输入结束后先发完，再 SHUT_WR，最后收完关闭。
+- poll 改变表示，不免除队列和生命周期管理。
 
 ## 练习
 
+<div className="[&_.mdx-answer_button]:min-h-11 [&_.mdx-answer_button]:min-w-11">
+<Exercises>
 
-## 小结
+1. **预测与观察：一个就绪位到底能推出什么？**
 
-- I/O模型：连接“列出描述符”的接口、状态与分组证据。
-- select函数：连接“注册兴趣集合”的接口、状态与分组证据。
-- str_cli函数（修订版）：连接“等待就绪”的接口、状态与分组证据。
-- 批量输入：连接“推进连接状态”的接口、状态与分组证据。
-- shutdown函数：连接“处理短计数”的接口、状态与分组证据。
-- 本页13个正式目录层级全部进入可重放网络实验链。
+   先预测，再操作实验。以换行为消息结束：初始第二片为 `C\n`，然后在实验代码的分片情景中把它改为 `C`，最后恢复（仓库组件 `unp-06-io-multiplexing-lab.tsx` 的 `events` 函数、`case "split"` 第二项 `bytes`；网页没有第二片编辑器，无本地源码时先做纸面复算，再验证网页已有情景）。分别记录两轮 select 返回、每次 read 的字节数、应用累计字节和完整行数。再切换“AB 后收到 FIN”，以及 `nfds=3` 的错误模式（分别用无限等待与有限超时）。为什么同样是“返回 1”，既可能读到字节，也可能读到 EOF？
 
-## 术语表
+   把“等待就绪 → read 搬运”画成两段，再对照 6.2 的五种 I/O模型：阻塞 I/O、非阻塞 I/O、I/O复用、信号驱动 I/O、异步 I/O，分别是谁等待、谁搬运、通知表示什么？最后完整重置，检查情景、超时、故障和帧号是否都恢复，而不只清空统计文字。
 
+   <Answer label="查看练习 1 答案：就绪、字节和消息">
 
+   默认 `nfds=4`，两轮 select 都返回 1；两次 read 分别为 2、2，应用从 `AB` 变为 `ABC\n`，累计 2→4 字节，完整行 0→1。第二片改为 `C` 后是 2+1=3 字节、0 完整行；不是“少了一个就绪事件”。FIN 情景先读出 `AB`，排空后第二轮仍可读，但 read 返回 0；未终止的行要交给协议处理，不能凭 EOF 补造换行。
+
+   `nfds=3` 不扫描 fd 3；本题无标准输入事件，因此无限等待没有返回，应用仍为 0 字节；有限超时到期才返回 0。数据已经在 socket 队列中，不等于这个调用正在监视它。对比 `nfds=maxfd+1=4` 即可定位责任在扫描边界，而不是传输链路。
+
+   阻塞 I/O 在读调用内等条件并搬运；非阻塞 I/O 不能推进就返回 EAGAIN，由调用者安排再试；I/O复用由 select/poll 等多个对象，随后程序另行 read；信号驱动 I/O 通知就绪后仍由程序读取；异步 I/O 提交操作后由实现推进，完成通知针对已完成的操作。把这五种模型都画成“收到通知就得到完整消息”是错误的，应用层组帧始终另有责任。
+
+   Reset 的可核查终态是：分片、NULL 等待、无故障、第 0 帧、停止播放、应用 0 字节/0 行。这里的教学节拍不代表真实网络延迟。
+
+   </Answer>
+
+2. **实现与诊断：输入结束时，何时允许半关闭？**
+
+   把 6.4 的 str_cli 修订思路改成 6.7 的有状态客户端。待发队列还剩 5 字节时收到 stdin EOF，随后两次 send 分别返回 2 和 3：写出状态转移并标出 shutdown 的准确时刻。批量输入若混用 fgets，为什么“内核管道空”不等于“stdio 没有下一行”？还要保留哪些读写兴趣？
+
+   假设总截止时间是单调时钟的 10.000 秒，select 被 EINTR 打断后时钟为 8.750 秒，下次最多请求等多久？再画出“检查终止标志 → 信号到达 → 开始等待”的故障时序，说明 pselect 的掩码切换要放在哪一步；不要把 pselect 写成消息组帧工具。
+
+   <Answer label="查看练习 2 答案：排空、截止时间与信号">
+
+   stdin EOF 后将 `input_open=false` 并移除 fd 0；保留 socket 读兴趣，待发非空时保留写兴趣。第一次 send 后为 5−2=3 字节，第二次为 3−3=0；只有此时才能执行一次 `shutdown(sockfd, SHUT_WR)`，设置 `write_shutdown=true`，继续接收回射至 socket 读返回 0。SHUT_RD 关闭了错误方向；立即 close 则使客户端无法继续收回射。
+
+   fgets 可能预取 `a\nb\n`，只把 `a\n` 交给应用；管道暂空但写端未关时，select 可能等待，下一次 fgets 却能从用户缓冲取得 `b\n`。如果输入是普通文件，select 通常始终就绪，这是另一种情况。示例统一使用 read 与应用缓冲，避免把隐藏的 stdio 队列当成内核状态。
+
+   剩余预算是 10.000−8.750=1.250 秒，重建 timeval 为 1 秒、250000 微秒；再次被中断后还需重新计算，不能每次重新给满两秒。先处理终止标志，过期则不再等待。
+
+   不安全时序中，信号在检查之后、select 之前已经处理完，随后 select 可能永久睡下。正确安排是先屏蔽目标信号、检查标志，再由 pselect 原子切换到等待期掩码并进入等待，返回后恢复原掩码并处理标志。它避免的是丢失唤醒，不会帮忙读取字节或恢复 fd_set；本实验的 EINTR 情景也不等于完整模拟该掩码协议。
+
+   </Answer>
+
+3. **迁移与设计：把回射服务器从 select 改成 poll。**
+
+   两条 client 连接中，第一项 `revents=POLLIN|POLLHUP`，第二项只有 `POLLOUT`，poll 应返回几？另有一个负 fd 的空槽和一个暂无新连接的监听 socket，它们是否贡献计数？为 6.8 与 6.11 的 TCP 回射服务器写出读端排空、保存未写完尾部、取消空写兴趣、延后 close 的伪代码。设每连接队列容量为 8 字节，当前待发 6 字节，下一次最多读入多少？这与 nfds 或 poll 的条目数有什么不同？
+
+   <Answer label="查看练习 3 答案：条目计数与逐连接队列">
+
+   poll 返回 2，不是 3；它数 revents 非零的数组条目，不数事件位。负 fd 空槽被忽略，没有事件的监听 socket 不贡献计数。监听 socket 就绪应走 accept 分支，不能像 client 一样 recv。select 版本则扫描结果集合并同样区分监听/连接，不能把它的 nfds=maxfd+1 当作 poll 的数组长度。
+
+   第一项在 POLLIN 或 HUP 时执行非阻塞接收：正数进入该连接待发队列，EAGAIN 回循环，0 才标记读端结束。剩余容量为 8−6=2 字节，不能无限读入；队列满时暂停读，写出后再恢复。第二项按 send 的实际成功长度推进队头，未写完尾部仍留队；队列空则取消 POLLOUT。队列容量是内存和背压约束，既不是描述符扫描上界，也不是条目数。
+
+   ```text
+   若连接有读/挂断事件且队列有空位：
+       n = recv(至多剩余容量)
+       n > 0：追加 n 字节到本连接队列
+       n == 0：read_ended = true；取消读兴趣
+       n < 0：EAGAIN 等下一轮；EINTR 重新安排；其他错误按策略清理
+   若连接可写且队列非空：
+       n = send(队头尚未发送部分)
+       n > 0：仅移除这 n 字节；EAGAIN 保留队列
+   仅队列非空时订阅写；仅读端未结束且有容量时订阅读
+   仅 read_ended 且队列为空时最终关闭
+   ```
+
+   因而不能见 POLLHUP 就丢掉尾部数据；当某平台持续报告挂断时，还需合理调度未排空的输出，避免空转。迁移 API 改变的是集合表示，不改变逐连接缓冲、非阻塞错误处理和生命周期责任。
+
+   </Answer>
+
+</Exercises>
+</div>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="I/O复用">
+    先一起等多个对象，再处理有事可做的对象；一次等待不等于一次读完。
+  </GlossaryItem>
+  <GlossaryItem term="就绪">
+    现在尝试相应操作不会因等待该条件而阻塞；结果可能是字节、结束或错误。
+  </GlossaryItem>
+  <GlossaryItem term="半关闭">
+    只结束一个方向；发送结束后仍能接收对方剩余数据。
+  </GlossaryItem>
+  <GlossaryItem term="原子信号等待">
+    替换等待期信号掩码与进入等待不可被中间的信号空窗拆开。
+  </GlossaryItem>
+  <GlossaryItem term="pollfd">
+    将“哪个 fd、关心什么、实际发生什么”分成三个字段的一条记录。
+  </GlossaryItem>
+  <GlossaryItem term="fd_set / FD_SETSIZE">
+    前者是一组描述符；后者界定可交给集合宏的描述符索引范围。
+  </GlossaryItem>
+  <GlossaryItem term="EOF">
+    此方向不会再有正常后续字节；正长度流读取返回 0，与暂时无数据不同。
+  </GlossaryItem>
+  <GlossaryItem term="EINTR / EAGAIN">
+    前者表示调用被信号中断；后者表示当前不能推进，稍后可再试。
+  </GlossaryItem>
+  <GlossaryItem term="背压">
+    下游处理不及时，就限制继续读入；不能用无限增长的队列掩盖慢消费者。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与范围说明
+
+本页按 manifest 的 `unp-unit-06` 限定为第 6 章及 6.1–6.12，共 13 个目录节点。**不复现原书正文，不宣称拥有改编授权**；现代 POSIX 文档用于核对接口语义，不代表第三版所涉历史平台全部实现这些行为。此页仍为草稿。`qualityVersion: 1` 保持待验状态；仅在主控对最终候选完成真实截图与交互复核后再更新为 2，整书审批仍另行执行。
+
+- [S1：InformIT 第三版书目](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555)。复用前一 worker 的成功访问缓存（本轮未重新抓取），但缓存目录只显示到第 4 章的一部分；第 6 章编号沿用仓库 manifest；[馆藏原书目录扫描](https://www.gbv.de/dms/weimar/toc/374887241_toc.pdf)本轮单次请求返回 HTTP 429（Too Many Requests），未重试；它仍是待复核线索，不将旧稿未留存的检索摘要当作本轮核验。
+- [S2：POSIX.1-2024 select/pselect](https://pubs.opengroup.org/onlinepubs/9799919799/functions/select.html)：集合、就绪、超时与信号掩码。
+- [S3：POSIX shutdown](https://pubs.opengroup.org/onlinepubs/9799919799/functions/shutdown.html)：方向与描述符生命周期。
+- [S4：POSIX recv](https://pubs.opengroup.org/onlinepubs/9799919799/functions/recv.html)：流边界、EOF、非阻塞错误。
+- [S5：POSIX accept](https://pubs.opengroup.org/onlinepubs/9799919799/functions/accept.html)：监听连接与接受语义。
+- [S6：POSIX send](https://pubs.opengroup.org/onlinepubs/9799919799/functions/send.html)：发送计数、阻塞和错误。
+- [S7：POSIX aio_read](https://pubs.opengroup.org/onlinepubs/9799919799/functions/aio_read.html)：异步请求与完成的区分。
+- [S8：POSIX fgets](https://pubs.opengroup.org/onlinepubs/9799919799/functions/fgets.html)：流读取；结合 select 的描述符视角分析缓冲分层。
+- [S9：RFC 9293 §3.6](https://www.rfc-editor.org/rfc/rfc9293.html#section-3.6)：TCP 关闭与未完成数据。
+- [S10：POSIX poll](https://pubs.opengroup.org/onlinepubs/9799919799/functions/poll.html)：events/revents、HUP、计数和超时。
+
+<Attribution
+  sourceUrl="https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
+  workTitle="UNIX Network Programming, Volume 1: The Sockets Networking API, 3rd Edition"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
