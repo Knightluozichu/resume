@@ -1,52 +1,326 @@
 ---
-title: "第4章 基本TCP套接字编程"
+title: "第4章 基本 TCP 套接字编程"
 type: C
 section: "基本套接字编程"
 order: 4
-description: "第4章 基本TCP套接字编程围绕socket函数、connect函数、bind函数、listen函数、accept函数、fork和exec函数建立从套接字接口到分组、内核状态与清理结果的证据链。 覆盖12个正式目录层级。"
+description: "从 socket 到 close：沿描述符、端点、监听队列和进程引用，推演 TCP 客户端与并发服务器的生命周期。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
-draft: false
-qualityVersion: 2
+draft: true
+qualityVersion: 1
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: unp-unit-04
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { UnpElementaryTcpSocketsLab } from "@/components/mdx/unix-network-programming-vol1/v2/unp-04-elementary-tcp-sockets";
 
-## 为什么同时看API、内核状态与分组
+<Objectives>
 
-、、、、共同构成本页坐标。第4章
-基本TCP套接字编程围绕socket函数、connect函数、bind函数、listen函数、accept函数、fork和exec函数建立从套接字接口到分组、内核状态与清理结果的证据链。
+- 能按客户端与服务端两条路径排列 `socket`、`bind`、`listen`、`connect`、`accept`、`fork` 与 `close`，并说出每步改变了什么。
+- 能从监听 fd、连接 fd 和进程描述符表推导并发服务器中哪些引用必须关闭。
+- 能改出正确的父子进程清理路径，回答“子进程已经关闭连接，为什么客户还读不到 EOF？”，并用引用图与本机实验验证修复。
 
-在“第4章 基本TCP套接字编程”中，第3版覆盖IPv4、IPv6、TCP、UDP、SCTP、路由与密钥管理套接字，并保留STREAMS等历史接口。正文先还原书中标准和测试平台语境；Linux专有工具只用于观测与现代对照，不能冒充POSIX或协议标准保证。SCTP、STREAMS、T/TCP和历史IPv6 API的可用性必须由当前平台实测确认。
+</Objectives>
 
-“第4章 基本TCP套接字编程”未取得未获授权的完整中文正文；以 [InformIT 第三版官方目录与合法样章](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 界定 3 部分、31 章和 5 个附录范围，中文解释、代码、实验与练习均为独立教学重写。“第4章 基本TCP套接字编程”的接口与协议事实分别以 [POSIX socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)、[RFC 9293 TCP](https://www.rfc-editor.org/rfc/rfc9293.html)、[RFC 768 UDP](https://www.rfc-editor.org/rfc/rfc768.html)、[RFC 9260 SCTP](https://www.rfc-editor.org/rfc/rfc9260.html)、[RFC 6458 SCTP sockets](https://www.rfc-editor.org/rfc/rfc6458.html) 和 [RFC 8200 IPv6](https://www.rfc-editor.org/rfc/rfc8200.html) 核对；现代差异不覆盖第三版历史语境。
+## 先把“接入”和“处理”分开
+
+一条生产线既要接收新订单，又要处理已经接下来的订单。如果处理一单就撤掉入口，下一单便无处可去；如果交接之后双方都保留着“尚未结束”的记录，收尾又会迟迟无法完成。
+
+本章解决的就是这两种责任如何分开、何时交接、何时释放。先看入口和单次任务，再追踪谁仍持有它，而不是先背一长串函数名。
+
+## 4.1 概述
+
+进程通过<Term def="进程中引用内核打开对象的小整数；同一对象可以被多个表项引用">文件描述符</Term>操作套接字。<Term def="持续接受新连接的服务端端点">监听套接字</Term>负责接入；<Term def="代表一条已建立连接、用于该客户数据交换的端点">连接套接字</Term>负责单次会话。图中 fd 3 与新 fd 4 并存，是全章要守住的区别。
+
+一条典型路径可以概括为：服务端 `socket → bind → listen → accept`，客户端 `socket → connect`；连接建立后双方读写，最后关闭各自不再需要的描述符。函数调用成功不代表应用协议数据已经交换：`connect` 成功说明连接建立，应用仍需自行规定消息边界、读写循环与错误恢复。
+
+<Term def="按序传递字节、但不保留应用写入边界的传输服务">TCP 字节流</Term>
+是可靠、有序的，不保留应用一次 `write` 与对端一次 `read`
+的边界。连接的创建、数据协议和释放是三个层次，调试时要分别取证。
+
+## 4.2 socket函数
+
+`socket(domain, type, protocol)` 请求内核创建指定地址族与类型的套接字，成功返回非负 fd，失败返回 `-1` 并设置 `errno`（见 [POSIX socket 规范](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)）。常见 TCP IPv4 组合为 `AF_INET`、`SOCK_STREAM`、协议参数 `0`（由系统选择该类型的默认协议）。它此时通常尚未绑定本地端口，也未连接远端。
+
+**看图/预测**：实验的 socket 帧中，两端均未连接，服务端对象没有地址；此时能直接向某个客户写数据吗？不能，还没有指定或建立对端关系。
+
+资源边界从这里开始：若后续 `bind` 或 `listen` 失败，程序应关闭已创建的 fd；每个成功创建的 fd 都要有明确所有者和清理路径。平台提供的原子 close-on-exec 标志可减少并发 `fork/exec` 场景中的泄漏窗口，但是否可用应按目标平台接口确认。
+
+## 4.3 connect函数
+
+客户端把远端地址传给 `connect(fd, address, length)`。阻塞套接字通常会等待连接成功或失败；非阻塞套接字可能以 `EINPROGRESS` 返回，之后要用就绪通知和 `SO_ERROR` 判断最终结果，不能把“尚在进行”当成已连通。未监听端口常见 `ECONNREFUSED`；防火墙丢弃、路由黑洞等情形可能表现为等待后超时，具体错误依系统和网络状况而异。
+
+**错误分类**：`ECONNREFUSED` 表示目标未监听或拒绝；`ENETUNREACH` 表示无可达网络路径；`ETIMEDOUT` 表示在超时前未建立连接。`EINPROGRESS` 则是非阻塞建立尚在进行，不是终止错误。就绪也可能通知失败，须再读 `SO_ERROR`。POSIX 还规定阻塞 connect 被信号中断后可继续异步建立，不能一概原地重调。实验仅选“无过滤的本机拒绝”路径，不把丢包伪装成立刻拒绝。
+
+客户端通常不必显式 `bind`：内核可在连接过程中选择本地地址和临时端口。若程序确实需要固定源地址或端口，才显式绑定，并准备处理地址不可用或端口占用。连接失败后的套接字能否再次用于连接有接口/实现差异；可移植的恢复策略是关闭旧 fd、创建新 socket，再按原参数重试，并设置退避上限。
+
+## 4.4 bind函数
+
+服务端通过 `bind(fd, local_address, length)` 请求把端点关联到本地地址。`0.0.0.0`（IPv4 `INADDR_ANY`）表示接受发往本机合适接口的地址，而非某个远端；端口 `0` 请求系统分配临时端口，随后用 `getsockname` 查询实际端口。固定端口已被占用时，常见失败为 `EADDRINUSE`；绑定到不存在或无权使用的本地地址，也会失败。
+
+**看图/操作**：将服务端绑定端口选为 `0`，查询读数变为示例 `49152`；客户端仍找 `9876` 就会被拒绝。再将目标改成 `49152` 才能握手。`0.0.0.0` 是本地通配绑定，不应作为客户要访问的目标；客户选择本机 `127.0.0.1`，accept 后本地端点也显示这个具体地址。
+
+地址结构需先清零并正确填地址族、网络字节序端口和地址字段。`bind` 的成功只说明本地名称关联成功，并没有开始接收连接。多地址、IPv4/IPv6 双栈及重用选项的行为要按系统配置与套接字选项验证，不能将某个平台的默认值当作通用承诺（见 [POSIX bind 规范](https://pubs.opengroup.org/onlinepubs/9799919799/functions/bind.html)）。
+
+## 4.5 listen函数
+
+面向连接的服务端在绑定后调用 `listen(fd, backlog)`，才把套接字标记为接受连接。`bind` 成功并不代表已经监听。<Term def="内核保存尚待应用接收的请求或连接的队列，具体划分由实现决定">待处理连接队列</Term>不能与“当前在线客户数”混为一谈：已被 `accept` 取出的连接不再占据这个等待位置，仍可继续由工作者服务。
+
+[POSIX listen](https://pubs.opengroup.org/onlinepubs/9799919799/functions/listen.html) 将 backlog 定义为给实现的队列限制提示，允许截小，也允许将未完成连接纳入队列。**现代 Linux（自 2.2 起）不同于早期语境**：backlog 指完全建立、等待 accept 的连接队列；未完成握手的 SYN 队列由另一套设置控制，backlog 还受 `somaxconn` 截断。详见 [Linux listen(2)](https://man7.org/linux/man-pages/man2/listen.2.html)。因此不能画出“backlog=1 就只准一人在线”的精确容量图。
+
+**看图/预测**：connect 帧仅有一个已握手 token 等待；accept 帧 token 移走，新 connfd 出现，而监听框不消失。实验固定仅一条请求，不推算队列溢出阈值。空队列上的阻塞 accept 等待；队列压力下的延迟、拒绝、重传须结合目标系统实测。
+
+## 4.6 accept函数
+
+`accept(listenfd, peer_address, peer_length)` 成功时创建并返回新的套接字 fd，供应用与该对端通信；原来的 `listenfd` 仍保持监听用途。可选的地址缓冲区让程序取回对端地址；长度参数按值-结果方式使用，调用前提供缓冲容量，返回时得到实际长度。
+
+**看图**：accept 帧中 fd 3 留在监听对象上，fd 4 指向另一对象；这不是 fd 3 改名。传入地址长度前应设为缓冲区容量，例如 `socklen_t n = sizeof(peer)`。
+
+失败时先检查返回值和 `errno`。信号可能使调用以 `EINTR` 中断；可重试的错误应依据错误类型处理，不能不加判断地无限循环。`accept4` 可在接受连接时原子设置描述符标志；它曾是 Linux 扩展，也已进入 POSIX.1-2024，不能笼统称为“非 POSIX 接口”。是否可用仍须核对目标系统与标准版本，不应把新版接口当作第三版原书的原有内容。连接在进入 `accept` 前被对端取消也是现实边界，服务器应继续服务后续请求，而非因此退出整个监听循环。
+
+## 4.7 fork和exec函数
+
+`fork` 创建子进程。父子进程各有自己的描述符表项，但相应表项形成<Term def="某个进程表项对内核打开对象的关联；fork 后父子表项可以共同引用它">描述符引用</Term>，共同指向同一打开的内核对象；这不是复制出两条独立 TCP 连接。`exec` 替换当前进程映像，不再新建进程。成功 exec 保留未设 `FD_CLOEXEC` 的 fd；设置该标志的 fd 被关闭（[POSIX exec](https://pubs.opengroup.org/onlinepubs/9799919799/functions/exec.html)）。若服务器以子进程处理连接，父进程应关闭自己持有的 `connfd`，子进程关闭不需要的 `listenfd`，否则多余引用会让资源延迟释放，也可能让对端迟迟看不到预期 EOF。
+
+**看图/计数**：fork 帧中连接对象引用从 1 变 2；cleanup 帧正常变回 1，故障路径仍为 2。勾选 `FD_CLOEXEC` 后，exec 帧仅删除子进程的连接边，不能清理父进程遗漏的引用。标志属于描述符表项，子进程设置不会自动改父进程表项；代码可用 `fcntl(fd, F_SETFD, old_flags | FD_CLOEXEC)`，必须检查两次 fcntl 的返回值。
+
+创建子进程失败时，当前进程仍拥有已接受的连接 fd，必须处理该连接或关闭它。子进程结束后还要回收退出状态；否则会累积僵尸进程（参见 [POSIX fork](https://pubs.opengroup.org/onlinepubs/9799919799/functions/fork.html)）。信号处理、异步安全及更完整的进程回收属于并发服务器生命周期的一部分，而不是 `fork` 自动完成的事。
+
+## 4.8 并发服务器
+
+并发不是“多调用几次 `accept`”，而是明确谁接入、谁服务、谁关闭每个引用。常见进程模型由一个父进程保留 `listenfd`，每次 `accept` 后 `fork` 子进程；父进程关闭新连接 fd 并回到接入循环，子进程关闭监听 fd、服务单个客户端并退出。线程池或事件循环有不同的所有权策略，但同样要保证 fd 在所有使用者结束前不会被误关。
+
+**责任对照**（实验 cleanup 帧中的两类边）：
+
+| 进程   | 保留的引用  | 必须关闭的引用 | 下一步               |
+| ------ | ----------- | -------------- | -------------------- |
+| 父进程 | listenfd    | 本次 connfd    | 回到 accept 接下一位 |
+| 子进程 | 本次 connfd | listenfd       | 服务后 close / 退出  |
+
+生产代码还需设定连接数/工作队列上限、读写超时、信号与子进程回收策略。容量满时要有明确拒绝或排队策略；资源耗尽（例如进程数或 fd 达上限）时记录错误、释放本次已取得资源，并在退避后恢复，而不是忙循环重试。
+
+## 4.9 close函数
+
+`close(fd)` 释放调用进程中的 fd。对套接字而言，关闭行为与剩余引用、未发送数据、`SO_LINGER` 等设置及 TCP 状态有关；不能将每次 `close` 简化为“立即发送 FIN”（TCP 的关闭过程见 [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293.html)）。当一端有序关闭其发送方向，另一端读到<Term def="读取返回 0 的文件结束指示；对 TCP 常表示对端已结束发送方向，不一定代表反向也结束">EOF</Term>（返回 0）表示该方向已结束，但仍可能有反向数据尚待接收。需要独立控制半关闭时可进一步学习 `shutdown`，不要用关闭整个 fd 替代所有协议语义。
+
+关闭失败的处理应尊重目标系统对错误的说明；不要在不确认语义时盲目重复 `close` 同一个整数，因为该 fd 数值可能已被重新分配给别的资源。清理路径应先记录原始错误，再按平台契约作决定（见 [POSIX close](https://pubs.opengroup.org/onlinepubs/9799919799/functions/close.html)）。
+
+**看图/操作**：close 帧不是“清空所有 fd”。只有子进程仍持有的连接边被删；父进程遗留边在错误模式中保留。下方本机实验用读取超时与返回空字节区分“还活着”和 EOF。
+
+## 4.10 getsockname和getpeername函数
+
+`getsockname` 查询套接字的本地地址，`getpeername` 查询已连接套接字的对端地址。对绑定端口 `0` 的服务器，成功 `bind` 后查询本地地址可得到系统分配的端口；客户端 `connect` 后也可用它核实内核选择的本地端点。两者都是观测手段，不会替程序修复错误地址（见 [POSIX getsockname](https://pubs.opengroup.org/onlinepubs/9799919799/functions/getsockname.html) 与 [POSIX getpeername](https://pubs.opengroup.org/onlinepubs/9799919799/functions/getpeername.html)）。失败仍需检查返回值、长度和 `errno`。监听端点的 getpeername 通常报 `ENOTCONN`，因为它并不代表某一个客户。实验下方查询表把监听通配地址与已接受连接的具体接口地址分开展示；代码用两侧 local/peer 交叉断言，而不是猜 fd 的含义。
+
+## 实验：预测队列与 fd 的变化
+
+1. 默认无故障：依次单步到 bind、listen、connect、accept，确认“已绑定”与“监听”分别出现，队列 token 转移到**新** connfd，原监听 fd 未被替换。
+2. 选固定端口冲突：只走到 bind，后续成功帧不可达；选跳过 listen 或设置不匹配的目标端口：到 connect 拒绝后终止。修复目标参数后重新开始。选择端口 0 表示系统另选空闲端口，因此不会触发“固定端口占用”样本。
+3. 选父进程遗漏 close：走到 fork、cleanup、exec、close，数连接边的 `2 → 2 → 2 → 1`；勾选 `FD_CLOEXEC` 后变为 `2 → 2 → 1 → 1`。最后引用仍属于父进程，子进程无法替它释放。
+4. 全部重置恢复端口 9876、无故障、未勾选标志、socket 首帧及暂停。播放遵循减少动态效果偏好；不播放也可用 Tab、方向键、步点和下一步检查每一帧。
+
+本实验不实际联网。它只演示一条连接和一个子进程，不模拟 Linux 队列容量、握手时间或真实端口分配。终止分支截断时间线，而不只是在成功图上贴错误说明。
+
+<UnpElementaryTcpSocketsLab />
+
+## 可运行对照：端点查询与最后一个引用
+
+下面是独立编写的 Python 3 最小实验，调用系统 socket API，只使用回环网络和系统分配端口，不需要 root。保存为 `tcp_endpoints.py` 后运行 `python3 tcp_endpoints.py`。两个端点放在同一进程是为了排除进程调度干扰，`dup` 精确增加一个连接对象引用；fork 的父子所有权另见上图。
+
+```python
+import errno
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+    listener.bind(("0.0.0.0", 0))
+    port = listener.getsockname()[1]
+    listener.listen(1)
+    print("listen local:", listener.getsockname())
+    try:
+        listener.getpeername()
+    except OSError as exc:
+        assert exc.errno == errno.ENOTCONN
+        print("listen peer: ENOTCONN")
+
+```
+
+接着在**同一文件、同一外层 with 内**添加以下部分（保留四格缩进）。读数应满足服务端 local 等于客户 peer；人为保留的引用必须先制造超时，释放后才出现 EOF。
+
+```python
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        client.settimeout(1.0)
+        client.connect(("127.0.0.1", port))
+        conn, peer = listener.accept()
+        with conn:
+            assert conn.fileno() != listener.fileno()
+            assert conn.getpeername() == client.getsockname()
+            assert conn.getsockname() == client.getpeername()
+            print("conn local / peer:", conn.getsockname(), peer)
+            with conn.dup() as retained:
+                # 对应“某个持有者关了，但还有另一个引用”
+                conn.close()
+                try:
+                    client.recv(1)
+                    raise AssertionError("不应在仍有引用时收到 EOF")
+                except TimeoutError:
+                    print("retained ref: timeout, not EOF")
+            # retained 退出 with 后，最后一个服务端连接引用释放
+            assert client.recv(1) == b""
+            print("last ref closed: EOF; listenfd still open")
+```
+
+预期顺序为：通配本地地址和非零端口 → 监听端点没有 peer → 新连接的具体本地/远端地址 → 残留引用导致读取超时 → 最后引用释放后读到 `b""`。端口值每次可变；这里没有数据、半关闭或 linger 设置，超时只是有界地验证“未收到 EOF”，不是证明网络永不出错。
+
+**C 接口对照**：下面是并发接入循环中的所有权片段，不是完整服务器。`listenfd` 已成功监听，`service` 代表应用读写循环，`pid` 用 `pid_t`；父进程还须在外层回收子进程。每个失败分支都处理已经取得的资源。
+
+```c
+int connfd = accept(listenfd, NULL, NULL);
+if (connfd < 0) {
+    if (errno == EINTR) continue; /* 只对已确认的可重试错误重试 */
+    perror("accept");
+    break;                      /* 避免资源耗尽后忙循环 */
+}
+pid_t pid = fork();
+if (pid < 0) {
+    perror("fork");
+    close(connfd);               /* fork 失败，仍由父进程负责 */
+    break;
+}
+if (pid == 0) {
+    close(listenfd);             /* 子进程不再接入 */
+    service(connfd);
+    close(connfd);
+    _exit(0);
+}
+close(connfd);                   /* 父进程不服务本次连接 */
+```
+
+## 故障定位与恢复清单
+
+| 症状                        | 先检查                                     | 有证据支持的恢复动作                                                                 |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `bind` 报 `EADDRINUSE`      | 地址、端口、旧进程及实际监听者             | 查清占用者；确认部署策略后换端口或有意配置重用选项，再重启验证。不要无条件开启重用。 |
+| `connect` 报 `ECONNREFUSED` | 服务进程、绑定地址、监听端口、目标地址     | 在服务端确认 `listen` 成功；修正目标并重试。                                         |
+| `connect` 一直等到超时      | 路由、防火墙、安全组、对端状态             | 用同一目标做路由/抓包对照；恢复路径后带超时和退避重试。                              |
+| `accept` 无新连接           | 是否确有请求、进程是否阻塞、队列与资源使用 | 保持监听循环；释放过载资源，按限流策略恢复，不以增大 backlog 代替容量设计。          |
+| 对端迟迟不见 EOF            | 父子进程是否都关闭了不需要的连接 fd        | 清点所有副本；由不再使用的一方关闭引用，再用最小复现实验观察 EOF。                   |
 
 ## 常见误区
 
+<Callout type="trap" title="误区：accept 会把监听 socket 变成连接 socket">
+  不会。成功调用返回新的连接 fd；原监听 fd
+  仍可继续接受后续连接。把两者混用会让服务器在处理第一个客户后丢失接入能力。
+</Callout>
 
-## 四类样本与验收
+<Callout type="trap" title="误区：子进程 close 了，所以客户必然立即读到 EOF">
+  现象：子进程结束服务后客户端仍等待。原因：父进程可能还保留
+  connfd；父进程真正退出会释放自己的
+  fd，但正常接入父进程并不退出。修法：在实验打开“父进程遗漏
+  close”，确认末帧仍有一条连接边，再恢复父进程的 close。
+</Callout>
 
-| 样本 | 只改变什么                 | 必查证据              | 通过条件   |
-| ---- | -------------------------- | --------------------- | ---------- |
-| 基线 | 固定网络、地址与输入       | API、状态、队列与分组 | 与预测一致 |
-| 边界 | 缓冲、MTU、并发或时序      | 首个阻塞、截断或拒绝  | 边界可解释 |
-| 故障 | 丢包、复位、信号或路径故障 | errno、首包与责任层   | 故障可定位 |
-| 恢复 | 关闭、回收、撤销网络设置   | 残留端点与同输入重放  | 回到基线   |
+<Callout
+  type="trap"
+  title="误区：backlog 就是允许连接的总人数，close 总会立刻发 FIN"
+>
+  backlog
+  的解释受实现和系统限制影响；连接容量还受应用工作者、fd、内存等约束。close
+  释放一个 fd 引用，线路上的 TCP 变化取决于引用和连接状态。
+</Callout>
 
 ## 练习
 
+<Exercises>
 
-## 小结
+1. 独立实现端点诊断：根据概述中的双端调用路径，服务端绑定 `0.0.0.0:0`，客户端仍使用 9876。请修改上方 Python 实验打印实际端口，并让客户端连接它；预测 getsockname和getpeername函数 的结果，说明 accept 是否替换 listenfd、`backlog=1` 是否限制只能服务一人。若收到 `EINPROGRESS`，能宣布失败或成功吗？
 
-- socket函数：连接“解析监听地址”的接口、状态与分组证据。
-- connect函数：连接“创建绑定监听”的接口、状态与分组证据。
-- bind函数：连接“接受连接”的接口、状态与分组证据。
-- listen函数：连接“传输字节流”的接口、状态与分组证据。
-- accept函数：连接“处理半关闭”的接口、状态与分组证据。
-- 本页12个正式目录层级全部进入可重放网络实验链。
+   <Answer>
+     先用 socket函数 创建端点，再用 bind函数 绑定端口0，getsockname
+     取回分配的非零端口，listen函数 启动监听；客户用 connect函数 连接 127.0.0.1
+     与该端口。监听 fd 的 local 仍为通配地址，getpeername 报
+     ENOTCONN；accept函数 返回不同的 connfd，本地地址为 127.0.0.1，peer
+     等于客户本地地址。图中 token 离开等待队列，新 fd 出现而监听 fd
+     保留；backlog 约束等待接入的队列，不是已接入客户总数。EINPROGRESS
+     只说明非阻塞建立尚在进行，等待就绪并查询
+     SO_ERROR；拒绝与超时才是另外的结果分支。
+   </Answer>
+
+2. 改 Demo 的并发服务器所有权路径：选“父进程遗漏 close”，分别在未勾选、勾选 FD_CLOEXEC 时，写出 fork、cleanup、exec、close 四帧的连接引用数。然后指出应补在哪一行的 close，预测修复后的序列。若 exec 失败，标志是否已经关闭 fd？
+
+   <Answer>
+     遗漏时未勾选是 2、2、2、1；勾选是 2、2、1、1。修改 C 片段父进程分支，在
+     fork 成功后执行 close(connfd)，不是 close(listenfd)。正常未勾选变为
+     2、1、1、0；正常勾选变为 2、1、0、0。fork和exec函数
+     不会各自创造一条新连接；close函数
+     释放一个引用。子进程设置标志只影响自身表项；exec 成功才按标志关闭，exec
+     失败不能当作已完成交接，应处理错误并关闭仍持有的资源。
+   </Answer>
+
+3. 按小结复核生命周期并增加失败分支验证：在 Python 程序中创建第二个 socket，尝试绑定第一个仍持有的固定地址/端口（不启用重用选项），捕获 EADDRINUSE 并关闭第二个 fd。再按原示例完成“残留引用超时→最后引用关闭后 EOF”。如何避免测试无限等，以及 bind 失败后错误地继续 listen？
+
+   <Answer>
+     对第二个 socket 使用 with，try/except 只接受 EADDRINUSE；失败分支不得执行
+     listen/connect。客户端预先设置有界 timeout；在 retained
+     存活期间只能期待超时，关闭 retained 后期待 recv
+     返回空字节。若错误种类不同就报告环境而不是改成成功。真正的服务器不能笼统重试所有
+     errno；先释放本次
+     fd，排查地址、权限与端口，再进行有上限的恢复。实验“端口占用”只到 bind
+     帧，无任何绿色 connect 或 accept 成功状态。
+   </Answer>
+
+</Exercises>
+
+## 4.11 小结
+
+- `socket` 创建 fd；`bind` 关联本地地址；`listen` 建立被动接入点。
+- `connect` 请求连接；`accept` 返回新的连接 fd，监听 fd 保留。
+- `fork` 复制 fd 引用；父子进程必须各自关闭无用副本。
+- `close` 释放 fd 引用；TCP 终止行为不能简化成一次固定报文。
+- 用返回值、`errno`、端点查询和抓包分层验证，并设计可恢复路径。
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="文件描述符">
+    进程用来指向内核资源的编号；编号相同不代表资源永远相同。
+  </GlossaryItem>
+  <GlossaryItem term="TCP 字节流">
+    按顺序传送字节的连接服务，不替应用保留每次读写的分段边界。
+  </GlossaryItem>
+  <GlossaryItem term="监听套接字">
+    专门等待新连接的服务端端点，通常跨多次 accept 持续使用。
+  </GlossaryItem>
+  <GlossaryItem term="连接套接字">
+    代表某一条已建立连接的新端点，供应用与该客户端交换数据。
+  </GlossaryItem>
+  <GlossaryItem term="待处理连接队列">
+    内核暂存尚待应用接收的连接请求/连接的队列；具体划分和容量受实现影响。
+  </GlossaryItem>
+  <GlossaryItem term="描述符引用">
+    某个进程表项对内核打开对象的关联；fork 后父子表项可以共同引用它。
+  </GlossaryItem>
+  <GlossaryItem term="EOF">
+    读取返回 0 的文件结束指示；对 TCP
+    常表示对端已结束发送方向，不一定代表反向也结束。
+  </GlossaryItem>
+</Glossary>
 
+## 来源与访问边界
+
+本章按只读 fidelity manifest 的第三版 4.1–4.11 单元独立中文改写，不复现原书正文。2026-10-18 实际访问 [InformIT 官方书页](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 得到书目信息和部分目录；本次返回目录在第 4 章 Concurrent Servers 后结束，未独立确认后面三个小节的编号，继续沿用已登记映射并保留此核验限制。作者站访问因证书验证失败未取得内容；未绕过验证，也未取得完整中文或英文正文授权。
+
+接口事实另据实际读取的 POSIX.1-2024 [socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)、[connect](https://pubs.opengroup.org/onlinepubs/9799919799/functions/connect.html)、[accept](https://pubs.opengroup.org/onlinepubs/9799919799/functions/accept.html)、[close](https://pubs.opengroup.org/onlinepubs/9799919799/functions/close.html)、[fcntl](https://pubs.opengroup.org/onlinepubs/9799919799/functions/fcntl.html) 及各节所链规范；IPv4 通配地址与端口选择还核对了 [Linux ip(7)](https://man7.org/linux/man-pages/man7/ip.7.html)。这些是公开可读的事实来源，不等于开放改编许可。新版 POSIX 与 Linux 行为仅用于标明当前接口边界，不冒充第三版原书逐句内容。
+
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Unix Network Programming, Volume 1: The Sockets Networking API, 3rd Edition"
+  adaptedUrl="https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
+  sourceBasis="outline-only"
+/>
