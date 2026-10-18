@@ -16125,6 +16125,35 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GwpRoutingLab: module0.GwpRoutingLab,
     } as ChapterMdxComponents;
   },
+  "go-web-programming/03-display-data/gwp-database": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/gwp-database-lab");
+    return {
+      GwpDatabaseLab: module0.GwpDatabaseLab,
+      GwpMapperLab: module0.GwpMapperLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/03-display-data/gwp-templates": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/gwp-templates-lab");
+    return {
+      GwpTemplatesLab: module0.GwpTemplatesLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/04-service-testing/gwp-json-api": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/v2/gwp-json-api");
+    return {
+      GwpJsonApiLab: module0.GwpJsonApiLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/04-service-testing/gwp-testing": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/v2/gwp-testing");
+    return {
+      GwpTestingLab: module0.GwpTestingLab,
+    } as ChapterMdxComponents;
+  },
   "gpu-gems/01-natural-effects/gpugems-ch01": async () => {
     const module0 =
       await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch01-water-simulation");
