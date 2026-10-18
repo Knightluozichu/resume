@@ -320,10 +320,14 @@ B11清理确认：四worker已关闭，所属PID91440/91441/91469退出，3100�
 - 三书部署门禁全部通过（质量、视觉、TypeScript、全站内链），全站生产构建完成；release `release-20261009T045256Z-53fedcaea14e`（commit `53fedcaea14ed1a708dce5555f19ad955c16a002`）已原子切换并通过公网复检。有效管理者14章、Python Advanced 16章记为 published；Python Crash Course的4个非草稿修订章已在线，其余18章保持草稿。三书生产抽样路由分别5/5、5/5、3/3返回200。
 
 
-## 批次 35：UNP Vol.1 导读与第1–7章（closeout-ready-with-7-holds）
+## 批次 35：UNP Vol.1 导读与第1–7章（closed-with-7-holds）
 
 - 仅ch01 failed→passed；map、ch02–07 failed→queued，7 held/qV1；ch01 qV2，全部8页draft:true。全库4609：failed1712、queued203、passed1702、published992，remaining1916→1915，publishedBooks110。992 published解析条目与policy完全保留；3条无关未发布passed仅审计重算。
 - 全部8页official当前hash PASS不是完整自定义验收。ch04窄屏valid-draft单击Reset仍retained/CLOEXEC=true，1440通过；ch07仅default-only，每宽170检查中1项Cloudflare console失败、46端点NOT_RUN。来源、SCTP、ch03原生边界/chunk/EPIPE及ch06 native缺口保留。
 - 最新book-check exit1（37/38未通过）；global update-ledger/invariants exit0不等于全库通过；全库TOC144书失败保留。旧build早于ch03 qV2→1，历史限制保留且不重绑定；current-hash-build-refresh真实1次exit0、83.496s、timeout300未触发，8MDX/16TSX/shared稳定，ch03 qV1最新hash已绑定，当前build缺口闭环。UNP production HTML0/目标draft0of8不等于生产渲染验收；PID14601 gone、0残留，dev91150不变。
 - 主控已提交8章（清单见报告）、共享3325b3648、台账40ef08555；报告commit/push待主控填。本任务未git提交。未审批、未部署、全库未完成。屏障关键路径仅报告/build，二者已完成，source-only助手另行。
 - 证据ignored留本地，报告仅摘要/SHA256，不声称远程包含巨大证据。报告：[batch-35.md](/Users/luozichu/Repositories/learn/remuse/quality/repair-reports/batch-35.md)；完整记录/清单：[batch-35.json](/Users/luozichu/Repositories/learn/remuse/quality/repair-reports/batch-35.json)。
+
+### 主控最终闭环记录（2026-10-18T15:54:14.312483+00:00）
+
+报告提交 `c535056bfec243010c6517a39fc00e80891a8455` 已正常 push，并通过 `git ls-remote --heads origin main` 核验一致。当前哈希构建通过；全部批35助手已关闭，无本批浏览器/测试残留；受保护 dev PID91150 启动身份未变。批35屏障关闭：1 accepted、7 held，未审批/部署；全库任务继续进入批36，不将 held 视作完成。此附记是原待提交状态的后续事实记录。

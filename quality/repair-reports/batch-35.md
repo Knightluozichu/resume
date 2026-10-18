@@ -1,6 +1,6 @@
 # Batch 35 可提交收口报告（草稿）
 
-**状态：`closeout-ready-with-7-holds`**。报告可提交，不等于七个 hold 解除、整书获批或全库完成。
+**状态：`closed-with-7-holds`**。报告可提交，不等于七个 hold 解除、整书获批或全库完成。
 快照：`2026-10-18T15:47:37.572911+00:00`；权威：[transition-review.json](/Users/luozichu/Repositories/learn/remuse/quality/artifacts/batch-35/controller/final-ledger-refresh/transition-review.json)。
 
 ## 1. 收口与台账
@@ -214,3 +214,7 @@
 | [FILES.sha256](/Users/luozichu/Repositories/learn/remuse/quality/artifacts/batch-35/controller/current-hash-build-refresh/FILES.sha256) | `ca2119d2c87632332ce3be88d605feb661228292ebc661be28f54884bcc23a43` |
 
 更新：2026-10-18T15:50:15.194533+00:00。仅纳入已保存构建证据；本报告任务未执行构建/测试。全部证据仍ignored本地保留，不声称远端包含巨大证据。
+
+### 主控最终闭环记录（2026-10-18T15:54:14.312483+00:00）
+
+报告提交 `c535056bfec243010c6517a39fc00e80891a8455` 已正常 push，并通过 `git ls-remote --heads origin main` 核验一致。当前哈希构建通过；全部批35助手已关闭，无本批浏览器/测试残留；受保护 dev PID91150 启动身份未变。批35屏障关闭：1 accepted、7 held，未审批/部署；全库任务继续进入批36，不将 held 视作完成。此附记是原待提交状态的后续事实记录。
