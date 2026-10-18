@@ -3,50 +3,334 @@ title: "第3章 套接字编程简介"
 type: C
 section: "基本套接字编程"
 order: 3
-description: "第3章 套接字编程简介围绕套接字地址结构、值-结果参数、字节排序函数、字节操纵函数、inet_aton、inet_addr和inet_ntoa函数、inet_pton和inet_ntop函数建立从套接字接口到分组、内核状态与清理结果的证据链。 覆盖12个正式目录层级。"
+description: "从地址字节到长度契约：比较 macOS/Linux 地址布局，诊断字节序、文本转换、截断与短读写。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
-draft: false
-qualityVersion: 2
+qualityVersion: 1
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: unp-unit-03
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Unp03AddressBytesLab } from "@/components/mdx/unix-network-programming-vol1/v2/unp-03-sockets-introduction";
 
-## 为什么同时看API、内核状态与分组
+<Objectives>
 
-、、、、共同构成本页坐标。第3章
-套接字编程简介围绕套接字地址结构、值-结果参数、字节排序函数、字节操纵函数、inet_aton、inet_addr和inet_ntoa函数、inet_pton和inet_ntop函数建立从套接字接口到分组、内核状态与清理结果的证据链。
+- 能修改地址初始化代码，区分平台布局与网络序字段，并解释为什么 `memcmp` 不等不代表两个端点不同。
+- 能检查取地址、文本输出和读写循环的返回值，分别处理截断、缓冲不足、短计数与 EOF。
+- 能回答：小端机器把 8080 直接存入端口字段后，六个端口/IPv4 字节是什么？容量 4 能否接收完整地址？
 
-在“第3章 套接字编程简介”中，第3版覆盖IPv4、IPv6、TCP、UDP、SCTP、路由与密钥管理套接字，并保留STREAMS等历史接口。正文先还原书中标准和测试平台语境；Linux专有工具只用于观测与现代对照，不能冒充POSIX或协议标准保证。SCTP、STREAMS、T/TCP和历史IPv6 API的可用性必须由当前平台实测确认。
+</Objectives>
 
-“第3章 套接字编程简介”未取得未获授权的完整中文正文；以 [InformIT 第三版官方目录与合法样章](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 界定 3 部分、31 章和 5 个附录范围，中文解释、代码、实验与练习均为独立教学重写。“第3章 套接字编程简介”的接口与协议事实分别以 [POSIX socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)、[RFC 9293 TCP](https://www.rfc-editor.org/rfc/rfc9293.html)、[RFC 768 UDP](https://www.rfc-editor.org/rfc/rfc768.html)、[RFC 9260 SCTP](https://www.rfc-editor.org/rfc/rfc9260.html)、[RFC 6458 SCTP sockets](https://www.rfc-editor.org/rfc/rfc6458.html) 和 [RFC 8200 IPv6](https://www.rfc-editor.org/rfc/rfc8200.html) 核对；现代差异不覆盖第三版历史语境。
+## 3.1 概述
+
+本章对应原书“第二部分 基本套接字编程”中的“第3章 套接字编程简介”。这里先建立地址表示、容量和读写进度的接口契约，后续章节才把它们组合成客户与服务器；本章的字节图不是连接建立过程，也不是 TCP 报文图。
+
+### 直觉：为什么标签、盒子和搬运进度必须分开检查
+
+想象一条分拣流水线：前端输入“去哪里”和“找哪扇门”，后端却只接受固定格数的标签。数字相同但格子的顺序反了，包裹仍可能被送到别的门。
+
+标签正确还不够。接收标签的盒子可能太小，搬运工也可能一次只搬一部分。把“做了一点”当成“全部完成”，下一道工序就会处理残缺材料。
+
+本章把这三类错误拆开：先检查标签格式，再检查容器大小，最后检查累计完成量。后续建立连接的程序将依赖这些检查，而不是靠“多数时候能跑”碰运气。
+
+## 3.2 套接字地址结构
+
+应用通过<Term def="承载协议族、地址等字段的协议专用对象；具体内存布局由目标系统决定">套接字地址结构</Term>向内核描述端点。IPv4 使用 `sockaddr_in`，IPv6 使用 `sockaddr_in6`；`sockaddr *` 是 API 接口所用的通用指针类型。强转指针不会转换字节，也不会把 IPv4 变成 IPv6。`sockaddr_storage` 提供足够的空间和对齐，适合接收未知地址族的结果，但仍需检查实际地址族和长度。
+
+POSIX 规定必要成员及接口语义，不承诺所有 Unix 的字段偏移相同。实验默认 **macOS 小端实例**：偏移 0 为一字节 `sin_len=16`，偏移 1 为一字节 `sin_family=AF_INET`；Linux 小端示例前两字节为 `02 00`。本次两种示例总长恰好都是 16，端口偏移 2、地址偏移 4；不能由此推导其他结构也相同。用 `sizeof`、`offsetof` 和目标头文件核实，不能在生产代码手写偏移。
+
+**图中看什么：**切换 ABI 后看第一行由 `10 02` 变成 `02 00`；端口和地址仍保持自己的网络序。结构体包含本地接口元数据与填充，不是直接发上网络的 IP 首部。
+
+## 3.3 值-结果参数
+
+`accept`、`getsockname`、`getpeername` 用<Term def="调用前表示可写容量，成功返回后表示实际地址长度的双向长度参数">值-结果参数</Term>告诉内核有多少空间，并取回地址的实际长度。注意“实际地址长度”**不一定是实际复制量**：地址长 16、传入容量 4 时，成功的截断调用可能只复制 4 字节，却返回长度 16。不得按返回长度越过真实缓冲区读内存。
+
+```c
+struct sockaddr_storage peer;
+socklen_t capacity = sizeof(peer);
+socklen_t len = capacity;              // 每次调用前重新初始化
+int fd = accept(listener, (struct sockaddr *)&peer, &len);
+if (fd < 0) { /* 按 errno 处理；不得消费 peer */ }
+else if (len > capacity) {
+    /* 地址已截断；不能解析缺失字段，仍须管理 fd 的所有权 */
+} else {
+    /* 再检查 family，以及 len 是否覆盖该地址族所需成员 */
+}
+```
+
+未初始化 `len` 会把不确定值当容量；谎报比实际对象更大的容量可能导致内存破坏。失败时不能认为输出有效；成功后也必须检查长度和地址族。`connect`、`bind` 的长度则按值传入，不是此模式。实验“长度与缓冲区”把可写格子和缺失格子分开标记；练习二要求同时核查返回码、容量与输出长度。
+
+## 3.4 字节排序函数
+
+<Term def="多字节字段按高位字节在前的约定排列，即大端序">网络字节序</Term>规定
+`sin_port` 和 `sin_addr` 的表示。`sin_family`
+等本地字段不能跟着统一做大端转换。`htons` / `ntohs` 处理 16 位整数，`htonl` /
+`ntohl` 处理 32
+位整数；大端机器上转换可能是恒等操作，但程序仍应使用接口表达意图。
+
+逐步手算端口 8080：8080 除以 256 得高字节 31、余数 144；转成十六进制为 `1F 90`。小端机器直接保存整数时却得到 `90 1F`。接收字段的内核按网络序解释它，得到 144×256+31=36895。实验的交叉线连接高低字节，实心端口标记从 8080 移到 36895；这不是仅换一段提示文字。
+
+边界也能揭示误区：0 和 65535 的两字节相同，漏转换不一定显现，因此不能用这两例证明代码正确。端口 0 在 `bind` 中通常用于请求系统分配临时端口，不应当作常规远端服务端口。`inet_pton` 已经产生网络序地址，不能再对结果盲目 `htonl`，否则小端机上反而把地址翻错。
+
+## 3.5 字节操纵函数
+
+`memset` 把每个字节写成给定值；`memcpy(dst, src, n)` 拷贝精确的 n 字节且要求区域不重叠；有重叠可能时用 `memmove`。`memcmp` 返回负、零或正，描述对象表示的字典序关系，不保证结果恰好是 -1 或 1。旧接口 `bzero`、`bcopy`、`bcmp` 不应机械替换：`bcopy(src,dst,n)` 是源在前且允许重叠；`bcmp` 只承诺零/非零，不能依赖符号排序。
+
+```c
+unsigned char src[4] = {10, 0, 0, 7}, dst[4];
+memcpy(dst, src, sizeof(src));          // 得到 0A 00 00 07
+// 字符串拷贝会在第一个 00 处结束，不能复制二进制地址。
+int same_endpoint = a.sin_family == b.sin_family &&
+                    a.sin_port == b.sin_port &&
+                    a.sin_addr.s_addr == b.sin_addr.s_addr;
+```
+
+这里比较的是同一协议族 IPv4 端点；IPv6 还要考虑 scope 等语义。整块 `memcmp(&a,&b,sizeof(a))` 可能因填充不同而“不等”，不能替代字段比较。先清零对象让保留区确定，但不能声称保留字节非零就会连错地址。实验切换保留区时，八个保留格中偏移 8–11 的四格变化，而端口尺不动；这是对象表示和协议语义的区别。
+
+## 3.6 inet_aton、inet_addr和inet_ntoa函数
+
+`inet_addr` 返回 IPv4 网络序地址，但失败返回 `INADDR_NONE`，与合法的 `255.255.255.255` 冲突。`inet_aton` 将成功状态（非零）与写入的地址分开，返回 0 表示失败，从而避免这项歧义，但仍只有 IPv4；某些历史实现接受缩写、八进制或十六进制，不能假定它的语法与 `inet_pton` 完全相同。`inet_ntoa` 返回内部字符串，后续调用可能覆盖它；不要存两个返回指针就以为保存了两份文本。
+
+实验选择 `255.255.255.255`，四格都是 FF，但它仍是合法 IPv4 文本；选择 `999.0.0.1` 则必须停止使用地址对象。两个例子说明“能否解析”不能靠地址数值是否全 1 判断。这里仅核验转换行为，不声称广播地址可以用于建立普通 TCP 连接。练习一要求保留这两项回归输入。
+
+## 3.7 inet_pton和inet_ntop函数
+
+这里的<Term def="文本与网络序二进制地址之间的转换">地址文本转换</Term>
+由 `inet_pton` 与 `inet_ntop` 完成。`pton` 返回 1 表示成功，0 表示文本不合法，-1
+表示地址族等错误并设置 `errno`；不要只检查“不是
+-1”。目标空间要能容纳该族地址：IPv4 4 字节，IPv6 16 字节。
+
+```c
+struct in_addr ip;
+int rc = inet_pton(AF_INET, "10.0.0.7", &ip);
+if (rc != 1) { /* rc==0: 修文本；rc==-1: 查 errno；此分支终止 */ }
+else {
+    char out[INET_ADDRSTRLEN];          // IPv4 最长字符串连 NUL 共 16
+    if (inet_ntop(AF_INET, &ip, out, sizeof(out)) == NULL) {
+        /* ENOSPC: 输出空间不足；EAFNOSUPPORT: 不支持的地址族 */
+    } else { /* out 现在才是可使用的 NUL 结尾文本 */ }
+}
+```
+
+`ntop` 输入是二进制地址，不是整个 `sockaddr_in`，`size` 是输出文本缓冲区的真实大小，不是输入地址长度。`10.0.0.7` 有 8 个可见字符，需要 9 字节含 NUL；`255.255.255.255` 需要 16。实验标尺显示这条边界，通用 IPv4 代码仍应分配 `INET_ADDRSTRLEN`，IPv6 用 `INET6_ADDRSTRLEN`（46）。空间不足返回 NULL，不是可消费的截断字符串；未成功前不要读取结果。小容量模型及宿主机实测不是对所有 libc 的额外承诺。
+
+## 3.8 sock_ntop和相关函数
+
+`sock_ntop` 是书中地址格式化辅助函数的名字，**不是 POSIX API**。它接收通用地址和长度，按地址族选择处理，把重复的分支收在一处。相关比较、端口提取与赋值辅助函数同样必须遵守各族布局，不能把任意 `sockaddr *` 都当成 `sockaddr_in *`。
+
+设计自己的包装时，先检查长度够不够，再读取 family 和具体成员；从网络序端口恢复主机值时用 `ntohs`。日志中 IPv6 端点常写成 `[地址]:端口`，方括号消除地址内部冒号与端口分隔符的歧义。地址文本容量常量不包括追加端口的额外空间，必须重新计算完整格式所需长度。
+
+原书不同辅助实现的静态缓冲、返回错误和线程安全契约，应阅读所用版本代码后确认。本章不复制原书实现，也不声称获取了正文改编授权。实验“长度与缓冲区”同时绘制纯地址与“IPv4 地址:端口”的需求宽度：`10.0.0.7:8080` 需要 14 字节，而仅地址需要 9 字节。容量在 9–13 之间时，上面的纯地址文本够用，下面的完整端点仍不足；练习二要求解释这段差异。下图采用自写格式化契约，不声称执行了原书包装器。
+
+## 3.9 readn、writen和readline函数
+
+这里用<Term def="循环累计字节数直到目标、EOF 或错误">短计数循环</Term>
+处理 `read` / `write` 的部分成功。TCP
+没有应用消息边界，成功一次只表示返回计数那么多字节。定长 `readn`、`writen`
+和按行 `readline` 是辅助函数而非系统调用。实验展示 AB、换行、CDE
+六字节，每一步推进指针，缺失部分仍空着。
+
+以下是独立编写的阻塞式定长读取核心；调用方需保证目标内存足够，且 n 不超过 `SSIZE_MAX`。错误返回 -1 的简化契约会丢失“本次出错前已读多少”的返回信息，所以它不能直接充当可恢复的非阻塞状态机。
+
+```c
+ssize_t read_exact(int fd, void *buf, size_t n) {
+    size_t done = 0;
+    while (done < n) {
+        ssize_t r = read(fd, (char *)buf + done, n - done);
+        if (r > 0) { done += (size_t)r; continue; }
+        if (r == 0) break;              // 正请求长度的流 EOF
+        if (errno == EINTR) continue;   // 没有进展，原位置重试
+        return -1;                     // 包括 EAGAIN：本函数不负责等待
+    }
+    return (ssize_t)done;
+}
+```
+
+`writen` 同样推进源指针和剩余量；正请求下若 write 返回 0，不能无限空转，应作为无进展失败处理。发生 EPIPE 时还可能收到 SIGPIPE，要在程序层明确处理。非阻塞 EAGAIN 需要保存进度、等待可写后再继续，不是立刻无限重试。
+
+`readline` 的停止条件是换行、容量上限或 EOF。常见契约保留换行、另加 NUL，计数不含 NUL；但应核对所用实现。内部缓冲可能预读下一行，不能与绕过该缓冲的 `read` 随意混用。达到容量而未见换行只是行片段，不是完整一行。
+
+### 返回 0：必须连同调用条件解释
+
+请求长度大于零的 TCP `read` 返回 0，表示入站字节读尽后的有序 EOF；对端可能只关闭写方向，本端仍可发送。零长度 `read(fd, buf, 0)` 返回 0 不能据此判断关闭。UDP `recvfrom` 返回 0 可以是完整的空数据报，不能套用 TCP EOF 规则。实验空信封会移动到接收侧，虽然载荷宽度为零，接收事件确实发生了。
+
+## 交互实验：先预测，再按字节和长度核对
+
+**猜一猜：**端口 8080 漏掉 `htons` 后连线会怎样改变？再将地址输出容量从 16 调到 4，返回长度是否也会变成 4？最后让读取在两字节后遇到 EOF，目的缓冲区能否填满？
+
+<Unp03AddressBytesLab />
+
+1. 在“地址字节”比较两种 ABI；打开漏转换，再试 0、65535 观察会掩盖错误的边界；输入非法文本后应停止消费地址。保留区非零不是连接失败模拟。
+2. 在“长度与缓冲区”分别试容量 0、4、8、9、16；选择 `10.0.0.7`，单步观察地址结构长度与文本空间的不同契约。空格、缺失格、NUL 需求由图形表示，不能只看一句成功提示。
+3. 在“短读写”改变每次处理量，手动步进到完成或 EOF；切换 readline 看换行终点，切换 UDP 看零字节也有一次接收。全局重置必须恢复默认 ABI、地址、端口、容量、操作、故障、帧和暂停状态；减少动态效果时仅手动步进。
+
+## 把字节图落回 C 初始化代码
+
+初始化顺序是确定对象、指定协议族、转换端口、解析地址、检查状态，然后才交给连接函数。以下聚焦地址准备；实际程序须检查 `socket` / `connect` 并在所有结束路径关闭描述符，不假设存在测试服务器。
+
+```c
+struct sockaddr_in serv;
+memset(&serv, 0, sizeof(serv));
+#if defined(__APPLE__) || defined(__FreeBSD__)
+serv.sin_len = sizeof(serv);            // 本示例列举的平台，不穷举 BSD
+#endif
+serv.sin_family = AF_INET;
+serv.sin_port = htons(8080);
+int ok = inet_pton(AF_INET, "10.0.0.7", &serv.sin_addr);
+if (ok != 1) { /* 报错并停止，不能继续 connect */ }
+else if (connect(fd, (struct sockaddr *)&serv, sizeof(serv)) < 0) {
+    /* 按 errno 诊断，并按所有权释放 fd */
+}
+```
+
+同一地址字段在两种平台上都是 `1F 90 0A 00 00 07`；只比较这六字节不能证明整个结构体 ABI 相同。实验是确定性的字节模型，不会替你真实调用 `connect`，也不会把填充字节误画成网络载荷。
 
 ## 常见误区
 
+<Callout type="trap" title="误区一：开发机上正确，就可以省掉 htons">
+**现象 →** 换小端主机后尝试连接 36895 而不是 8080。
 
-## 四类样本与验收
+**原因 →** 直接赋整数形成 `90 1F`，网络序解释已改变；对称字节测试可能掩盖问题。
 
-| 样本 | 只改变什么                 | 必查证据              | 通过条件   |
-| ---- | -------------------------- | --------------------- | ---------- |
-| 基线 | 固定网络、地址与输入       | API、状态、队列与分组 | 与预测一致 |
-| 边界 | 缓冲、MTU、并发或时序      | 首个阻塞、截断或拒绝  | 边界可解释 |
-| 故障 | 丢包、复位、信号或路径故障 | errno、首包与责任层   | 故障可定位 |
-| 恢复 | 关闭、回收、撤销网络设置   | 残留端点与同输入重放  | 回到基线   |
+**修法 →** 用 `htons`，并用 8080 这样的非对称输入测试实验中的连线和端口尺。
 
-## 练习
+</Callout>
 
+<Callout type="trap" title="误区二：len 返回 16，所以缓冲区必有 16 字节">
+**现象 →** 容量 4 的地址缓冲区在成功调用后仍被当作完整地址读取。
 
-## 小结
+**原因 →** 返回长度可以是未截断地址的长度，并不是复制量。
 
-- 套接字地址结构：连接“解析监听地址”的接口、状态与分组证据。
-- 值-结果参数：连接“创建绑定监听”的接口、状态与分组证据。
-- 字节排序函数：连接“接受连接”的接口、状态与分组证据。
-- 字节操纵函数：连接“传输字节流”的接口、状态与分组证据。
-- inet_aton、inet_addr和inet_ntoa函数：连接“处理半关闭”的接口、状态与分组证据。
-- 本页12个正式目录层级全部进入可重放网络实验链。
+**修法 →** 调用前初始化容量，成功后先比较长度与容量，再按地址族检查必要字段。
 
-## 术语表
+</Callout>
 
+<Callout type="trap" title="误区三：read 返回 0 总是断开，write 成功总是写完">
+**现象 →** 丢弃合法空数据报，或漏发消息尾部。
 
+**原因 →** 忽略传输类型、请求长度和实际返回计数。
+
+**修法 →** 流与数据报分开解释；循环按正计数推进，EOF、EINTR、EAGAIN 和其他错误各自处理。
+
+</Callout>
+
+## 3.10 小结
+
+检查套接字调用时，不要只问返回值“是不是错误”。地址准备要确认布局与字节序，地址输出要确认真实容量和返回长度，数据传输要确认累计进度及终止原因。三个实验模式分别呈现这三种契约，不能互相代替：一个文本输出成功并不证明地址对象完整，一个写循环完成也不证明对端应用已处理。
+
+- 布局按目标 ABI；端点相等不等于对象字节相等。
+- 先检查转换状态、真实容量和返回长度，再使用结果。
+- 8080 应为 1F 90；短计数必须累计，零返回须看上下文。
+
+### 原始概念与实验、练习的对应
+
+下表保留 manifest 中的原始概念名称。编号同时指向上文同名小节；“对照推理”不是执行了原书函数的声明。实验只模拟明确标出的 ABI、容量和调用轨迹，不执行历史接口或原书包装器。
+
+| 原始概念名称                            | 实质解释与图中可验证的对象                                                                                                           | 练习回收                                 |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| 3.1 概述                                | 标签、空间、进度是不同契约；依次切换三个模式，对照字节格、容量格与指针                                                               | 1–3：先判断所修复的是哪一层              |
+| 3.2 套接字地址结构                      | 通用指针不转换对象；切换 ABI，观察 `sin_len/family` 两格而非修改网络字段                                                             | 1：写出两种首行并判断字段相等            |
+| 3.3 值-结果参数                         | 容量是输入，实际地址长度是输出；容量 4 时缺失格子仍缺失，返回长度为 16                                                               | 2：检查状态、长度和必要成员范围          |
+| 3.4 字节排序函数                        | 16/32 位转换有方向；漏 `htons` 改变交叉连线和端口尺，0/65535 会掩盖故障                                                              | 1：算出 8080 与 36895，解释反例          |
+| 3.5 字节操纵函数                        | 定长复制不能遇 00 停止；保留区偏移 8–11 的四格改变但端点不变，重叠复制另须 `memmove`                                                 | 1：区别字段相等、对象相等和复制前提      |
+| 3.6 inet_aton、inet_addr和inet_ntoa函数 | 状态与数据混合导致歧义、内部字符串有生命周期；对照图中广播 FF 与非法输入，推理旧接口不能只检查全 1；不模拟历史解析器                 | 1：区分失败信号，并保存两次文本结果      |
+| 3.7 inet_pton和inet_ntop函数            | 1/0/-1 是解析状态，NULL 是格式化失败；从二进制格到文本容量标尺，8/9 字节边界含 NUL                                                   | 2：判断哪些输出可消费                    |
+| 3.8 sock_ntop和相关函数                 | 通用地址按族分派，格式化、比较与端口处理不能绕过布局和所有权；对比纯地址与完整端点两条需求宽度，容量 9–13 只满足前者；图不执行包装器 | 2：计算完整端点容量并设计错误/所有权契约 |
+| 3.9 readn、writen和readline函数         | 短计数推进指针和剩余量；切换定长/按行，观察终点 6/3，注入两字节后的 EOF/EPIPE                                                        | 3：实现循环，区分无进展、重试与结束      |
+| 3.10 小结                               | 回到三层契约：不能用文本成功推断地址完整，也不能用写完推断远端处理；重置后逐层复查                                                   | 1–3：归纳每个失败应在哪层修复            |
+
+## 练习与答案
+
+<div data-unp03-exercises>
+
+<Exercises>
+
+1. **问题 1：地址表示的修改与反证。** 将 C 示例目标改成 `10.0.0.7:8080`，写出六个字段字节；去掉 `htons` 后小端主机看到哪个端口？再在实验切换 ABI、非零保留区、广播地址和非法地址，解释哪些改变对象表示、哪些使转换失败。把 `memcpy` 换成字符串复制为什么错误？对照 3.5 字节操纵函数，解释可能重叠时为何还需换用 `memmove`。对照 3.6 inet_aton、inet_addr和inet_ntoa函数，分别指出广播输入的失败判据，以及连续格式化两个地址时如何避免旧文本被覆盖。
+
+   <Answer>
+     正确字段为 `1F 90 0A 00 00 07`；漏转换变成 `90 1F 0A 00 00 07`，端口为
+     36895。macOS 示例前两字节为 `10 02`，Linux 小端为 `02
+     00`；保留区改变可导致整块 memcmp 不等，但不改变端点的
+     family、port、addr。0A 后的 00
+     是地址数据而不是结束标志，须定长复制四字节。广播文本解析成功，`999.0.0.1`
+     返回 0；不能用 inet_addr 的全 1
+     返回值区分失败与广播。修复代码须保留清零、按平台设置长度、htons 和 pton
+     成功检查；不能再对 pton 结果做 htonl。重叠区域不能使用 memcpy，应使用
+     memmove；inet_aton 用非零状态判成功，inet_addr 的全 1
+     无法区分失败与广播，inet_ntoa
+     的旧文本应在下一次调用前复制到自有缓冲区，或改用调用方提供缓冲区的接口。
+   </Answer>
+
+2. **问题 2：值-结果参数与文本容量不是同一个数字。** 合法的 4 字节接收空间调用取地址函数，成功后长度为 16，能否解析 IPv4 地址？把 `10.0.0.7` 输出到 8 与 9 字节文本缓冲区会怎样？自写格式化包装器要输出 `10.0.0.7:8080`，最少分配多少字节？结合 3.7 inet_pton和inet_ntop函数，说明解析返回 0 与格式化返回 NULL 能否继续使用输出；结合 3.8 sock_ntop和相关函数，给自写包装器规定地址族、长度、缓冲区和错误处理契约。
+
+   <Answer>
+     不能：长度大于容量表示截断，偏移 4
+     起的地址字段根本未完整写入。先判返回码，再判长度、地址族和必要成员范围。文本有
+     8 个可见字符，至少还需 1 字节 NUL；本实验及宿主 libc 的 8 字节测试返回
+     NULL/ENOSPC，9 字节容得下；通用实现用 INET_ADDRSTRLEN=16。完整端点需
+     8+1+4+1=14
+     字节。若包装返回静态缓冲，下一次调用可能覆盖旧文本；优先让调用方提供缓冲区，并返回明确状态，不能把书中
+     sock_ntop 当 POSIX 函数。pton 返回 0 时修正文本而不是消费输出，ntop 返回
+     NULL 时按 errno
+     处理；自写包装器先检查长度与地址族，再选择字段，检查整个输出容量并返回明确失败状态。它不能把任意地址结构强转成
+     IPv4 后直接读取。
+   </Answer>
+
+3. **问题 3：readn、writen和readline函数的终止条件。** 基于 `read_exact` 写阻塞式 `write_exact`；用实验模拟一次最多 2 字节、目标 6 字节。再诊断：两字节后 EOF、第二次 EINTR、EAGAIN、写入返回 0、readline 收到 AB 换行、空 UDP，各应如何处理？
+
+   <Answer>
+     写循环把 read 换成 write，源指针使用 const char 指针；正返回推进
+     done，EINTR 不改位置重试，其他错误返回 -1。正请求下返回 0
+     作为无进展失败而非空转；调用方要处理
+     SIGPIPE/EPIPE，非阻塞版本另存进度、等待就绪。正常轨迹为
+     done=2/4/6、remaining=4/2/0。读两字节后 EOF 返回
+     2，不能消费完整六字节消息；EINTR 不丢已有两字节，EAGAIN 不是 EOF。readline
+     返回包含换行的三字节，另留 NUL；空 UDP 的 recvfrom 返回 0
+     仍是一次完整消息。即使写完六字节也只代表本机接受数据，不能据此宣称远端应用已处理。
+   </Answer>
+
+</Exercises>
+
+</div>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="套接字地址结构">
+    传给套接字 API 的协议专用对象；具体大小、偏移及附加长度字段取决于目标 ABI。
+  </GlossaryItem>
+  <GlossaryItem term="值-结果参数">
+    同一个长度变量，传入时是容量，成功返回时是实际地址长度；截断时可大于复制量。
+  </GlossaryItem>
+  <GlossaryItem term="网络字节序">
+    高位字节先出现的多字节表示；端口需转换，本地地址族字段不能一律转换。
+  </GlossaryItem>
+  <GlossaryItem term="地址文本转换">
+    按地址族在可读文本和网络序二进制之间转换，必须检查状态、目标空间及文本终止符。
+  </GlossaryItem>
+  <GlossaryItem term="短计数循环">
+    每次按真实完成量推进指针，累计到所需长度或指定终点，分别处理 EOF 与错误。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与核验边界
+
+本章以 [InformIT 第三版目录](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 限定 3.1–3.10 范围，采用独立编写的解释与实验，不是逐句翻译，也不把出版社公开目录或样章当作开放改编许可证。未声称已获全书正文授权。
+
+API 事实分别核对 [POSIX accept](https://pubs.opengroup.org/onlinepubs/9799919799/functions/accept.html)、[inet_pton / inet_ntop](https://pubs.opengroup.org/onlinepubs/9799919799/functions/inet_ntop.html)、[read](https://pubs.opengroup.org/onlinepubs/9799919799/functions/read.html)、[write](https://pubs.opengroup.org/onlinepubs/9799919799/functions/write.html) 和 [memcpy](https://pubs.opengroup.org/onlinepubs/9799919799/functions/memcpy.html)。历史接口差异参考 [Linux man-pages inet](https://man7.org/linux/man-pages/man3/inet.3.html)；macOS 布局参考 [Apple XNU in.h](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/netinet/in.h) 并与本机头文件计算结果交叉核对。标准文本与平台实现分别标注，不能把 macOS 实测当成 Linux 或所有 Unix 的行为保证。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="W. Richard Stevens, Bill Fenner, Andrew M. Rudoff, UNIX Network Programming, Volume 1: The Sockets Networking API, Third Edition"
+  adaptedUrl="https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
+/>
