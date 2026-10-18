@@ -3,75 +3,489 @@ title: "第6章 存储数据"
 type: C
 section: "Go Web编程 · 展示与数据"
 order: 6
-description: "比较内存、CSV、gob、SQL关系与映射器，建立CRUD、事务和资源生命周期证据。"
+description: "从内存、CSV与gob快照到SQL父子行，追踪数据寿命、CRUD、事务结果与资源所有权。"
 demo: true
 math: false
+practiceMode: code
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-6"
-draft: false
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+draft: true
+qualityVersion: 2
 ---
 
+import {
+  GwpDatabaseLab,
+  GwpMapperLab,
+} from "@/components/mdx/go-web-programming/gwp-database-lab";
 
-## 从数据需要活多久开始
+## 学习目标
 
-先预测：把论坛主题保存在map中，进程重启后是否仍存在？不会。先决定寿命、容量、查询和并发，再选择介质。
+本章围绕同一篇帖子，从进程内保存走到数据库父子表；验收标准不是“写入函数没报错”，而是能说明数据何时可确认、错误往哪里返回、资源由谁释放。
 
+<Objectives>
 
-## 内存存储
+- 能实现带同步的内存存储及 CSV、gob 往返，修改坏输入或失败输出并解释错误。
+- 能改出帖子与评论的事务写入，逐项核查参数化、CRUD、游标关闭和父子关系。
+- 能回答：读到了刚写入的帖子，但 Commit 返回错误，此时能否宣布保存成功并自动重试？
 
-Struct、slice和map提供低延迟，但状态只存在于进程内。适合缓存、测试替身或临时状态；多goroutine读写必须同步，快照与恢复要另行设计。
+</Objectives>
+
+## 直觉：写完不等于留下来
+
+写下的帖子暂时出现在屏幕上，并不意味着关掉程序以后还能找回来。若没有独立的保存步骤，一次重启就可能让所有人的劳动消失。
+
+另一种麻烦是只保存了一半：帖子留下了，评论却丢了。我们需要分清“正在处理”“已确认保存”和“结果尚不确定”，而不是用一个绿色勾号概括一切。
+
+## 存储数据：先选择寿命，再选择接口
+
+存储数据要回答四件事：需要活多久、谁能同时修改、如何查找、失败后能否恢复。同一个 `Post` 可以放在内存、文件或 SQL 表中，但三者的失败语义并不相同；统一接口不能把这些差异抹平。
+
+| 介质               | 保存动作                 | 重启后                 | 主要责任                   | 本章可核查路径                  |
+| ------------------ | ------------------------ | ---------------------- | -------------------------- | ------------------------------- |
+| 内存存储           | 修改 map                 | 丢失，除非另有恢复     | 并发同步、返回副本         | `TestMemoryConcurrent`，问题 1  |
+| CSV / gob 文件存储 | 编码到流，再完成文件提交 | 取决于文件提交是否完成 | 编码、Flush、Close、耐久性 | 往返及写入失败测试，问题 1      |
+| Go 与 SQL          | 参数化语句及事务提交     | 取决于数据库确认及配置 | 错误、连接池、事务、游标   | 资源实验及 SQL 契约测试，问题 2 |
+
+下列 Go 代码块按正文顺序拼接就是标准库实验包，使用 **Go 1.26.0**。它们是现代独立示例，不是 2016 年原书代码。外部映射器代码特意标为 `text`，不混入可执行标准库实验。
+
+```go
+package storage
+
+import (
+    "context"
+    "database/sql"
+    "encoding/csv"
+    "encoding/gob"
+    "errors"
+    "fmt"
+    "io"
+    "strconv"
+    "sync"
+)
+
+type Post struct {
+    ID int64
+    Title string
+}
+```
+
+## 内存存储：同步保护的范围要包含读和写
+
+内存存储不需要编码或连接驱动，适合短期状态与缓存。这里用 <Term def="让共享数据的读写按约定互斥，避免并发访问互相破坏。">同步</Term> 保护 map；读写必须遵守同一把锁，而非只给写操作加锁。锁不是持久化机制，进程退出后数据仍会消失。
 
 ```go
 type MemoryStore struct {
     mu sync.RWMutex
-    threads map[int]Thread
+    posts map[int64]Post
+}
+func NewMemoryStore() *MemoryStore {
+    return &MemoryStore{posts: make(map[int64]Post)}
+}
+func (m *MemoryStore) Put(p Post) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.posts[p.ID] = p
+}
+func (m *MemoryStore) Get(id int64) (Post, bool) {
+    m.mu.RLock()
+    defer m.mu.RUnlock()
+    p, ok := m.posts[id]
+    return p, ok
 }
 ```
 
-## CSV与Gob文件存储
+本例返回只含整数和字符串的值副本，调用者改标题不会修改 map 中的记录。若将来加入 slice、map 或指针，浅拷贝不再隔离底层可变数据。不得复制已使用的锁，也不要在持锁期间做慢速文件或网络访问。实验最后的“模拟进程重启”清空草稿，问题 1 用并发测试检验另一条边界：同步正确不代表保存长久。
 
-CSV便于交换和检查，gob保留Go类型信息但与Go结构耦合。不能直接覆盖唯一好文件；部分写入、进程崩溃和schema变化都要测试。
+## CSV与gob文件存储：编码只是中间步骤
 
-```go
-tmp, err := os.CreateTemp(dir, "threads-*.tmp")
-if err != nil { return err }
-defer tmp.Close()
-// encode, sync, close, then rename
-```
+文件存储把内存状态变成字节。这里的 <Term def="在某一时刻把一组记录编码成可供以后恢复的数据。">快照</Term> 只承诺捕获的记录集合，不自动包含并发一致性、原子替换或磁盘耐久性。先在锁内复制数据，再在锁外编码，可避免把慢磁盘变成全局锁。
 
-## Go与SQL
+### 读取和写入 CSV 文件
 
-database/sql是连接池和查询抽象，`*sql.DB`不是单连接。要求使用占位参数、区分ErrNoRows、检查Rows.Err并关闭Rows。
-
-
-## CRUD与事务
-
-Create、retrieve、update、delete必须定义未找到、重复键和并发更新行为。由BeginTx、Commit和Rollback明确拥有，不能跨请求泄漏。
+CSV 适合表格交换，但字段都是文本，数字类型和列顺序必须由应用约定。不要按逗号手工拆分：标题可能含逗号、引号或换行。`csv.Writer` 会缓冲，最后必须 `Flush`，再查看 `Error`；只检查 `Write` 不足以发现底层写入失败。
 
 ```go
-tx, err := db.BeginTx(ctx, nil)
-if err != nil { return err }
-defer tx.Rollback()
-if _, err := tx.ExecContext(ctx, query, args...); err != nil { return err }
-return tx.Commit()
+func WriteCSV(w io.Writer, posts []Post) error {
+    cw := csv.NewWriter(w)
+    if err := cw.Write([]string{"id", "title"}); err != nil {
+        return err
+    }
+    for _, p := range posts {
+        if err := cw.Write([]string{
+            strconv.FormatInt(p.ID, 10), p.Title,
+        }); err != nil { return err }
+    }
+    cw.Flush()
+    return cw.Error()
+}
 ```
 
-## SQL关系
+读取时既校验列数，也校验列名及 ID。这样损坏文件不会悄悄变成零号帖子；这里接受重复 ID 的多条记录，若导入唯一键仓库，应再做重复检查，不要让 map 覆盖掩盖输入问题。
 
-用户、主题和回复通过主外键连接，一对多与多对多影响查询和删除规则。应由数据库约束与应用验证双层保护。
+```go
+func ReadCSV(r io.Reader) ([]Post, error) {
+    cr := csv.NewReader(r)
+    cr.FieldsPerRecord = 2
+    records, err := cr.ReadAll()
+    if err != nil { return nil, err }
+    if len(records) == 0 || records[0][0] != "id" ||
+        records[0][1] != "title" {
+        return nil, fmt.Errorf("invalid CSV header")
+    }
+    posts := make([]Post, 0, len(records)-1)
+    for _, record := range records[1:] {
+        id, err := strconv.ParseInt(record[0], 10, 64)
+        if err != nil { return nil, err }
+        posts = append(posts, Post{ID: id, Title: record[1]})
+    }
+    return posts, nil
+}
+```
 
-## Go关系映射器
+### gob 包：类型信息与恢复边界
 
-Mapper可减少扫描和SQL样板，但可能隐藏N+1查询、事务和字段映射。要求日志或测试能观察执行SQL数量和参数。
+gob 面向 Go 值传输，能保留整数等类型，并按结构体导出字段匹配。它不是供电子表格编辑的格式，也不是对任意结构修改都向后兼容的承诺；修改字段类型需要版本迁移测试。解码不可信输入还有资源消耗风险，不能把本例当作安全文件上传解析器。
 
+```go
+func WriteGob(w io.Writer, posts []Post) error {
+    return gob.NewEncoder(w).Encode(posts)
+}
+func ReadGob(r io.Reader) ([]Post, error) {
+    var posts []Post
+    if err := gob.NewDecoder(r).Decode(&posts); err != nil {
+        return nil, err
+    }
+    return posts, nil
+}
+```
 
-## 验收实验：同一仓库三种实现
+这两组函数只借用 `io.Reader` / `io.Writer`，**不关闭调用者传入的文件**。真正落盘时，文件所有者应：在目标目录创建临时文件 → 编码成功 → 检查文件 `Sync` 与 `Close` → 替换目标文件 → 按平台需要同步目录；任一步失败都不能报告已完成。重命名的原子性、已有目标的替换行为及崩溃耐久性依赖平台，不能用字节缓冲区往返来证明。问题 1 要求保留唯一好快照，不能先截断它再试着编码。
 
-为Thread仓库定义同一接口，分别实现内存、文件和SQL版本；运行共享契约测试。注入并发写、部分文件写、ErrNoRows、扫描失败和Commit失败，确认每种实现返回一致领域结果且不泄漏资源。
+## Go与SQL：连接、CRUD与事务资源
 
+Go 与 SQL 的衔接由 `database/sql` 和具体驱动共同完成：前者管理连接池与通用接口，后者实现数据库协议和方言。`*sql.DB` 通常由应用长期持有，不是每个请求新建的一条连接；调用 `Open` 成功也不等于服务器可达。
 
-## 本章回顾
+### 设置数据库：先准备环境和 schema
 
-本章覆盖内存存储、CSV与gob文件、Go与SQL、SQL关系、Go关系映射器和CRUD。正确存储选择由生命周期与查询驱动，正确实现由原子提交、资源关闭和故障证据证明。
+以下是 **PostgreSQL 18 文档语境下的操作说明，不是本章已执行的安装记录**：安装与你的平台匹配的 PostgreSQL、启动服务、创建最小权限应用角色及 `chitchat` 数据库，再用 `psql` 以获准账号执行 schema。连接信息通过环境或密钥配置提供，不写进源码。建库失败先检查服务、端口、角色与权限，不要把连接错误误判为 Go 语法错误。
 
+```sql
+CREATE TABLE posts (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title TEXT NOT NULL
+);
+CREATE TABLE comments (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE RESTRICT,
+    body TEXT NOT NULL
+);
+```
+
+将上面的 DDL 保存为 `schema.sql` 后，可以按下面的操作示意建库并应用 schema。前提是服务已启动、`app_owner` 角色已由管理员创建且具有建库权限；这是迁移账号，日常服务应另用受限账号。以下命令未执行。
+
+```sh
+createdb --host=127.0.0.1 --username=app_owner chitchat
+psql --host=127.0.0.1 --username=app_owner \
+  --set=ON_ERROR_STOP=1 --file=schema.sql chitchat
+```
+
+顺序是先父表、后子表，逆序清理。`NOT NULL` 仅排除空值，并不排除空字符串。生产还需迁移、备份、权限和约束策略；本章没有 PostgreSQL 服务集成证据，后面的 fake driver 不解析或验证这段 DDL。
+
+### 连接数据库：Open、Ping 和 Close 的所有权
+
+下面把驱动名作为参数；真实应用必须先引入并注册实际驱动，而标准库本身不附带 PostgreSQL 驱动。`OpenStore` 负责失败时释放刚创建的池，成功时把池的所有权交给应用；应用关闭时才 `Close`，不是每个查询完就关池。
+
+```go
+func OpenStore(ctx context.Context, driverName, dsn string) (*sql.DB, error) {
+    db, err := sql.Open(driverName, dsn)
+    if err != nil { return nil, err }
+    if err := db.PingContext(ctx); err != nil {
+        return nil, errors.Join(err, db.Close())
+    }
+    return db, nil
+}
+```
+
+给连接、查询设置 context 截止时间并按负载配置连接池上限。驱动可能不支持某些超时或隔离级别；用真实服务测试，不能从接口存在推导其实现。练习 2 先让 Ping 返回错误，再确认没有遗留打开连接。
+
+### 创建帖子：父子写入属于同一个事务
+
+这里的 <Term def="把相关数据库操作归入一个提交或回滚边界；提交结果必须单独检查。">事务</Term> 要通过同一个 `*sql.Tx` 发出全部相关查询。下面利用 PostgreSQL 的 `RETURNING id`
+得到父键，再传给评论；`$1`
+是参数位置，不是字符串替换。标题即使包含引号，也只作为数据传入。
+
+```go
+func CreatePostAndComment(ctx context.Context, db *sql.DB,
+    title, body string) (int64, error) {
+    tx, err := db.BeginTx(ctx, nil)
+    if err != nil { return 0, err }
+    defer tx.Rollback()
+    var id int64
+    err = tx.QueryRowContext(ctx,
+        "INSERT INTO posts(title) VALUES ($1) RETURNING id",
+        title).Scan(&id)
+    if err != nil { return 0, err }
+    _, err = tx.ExecContext(ctx,
+        "INSERT INTO comments(post_id,body) VALUES ($1,$2)", id, body)
+    if err != nil { return 0, err }
+    if _, err = AllPosts(ctx, tx); err != nil { return 0, err }
+    if err := tx.Commit(); err != nil { return 0, err }
+    return id, nil
+}
+```
+
+为对照实验，这里在事务内读取列表作检查；普通创建业务不必额外全表查询。`Commit` 成功后 deferred `Rollback` 不会再回滚已提交数据；提交失败时也不能假设再调用它就能证明数据库没写入。网络断开可能使结果不确定，应使用业务唯一标识核对，避免盲目重试生成重复帖子。提前失败时本例保留原错误，deferred rollback 是释放兜底，不代表 rollback 错误已被审计。
+
+### 检索帖子：没有记录不是空帖子
+
+单条检索把错误延迟到 `Scan` 返回；`sql.ErrNoRows` 表示查询无匹配行。不要把它与类型转换错误、连接错误都压成“查不到”，也不要读一个零值 `Post` 后当作真实记录返回。
+
+```go
+func FindPost(ctx context.Context, db *sql.DB, id int64) (Post, error) {
+    var p Post
+    err := db.QueryRowContext(ctx,
+        "SELECT id,title FROM posts WHERE id=$1", id).
+        Scan(&p.ID, &p.Title)
+    if err != nil { return Post{}, err }
+    return p, nil
+}
+```
+
+### 更新帖子：检查受影响行数
+
+更新是显式修改已知字段，不是把整个对象的默认值写回。这里没有版本号检查，所以**不防止并发请求的最后写覆盖**；需要乐观并发控制时，应把旧版本加入 `WHERE`，并区分不存在与版本冲突。
+
+```go
+func UpdatePost(ctx context.Context, db *sql.DB, p Post) error {
+    result, err := db.ExecContext(ctx,
+        "UPDATE posts SET title=$1 WHERE id=$2", p.Title, p.ID)
+    if err != nil { return err }
+    return requireAffected(result)
+}
+func requireAffected(result sql.Result) error {
+    n, err := result.RowsAffected()
+    if err != nil { return err }
+    if n == 0 { return sql.ErrNoRows }
+    return nil
+}
+```
+
+### 删除帖子：数据库关系会拒绝不完整删除
+
+删除也必须检查错误与影响行数。schema 使用 `RESTRICT`，因此有评论的帖子不能直接删除。若业务允许整体删除，需要明确先删评论、再删帖子并放在同一事务中，或经过设计才改成级联；不应在遇到外键错误时关闭约束。
+
+```go
+func DeletePost(ctx context.Context, db *sql.DB, id int64) error {
+    result, err := db.ExecContext(ctx,
+        "DELETE FROM posts WHERE id=$1", id)
+    if err != nil { return err }
+    return requireAffected(result)
+}
+```
+
+### 获取所有帖子：Next、Scan、Err 和 Close 各司其职
+
+这里的 <Term def="逐行读取查询结果并占有底层读取资源的对象，本例是sql.Rows。">游标</Term> 不是普通 slice。`Next=false` 可能是正常结束，也可能是网络读取失败；必须看
+`Rows.Err`。`Scan` 失败立即返回，deferred `Close`
+负责提前退出时释放资源。把成功部分作为完整列表返回会隐瞒数据缺失。
+
+```go
+type PostQuerier interface {
+    QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+func AllPosts(ctx context.Context, q PostQuerier) (posts []Post, err error) {
+    rows, err := q.QueryContext(ctx, "SELECT id,title FROM posts ORDER BY id")
+    if err != nil { return nil, err }
+    defer func() { err = errors.Join(err, rows.Close()) }()
+    posts = make([]Post, 0)
+    for rows.Next() {
+        var p Post
+        if err := rows.Scan(&p.ID, &p.Title); err != nil {
+            return nil, err
+        }
+        posts = append(posts, p)
+    }
+    if err := rows.Err(); err != nil { return nil, err }
+    return posts, nil
+}
+```
+
+`AllPosts` 可接受 DB 或 Tx；它拥有查询得到的 Rows，不拥有传入的池或事务。正常耗尽结果时 `database/sql` 自动关闭 Rows，显式 defer 仍是必要的提前返回保障。这里将关闭错误并入返回错误；调用者必须先看 `err`，不能在错误非空时使用结果。问题 2 用 fake driver 分别制造 Scan、迭代、Close 和 Commit 错误。
+
+## SQL关系：同一数据库中的一对多
+
+SQL关系由表约束表达，不是把 Go 指针写进数据库。本章两张表属于同一数据库，不需为每种实体创建一个独立数据库。`comments.post_id` 是 <Term def="要求子表的引用值指向父表已有键的数据库约束。">外键</Term>：在 `NOT NULL` 下，每条评论必须指向恰好一篇帖子；一篇帖子可以有零条到多条评论。
+
+```text
+posts.id=41          comments
+[第一篇帖子] 1 ──┬── [id=7, post_id=41]
+                 └── [id=8, post_id=41]     0..N
+posts.id=42
+[没有评论]   1 ────── 空集合               0..N
+```
+
+需要保留无评论帖子时用 `LEFT JOIN`，并处理子列的 SQL NULL（如 `sql.NullInt64`），不要把 NULL 扫到普通整数。内连接只返回有匹配的父子行；连接结果的帖子会重复，组装父对象时要按主键归并。图中的 `post_id=99` 故障就是“引用不存在的父键”，不是“多了一条合法评论”。问题 3 核查基数、删除规则与映射器的额外查询。
+
+## 交互实验：存储生命周期与事务资源账本
+
+先预测：把故障设为 **Commit 失败**，前面已经 Scan 到帖子，持久化确认区应显示“已确认”还是“结果未知”？单步操作会实际改变父子行、连接占用、游标及确认区；不是换一段介绍文本。最后重置全部参数，再比较无故障路径中的模拟重启。
+
+<GwpDatabaseLab />
+
+实验固定父键 41、评论键 7，用于看清关系，不模拟真实 ID 分配器。约束失败等路径按教学规则成功回滚；真实回滚失败、进程崩溃、数据库隔离和并发竞争不在这个图的证明范围。界面可以纯键盘单步，无计时器；下方完整事件可逐条核对。
+
+## Go关系映射器：Sqlx与Gorm省掉什么，没有省掉什么
+
+Go关系映射器减少字段扫描和查询样板，但不会让 SQL 关系、错误和事务消失。这里比较 **sqlx v1.4.0** 与 **GORM v1.31.1** 的传统 API；这是固定版本官方源码核对，不是安装或运行记录，也不把它们当成 2016 年版本。
+
+### Sqlx：保留 SQL，增加字段映射
+
+sqlx 扩展 `database/sql`。`GetContext` 适合单条记录，`SelectContext` 将多行装入 slice，并在其内部扫描路径关闭 Rows；如果自己使用 `QueryxContext`，仍要自己结束 Rows。结构体字段可用 `db` 标签对应列名；缺少对应字段可能产生映射错误。它并不自动识别一对多对象图。
+
+```text
+// sqlx v1.4.0 API示意，未安装或执行
+var p struct {
+    ID    int64  `db:"id"`
+    Title string `db:"title"`
+}
+err := xdb.GetContext(ctx, &p,
+    "SELECT id,title FROM posts WHERE id=$1", id)
+// 先检查err；无记录为sql.ErrNoRows。
+// SelectContext可取父/子列表，再按post_id分组。
+```
+
+### Gorm：对象查询仍有错误与关系成本
+
+GORM 传统 API 把结果错误放在返回对象的 `.Error`。`First` 在没有记录时报告 `ErrRecordNotFound`，而批量 `Find` 的空结果不等价于该错误。不要用 `Save` 代替“仅更新已存在记录”：该版本的 Save 在更新影响零行时可能转为创建。采用显式条件和字段集合更能表达意图。
+
+```text
+// GORM v1.31.1传统API示意，未安装或执行
+err := gdb.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+    if err := tx.Create(&post).Error; err != nil { return err }
+    comment.PostID = post.ID
+    return tx.Create(&comment).Error
+})
+// 必须检查Transaction返回值，包括Commit错误。
+// 禁止在回调内误用外部gdb代替tx。
+```
+
+`Preload` 的普通关联加载使用额外查询；逐个帖子自行查询评论会产生 N+1 访问。schema 的外键与删除策略要显式迁移并核查，而非只写 Go 关联字段。问题 3 要求预先写出期望 SQL、参数、查询次数及空结果规则，再选择映射器，不以 API 短小代替契约测试。
+
+### 映射机制实验：字段对应与关联归组分开观察
+
+先在下面预测当前关联样本需要几次查询，再分别操作两边。sqlx 模型把 SQL 列名与 `db` 标签逐项比较：将 `title` 标签错写为 `headline`，观察映射连线中断，而不是把第二列偷偷塞进 Title。GORM 模型故意打乱子行顺序，观察子 7 按外键进入父 42，子 8、9 进入父 41；归组不是按返回顺序配对。
+
+<GwpMapperLab />
+
+这是本章 TypeScript 实际计算的教学机制，不是 sqlx/GORM 调用，也不由前面的 database/sql fake-driver 测试替它背书。固定版本源码支持其边界：默认安全映射检查未知列；普通 has-many Preload 收集父键、额外查询子表、按关联键归组。`Find` 无父行时没有关联键，跳过子查询；有父行却没有评论时仍已发出关联查询，组装为空的 Comments。SQL 列类型转换、复杂嵌入、多级关联、JOIN、查询失败等不在本模型范围。完成问题 3 后用本区 Reset 恢复全部参数，不影响上方事务实验。
+
+## 常见误区：成功信号的边界
+
+这些误区都把某个局部成功当成整个保存过程成功。请对照资源实验与代码返回值逐项区分，而不是只在日志里搜索“error”。
+
+<Callout type="trap" title="Write 返回 nil，文件就完整了？">
+
+**现象 →** CSV 看似写完，恢复时缺少末尾记录。
+**原因 →** 数据仍在缓冲区，未检查 Flush 后的 Error；文件提交也未完成。
+**修法 →** 注入失败 Writer，检查错误传播；再由文件所有者检查 Sync、Close 和替换步骤。
+
+</Callout>
+
+<Callout type="trap" title="Scan 到帖子，事务就成功了？">
+
+**现象 →** 实验已扫描 1 行，Commit 失败后仍提示保存成功。
+**原因 →** 把事务内可见性当成提交确认。
+**修法 →** 以 Commit 返回值判定；错误时保留结果未知并核对业务标识，不能盲目重试。
+
+</Callout>
+
+<Callout type="trap" title="Next 返回 false，所以列表读完了？">
+
+**现象 →** 网络读取中断，却返回一份看似正常的短列表。
+**原因 →** 没检查 Rows.Err，也可能在 Scan 失败时漏关资源。
+**修法 →** 逐项检查 Query、Scan、Err、Close；用故障路径验证连接可归池。
+
+</Callout>
+
+## 小结与练习
+
+下面三题回收介质选择、事务边界和关系映射三个目标。先写预测再展开答案；标准库测试使用显式 fake driver，不能据此宣称 PostgreSQL 的约束或耐久性已经通过。
+
+- 内存锁解决并发，文件提交解决快照保存。
+- CRUD 必须区分无记录、转换失败与执行失败。
+- 关系约束与提交确认不会被映射器免除。
+
+<Exercises>
+
+**问题 1**
+
+实现并发 Put/Get，然后把含逗号、引号、换行的两篇帖子写入 CSV 和 gob 并读回。增加失败 Writer、坏 CSV 列数、坏 ID 和截断 gob；预测每一项返回什么。若存储包含 slice，怎样避免 Get 暴露共享底层数组？能否把缓冲区测试称为文件耐久性测试？
+
+<Answer label="答案 1：往返、同步与文件责任">
+
+往返后两条 Post 的 ID 与标题应逐字段相同，CSV 必须正确引用特殊字符。坏列数、坏 ID、截断 gob 均返回错误；失败 Writer 要暴露 CSV Flush 的错误，gob Encode 也必须返回写入错误。`TestCSVRoundTripAndFailures`、`TestGobRoundTripAndFailures` 和 `TestMemoryConcurrent` 对应这些条件。含 slice 时需要在锁内深拷贝，不能只返回结构体浅拷贝。先复制、后编码；使用新临时文件，不能先清空唯一好文件。这些测试证明编码与同步边界，不证明文件系统重命名或断电后耐久性。
+
+</Answer>
+
+**问题 2**
+
+先用无故障路径单步到结束，再分别注入 Query、Scan、Rows.Err 和 Commit 失败，记录 Tx 与 Rows 是否归零。改代码：保留 Commit 的原始错误，不返回创建成功的 ID。增加 Ping 失败、单条无记录和关闭失败测试。最后判断：实验显示提交未知，直接再次创建是否安全？
+
+<Answer label="答案 2：错误不等于可安全重试">
+
+无故障时父子行从暂存区进入确认区，模拟重启只清空草稿。Query 失败没有 Rows 可关闭；Scan、Rows.Err 失败需要结束已有 Rows，并退出事务。Commit 失败显示“结果未知”，事务已经终结；deferred Rollback 不是未提交的证明。`CreatePostAndComment` 在提交错误时返回 ID 0 和原错误，业务还需唯一请求标识及核对机制。`TestSQLTransactionContract` 检查顺序与资源，`TestSQLErrorBoundaries` 检查 Ping、Scan、Rows.Err、Close 与 `sql.ErrNoRows`。fake driver 只证明客户端调用契约，不证明真实 PostgreSQL。不能无条件重试创建。
+
+</Answer>
+
+**问题 3**
+
+一篇帖子可无评论，但每条评论必须属于一篇帖子。设计两表、说明删除规则，再写更新不存在 ID 的预期。若换用 sqlx 或 GORM，哪一层还负责这些约束？列出“取 20 篇帖子及评论”的查询预算，并解释为什么不用 Save 当纯更新。再操作映射实验：错写 `db` 标签后能否交付对象？打乱评论顺序后，父 41、42 分别收到哪些评论？比较无父行与有父行但空关联的查询总数。
+
+<Answer label="答案 3：一对多与映射器契约">
+
+`comments.post_id NOT NULL REFERENCES posts(id)` 给出子到父恰好 1、父到子 0..N；本章 RESTRICT 拒绝直接删除有评论的父行。需要整体删除时在同一事务中先删子、后删父，不能关闭约束。更新不存在 ID 的影响行数为 0，本例转换成 `sql.ErrNoRows`；真实驱动错误要原样返回。sqlx 负责字段映射，不自动组装关联；可用两次集合查询，按 post_id 归组。GORM 普通 Preload 需要额外关联查询，逐条加载可能成为 1+20 次；固定模型下先设两次预算，再以真实日志验证。v1.31.1 Save 可能在更新零行时创建，所以纯更新应用显式 WHERE 和字段，并检查 Error 与 RowsAffected。数据库负责外键，业务负责策略，映射器不代替两者。实验中错标签使 `title` 没有目标字段，结果是映射错误而非成功对象；默认安全模式不能靠列位置补救。按外键归组得到父 41 的评论 `[8,9]`、父 42 的评论 `[7]`。本模型使用 Find 与普通单层 has-many Preload：无父行时 1 次父查询，跳过关联；有父行但空关联时仍为 2 次，父对象保留且 Comments 为空。这些可计算状态证明教学算法，不证明真实映射器或 PostgreSQL 已执行。
+
+</Answer>
+
+</Exercises>
 
 ## 术语表
+
+术语按正文出现顺序汇总；将“同步”“快照”和“事务”分开，才能解释为什么一个步骤成功不意味着所有层都已成功。
+
+<Glossary>
+  <GlossaryItem term="同步">
+    规定共享内存怎样被并发读写；不是重启后的保存机制。
+  </GlossaryItem>
+  <GlossaryItem term="快照">
+    某时刻记录集合的编码副本；还需要完整写入与恢复策略。
+  </GlossaryItem>
+  <GlossaryItem term="事务">
+    相关数据库操作的提交边界；必须检查最终提交结果。
+  </GlossaryItem>
+  <GlossaryItem term="游标">
+    逐行读取结果且占用资源的对象；提前退出也必须关闭。
+  </GlossaryItem>
+  <GlossaryItem term="外键">
+    让子记录引用已存在父键的约束；配合非空约束确定基数。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与实测边界
+
+章节范围依据 Sau Sheong Chang《Go Web Programming》（Manning，2016）的完整第 6 章官方目录，涵盖内存、文件、CSV、gob、SQL设置与连接、CRUD与列表、关系schema与一对多、Sqlx、Gorm和总结。只有目录可用，因此采用 independent-rewrite；没有原书正文核对或原文授权声明。
+
+- [database/sql 官方文档](https://pkg.go.dev/database/sql)、[encoding/csv](https://pkg.go.dev/encoding/csv)、[encoding/gob](https://pkg.go.dev/encoding/gob)用于接口核对；预取文档标注 Go 1.27.2，不能当成本章运行版本。本章执行版本固定 Go 1.26.0，并以本地标准库源码交叉核对。
+- [PostgreSQL 18 建库说明](https://www.postgresql.org/docs/18/tutorial-createdb.html)与[约束说明](https://www.postgresql.org/docs/18/ddl-constraints.html)支持操作与schema解释，未执行真实 PostgreSQL 集成。
+- [sqlx v1.4.0 固定版本源码](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go)及[扫描实现](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go)支持 Get、Select 和关闭责任。
+- [GORM v1.31.1 操作与事务源码](https://github.com/go-gorm/gorm/blob/v1.31.1/finisher_api.go)及[查询回调](https://github.com/go-gorm/gorm/blob/v1.31.1/callbacks/query.go)支持 First、Find、Save、Transaction 和 Preload 的说明。未安装或执行这两个外部库。
+
+完整标准库实验由正文所有 `go` 代码块原样提取；作者的 Go 1.26.0 局部测试、教学模型测试、源哈希绑定与局部 MDX SSR 记录存于仓库 `quality/artifacts/batch-37/ch06/`，不等价于真实 sqlx/GORM/PostgreSQL 整合验证。主控已确认 qV1 的 mapper 与事务实验通过真实 Chrome 三尺寸交互、键盘、Reset、reduced-motion 和人工截图验收，official 核验通过，final-qv1-r5 工程检查 13/13、actualExit=0。本次获授权晋级质量版本 2，仍保持 draft:true；既有测试与验收记录保留其原始哈希绑定，最终 qV2 新哈希验收待主控完成，尚未发布。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Go Web Programming · Chapter 6（Sau Sheong Chang，Manning，2016）"
+  sourceUrl="https://livebook.manning.com/book/go-web-programming/chapter-6"
+/>
