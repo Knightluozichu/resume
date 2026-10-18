@@ -3,70 +3,377 @@ title: "第4章 处理请求内容"
 type: C
 section: "Go Web编程 · 请求与响应"
 order: 4
-description: "处理Request、HTML表单、ResponseWriter、Cookie和基于Cookie的Flash消息。"
+description: "用字段来源流、响应提交时序与 Cookie 生命周期，实测 Go 的表单、上传、JSON 和 flash。"
 demo: true
 math: false
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gwp-04
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-4"
-draft: false
+draft: true
+qualityVersion: 2
 ---
 
+import { GwpProcessingRequestsLab } from "@/components/mdx/go-web-programming/v2/gwp-processing-requests";
 
-## 从同名参数来自哪里开始
+<Objectives>
 
-先预测：查询字符串和POST body都有`name`时，`r.FormValue("name")`能否说明值来源？不能，它合并来源并隐藏解析错误。要求按协议来源读取数据。
+- 根据方法和媒体类型，写出重复字段进入 Form、PostForm 的顺序，并指出文件与 JSON 的独立入口。
+- 为正文读取设置总量限制，区分 400、413、415 的失败分支，并验证上传文件句柄与临时文件均已清理。
+- 预测首次 Write 前后的响应状态，以及 flash 删除前后请求 B、C 的 Cookie 值，再用实验核对。
 
+</Objectives>
 
-## Request与Response结构
+## 直觉：为什么“读到了值”不等于“处理成功”
 
-Request保存method、URL、header、body、host、remote address等信息；ResponseWriter负责header、状态与body。一旦首次Write发生，默认200和当前header即被提交。
+先看一个容易误判的请求：URL 带 `name=q1&name=q2`，正文带 `name=b1&name=b2`。把它想成两张来自不同入口的登记单：名字相同不代表来源相同，也不代表只能留一个值。Go 用多值集合保留这些记录，但选择哪张登记单优先，取决于解析方式。urlencoded POST 合并时正文在前，显式解析 multipart 时查询在前；只看 `FormValue("name")` 的单个结果，会把来源和重复信息一起丢掉。
+
+“拿到值”与“整份输入合法”还是两件事。例如查询串 `name=q1&bad=%zz` 中，合法字段可以被保留下来，同时解析器报告非法转义。若用忽略错误的便利函数读取 `name`，就会把部分成功误当成整个请求通过验证。正确顺序不是“有值就入库”，而是先检查解析错误，再按接口约定检查来源、字段个数与内容；实验的故障帧因此停止业务交付，并不声称 Go 会清空已经解析的字段。
+
+再把响应看成一份即将交出的回执。最终提交前可以改状态和普通响应头；第一次 Write 若隐式提交了 200，后来发现错误再写 413，只是试图修改已经交出的回执，客户端的最终状态不会跟着变。这不是“错误处理函数没被调用”，而是调用发生得太晚。相同地，删除 flash 是在响应中请客户端更新 Cookie；请求 B 已经带来的旧值不会倒流消失，要到下一次请求 C 才能观察删除效果。
+
+下面按“值从哪来 → 是否完整验证 → 是否已经提交 → 哪次请求可见”的顺序定位错误。遇到不符合预期的结果，先指出是哪一道边界被跨过，再选择解析、拒绝、延迟提交或删除 Cookie，避免用一个万能的“重试”掩盖不同机制。
+
+## Request：地址、头与正文是不同入口
+
+服务端的 <Term def="一次 HTTP 请求的结构化表示，包含方法、地址、头和可读取的正文流">Request</Term> 不是一个统一的参数字典。`Method` 决定动作，`URL` 保存路径与查询，`Header` 描述元数据，`Body` 是待消费的流。实验的“请求字段流”用不同入口保留来源；检查值之前，先决定接口究竟允许从哪个入口取值。
+
+### URL 不只是一个字符串
+
+`r.URL.Path` 是解码后的路径，`RawQuery` 保留查询原文。查询值类型为 `url.Values`，每个键对应字符串切片；`Get` 只取第一个，无法区分缺失和显式空字符串。要区分，使用 `values, exists := q["name"]`。`r.URL.Query()` 会忽略查询解码错误；需要拒绝坏输入时显式检查 `url.ParseQuery(r.URL.RawQuery)`。例如 `%zz` 非法，但其他合法键仍可能保留，不能把部分成功当完整成功。
+
+### Header 与 Host
+
+通过 `r.Header.Get("Content-Type")` 访问头，字段名大小写不敏感；重复头用 `Values` 观察，`Get` 不是取全部值。服务端请求的主机放在 `r.Host`，不能依赖 `r.Header.Get("Host")`。`Content-Type` 可能带 `charset` 或 multipart 的 `boundary` 参数，使用 `mime.ParseMediaType`，不要直接比较完整字符串。客户端声明类型并不能证明文件内容真实可信。
+
+### Body 是流，不是可反复查询的字典
+
+读取 `Body` 会推进位置，再次 `io.ReadAll` 通常只得到空数据。先解析再把同一个流交给另一套解码器，不会自动重放。服务端会关闭请求体，但上传文件的打开句柄仍需自己 `Close`。在任何消费前包上 `http.MaxBytesReader`；它在实际读取超限时返回错误，不是赋值瞬间拒绝，也不依赖可信的 `Content-Length`。为兼容 HTTP/1.x，尽量先读完需要的输入，再开始响应。
+
+## HTML表单：编码决定正文形态，合并顺序也是接口契约
+
+HTML表单（HTML forms）把带名称的控件值组织成请求；它不是 Go 的 `Form` 集合本身。原生 HTML GET 表单把字段编码进 URL 查询串，不把这些字段放入正文；POST 表单默认使用 `application/x-www-form-urlencoded`，显式选用 `multipart/form-data` 才会把文字和上传文件组织成带 boundary 的多个部分。JSON 通常由脚本另行序列化发送，不是把 HTML 表单改成 POST 就会得到的编码。
+
+实验固定查询为 `name=q1&name=q2`，让两种 POST 编码都提交文字值 b1、b2，multipart 另外包含名为 upload 的文件字段。这样改变的是编码和解析路径，而不是悄悄改变字段值。实验中的“urlencoded GET”则是手工构造含正文的 GET 对照请求，用来验证 `ParseForm` 不消费该正文；它不是原生 HTML GET 表单的发送方式。
+
+### Form、PostForm与MultipartForm：三个容器如何连接
+
+表单不是“所有 POST 的统称”。<Term def="Request.Form 中的已解析多值集合，可同时包含查询参数和表单正文">Form</Term> 是合并结果，`PostForm` 仅含表单正文。只有方法和媒体类型符合条件，`ParseForm` 才会消费正文。下表适用于未预先解析的新请求；每格都有 Go 1.26.0 的真实测试，而不是仅凭方法名推断。
+
+| 方法 / Content-Type                       | `ParseForm` 读取 body？ | `PostForm` | `Form["name"]` 示例 |
+| ----------------------------------------- | ----------------------- | ---------- | ------------------- |
+| POST、PUT、PATCH / urlencoded             | 是                      | `[b1 b2]`  | `[b1 b2 q1 q2]`     |
+| GET、HEAD、DELETE、OPTIONS / urlencoded   | 否                      | 空集合     | `[q1 q2]`           |
+| 任意上述方法 / JSON、text/plain 或无类型  | 否                      | 空集合     | `[q1 q2]`           |
+| 任意上述方法 / multipart，仅 `ParseForm`  | 否                      | 空集合     | `[q1 q2]`           |
+| 显式 `ParseMultipartForm`，有效 multipart | 是                      | `[b1 b2]`  | `[q1 q2 b1 b2]`     |
+
+表中的 urlencoded 指 `application/x-www-form-urlencoded`，multipart 指 `multipart/form-data`。显式 multipart 解析在本次测试的方法上不受 POST/PUT/PATCH 限制；接口仍应自己限制方法。urlencoded 的正文优先，multipart 则先保留查询值，再追加正文值。`FormValue` 的优先序也是 urlencoded 正文 → 查询 → multipart 正文，不可笼统记为“POST 永远优先”。
+
+Form、PostForm与MultipartForm 回答的是不同问题：查询与正文合并后有哪些文字、仅正文有哪些文字，以及 multipart 正文包含哪些文字和文件。`Form` 和 `PostForm` 都是文字多值集合；`MultipartForm` 则是显式 multipart 解析产生的结构，内部另分 `Value` 与 `File`。对本章这些新请求，关系如下：
+
+| 路径                                  | 正文解析所得                                             | 进入 `PostForm`                | 最终进入 `Form`              |
+| ------------------------------------- | -------------------------------------------------------- | ------------------------------ | ---------------------------- |
+| urlencoded POST → `ParseForm`         | 文字 b1、b2；`MultipartForm` 为 nil                      | b1、b2                         | 正文 b1、b2 在查询 q1、q2 前 |
+| multipart POST → `ParseMultipartForm` | `Value["name"]` 为 b1、b2；`File["upload"]` 为文件头切片 | 来自 Value 的 b1、b2，不含文件 | 查询 q1、q2 在文字 b1、b2 前 |
+| multipart 只调用 `ParseForm`          | 不消费 multipart 正文，`MultipartForm` 仍为 nil          | 空                             | 只有查询 q1、q2              |
+| JSON → 独立解码器                     | 应用结构体，不是上述表单容器                             | 空                             | 调用 `ParseForm` 时只收查询  |
+
+`ParseMultipartForm` 会在需要时先调用 `ParseForm`，再解析 multipart 正文。对新请求，查询因此先进入 `Form`，随后才追加 `MultipartForm.Value` 中的文字；这些文字也会进入 `PostForm`。这解释了顺序差异，不是“文件优先”或“所有 POST 都正文优先”。`File` 保存的是可打开的文件头入口，既不转换成文字值，也不代表所有内容已落盘。图中的箭头表示值的来源与汇入关系，不保证底层 map 或切片相互独立。
+
+### 显式检查错误，保留重复字段
+
+下面处理函数只接受 urlencoded POST，先限制读取到 1 MiB，再解析，最后明确从 `PostForm` 读取。切片保留重复键；若业务只允许一个值，应检查长度恰为一，而不是默默取第一个。`ParseForm` 是幂等的，重复调用不会倒带重读。
 
 ```go
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusCreated)
-_, _ = w.Write(payload)
-```
-
-## HTML表单
-
-URL encoded表单与multipart表单需要不同解析路径。区分重复键、缺失键、空字符串和文件字段；解析前要限制body大小。
-
-```go
-r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-if err := r.ParseMultipartForm(1 << 20); err != nil {
-    http.Error(w, "invalid form", http.StatusBadRequest)
-    return
+func formHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        w.Header().Set("Allow", "POST")
+        http.Error(w, "POST required", 405)
+        return
+    }
+    mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+    if err != nil || mt != "application/x-www-form-urlencoded" {
+        http.Error(w, "urlencoded required", 415)
+        return
+    }
+    r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+    if err := r.ParseForm(); err != nil {
+        bodyError(w, err)
+        return
+    }
+    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+    fmt.Fprint(w, strings.Join(r.PostForm["name"], ","))
 }
 ```
 
-
-## Form、PostForm与MultipartForm
-
-Form可合并URL查询和已解析表单，PostForm只表示body表单，MultipartForm还包含Value与File。防止不受控内存与临时文件消耗。
-
-## ResponseWriter
-
-WriteHeader只能有效一次，Write可能返回短写或错误。要求在进入流式输出前完成所有可预检失败；已提交响应不能再改成500。
-
-## Cookie
-
-Cookie是header中的客户端状态。敏感值需签名或只保存不透明会话ID，并验证长度、编码和过期。
+错误分支必须 `return`，否则后续成功正文会拼到错误响应后。以下 helper 被表单、上传和 JSON 示例共用：读取超限报告 413，其余解析失败报告 400。这里没有把用户输入或内部路径放进错误正文。
 
 ```go
-http.SetCookie(w, &http.Cookie{
-    Name: "flash", Value: signedValue, Path: "/",
-    HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
-})
+func bodyError(w http.ResponseWriter, err error) {
+    var tooLarge *http.MaxBytesError
+    if errors.As(err, &tooLarge) {
+        http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
+        return
+    }
+    http.Error(w, "invalid body", http.StatusBadRequest)
+}
 ```
 
+<Callout type="trap">
+  现象：坏表单看似仍取得了一个值。原因：`FormValue` / `PostFormValue`
+  会触发解析但忽略解析错误；`Get`
+  又只给一个值。修法：显式解析、检查错误，再按来源检查字段个数。`ParseForm` 未被
+  `MaxBytesReader` 限制时的 10 MB 默认限制仅针对 urlencoded
+  解析，不是所有请求的安全总上限。
+</Callout>
 
-## 验收实验：容量、提交与失效
+## MultipartForm：文字与文件分流，磁盘也需要收尾
 
-发送查询、urlencoded、multipart、超限body和坏边界，记录各字段集合与状态；再先Write后尝试WriteHeader，验证状态已冻结。最后篡改Flash Cookie、重复读取和跨Path读取，确认签名、作用域与删除策略生效。
+HTML表单选择 multipart 编码后，上传解析得到的 <Term def="multipart 解析结果，Value 保存文字字段，File 保存文件头及其内容入口">MultipartForm</Term> 把文字放进 `Value`，文件放进 `File`。文字也会进入 `PostForm` 和 `Form`；文件不会被当成普通表单值。实验图将 `MultipartForm` 画成含 Value、File 的外层容器：Value 的箭头通往 PostForm，再与查询汇入 Form；File 的箭头通往 `FileHeader.Open` 和独立读取，不进入两个文字集合。不能把 `Form["upload"]` 当成文件内容。
 
+### 内存阈值不等于请求总量
 
-## 本章回顾
+`ParseMultipartForm(maxMemory)` 会解析整个 multipart body；文件部分超过内存阈值可落临时磁盘。非文件值和元数据还有额外内存预算及解析器限制，因此这个参数也不是进程 RSS 的硬上限。总读取字节数必须另外用 `MaxBytesReader` 限制。即使设置 `maxMemory=1`，一个两字节文件也能成功解析并落盘，这不是绕过总限额，而是两个参数控制不同资源。
 
-本章覆盖Request与Response、HTML表单、Form、PostForm、MultipartForm、ResponseWriter、Cookie，以及使用Cookie实现Flash消息。正确处理依赖来源、容量、提交时点与失效，而不只是调用便捷函数。
+### 打开文件、关闭句柄、删除临时文件
 
+先限制 1 MiB 总量，再用 64 KiB 文件内存阈值解析。即使解析同时报告查询错误，也可能已生成 `MultipartForm`，所以先安排非空结果的清理，再处理错误。`RemoveAll` 删除临时文件，不会关闭已打开的文件句柄；`defer f.Close()` 和清理都需要。下面用 `io.Discard` 验证读取流程，不保存用户文件；生产保存还需校验类型、生成服务端文件名、处理存储失败。
 
-## 术语表
+```go
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        w.Header().Set("Allow", "POST")
+        http.Error(w, "POST required", 405)
+        return
+    }
+    r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+    err := r.ParseMultipartForm(64 << 10)
+    if r.MultipartForm != nil {
+        defer r.MultipartForm.RemoveAll()
+    }
+    if err != nil {
+        bodyError(w, err)
+        return
+    }
+    f, _, err := r.FormFile("upload")
+    if err != nil {
+        http.Error(w, "upload required", 400)
+        return
+    }
+    defer f.Close()
+    if _, err := io.Copy(io.Discard, f); err != nil {
+        http.Error(w, "file read failed", 500)
+        return
+    }
+    w.WriteHeader(http.StatusNoContent)
+}
+```
+
+`FormFile` 只返回第一个同名文件；多文件上传应遍历 `r.MultipartForm.File["upload"]`。上传方的文件名不适合直接拼接存储路径。真实 HTTP 服务器有请求收尾清理，而直接调用 handler 的 `httptest.ResponseRecorder` 不负责整个服务器生命周期；显式 `RemoveAll` 让测试和异常路径也有清晰的资源责任。
+
+## JSON：独立解码，不进入 Form
+
+JSON 是另一条正文解码路径。给请求设置 `application/json` 后，`ParseForm` 只解析查询，不会把 JSON 属性填进 `PostForm`，正文也不被它消费。实验切到 JSON 时，表单轨道只剩查询值，正文流向独立对象。先预测：同样是 POST，为什么结果和 urlencoded 不同？因为媒体类型决定了解码器，不是变量名决定的。
+
+下面只接受 JSON POST，限额为 1024 字节。先有限额地读取整个小文档，再解码：这样即使非法内容后面还有大量尾部，也能一致地报告超限；代价是占用不超过限额量级的缓冲。大文档可以流式解码，但需额外设计完整消费、尾部校验和资源预算。
+
+```go
+func jsonHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        w.Header().Set("Allow", "POST")
+        http.Error(w, "POST required", 405)
+        return
+    }
+    mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+    if err != nil || mt != "application/json" {
+        http.Error(w, "JSON required", 415)
+        return
+    }
+    data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024))
+    if err != nil { bodyError(w, err); return }
+    dec := json.NewDecoder(bytes.NewReader(data))
+    dec.DisallowUnknownFields()
+    var input struct { Name string `json:"name"` }
+    if err := dec.Decode(&input); err != nil {
+        bodyError(w, err); return
+    }
+    if err := dec.Decode(new(any)); err != io.EOF {
+        http.Error(w, "one JSON value required", 400); return
+    }
+    if input.Name == "" {
+        http.Error(w, "name required", 400); return
+    }
+    w.WriteHeader(http.StatusNoContent)
+}
+```
+
+第一次 `Decode` 只消费一个值，第二次必须得到 `io.EOF`，才排除了第二个文档或垃圾尾部；空白尾部允许。未知字段、类型不符、非法语法都拒绝；`null` 虽可解码，但会被必填检查拒绝。这里使用经典 `encoding/json`：`DisallowUnknownFields` 不拒绝重复属性，重复 `name` 会以后面的值覆盖前面的值，也不强制属性名大小写完全一致。需要更严格协议时必须另行校验，不能称这个示例为“所有歧义都被消除”。
+
+## ResponseWriter：提交后不能把失败改写成成功的反面
+
+处理函数通过 <Term def="构造响应头、最终状态与正文的接口；首次最终状态提交后普通响应头与状态不能重写">ResponseWriter</Term> 输出结果。`Header()` 返回待发送的头集合；设置它本身不提交。`WriteHeader(201)` 提交最终状态及当时的普通响应头；若此前没有最终状态，第一次 `Write` 隐式提交 200。这里的“提交”指 handler 不再能改写，并不保证字节已经即时抵达网络另一端。
+
+```go
+func createdHandler(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    _, _ = w.Write([]byte(`{"saved":true}`))
+}
+```
+
+实验的正常模式依次设置头、提交 201、写正文；故障模式先写正文，200 快照已经冻结，再设置普通头或调用 `WriteHeader(500)` 都不能修复。`w.Header()` 之后即使显示新值，也不代表客户端收到它；测试必须检查 `recorder.Result().Header` 的已提交快照。写失败可能已发出部分数据，生产中需记录错误、停止写入，而非再尝试发一个全新的 500。
+
+“只能提交一次”限定于最终 2xx–5xx。1xx 信息响应可以在最终状态前发送多次；trailer 也有专门机制，不适用普通头的修改规则。本章真实 `httptest.Server` 用 `httptrace.Got1xxResponse` 观察两次 103 后再收到 201；不使用 Recorder 冒充完整网络状态机，不覆盖 101 协议升级。
+
+<Callout type="trap">
+  现象：校验失败后调用 `http.Error(..., 500)`，客户端却仍见 200。原因：之前的
+  `Write`
+  已提交；后来的错误文本只会追加。修法：尽可能先验证输入、准备输出，再设置头和最终状态。实验切换“提前
+  Write”可看到被阻断的第二条状态更新。
+</Callout>
+
+## Cookie：发送、保存、读取属于不同往返
+
+<Term def="客户端保存并在后续匹配请求中带回的状态">Cookie</Term>
+并不在服务器调用 `SetCookie` 时自动写进当前
+`Request`。发送写的是响应头，读取用的是 `r.Cookie("flash")`；不存在时得到
+`http.ErrNoCookie`。多个响应 Cookie 应分别
+`http.SetCookie`，不要把它们拼成一个逗号分隔的普通头。
+
+### MaxAge 的三种语义
+
+Go 的 `MaxAge: 0` 表示**不发送 Max-Age 属性**，不是“立刻删除”；负数才序列化为 `Max-Age=0`，请求删除；正数表示存活秒数。`Expires` 是绝对过期时间；两者同时存在时，支持该机制的客户端按 Max-Age 优先。两者都未设置才是通常的会话 Cookie，不能承诺关闭窗口必然删除，因为客户端恢复策略不同。
+
+下面设置一个白名单通知码 `saved`，不是保存用户身份或任意 HTML。`Secure` 适合 HTTPS，`HttpOnly` 限制脚本读取，`SameSite=Lax` 约束部分跨站发送；这些属性都不能签名或加密值，也不能单独代替身份验证与 CSRF 防护。SameSite 在 Go 1.11 加入，此处是现代 Go 1.26.0 示例，不冒充 2016 原书实现。
+
+```go
+func sendFlash(w http.ResponseWriter, r *http.Request) {
+    http.SetCookie(w, &http.Cookie{
+        Name: "flash", Value: "saved", Path: "/",
+        MaxAge: 60, Expires: time.Now().Add(time.Minute),
+        HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+    })
+    w.WriteHeader(http.StatusNoContent)
+}
+```
+
+### Flash 的消费不是修改当前请求
+
+flash 是一次展示的通知约定：请求 A 触发保存；请求 B 带回通知码，服务端读取并在 B 的响应里要求删除；请求 C 才不再带回。删除必须匹配原 Cookie 的名字、Path 和 Domain；本例始终为 host-only、`Path: "/"`。若过晚到正文之后才设置删除头，客户端可能永远收不到删除命令。
+
+```go
+func getFlash(w http.ResponseWriter, r *http.Request) {
+    c, err := r.Cookie("flash")
+    if err != nil {
+        w.WriteHeader(http.StatusNoContent)
+        return
+    }
+    http.SetCookie(w, &http.Cookie{
+        Name: "flash", Value: "", Path: "/", MaxAge: -1,
+        Expires: time.Unix(1, 0), HttpOnly: true, Secure: true,
+        SameSite: http.SameSiteLaxMode,
+    })
+    if c.Value != "saved" {
+        http.Error(w, "invalid notification", 400)
+        return
+    }
+    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+    fmt.Fprint(w, "保存成功")
+}
+```
+
+本次 B 中再调用 `r.Cookie` 仍能读到旧值；删除只是响应里的指令。并发的 B1/B2 都可能带着旧 Cookie，因此 Cookie flash 不是原子“恰好一次”。涉及奖励、支付或必须单次消费的状态，应使用服务端存储与原子消费；即使给 Cookie 签名，也不能消除重放。本例白名单码仍可被伪造为 `saved`，只适合作为无权限影响的提示。
+
+<Callout type="trap">
+  现象：删除 flash
+  后本次仍能读取，或下次仍存在。原因：本次请求是旧快照；也可能删除的 Path
+  不同，或删除头设置太晚。修法：先发匹配作用域的负 MaxAge
+  Cookie，再输出；用下一次请求验证。不要把服务端 `r.Cookie`
+  当成会自动检查客户端过期时间的接口。
+</Callout>
+
+## 动手实验：看字段槽、提交线和往返箭头
+
+先预测：把 urlencoded 切到 multipart，`Form` 第一格会换成谁？选择一种请求，单步观察解析与合并；再注入“超限”看通路在哪断开。响应图中比较正常 201 与提前 Write 的 200；Cookie 图单步直到第三次请求，观察删除发生在响应还是当前请求中。
+
+<GwpProcessingRequestsLab />
+
+这是确定性教学模型，不在浏览器里运行 Go 或发送请求。实际执行依据是本章抽取代码的 Go 1.26.0 `httptest` 测试，包括方法/类型矩阵、重复字段、读取超限、坏 multipart、无效 JSON、二次状态、临时文件清理、Cookie 作用域和过期。所有 Go 块共同组成测试包，所需标准库 import 由抽取脚本补齐；不是每块都能独立 `go run`。浏览器布局与交互尚待主控独立验收，不能据此升级质量版本。
+
+## 小结与练习
+
+本章把请求到响应分成四个检查点：字段从哪里来、消费多少资源、何时冻结输出、客户端何时反映变更。下面用三个任务把这些检查点串起来；先操作实验或修改代码，再展开答案。
+
+- 按方法与媒体类型选解析器，保留重复字段。
+- 总量限制先于解析，上传句柄与临时文件分别清理。
+- 普通头和最终状态必须在提交前准备好。
+- flash 删除影响后续请求，不改变本次快照。
+
+<Exercises>
+1. 在实验中把 urlencoded 换成 multipart。query 为 `name=q1&name=q2`，body 含 `name=b1`、`name=b2`，分别写出 Form、PostForm 和 FormValue 的结果。再改成 GET urlencoded、JSON POST，会发生什么？若查询含 `%zz` 应怎样处理？
+
+<Answer label="答案 1：来源与顺序">
+  urlencoded POST 的 Form 为 b1、b2、q1、q2，PostForm 为 b1、b2，FormValue 为
+  b1。multipart 显式解析后 Form 为 q1、q2、b1、b2，PostForm 仍为
+  b1、b2，FormValue 为 q1；文件位于
+  MultipartForm.File["upload"]；MultipartForm.Value["name"] 为 b1、b2，并进入
+  PostForm。仅调用 ParseForm 不会建立 multipart 容器。GET urlencoded 和 JSON
+  POST 的 ParseForm 都不消费正文，Form 只有 q1、q2，PostForm
+  为空。无效查询必须检查 ParseQuery/ParseForm
+  的错误并拒绝，不能用忽略错误的便捷函数继续授权或入库。
+</Answer>
+
+2. 给示例 JSON 接口加测试：空正文、两个对象、未知属性、1025 字节正文各应返回什么？上传的 `maxMemory` 改为 1 能否替代总量限制？如果先写 `ok` 再尝试 413，客户端最终状态是多少？
+
+<Answer label="答案 2：实现失败分支">
+  空正文、两个对象、未知属性均 400；超过 1024 字节返回 413，即使开头不是合法
+  JSON。正文恰为 1024 字节且合法时可接受。maxMemory=1 只促使文件落盘，不能代替
+  MaxBytesReader；仍需关闭文件并 RemoveAll。若此前尚未最终提交，Write("ok")
+  会隐式提交 200，后来的 413 不能改变它，所以限额与解析必须在输出前完成。
+</Answer>
+
+3. 请求 B 消费 flash 后，将删除 Cookie 的 MaxAge 改为 0 或 Path 改为 `/other`，分别预测 C。两条并发请求能否保证仅显示一次？如何修复真正的一次性操作？
+
+<Answer label="答案 3：删除与过期">
+MaxAge=0 只省略属性；本例仍带过去的 Expires，所以仍会过期，不能只看 MaxAge 判断。若连 Expires 也去掉，会设置空值的会话 Cookie，不是删除。Path=/other 无法删除原来 Path=/ 的 Cookie，C 仍可带原值。并发请求可能都消费旧快照，必须在服务端以原子方式消费一次性状态，Cookie 仅携带不可预测的引用。
+</Answer>
+</Exercises>
+
+## 术语核对
+
+这些词分别对应输入结构、解析集合、输出边界与跨请求状态；能说明它们由谁创建、何时变化，比背 API 名字更重要。
+
+<Glossary>
+  <GlossaryItem term="Request">
+    服务端接收的一次请求；查询、头和正文不是同一个数据来源。
+  </GlossaryItem>
+  <GlossaryItem term="Form">
+    已解析的多值合并集合；优先序取决于表单编码，Get 只取第一项。
+  </GlossaryItem>
+  <GlossaryItem term="MultipartForm">
+    multipart 的文字与文件分离结构；内存阈值、总读取限额、临时文件清理是三件事。
+  </GlossaryItem>
+  <GlossaryItem term="ResponseWriter">
+    响应构造接口；最终提交冻结普通头与状态，不保证立即完成网络传输。
+  </GlossaryItem>
+  <GlossaryItem term="Cookie">
+    客户端跨请求携带的状态；Set-Cookie 属于响应，Cookie 属于后续请求。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与验证边界
+
+范围依据是 Sau Sheong Chang 的《Go Web Programming》（Manning，2016）第4章出版社目录 4.1–4.5，覆盖 Files、JSON 和 flash。本章是独立技术改写，不是原书译文；没有原书正文访问或复制、改编授权证据。冻结文档页面标为 go1.27.2，实际示例仅使用 Go 1.26.0 支持的标准库 API，并由该版本实测。未验证原书逐段忠实度、所有浏览器 Cookie 策略或真实生产安全性。
+
+- [出版社书目与目录](https://www.manning.com/books/go-web-programming)：只用于范围与书目信息。
+- [net/http：Request.ParseForm](https://pkg.go.dev/net/http#Request.ParseForm)、[ParseMultipartForm](https://pkg.go.dev/net/http#Request.ParseMultipartForm)、[MaxBytesReader](https://pkg.go.dev/net/http#MaxBytesReader)：解析与限额。
+- [net/url：ParseQuery](https://pkg.go.dev/net/url#ParseQuery)、[encoding/json：Decoder](https://pkg.go.dev/encoding/json#Decoder)：查询错误与单值解码。
+- [ResponseWriter](https://pkg.go.dev/net/http#ResponseWriter)、[Cookie](https://pkg.go.dev/net/http#Cookie)、[multipart.Form.RemoveAll](https://pkg.go.dev/mime/multipart#Form.RemoveAll)：提交、失效和资源回收。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Go Web Programming · Sau Sheong Chang · Manning · 2016 · 第4章"
+  sourceUrl="https://www.manning.com/books/go-web-programming"
+/>

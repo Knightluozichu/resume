@@ -16096,6 +16096,35 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GiaFinalReviewEvidenceGateLab: module0.GiaFinalReviewEvidenceGateLab,
     } as ChapterMdxComponents;
   },
+  "go-web-programming/01-foundations/gwp-chitchat": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/gwp-chitchat-lab");
+    return {
+      GwpChitchatLab: module0.GwpChitchatLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/01-foundations/gwp-http-basics": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/gwp-http-basics-lab");
+    return {
+      GwpHttpBasicsLab: module0.GwpHttpBasicsLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/02-request-response/gwp-processing-requests":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/go-web-programming/v2/gwp-processing-requests");
+      return {
+        GwpProcessingRequestsLab: module0.GwpProcessingRequestsLab,
+      } as ChapterMdxComponents;
+    },
+  "go-web-programming/02-request-response/gwp-routing": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/v2/gwp-routing");
+    return {
+      GwpRoutingLab: module0.GwpRoutingLab,
+    } as ChapterMdxComponents;
+  },
   "gpu-gems/01-natural-effects/gpugems-ch01": async () => {
     const module0 =
       await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch01-water-simulation");

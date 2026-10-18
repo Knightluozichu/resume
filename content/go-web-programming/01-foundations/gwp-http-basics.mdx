@@ -3,71 +3,456 @@ title: "第1章 Go与Web应用"
 type: C
 section: "Go Web编程 · 基础与全景"
 order: 1
-description: "理解Go适合Web应用的工程原因，拆解HTTP请求、响应、URI、HTTP/2、handler与template engine。"
+description: "从请求方法与URI走到Go处理器，预测重复请求的效果，诊断响应提交顺序，并实现可测试的Hello Go页面。"
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-1"
-draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gwp-01
+draft: true
 ---
 
+import { GwpHttpBasicsLab } from "@/components/mdx/go-web-programming/gwp-http-basics-lab";
 
-## 从浏览器为何能调用Go开始
+<Objectives>
 
-先预测：浏览器访问一个URI时，是否直接调用Go函数？不是。客户端发送HTTP消息，服务器解析后选择handler，再把结果编码为响应。把网络协议与函数调用分开。
+- 能解释一次页面访问中地址、请求、处理器和页面生成各负责什么，并说明 Go 的工程取舍。
+- 能改出一个按名字问候、拒绝坏输入、正确转义页面的 Hello Go，并用内存请求测试成功与失败。
+- 能回答：同一删除请求先返回 204、再返回 404，是否仍可幂等？为什么先写内容再写 400 会失败？
 
+</Objectives>
 
-## Go为何适合Web应用
+## 直觉：为什么要把订单、加工和发货分开
 
-编译产物、垃圾回收、静态类型、标准库和轻量并发共同降低交付成本。比“框架少”更重要；性能也必须由测量证明，不能从语言标签推导。
+想象一条按单生产的流水线：订单写着要什么，工位决定怎么加工，包装必须在发货前贴好。如果订单、加工和包装混成一步，退货时就很难找到责任位置。
 
-```go
-func main() {
-    http.HandleFunc("/", hello)
-    log.Fatal(http.ListenAndServe(":8080", nil))
-}
+页面也是如此：点击链接并不是隔空调用服务器里的函数。本章把一次访问拆开，让你能指出“选错入口”“输入不合格”和“结果标错状态”分别该在哪里修。
+
+## 一、Go与Web应用：价值在边界，不在“天然高性能”
+
+Go 能把网络处理写成普通函数，并用包组织应用；这有利于小团队维护，但不能替代容量规划。这里按出版社目录的可扩展、模块化、可维护和性能四个视角做工程判断，不复述未取得正文的作者论证。
+
+### Web应用如何工作：沿一次访问走完往返
+
+这里的 <Term def="客户端请求资源、服务器返回响应的一组应用层语义。">HTTP</Term> 约定双方怎样表达请求与结果。服务器解析消息后，把对象交给 <Term def="接收请求并构造响应的处理器；Go中实现ServeHTTP方法。">Handler</Term>，而不是执行浏览器传来的 Go 代码。路由器 <Term def="根据请求目标选择处理器的Go标准库多路复用器。">ServeMux</Term> 决定调用哪一个处理器。
+
+```text
+浏览器输入 /hello?name=Lin
+  → HTTP请求 → ServeMux选择 /hello
+  → Handler校验 name → 模板把名字写入HTML
+  → 状态+响应头+页面内容 → 浏览器显示
 ```
 
-## Web应用如何工作
+静态页面可以直接返回已有文件；动态页面则按输入或存储状态生成表示。同一个地址在不同时间返回不同内容，并不意味着协议失效。这解释“Web应用从页面展示走向按输入处理”的功能区别；本章不为目录 1.4 补造年份、人物或原书历史叙述。练习 1b 要你在这条数据流上定位错误。
 
-DNS、连接、HTTP请求、路由、handler、存储和模板按顺序协作。只拥有一次请求，不应启动无法取消的后台工作。
+### 可扩展、模块化、可维护与高性能Web应用：四维取舍
 
-## HTTP请求
+四维应用质量回答不同问题：负载增大时能否扩容、部件能否独立替换、修改后能否持续验证、给定资源下能否满足速度目标。它们不是同义词：把代码拆成包不会直接降低延迟，单次请求很快也不能证明扩容有效。下表把每一维落到可检查的边界。
 
-请求包含method、URI、版本、header和可选body。GET与HEAD应安全，PUT与DELETE按语义应幂等，但服务器实现仍要维护不变量。不等于每次响应字节完全相同。
+Go 的 <Term def="由Go运行时调度的并发执行单元，不等于一条独占的操作系统线程。">goroutine</Term> 方便组织并发工作；`net/http` 能并发处理连接，但共享状态仍需同步。并发只是让多个请求有机会推进，不是把慢数据库变快。
+
+| 目录视角 | 本章可观察的设计                         | 不能据此保证的事                           | 验证方法                                     |
+| -------- | ---------------------------------------- | ------------------------------------------ | -------------------------------------------- |
+| 可扩展   | 请求各有输入，处理器避免共享可变名字     | 多启动并发任务就能无限接单                 | 画出所有请求汇入同一存储的入口，测排队与延迟 |
+| 模块化   | `ServeMux → Handler → 模板` 有明确边界   | 分包越多越好                               | 在测试中单独调用处理器，无须启动整个站点     |
+| 可维护   | 静态类型约束调用；表驱动测试覆盖坏输入   | 能编译就没有协议错误                       | 对照“先写 body”实验，编译无误仍会返回错状态  |
+| 性能     | 可编译部署，减少不必要分配和重复模板解析 | Go一定快于其他语言；所有部署都仅需一个文件 | 在相同负载下测吞吐、分位延迟和内存，再优化   |
+
+```text
+请求A ─┐
+请求B ─┼→ 并发处理器 → 同一个存储瓶颈 → 等待
+请求C ─┘                 ↑ 容量不会随goroutine数自动增加
+```
+
+编译产物仍可能依赖动态库、配置和外部服务，垃圾回收也有运行成本。练习 1a 先用“存储已饱和”检验扩容与模块边界，再回到响应实验设计维护回归，最后提出有控制变量的性能测量方案。表格和瓶颈图帮助推理；协议实验只验证状态因果，不是四维质量的基准测试。标准库接口及并发边界见 [net/http](https://pkg.go.dev/net/http)。
+
+## 二、HTTP请求与响应：方法表达意图，状态报告结果
+
+HTTP请求与响应构成一次有方向的交换：请求用方法、目标、头和可选内容表达意图；响应以状态、头和可选内容报告这一次处理结果。方法属于请求，状态属于响应，两者不是一一对应的命令和回执：同一 DELETE 可先得到204、再得到404，仍须分别判断资源效果与本次结果。下一节的消息文本展示字段，第四节的实验把请求、资源和响应连成可操作的因果链。
+
+一个按钮能发出请求，不代表这种请求适合改变数据。先判断方法所表达的意图，再判断重复发送后的资源效果，最后判断浏览器的具体提交入口是否支持它；这三层不能互相替代。
+
+### 不请求改变资源，不等于没有日志
+
+方法的 <Term def="客户端没有请求改变目标资源状态的方法语义；不等于服务器没有任何副作用。">安全</Term> 性让预取和自动遍历不必担心主动删数据。GET、HEAD、OPTIONS、TRACE 被 RFC 9110 定义为安全方法；服务器仍可以记录访问日志。把删除操作藏在 `GET /notes/7?delete=1` 中，会使预取也可能删数据，违背安全语义。[RFC 9110 §9.2.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.1) 明确讨论了日志例外。
+
+### 重复后的目标效果，不是重复响应字节
+
+方法的 <Term def="多次相同请求对目标资源的预期效果，与一次请求相同。">幂等</Term> 性帮助处理“服务器已执行、客户端却没收到回应”的重试。DELETE 一次让 #7 不再存在，再删除仍不存在；第一次可回 204，第二次可回 404。GET 查询时间会变、日志会增加，也不因此失去方法的幂等语义。
+
+| 方法            | 安全？ | 按标准语义幂等？ | 本章对照对象                              |
+| --------------- | ------ | ---------------- | ----------------------------------------- |
+| GET / HEAD      | 是     | 是               | 获取表示 / 只取对应元数据，不返回响应内容 |
+| OPTIONS / TRACE | 是     | 是               | 能力询问 / 请求回显诊断；不要求服务开放   |
+| PUT             | 否     | 是               | 用给定表示建立或替换目标状态              |
+| DELETE          | 否     | 是               | 移除目标资源关联                          |
+| POST            | 否     | 不保证           | 本实验每次向集合新增一条笔记              |
+
+业务可以为 POST 设计去重契约，却不能让客户端默认所有 POST 都可自动重试。语义依据为 [RFC 9110 §9.2.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2)。练习 2a–c 分别检查资源、日志和响应。
+
+### HTML表单的提交入口更窄
+
+原生 HTML `form` 的 `method` 只定义 `get`、`post`、`dialog` 三种状态；前两种用于网络提交，`dialog` 用于关闭所在对话框，并不是 HTTP 方法。省略或填入无效的 `method` 值，默认是 GET；`method="DELETE"` 不会让表单发出 DELETE。提交按钮的 `formmethod` 可以覆盖表单设置。依据是 [WHATWG HTML：form submission attributes](https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#attr-fs-method)。
+
+```html
+<form action="/hello" method="get">
+  <label>名字 <input name="name" value="Lin" /></label>
+  <button type="submit">问候</button>
+</form>
+```
+
+此表单把成功参与提交的命名控件编码到查询中，得到 `/hello?name=Lin`。普通 POST 表单默认把 `application/x-www-form-urlencoded` 数据放入 body；POST 并不自动加密，需要 HTTPS 保护传输。浏览器脚本是另一条请求入口，不能把 HTML form 的限制扩大成“浏览器只支持 GET/POST”。这里不展开脚本方法限制或跨源策略。练习 2c 请你纠正一个错误的删除表单。
+
+## 三、URI与HTTP/2：区分资源标识与传输组织
+
+URI与HTTP/2处理不同层次：前者标识要访问什么，后者规定消息如何以帧和流在连接上传输。协议版本不会把客户端片段变成服务器路径，也不会把改变资源的动作自动变成安全操作。练习 1c 分解地址与消息，1d 检查传输证据的边界，两个判断缺一不可。
+
+为了知道错在哪里，要能从消息中找出目标、偏好和结果。下面先用 HTTP/1.1 的可读文本解释对象，再区分 Go 的高层表示与 HTTP/2 的线上编码，避免把教学打印结果当成真实抓包。
+
+### URI中哪些部分会到服务器
+
+这里的 <Term def="标识资源的统一资源标识符；不要求都能直接作为网络位置访问。">URI</Term> 是标识概念，URL 是本例带访问方式的地址。以 `https://example.test/hello?name=Lin#answer` 为例：[net/url.URL](https://pkg.go.dev/net/url#URL) 将其分解为以下字段。
+
+| 地址片段       | Go中的对应字段 | HTTP请求中的位置                                          |
+| -------------- | -------------- | --------------------------------------------------------- |
+| `https`        | Scheme         | 决定访问方式；不是直接交给handler执行的命令               |
+| `example.test` | Host           | 请求authority；HTTP/1.1通常为Host字段，Go服务端看`r.Host` |
+| `/hello`       | Path           | 目标路径，供路由匹配                                      |
+| `name=Lin`     | RawQuery       | 查询编码；需解析而不是手工切等号                          |
+| `answer`       | Fragment       | 客户端片段，不发送给服务器                                |
 
 ```http
-POST /threads HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
+GET /hello?name=Lin HTTP/1.1
+Host: example.test
+Accept: text/html
 
-title=Go
 ```
 
+这里是直连源站的 HTTP/1.1 请求示意，空行结束头部；没有 `#answer`。代理场景的请求目标形式可能不同。片段不进入目标 URI 的依据是 [RFC 9110 §7.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-7.1)。练习 1c 和后面的 `RequestURI()` 测试核对片段边界。
 
-## HTTP响应、URI与HTTP/2
+### 请求头与响应头分别约束什么
 
-响应由状态行、header和body组成；URI标识资源位置与查询。HTTP/2改变连接上的帧和stream复用，不改变handler看到的高层请求语义。要求写body前确定状态和header。
+消息的 <Term def="HTTP消息中的命名字段，用于携带内容类型、偏好等元数据。">header</Term> 不只是任意备注。`Accept: text/html` 是客户端希望得到的类型，不是服务器已经承诺的结果；响应 `Content-Type` 才声明返回内容的媒体类型。请求也能有 `Content-Type`，例如说明 POST body 是表单编码。字段名不区分大小写，字段值的规则由各字段定义。
 
-## Handler与Template Engine
+```http
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
 
-Handler处理协议和业务，template engine把数据与展示程序组合。应默认使用html/template处理上下文转义。
+<p>Hello, Lin!</p>
+```
+
+响应的 <Term def="服务器对本次请求结果的三位数字分类，不是业务文本的替代品。">状态码</Term> 用第一位分组：1xx 是临时信息，2xx 是成功，3xx 常用于重定向或缓存验证，4xx 表示请求侧问题，5xx 表示服务器未能完成请求。正文用 200、400、404、405、500 检验不同边界；405 还要提供 `Allow` 说明支持的方法。204 和 HEAD 响应没有内容，不能靠给它们写一段错误页面来传递信息。
+
+### HTTP/2改变传输组织，不取消方法语义
+
+新的协议版本 <Term def="沿用HTTP语义、以二进制帧及多路复用流组织连接的协议版本。">HTTP/2</Term> 不是把 `HTTP/1.1` 字符串替换成 `HTTP/2`
+就发送成功。它用二进制帧组织消息，多个流可共享一条连接；handler
+仍处理请求方法、目标及头等高层信息。[RFC 9110
+§1.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-1.3)
+概述了这一层次差别。
+
+```text
+HTTP/1.1文本消息 ─解析─┐
+                      ├→ Go Request → 同一Handler → 结果语义
+HTTP/2帧与流 ─解码────┘
+```
+
+[Go 1.6 发布说明](https://go.dev/doc/go1.6#http2) 已记录 HTTPS 场景的透明 HTTP/2 支持；不能因此宣称下面的明文 `ListenAndServe` 会自动升级。本文只测构造的 `Request.ProtoMajor` 为 1 或 2 时 handler 不分支，**没有测试 TLS 协商、帧、连接复用或线上 HTTP/2**。练习 1d 要你说明这项测试能证明什么、不能证明什么。
+
+## 四、协议实验：请求可以重复，响应不能倒写
+
+同一个动作重复两次，与同一组写操作交换顺序，是两类不同的问题。实验分别画出资源集合、访问日志和响应提交边界；先记录预测，再看对象怎样改变，而不是只记住一句“要先设头”。
+
+猜一猜：连续 DELETE 两次，状态码与资源数是否都相同？再切到响应提交实验：若先写 body，后来设置的头和值还能进入响应吗？每个实验都可用“重置全部实验”恢复。
+
+<GwpHttpBasicsLab />
+
+### 怎样读响应提交图
+
+Go 的 <Term def="处理器用来设置响应头、提交状态并写入内容的接口。">ResponseWriter</Term> 在第一次 `Write` 未见显式状态时会隐含 `WriteHeader(200)`。提交最终状态之后，再改普通 header 不影响已提交的头；再写一个最终状态也不能替换之前的状态。图中上框是仍可变的本地头映射，下框是已提交的响应快照，二者不同才是故障所在。
+
+正确轨迹是“设头 → 提交400 → 写错误内容”；故障轨迹是“写内容并隐含200 → 晚设头 → 晚写400”。这不是“数据立即到达网卡”的时刻描述：网络层仍可能缓冲。本章限于一个最终响应；1xx 临时响应与 trailers 有额外规则，不能套用“所有头永远只写一次”。依据见 [ResponseWriter](https://pkg.go.dev/net/http#ResponseWriter)。练习 2d 用三步图解释晚写故障。
+
+## 五、Hello Go Web应用：先得到完整页面，再提交响应
+
+本节按“输入 → 数据 → 页面 → 响应”实现一个完整小程序，而不是复制原书代码。四段 `main.go` 代码按顺序拼接即可；实测目标是 **Go 1.26.0**，只使用标准库。路径式注册保留经典写法，方法路由单独标为 Go 1.22+ 现代对照。
+
+### 处理器与模板引擎：先决定能否响应，再生成表示
+
+处理器与模板引擎通过数据和错误结果协作，但不互相替代。处理器检查路径、方法和名字，决定400、405或200；模板引擎只按可信展示规则把已选数据生成为HTML，不替处理器判断业务输入是否合法。本例先渲染到buffer：模板失败时处理器还能选500，而不是已发半页200再报错。练习 1b 沿流程分工，练习 3 则用转义和模板失败的测试检验这条边界。
+
+页面生成侧的 <Term def="将可信展示规则与数据组合成输出的组件；html/template还按HTML上下文转义数据。">模板引擎</Term> 把 HTML 结构和名字分开。`html/template` 假定模板作者可信、传给 `Execute`
+的数据不可信；普通字符串会按上下文转义，不能把用户输入强转成 `template.HTML`
+来绕开保护。模板本身也不能直接由用户上传后执行。[html/template
+安全模型](https://pkg.go.dev/html/template#hdr-Security_Model)
+给出了这个信任边界。
 
 ```go
-func hello(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-    w.WriteHeader(http.StatusOK)
-    _, _ = io.WriteString(w, "hello")
+// hello:imports
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "html/template"
+    "log"
+    "net/http"
+    "net/url"
+    "time"
+)
+
+var page = template.Must(template.New("hello").Parse(
+    `<p>Hello, {{.}}!</p>`,
+))
+```
+
+模板在启动期解析，`Must` 只用于程序员控制的常量模板：语法错应阻止启动，而非等用户请求才发现。下面的输入函数使用 `url.ParseQuery`，保留坏编码错误；无 `name` 时默认 Go，显式空值、重复值或超过32个 Unicode 码点则拒绝。32码点是本示例的业务边界，不是 HTTP 的通用限制，也不是32字节。
+
+```go
+// hello:input
+func nameFrom(r *http.Request) (string, error) {
+    values, err := url.ParseQuery(r.URL.RawQuery)
+    if err != nil { return "", err }
+    names, exists := values["name"]
+    if !exists { return "Go", nil }
+    if len(names) != 1 || len([]rune(names[0])) == 0 ||
+        len([]rune(names[0])) > 32 {
+        return "", fmt.Errorf("name must contain 1..32 code points")
+    }
+    return names[0], nil
+}
+
+func reply(w http.ResponseWriter, r *http.Request,
+    status int, kind, body string) {
+    w.Header().Set("Content-Type", kind+"; charset=utf-8")
+    w.WriteHeader(status)
+    if r.Method != http.MethodHead {
+        _, _ = w.Write([]byte(body))
+    }
 }
 ```
 
+`reply` 将设置头、状态、内容的顺序固定；显式跳过 HEAD 内容，使直接调用处理器的内存测试也能观察这一点。写入错误在这个短例中被忽略；真实服务可记录它，却不能在响应已提交后再改写为500。`hello` 先判方法，再校验，再把模板结果写进 buffer；只有渲染成功才提交200。这样模板执行中途失败不会泄漏半个成功页面。
 
-## 验收实验：原始消息到Handler
+```go
+// hello:handler
+func hello(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodGet && r.Method != http.MethodHead {
+        w.Header().Set("Allow", "GET, HEAD")
+        reply(w, r, 405, "text/plain", "method not allowed\n")
+        return
+    }
+    name, err := nameFrom(r)
+    if err != nil {
+        reply(w, r, 400, "text/plain", "bad name\n")
+        return
+    }
+    var output bytes.Buffer
+    if err := page.Execute(&output, name); err != nil {
+        reply(w, r, 500, "text/plain", "render failed\n")
+        return
+    }
+    reply(w, r, 200, "text/html", output.String())
+}
 
-用curl分别发送GET、POST和不支持的方法，保存请求行、header、状态和body；随后切换HTTP/1.1与HTTP/2客户端，确认业务handler行为一致。故意在Write后修改状态码，观察为何响应已提交。
+func classicMux() *http.ServeMux {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/hello", hello)
+    return mux
+}
+```
 
+`/hello` 没有末尾斜杠，因此不是一个子树入口；`/missing` 或 `/hello/child` 不应误入问候页面。下面的启动函数仅用于读者本机试跑；本批没有启动它。它是本地教学服务器，不是生产部署配置，尚未包含 TLS、认证、完整超时或容量控制。
 
-## 本章回顾
+```go
+// hello:main
+func main() {
+    server := &http.Server{
+        Addr: "127.0.0.1:8080",
+        Handler: classicMux(),
+        ReadHeaderTimeout: 5 * time.Second,
+    }
+    log.Fatal(server.ListenAndServe())
+}
+```
 
-本章覆盖Go与Web应用、可扩展、模块化、可维护与高性能Web应用、Web应用如何工作、HTTP请求与响应、URI、HTTP/2、处理器与模板引擎，以及Hello Go Web应用。下一章会把这些部件装进完整论坛。
+### 现代对照：方法匹配不属于2016原例
 
+Go **1.22+** 才为 `ServeMux` 增加方法和通配符模式。以下可选函数仍调用同一个 `hello`；`GET /hello` 同时匹配 HEAD，其他方法在路由层得到405。它是现代独立示例，不声称来自2016原书。依据见 [Go 1.22 路由变化](https://go.dev/doc/go1.22#enhanced_routing_patterns)。本批将它与前面的代码一起放在 Go1.26.0 下测试。
 
-## 术语表
+```go
+// hello:modern
+func modernMux() *http.ServeMux {
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /hello", hello)
+    return mux
+}
+```
+
+### 不启动服务，也能检查协议对象
+
+下面是独立的 `main_test.go`。`httptest.NewRecorder` 捕获状态、头和内容，不监听端口；它不能证明浏览器、连接或 TLS 正常。先运行默认 GET，再扩展为练习3给出的边界矩阵。本章证据脚本直接提取上述原代码，而非另写一个更容易通过的实现。
+
+```go
+// hello:test
+package main
+
+import (
+    "net/http/httptest"
+    "testing"
+)
+
+func TestHelloExample(t *testing.T) {
+    r := httptest.NewRequest("GET", "/hello?name=Lin", nil)
+    w := httptest.NewRecorder()
+    classicMux().ServeHTTP(w, r)
+    res := w.Result()
+    defer res.Body.Close()
+    if res.StatusCode != 200 || w.Body.String() != "<p>Hello, Lin!</p>" {
+        t.Fatalf("status=%d body=%q", res.StatusCode, w.Body.String())
+    }
+}
+```
+
+把文件放进一个临时目录，建立 `go.mod` 后运行 `/opt/homebrew/bin/go test -v -count=1 -timeout=120s`。不需要第三方依赖；也不要把测试通过扩大成线上服务已验收。`name=%3Cb%3E` 应得到 `&lt;b&gt;` 文本，`name=` 应得到400，这两条把模板保护和输入契约分别测出来。
+
+## 六、三个最容易混淆的故障
+
+这些错误通常不会被编译器阻止。诊断时先看请求表达的意图，再看状态与头何时提交，最后看模板的信任边界；每一项都能回到实验或测试矩阵中复现。
+
+<Callout type="trap">
+  **现象 →** GET 删除笔记，搜索预取也触发删除。 **原因 →**
+  把“GET通常没body”误当成安全的定义。 **修法 →**
+  不让安全方法承载删除意图；在实验中区分资源数和日志数。
+</Callout>
+
+<Callout type="trap">
+  **现象 →** 错误页面已经显示，状态却是200。 **原因 →**
+  首次写body隐含提交200，后来的400不能覆盖。 **修法 →** 开启实验“故障：先写
+  body”逐步复现，再把校验、设头、状态提交放到内容之前。
+</Callout>
+
+<Callout type="trap">
+  **现象 →** 为了让名字里的标签生效，把输入转成`template.HTML`。 **原因 →**
+  把“有模板引擎”误当成对任意信任标记的保护。 **修法 →**
+  保持名字为普通字符串，用HTML注入测试验证输出被转义；模板作者仍须可信。
+</Callout>
+
+## 七、本章小结与带答案练习
+
+现在应当能够沿对象边界解释一次访问，而不只是拼出一个能显示文字的页面。先独立填写资源数、状态码和内容，再展开答案；第三题要求改程序并新增测试，而不是直接改浏览器中的显示值。
+
+- 沿地址、请求、处理器和页面生成定位职责；Go的并发能力不消除存储瓶颈。
+- 问候程序先校验、再转义渲染；用正常、坏输入和边界测试检查输出。
+- 重复删除可返回不同状态但仍幂等；首次写内容已提交状态，不能倒写400。
+
+<Exercises>
+
+**问题 1：沿着页面访问找边界**
+
+a. 要设计可扩展、模块化、可维护与高性能Web应用，不能只问“Go够不够快”。数据库已饱和时，增加goroutine能保证吞吐提高吗？应隔离哪两个部件定位瓶颈？再在响应提交实验中开启“先写 body”故障并走完三步：为防止后续改动复发，测试须断言哪些对象字段？若计划把每请求解析模板改为启动时解析，应控制哪些条件、记录哪些指标，才能判断优化有效？
+
+b. 用第一节的数据流解释Web应用如何工作：把 `Lin` 变成HTML的步骤属于路由器、处理器还是模板引擎？给处理器与模板引擎划出输入、输出和错误边界，再说明静态文件与动态页面的区别。
+
+c. 对照HTTP请求与响应的两段消息，给 `https://example.test/hello?name=Lin#answer` 写出源站收到的目标，以及说明“期望类型”和“实际类型”的字段。若名字超长，哪一侧选择400，内容应来自正常页面模板吗？
+
+d. 结合URI与HTTP/2两个层次判断：把内存 `Request.ProtoMajor` 改成2后测试成功，能否证明片段到达服务器，或已经支持线上HTTP/2？还缺什么证据？
+
+<Answer>
+  a. 不保证：存储排队可能增加。模块化使处理器与存储可分别测量，先确认时间花在排队、存储还是应用计算，再决定扩容点。维护回归应直接调用handler，用Recorder的Result断言实际状态400、已提交的`X-Phase: checked`及错误内容；故障顺序实际得到200且缺少该响应头，因此断言会失败。只检查本地Header映射或是否编译成功，会漏掉这个错误。
+
+性能比较须固定Go版本、硬件、输入分布、并发负载、响应正确性及存储条件，只改变模板解析位置；预热后多轮比较吞吐、p95/p99延迟、内存与分配量，记录误差和是否发生错误。吞吐增大但尾延迟恶化不能算全面改善。本章没有运行负载基准，httptest的正确性通过也不证明高性能；这是一项测量方案练习，不是性能结论。
+
+b. 路由选处理器；处理器把请求转换成经校验的数据，模板把数据转换成HTML或返回渲染错误，最终由处理器选择状态并写响应。静态文件已有内容，动态页面按输入或状态生成表示。模板报错时先前的buffer不能当成成功页面发送。
+
+c. 目标为`/hello?name=Lin`，片段不发送；`Accept`是请求偏好，响应`Content-Type`说明实际类型。服务器处理器在校验失败时选400并返回`bad name\n`，不能继续渲染正常问候页。
+
+d. 都不能。URI的Fragment由客户端处理；内存字段测试只证明handler不因该字段而改变这组行为，没有测TLS协商、帧或连接复用。要证明线上HTTP/2，需要实际协议协商和传输观测；本章不执行这类网络实验，明文启动函数也不能凭此宣称自动使用HTTP/2。
+
+</Answer>
+
+**问题 2：预测资源、日志和响应**
+
+a. 选择 DELETE、预测0条并执行两次，填写资源数与状态序列。b. 重置后选择 GET、预测1条并执行两次，日志应为多少？c. 若本例 POST 被自动重试，两次之后多少条？`method="DELETE"` 能修好原生表单吗？d. 在响应提交实验开启故障、预测200，执行三步；本地与已提交响应中的 `X-Phase` 分别是什么？
+
+<Answer>
+  a. 初始1条，随后0、0；状态204、404，预期资源效果仍幂等。b.
+  资源仍1条，日志2条；安全不等于没有日志。c.
+  3条，POST默认无幂等保证；无效的form方法回退GET，应设计受控的POST删除入口，或另行使用脚本请求入口，不能伪造原生支持。d.
+  本地头是`checked`，已提交响应没有该头，状态保持200。正常顺序则得到400和`X-Phase:
+  checked`。
+</Answer>
+
+**问题 3：独立改出一个有边界的问候页面**
+
+在第五节的Hello Go Web应用中，将名字上限改为4个 Unicode 码点，保留空值、重复值和坏编码拒绝逻辑，不改模板的转义策略。目标是 `name=春夏秋冬` 得200，`name=春夏秋冬雨` 得400；HEAD对有效名字无内容。自行补全表驱动测试，并设计一个会执行失败的可信模板，确认不会先输出半个200页面。
+
+<Answer>
+  把`nameFrom`中上限32改成4；`len([]rune(...))`不能换成字节长度。补测：无name→`Hello,
+  Go!`；空值、重复值、坏编码、5码点→400及`bad
+  name\n`；4码点→200；`name=%3Cb%3E`→200且内容为`<p>Hello, &lt;b&gt;!</p>
+  `；HEAD→200、HTML类型、空内容；POST→405且Allow含GET、HEAD；未知路径→404。让可信测试模板在输出前缀后访问不存在的字段，`Execute`会出错；因先渲染buffer，实际响应只能是500及`render
+  failed\n`，不应含前缀。恢复全局模板，且不要对修改它的测试启用并行。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+这些词按本章出现顺序回收；尤其要把资源语义和传输实现分开。遇到安全、幂等或响应提交的疑问，可返回实验，看资源实体和响应快照而不只比较文字。
+
+<Glossary>
+  <GlossaryItem term="HTTP">
+    请求资源、返回响应的一组应用层语义；不是远程直接调用Go函数。
+  </GlossaryItem>
+  <GlossaryItem term="Handler">
+    接收请求并构造响应的处理器；在Go中实现ServeHTTP方法。
+  </GlossaryItem>
+  <GlossaryItem term="ServeMux">
+    按目标和模式选择处理器的路由器；方法模式要区分Go版本。
+  </GlossaryItem>
+  <GlossaryItem term="goroutine">
+    Go运行时调度的并发工作单元，不自动扩大数据库容量。
+  </GlossaryItem>
+  <GlossaryItem term="安全">
+    客户端没有请求改变目标资源，不保证服务器完全没有日志等副作用。
+  </GlossaryItem>
+  <GlossaryItem term="幂等">
+    相同请求重复后的预期资源效果等于一次，不要求响应完全相同。
+  </GlossaryItem>
+  <GlossaryItem term="URI">
+    资源标识符；本章用包含scheme、主机、路径、查询和片段的URL作例子。
+  </GlossaryItem>
+  <GlossaryItem term="header">
+    消息的命名元数据字段；同一字段在请求或响应中有各自用途。
+  </GlossaryItem>
+  <GlossaryItem term="状态码">
+    描述这次请求结果的三位数字，必须与返回内容的意图一致。
+  </GlossaryItem>
+  <GlossaryItem term="HTTP/2">
+    用帧与流组织传输的HTTP版本，handler仍面对高层语义。
+  </GlossaryItem>
+  <GlossaryItem term="ResponseWriter">
+    设置头、提交状态、写内容的接口；最终状态提交后不能倒写。
+  </GlossaryItem>
+  <GlossaryItem term="模板引擎">
+    将展示规则和数据组合为输出；html/template按上下文转义普通数据。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与验证边界
+
+本章仅以 Manning 的第1章目录 1.1–1.11 确定范围，独立组织说明、图和代码；可核对的书目为 Sau Sheong Chang，Go Web Programming，Manning，2016年7月。目录访问不等于取得正文或翻译、转载授权，也不证明与原书措辞、例子或历史论述一致。
+
+事实依据已在相应小节链接到 RFC 9110、WHATWG HTML、Go官方API及1.6/1.22发布说明。批36冻结的 pkg.go.dev 页面显示较新文档版本，故本例只使用目标 Go1.26.0 实测的API；现代路由显式标Go1.22+。本章未复制作者仓库代码，也不沿用未知许可证。
+
+本批用内存 `httptest` 核对例子、协议边界与故障路径，不使用真实浏览器、不启动服务，不宣称视口、TLS/HTTP2传输或整站构建已验收。正文保持草稿与质量版本1，正式浏览器验收由主控完成。
+
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Go Web Programming（Sau Sheong Chang，Manning，2016）"
+  sourceUrl="https://www.manning.com/books/go-web-programming"
+  sourceBasis="outline-only"
+/>

@@ -3,69 +3,473 @@ title: "第2章 Go ChitChat"
 type: C
 section: "Go Web编程 · 基础与全景"
 order: 2
-description: "以完整论坛连接应用设计、数据模型、mux、静态文件、Cookie、模板、PostgreSQL与服务器启动。"
+description: "沿论坛请求追踪会话记录、主题查询与HTML响应，区分可执行测试、数据库边界和三平台安装说明。"
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-2"
-draft: false
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+officialUnitId: gwp-02
+practiceMode: code
+draft: true
+qualityVersion: 2
 ---
 
+import { GwpChitchatLab } from "@/components/mdx/go-web-programming/gwp-chitchat-lab";
 
-## 从完整应用而不是API清单开始
+## 学习目标
 
-先预测：登录、发帖、回复和浏览能否只靠一个handler完成？技术上可以，结构上不可维护。ChitChat用完整论坛展示各部件协作。是后续章节反复拆解的全景样本。
+这一章把一个论坛拆成能单独检验的责任边界。重点不是一次写完产品，而是证明每个请求为什么有权继续、为什么在某处停止。
 
+<Objectives>
 
-## 应用设计与目录边界
+- 能画出用户、会话、主题和回复的关系，并区分路由、存储与展示职责。
+- 能修改并测试一个主题页处理器，使无效会话、存储故障与模板故障返回不同结果。
+- 能回答：浏览器带来一串登录标记，为什么仍然必须查服务器记录，且不能直接信任其中的用户编号？
 
-入口负责配置、数据库和路由装配，handler负责请求用例，data层负责持久化，template负责展示，public目录负责静态资源。阻止全局数据库和模板解析散落。
+</Objectives>
+
+## 直觉：为什么拿着 cookie 仍可能看不到主题
+
+访客找主题，成员写回复，管理员希望讨论不会因一次失败而消失。如果每条路都顺便做所有事情，一处改动就会影响整张地图。
+
+我们先标出每个入口能到哪里，再标出谁负责确认身份、谁保存讨论、谁排版页面。没有这些边界，“页面打不开”就无法定位是哪一步出了问题。
+
+把 cookie 想成寄存处的取物牌：牌上不是可信的姓名，只是柜台查记录的线索。柜台必须确认记录还在、没有过期，才把记录中的用户交给下一位办事人。这个比喻只解释查找关系，不代表 token 不会被盗；持有被盗 token 的人仍可能冒用有效记录。
+
+因此两次都“拿着牌”的请求也会不同：记录已撤销时应在会话查找处停止，记录有效而主题库离线时则走到主题查询才失败。先预测哪个查询计数会增加，再读下面的责任图；这能把身份拒绝与存储故障分开，而不是统一叫作“页面打不开”。
+
+## ChitChat 的设计：谁有权调用谁
+
+本节对应目录 2.1–2.2。论坛的业务旅程是浏览主题、登录、创建主题和回复；这些是应用目标，不等于本章已经实现全部功能。下文可运行片段只实现首页、受保护的主题读取、静态资源和注销边界，不含注册、密码校验或发帖界面。
+
+处理器即 <Term def="接收一次HTTP请求并决定响应的函数或对象。">Handler</Term>，负责把请求转换成用例。mux 是按方法和路径挑选处理器的多路复用器；它不是权限系统。入口把配置、存储接口、已解析模板注入处理器，避免在每次请求中重新建连接或解析文件。
 
 ```text
-main -> mux -> handler -> data model -> PostgreSQL
-                 |-> template -> HTML
-                 |-> static files
+入口：配置 → 模板解析 → 数据库连接检查 → 路由装配 → 监听
+                                   ↓
+GET /static/site.css → 只读 public 资源 → CSS
+GET /threads/7 → 会话查表 → 主题存储 → 模板缓冲 → HTML
+POST /logout → 来源校验 → 撤销会话 → 清除 cookie
 ```
 
-## 数据模型
+模板只接收展示数据，不自行查询数据库。存储层不知道 ResponseWriter，HTTP 层也不拼 SQL。这样数据库不可用时，可以替换存储接口复现故障，而不必真的关闭共享服务。实验中选择静态路径，会直接绕过两次存储访问。
 
-User、Session、Thread和Post通过主键与外键连接。要求创建回复时同时证明主题存在和用户已授权，时间与ID由明确一层产生。
+## 数据模型：一条回复究竟属于谁
 
+目录 2.3 的四个对象不是四份孤立列表。用户拥有会话、主题和回复；回复还属于一个主题。所谓 <Term def="描述关系两端各允许关联多少条记录，例如一对多及是否允许零条。">ER 基数</Term>，必须同时说明“最多几个”和“能否没有”。
 
-## 接收与处理请求
-
-Multiplexer根据path选择handler，静态文件走受限根目录，动态请求执行解析、授权、数据调用和响应。不应把业务授权藏在路径命名中。
-
-```go
-mux := http.NewServeMux()
-mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("public"))))
-mux.HandleFunc("/thread/create", createThread)
+```text
+users.id  1 ───── 0..N sessions.user_id
+users.id  1 ───── 0..N threads.user_id
+users.id  1 ───── 0..N posts.user_id
+threads.id 1 ──── 0..N posts.thread_id
 ```
 
-## 使用Cookie访问控制
+图表示本章现代设计：子记录必须有一个有效父记录，父记录可以暂时没有子记录。主键唯一标识记录；外键约束引用的父记录存在；要排除“没有父记录”，还必须加 `NOT NULL`。观察到的作者 `setup.sql` 外键允许空值，因此不能把上图的必选关系反说成原代码已保证。
 
-登录成功后服务器生成会话并设置Cookie，请求再用Cookie定位Session。需要HttpOnly、Secure、SameSite、过期和轮换策略；原书的简化实现是教学起点，不是完整安全方案。
+| 表       | 关键约束与用途                                     | 删除时要决定什么             |
+| -------- | -------------------------------------------------- | ---------------------------- |
+| users    | id 主键，email 唯一；身份资料不作为 cookie 内容    | 保留讨论作者还是显式匿名化   |
+| sessions | token_hash 唯一，user_id 非空外键，expires_at 非空 | 撤销会话不能删除用户         |
+| threads  | id 主键，user_id 非空外键，topic 为普通文本        | 有回复时拒绝删除或显式级联   |
+| posts    | id 主键，user_id、thread_id 均为非空外键           | 不能留下指向不存在主题的回复 |
 
-## 使用模板生成HTML
+不带 `UNIQUE(user_id)` 的外键不会限制“每人只能一帖”。反过来，数据库约束也不能证明“当前请求者有权改这帖”：那是处理器根据已确认身份执行的授权规则。写主题及关联回复若必须同时成功，应放在同一事务中；本章只读路径不制造“已验证事务”的假象。
 
-Handler取得数据后执行已解析模板，模板失败必须在响应提交前处理。要求启动期预解析并避免在模板中访问数据库。
+## 可观察实验：从 cookie 探针到响应提交
+
+先预测：把“有效会话”改成“过期会话”，主题 SQL 还会发生吗？再预测：会话库失败应显示 403 还是 503？逐步推进，看记录行、高亮路径、查询计数和最终状态一起变化，而不是只读结论。
+
+<GwpChitchatLab />
+
+动手试：有效会话推进三步得到 200；无效、过期、已注销会话在第一步停止，主题查询为零。保持有效会话分别注入两类存储错误和模板错误，观察 503、503、500。开启“不可信标题”后读响应源文本：尖括号被编码，不会执行脚本。切换静态路径，即使故障开关仍开着，也没有数据库调用。
+
+实验使用固定数据和时钟，token 标签可读是为了教学；它既没有生成真实登录凭证，也没有连接 PostgreSQL。重置恢复会话、故障、路径、标题与步骤全部参数。
+
+## 多路复用器、静态文件与处理函数：分清派发、资源与用例
+
+目录 2.4.1–2.4.3 的多路复用器、静态文件与处理函数分担三个责任：`ServeMux` 按方法和路径派发请求；文件服务器从公开资源目录读取字节；`ReadThread` 等处理函数执行会话检查、主题读取与响应生成。注册了路由不等于做过身份检查，静态资源成功也不等于数据库健康。
+
+下面所有 Go 块按出现顺序拼成一个 `package chitchat` 文件；这是独立编写的现代示例，目标 Go 1.26.0，方法路由需要 Go 1.22+，不是 2016 源码复刻。标准库测试不安装依赖，也不启动监听服务。
 
 ```go
-func index(w http.ResponseWriter, r *http.Request) {
-    threads, err := store.Threads(r.Context())
-    if err != nil { http.Error(w, "load failed", 500); return }
-    if err := templates.ExecuteTemplate(w, "index.html", threads); err != nil { log.Print(err) }
+package chitchat
+
+import (
+    "bytes"
+    "context"
+    "crypto/sha256"
+    "database/sql"
+    "errors"
+    "fmt"
+    "html/template"
+    "io/fs"
+    "net/http"
+    "strconv"
+    "time"
+)
+```
+
+接口只暴露本次用例需要的三件事。传入时钟使到期边界可以精确测试；数据库连接池、文件系统和模板都由入口装配，不隐式读取开发机环境。
+
+```go
+var ErrSessionRejected = errors.New("session rejected")
+type Session struct { UserID int64; ExpiresAt time.Time }
+type Thread struct { ID int64; Topic string }
+type Store interface {
+    Session(context.Context, string) (Session, error)
+    Thread(context.Context, int64) (Thread, error)
+    Revoke(context.Context, string) error
+}
+type App struct {
+    Store Store
+    Page *template.Template
+    Now func() time.Time
+}
+func (a App) Routes(assets fs.FS) http.Handler {
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprint(w, "ChitChat: visit /threads/7")
+    })
+    mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(assets)))
+    mux.HandleFunc("GET /threads/{id}", a.ReadThread)
+    mux.HandleFunc("POST /logout", a.Logout)
+    return mux
 }
 ```
 
+`/{$}` 只匹配根路径，避免首页吞掉未知路径。方法不匹配时 mux 返回 405；`GET` 模式也匹配 `HEAD`。`StripPrefix` 把 URL 中的 `/static/` 去掉，交给文件服务器查 `site.css`。`assets` 只能包含公开文件；不能把仓库根目录传进去。文件服务器可能列目录，也不是防符号链接泄露的安全沙箱；生产可使用只嵌入已批准资源的 `embed.FS` 子树。
 
-## 验收实验：四条用户旅程
+核查路径：实验先选静态资源，再选主题请求，观察会话和主题查询次数从零变为按需调用；在问题 1 判断方法不匹配的 405，并用 `TestRoutesAndStaticBypass` 核对首页、未知路径和静态文件内容。
 
-分别执行匿名浏览、登录、创建主题和回复，记录每步路由、Cookie、SQL与模板。关闭数据库后重复创建，确认返回失败且没有部分记录；破坏模板后确认日志包含模板名，且不会在已发送200后再尝试改状态。
+## 使用Cookie访问控制：标记是索引，不是身份证
 
+目录 2.4.4 讨论使用Cookie访问控制：Cookie 负责把查找线索带回来，服务器记录才决定请求能否继续。<Term def="服务器保存的登录状态，客户端只持有用于查找它的随机标记。">会话</Term>需要不可预测的 token、服务器到期时间和撤销能力。cookie 只是浏览器存储并随请求发送的键值；`user_id=42` 即使由浏览器发来，也没有证明请求者就是用户 42。
 
-## 本章回顾
+本例采用 **403 Forbidden 的直接拒绝策略**：缺失、无效、过期或已撤销的 cookie 都不能继续访问主题，不发登录跳转，也不实现 HTTP 认证挑战。根据 [RFC 9110 §11.6.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-11.6.1)，401 必须携带至少一个 `WWW-Authenticate` challenge；`http.Error` 不会自动补上它。这里不冒称支持 Basic 或 Bearer，不能为凑响应头而虚构方案。真实表单登录产品也可设计登录跳转，但需要另行实现登录页及返回路径校验；403 不是所有 cookie 应用唯一可选的策略。
 
-本章覆盖Go ChitChat、应用设计、数据模型、多路复用器、静态文件与处理函数、使用Cookie访问控制、使用模板生成HTML响应、PostgreSQL与数据库接口，以及启动服务器。它给出全景，后续章节逐层深化。
+### 查找与过期
 
+本章把 token 的 SHA-256 摘要作为查找键，减少存储泄露时直接暴露 bearer token 的风险；哈希不是密码存储方案。真实登录还必须安全验证密码、用加密安全随机数生成高熵 token、存储会话并在登录或提权时轮换。本章不实现这些流程，不应把示例当完整认证系统。
 
-## 术语表
+```go
+func tokenKey(raw string) string {
+    sum := sha256.Sum256([]byte(raw))
+    return fmt.Sprintf("%x", sum)
+}
+func (a App) identity(r *http.Request) (Session, error) {
+    cookie, err := r.Cookie("sid")
+    if err != nil || cookie.Value == "" { return Session{}, ErrSessionRejected }
+    s, err := a.Store.Session(r.Context(), tokenKey(cookie.Value))
+    if errors.Is(err, sql.ErrNoRows) { return Session{}, ErrSessionRejected }
+    if err != nil { return Session{}, err }
+    if s.UserID <= 0 || !a.Now().Before(s.ExpiresAt) {
+        return Session{}, ErrSessionRejected
+    }
+    return s, nil
+}
+```
+
+无 cookie、未命中或刚好到期都拒绝；数据库报错则向上传播，不能“查不到就当游客”。生产会话 cookie 应限制 `Path=/`、不滥设 Domain，并使用 `HttpOnly`、`Secure`、适当的 `SameSite`。这些属性不能替代服务端过期检查，也不能防止被盗 token 被重放。`Secure` 的部署前提是 HTTPS，不能拿明文开发服务器的行为冒充上线保证。
+
+### 注销与失败顺序
+
+注销必须先撤销服务端记录，再清 cookie。仅删除浏览器标记，攻击者保留的旧副本仍可使用。本例 `POST /logout` 强制精确的可信 Origin；拒绝缺失或不同来源，避免跨站请求偷偷注销。真实部署应从受信配置设置公开 origin，并结合适用的 CSRF 防护，而不是信任任意 Host 头。
+
+```go
+func (a App) Logout(w http.ResponseWriter, r *http.Request) {
+    if r.Header.Get("Origin") != "https://forum.example" {
+        http.Error(w, "origin rejected", http.StatusForbidden); return
+    }
+    cookie, err := r.Cookie("sid")
+    if err == nil && cookie.Value != "" {
+        if err = a.Store.Revoke(r.Context(), tokenKey(cookie.Value)); err != nil {
+            http.Error(w, "store unavailable", 503); return
+        }
+    }
+    http.SetCookie(w, &http.Cookie{
+        Name: "sid", Value: "", Path: "/", MaxAge: -1,
+        Expires: time.Unix(1, 0), HttpOnly: true, Secure: true,
+        SameSite: http.SameSiteLaxMode,
+    })
+    w.WriteHeader(http.StatusNoContent)
+}
+```
+
+撤销存储失败返回 503，不发送“已成功注销”的承诺。未找到记录的删除应幂等成功。作者可见示例采用 GET 注销、简化 cookie 和不同错误处理；这里只观察这些差异，没有复制其认证实现或执行其 SQL 清表脚本。
+
+核查路径：实验切换有效、无效、过期和已注销会话，预测是否到达主题查询；问题 1 比较拒绝与存储故障，问题 3 实现撤销重放。`TestCookieRejectionPolicy` 与 `TestLogoutAndReplay` 检查拒绝码和停止位置，而非信任客户端用户字段。
+
+## PostgreSQL与数据库接口：让 SQL 文本与值保持分离
+
+目录 2.7 把 PostgreSQL与数据库接口接起来：PostgreSQL 服务端实际保存数据和执行 SQL，驱动负责协议通信，Go 的标准接口统一连接管理与查询调用；它们不是同一层。`database/sql` 是标准接口，`*sql.DB` 是并发安全的连接池；具体 PostgreSQL 驱动需要另外选择与注册。`sql.Open` 可能只检查参数，必须使用带期限的 `PingContext` 才能检查当时的连通性；它也不保证下一次请求永远成功。
+
+核查路径：本节读接口与参数，下文“三平台准备”检查服务与连接身份；问题 2 诊断客户端可用但服务不可达，问题 3 检查恶意值是否仍是独立参数。`TestDatabaseSQLFakeBoundary` 通过 fake driver 检查真实 `database/sql` 调用边界，不执行 PostgreSQL。
+
+### 参数化会话查询
+
+<Term def="把固定SQL结构和待绑定的值分别交给数据库驱动，而非拼接成一段SQL文本。">
+  参数化查询
+</Term>
+把 token 放进参数槽 `$1`。这里使用 PostgreSQL 的占位符约定，不应推论所有 SQL
+驱动都用同一种占位符。取消信号沿 `r.Context()`
+传入存储，驱动对取消的具体支持仍需真实环境验证。
+
+```go
+type SQLStore struct { DB *sql.DB }
+func (s SQLStore) Session(ctx context.Context, key string) (Session, error) {
+    var row Session
+    err := s.DB.QueryRowContext(ctx,
+        "SELECT user_id, expires_at FROM sessions WHERE token_hash = $1",
+        key).Scan(&row.UserID, &row.ExpiresAt)
+    return row, err
+}
+func (s SQLStore) Thread(ctx context.Context, id int64) (Thread, error) {
+    var row Thread
+    err := s.DB.QueryRowContext(ctx,
+        "SELECT id, topic FROM threads WHERE id = $1", id).
+        Scan(&row.ID, &row.Topic)
+    return row, err
+}
+func (s SQLStore) Revoke(ctx context.Context, key string) error {
+    _, err := s.DB.ExecContext(ctx,
+        "DELETE FROM sessions WHERE token_hash = $1", key)
+    return err
+}
+```
+
+`QueryRowContext` 的查询错误可能到 `Scan` 才出现。主题没有记录是 404，会话没有记录是 403，连接故障则是 503；同一个 `sql.ErrNoRows` 必须按用例解释。参数化不能自动替你完成访问控制，也不能把任意用户输入变成表名或列名。
+
+### 从请求返回主题
+
+先确认身份再查主题，避免被拒绝的请求继续访问业务数据。下面刻意把所有有效成员都视为可读主题；若需要私密主题，必须再检查成员与主题的关系，不能只检查“登录过”。
+
+```go
+func (a App) ReadThread(w http.ResponseWriter, r *http.Request) {
+    _, err := a.identity(r)
+    if err != nil {
+        status := http.StatusServiceUnavailable
+        if errors.Is(err, ErrSessionRejected) { status = http.StatusForbidden }
+        http.Error(w, http.StatusText(status), status); return
+    }
+    id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+    if err != nil || id <= 0 { http.Error(w, "bad id", 400); return }
+    thread, err := a.Store.Thread(r.Context(), id)
+    if errors.Is(err, sql.ErrNoRows) { http.NotFound(w, r); return }
+    if err != nil { http.Error(w, "store unavailable", 503); return }
+    var page bytes.Buffer
+    if err := a.Page.ExecuteTemplate(&page, "thread", thread); err != nil {
+        http.Error(w, "render failed", 500); return
+    }
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    _, _ = w.Write(page.Bytes())
+}
+```
+
+错误正文不泄露数据库内部信息。最后的网络写入仍可能失败；此时不能再改成一个新的 500，生产系统应记录写入错误。示例用缓冲只保证“模板执行失败时尚未提交响应”，并不保证网络传输是原子的。
+
+## 使用模板生成HTML响应：先生成，再提交
+
+目录 2.5–2.5.1 关心使用模板生成HTML响应的完整过程：处理函数把主题数据交给已解析模板，模板生成 HTML 到缓冲区，成功后才提交 HTTP 响应；布局和导航也可复用，减少散落的重复逻辑。`html/template` 使用 <Term def="根据HTML文本、属性等所在位置对不可信数据进行适当编码。">上下文转义</Term>，把论坛标题当数据而不是脚本；`text/template` 不提供相同的 HTML 防护。
+
+```go
+func parsePage() (*template.Template, error) {
+    return template.New("thread").Parse(`<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>ChitChat</title></head>
+<body><h1>{{.Topic}}</h1></body></html>`)
+}
+```
+
+模板源由开发者控制，用户标题仍保持普通 string，不转换成 `template.HTML`。启动时解析一次，把语法错误挡在服务接流量之前；布局、导航与内容可以用命名模板复用，而不是让模板执行数据库查询。执行时写入临时 buffer，因为 `ExecuteTemplate` 出错前可能已输出部分文本；成功后再写响应，才不会出现“半个 200 页面后又报 500”。
+
+实验里的“不可信标题”对应测试中的脚本文本。浏览器显示的文字与 HTML 源文本不同：源文本中的 `&lt;` 会显示为 `<`，但不会重新作为脚本标签解释。这是转义的效果，不是删掉用户内容。
+
+核查路径：实验先选“不可信标题”，再注入“模板失败”，比较转义后的完整页面与只有错误正文的响应。问题 3 要求断言失败前缀没有泄露；`TestTemplateEscapingAndAtomicBuffer` 验证生成、缓冲和提交顺序，而不只检查一个转义字串。
+
+## PostgreSQL 三平台准备：操作指南不是执行记录
+
+目录 2.6.1–2.6.3 的安装路径必须结合当前系统选择，不能照抄 2016 年版本号。本章补查了 PostgreSQL 官方四个平台入口，下面是读者将来可以执行的检查顺序；本任务没有安装包、初始化集群、启动服务或连接真实 PostgreSQL，也没有证明本机服务是否存在。
+
+| 平台                     | 官方入口支持的选择                                                                              | 安装后由操作者核验                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Linux / FreeBSD          | Linux 按发行版进入官方列出的包仓库；FreeBSD 使用 ports/packages 途径，不能混用 Linux 的服务命令 | 是否装了服务端而非只有客户端；该发行方式是否自动初始化；服务管理方式、数据目录及运行用户 |
+| macOS（原目录 Mac OS X） | 官方列出安装器、Postgres.app、Homebrew 等选项；选一种，避免多个实例抢端口                       | 客户端路径对应哪套安装；应用或服务是否运行；实际端口与数据目录                           |
+| Windows                  | 官方页面链接安装器及二进制分发；按实际安装器选项配置服务器                                      | 服务名称与状态、安装账户权限、口令保存、端口及本地连接规则                               |
+
+先选受支持版本与发行方式，再依该发行方式完成安装和必要的集群初始化。不要不加判断重复初始化已有数据目录。启动其服务后创建独立的练习数据库和最小权限角色；应用不应长期使用超级用户。连接配置不要写进仓库，远端连接还要配置合适的 TLS 和服务器访问规则。
+
+可在你自己的终端做以下**只读检查**，输出是待观察结果，不是本次执行日志：
+
+```sh
+psql --version
+pg_isready -h 127.0.0.1 -p 5432
+psql -h 127.0.0.1 -p 5432 -U chitchat_app -d chitchat \
+  -c 'SELECT current_database(), current_user, version();'
+```
+
+第一条只证明客户端版本，第二条只检查服务器接受连接的状态；第三条才以指定角色实际连接并读取环境身份。再用经审查的迁移创建本章模型：至少包含 `sessions(token_hash, user_id, expires_at)` 和 `threads(id, topic, user_id)` 所需字段与约束。作者脚本含 `DROP TABLE`，不拿它对任何现有数据库执行。fake 测试不会验证这些表确实存在。
+
+## 启动服务器：把启动失败挡在接收请求之前
+
+目录 2.8 的启动服务器是按依赖装配后才接收请求，不只是调用监听函数。下方 `StartServer` 是本例的函数名，不是启动过程的全部含义。先解析模板，再打开连接池并探测，最后注册路由与监听；任何前置失败应返回给入口，不输出“已经启动成功”。这也让本章的依赖关系图能成为排障顺序。
+
+```go
+func StartServer(driverName, dsn string, assets fs.FS) error {
+    page, err := parsePage()
+    if err != nil { return err }
+    db, err := sql.Open(driverName, dsn)
+    if err != nil { return err }
+    defer db.Close()
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+    if err = db.PingContext(ctx); err != nil { return err }
+    app := App{Store: SQLStore{DB: db}, Page: page, Now: time.Now}
+    server := &http.Server{
+        Addr: "127.0.0.1:8080", Handler: app.Routes(assets),
+        ReadHeaderTimeout: 5*time.Second,
+        WriteTimeout: 10*time.Second, IdleTimeout: 60*time.Second,
+    }
+    return server.ListenAndServe()
+}
+```
+
+入口 `main` 应检查返回错误并退出；这段定义会参与编译，但本次不调用监听。没有注册驱动时 `sql.Open` 返回错误，不会神奇地产生 PostgreSQL。示例只绑定 loopback 明文地址，展示装配而非公网部署；生产还需 HTTPS、请求大小/时间限制、日志、信号处理和有期限的 `Shutdown`。正常关闭产生的 `http.ErrServerClosed` 应由入口与启动失败区分。
+
+| 观察到的失败            | 先检查                      | 不该做什么             |
+| ----------------------- | --------------------------- | ---------------------- |
+| unknown driver          | 是否选择并注册了目标驱动    | 误说数据库密码错了     |
+| Ping 超时或拒绝         | 服务、端口、网络、TLS、凭据 | 只凭 Open 成功宣布就绪 |
+| relation does not exist | 数据库身份、迁移及 schema   | 反复安装 PostgreSQL    |
+| address already in use  | 实际监听地址及占用者        | 直接终止未知服务       |
+
+核查路径：问题 2 要求重排启动步骤，并区分 unknown driver 与 Ping 失败。`TestStartServerFailsBeforeListen` 只执行这两条提前返回路径，记录 fake 连接的打开、探测和关闭；成功监听与真实数据库连通不在测试结论内。
+
+## 本地验证与常见误区
+
+目录 2.9 的收束需要证据，而不是把全部代码粘在一起宣布成功。本章使用 Go 标准库 `httptest.ResponseRecorder` 直接调用 mux，不开网络监听；使用明确命名的 fake store 和 fake SQL driver 分别检查处理器行为与 `database/sql` 参数边界。测试源码由正文 Go 块提取，复现材料存放在本批 ch02 证据目录。
+
+这些测试能检查状态码、提前停止、撤销重放、模板转义、参数顺序和启动失败，却不能证明真实 PostgreSQL 语法、迁移约束、权限、事务、TLS、网络取消或安装步骤已成功。实验图同样是教学模型，浏览器与响应式验收另交主控，不能用单元测试替代。
+
+<Callout type="trap" title="cookie 中写了用户编号就是已登录？">
+  **现象 →** 伪造 `user_id=42` 后可看私密内容。**原因 →**
+  把客户端数据当身份凭证。**修法 →**
+  只读随机会话索引，查服务器记录、检查到期和权限；实验切换无效会话，确认主题查询为零。
+</Callout>
+
+<Callout type="trap" title="无结果与数据库宕机都返回未登录？">
+  **现象 →** 数据库故障时所有人被误报密码错误。**原因 →** 忽略存储 error。**修法
+  →** 区分未命中的 403 与不可用的 503；实验的会话库失败不能落到正常主题页。
+</Callout>
+
+<Callout type="trap" title="模板报错后还能改状态吗？">
+  **现象 →** 客户端收到 200 和半页 HTML。**原因 →** 先向网络写了部分输出。**修法
+  →** 启动期解析、请求期缓冲，执行失败丢弃缓冲；不要用 template.HTML
+  绕过标题转义。
+</Callout>
+
+## 小结与练习
+
+把图中的关系、代码中的边界和实际观察到的输出对齐，才算完成这一章。以下三题分别回收设计、故障诊断和实现能力；答案应在做出预测后展开。
+
+- 论坛责任分层，外键与权限不是同一件事。
+- 会话必须查表，拒绝后不继续查主题。
+- 状态区分 403、404、503 与模板 500。
+- 模板缓冲与参数绑定保护不同边界。
+- 安装指南、fake 测试与真实数据库证据分开。
+
+<Exercises>
+
+**问题 1**：预测一条请求会走到哪里
+
+有效会话访问主题、过期会话访问主题、会话库失败、携带无效 cookie 访问静态文件分别返回什么？在实验中核对，并解释 GET /logout 与 POST /threads/7 为什么不能直接执行这些处理器。
+
+<Answer label="查看答案：路径与状态">
+  四者分别是 200、403、503、200；403 是本例不发 HTTP challenge
+  的直接拒绝策略，不是缺少响应头的 401。主题 SQL 次数依次为
+  1、0、0、0。后两条请求的方法不在对应路由允许范围内，返回
+  405。静态资源不读取会话，所以不能通过静态成功推断数据库健康。`GET /{$}`
+  只命中首页，未知路径不应被首页吞掉。
+</Answer>
+
+**问题 2**：诊断安装、关系模型与启动顺序
+
+Windows 上 `psql --version` 成功，应用却报连接拒绝；能宣布 PostgreSQL 已可用吗？另有一条回复的 thread_id 为空，为什么“有外键”仍可能保存成功？画出正确的关系并说明应补哪条约束。
+
+再给启动服务器的五步排序：监听、解析模板、注册路由、打开连接池、探测连接。若驱动未注册，或 fake driver 的 Ping 返回错误，分别停在哪一步？运行 `TestStartServerFailsBeforeListen`，核对错误、Ping 次数和资源关闭顺序；说明为何这些失败测试不能证明真实 PostgreSQL 就绪或监听成功。
+
+<Answer label="查看答案：环境与ER基数">
+  不能：版本命令只运行客户端，应按安装方式检查服务、真实监听端口，再用指定角色连接练习库。threads
+  的一条记录对应零到多条 posts，每条 post 在本章设计中恰属一条 thread。外键允许
+  NULL 时并不强制引用存在，需给 posts.thread_id 加 NOT
+  NULL；先处理已有空数据。这里是设计推导，不是已经执行迁移的声明。
+
+启动顺序是解析模板 → sql.Open 打开连接池 → PingContext 探测连接 →
+注册路由 → ListenAndServe 监听。未注册驱动在 Open 处返回，不能继续探测；
+fake 探测失败时，错误原样返回，Ping 次数为 1，随后关闭连接，查询次数为 0。
+代码在这些错误分支直接 return，尚未走到路由装配和监听。
+测试记录 open → ping → close，但没有调用成功探测后的路径；
+模板解析在前的顺序还应对照函数逐行检查，不能谎称注入了模板解析错误。
+这些只是 fake 边界和失败路径证据，不是数据库连通或服务器启动成功记录。
+
+</Answer>
+
+**问题 3**：独立实现并验证拒绝路径
+
+给 fake store 加撤销能力：先以有效 sid 读取主题，再发合法来源的 POST /logout，最后重放原 sid，应得到 403 且不新增主题查询。再把模板换成“先输出固定前缀、后执行不存在字段”的模板，断言 500 正文没有该前缀。同时断言拒绝响应没有虚构的 WWW-Authenticate 或 Location 头。最后说明如何测试恶意字符串不会被拼进 SQL。
+
+<Answer label="查看答案：撤销、缓冲与绑定">
+  Revoke 从 token 摘要映射中删除记录；第二次查找返回 sql.ErrNoRows，identity
+  将它映射为 ErrSessionRejected，处理器返回 403 Forbidden；没有实现 HTTP
+  challenge 或登录页，就不伪造相关响应头。到期时刻恰等于 Now
+  也应拒绝。模板先写入 bytes.Buffer，执行失败不把 buffer
+  拷到响应，所以只有错误正文。SQL 测试让 fake driver 记录原始 query
+  和独立参数：query 仍含 $1，恶意字符串只在参数值里。它验证 Go
+  的传参边界，不证明 PostgreSQL 引擎已经执行或抵挡了真实注入。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+这些术语分别描述职责、关系和安全边界。遇到“某一步保证了所有安全”的说法时，可按此表检查它实际只负责什么。
+
+<Glossary>
+  <GlossaryItem term="Handler">
+    接收一次 HTTP 请求并产出响应的处理函数或对象；选择用例但不承担所有存储实现。
+  </GlossaryItem>
+  <GlossaryItem term="ER 基数">
+    实体之间能关联几条记录；1 与 0..N 同时表达唯一父记录及可没有子记录。
+  </GlossaryItem>
+  <GlossaryItem term="会话">
+    服务器保管的登录记录；随机 token 只用于定位记录，到期或撤销后不可继续授权。
+  </GlossaryItem>
+  <GlossaryItem term="参数化查询">
+    SQL 结构与值分开传给驱动；本章 $1 是值的位置，不是字符串插值。
+  </GlossaryItem>
+  <GlossaryItem term="上下文转义">
+    按输出位置编码不可信文本，使数据不被浏览器误当作 HTML 或脚本结构。
+  </GlossaryItem>
+  <GlossaryItem term="mux / cookie">
+    mux 选择处理器；cookie 是客户端随请求发送的键值。两者都不能单独证明身份。
+  </GlossaryItem>
+  <GlossaryItem term="主键 / 外键 / 连接池">
+    主键标识记录，外键约束引用；连接池复用数据库连接，创建池不等于已经连通。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与版本边界
+
+本章独立改写的范围来自 Sau Sheong Chang 的《Go Web Programming》（Manning，2016）第 2 章目录 2.1–2.10。目录访问不等于原文授权；没有核验原书完整正文，不声称逐段翻译或正文忠实度。公开作者代码只用于观察架构与现代改进点，没有执行其程序或建表脚本。
+
+- [出版社目录](https://www.manning.com/ajax/getTocHtml?id=679)：应用设计、数据模型、请求、模板、三平台 PostgreSQL、数据库接口与启动范围。
+- [作者仓库](https://github.com/sausheong/gwp/tree/master/Chapter_2_Go_ChitChat/chitchat)：冻结观察 main.go、setup.sql、route_auth.go、utils.go；可见源码不构成本文对书籍许可的推断。
+- [Go 1.22 路由变化](https://go.dev/blog/routing-enhancements)、[net/http](https://pkg.go.dev/net/http)、[html/template](https://pkg.go.dev/html/template)、[database/sql](https://pkg.go.dev/database/sql)：现代 API 与错误边界。抓取页面部分标 go1.27.2，运行验证基线另用本地 go1.26.0，不把较新文档版本冒充测试版本。
+- [PostgreSQL 安装概览](https://www.postgresql.org/docs/current/tutorial-install.html)、[Linux](https://www.postgresql.org/download/linux/)、[FreeBSD](https://www.postgresql.org/download/freebsd/)、[macOS](https://www.postgresql.org/download/macosx/)、[Windows](https://www.postgresql.org/download/windows/)：当前平台入口及安装选择，不证明本书旧版命令或本机执行成功。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Go Web Programming — Sau Sheong Chang（Manning，2016），第2章"
+  sourceUrl="https://www.manning.com/books/go-web-programming"
+/>

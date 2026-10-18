@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-18T15:31:28.293Z；旧版分数不迁移。
+> 2026-10-18T17:32:25.901Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1712
+- failed：1708
 - queued：203
-- passed：1702
+- passed：1706
 - published：992
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -95,12 +95,12 @@
 | 82 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
 | 83 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
 | 84 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 85 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 86 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 87 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 88 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 89 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 90 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 85 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 86 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 87 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 88 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 89 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 90 | go-web-programming | 12 | 8 | 0 | 4 | 24 |
 | 91 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 92 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 93 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |

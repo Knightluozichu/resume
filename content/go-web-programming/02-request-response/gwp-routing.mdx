@@ -3,72 +3,416 @@ title: "第3章 处理请求"
 type: C
 section: "Go Web编程 · 请求与响应"
 order: 3
-description: "用net/http建立服务器，掌握Handler、HandlerFunc、ServeMux和HTTP/2传输边界。"
+officialUnitId: gwp-03
+description: "建立显式HTTP服务，验证路由优先级、中间件回栈与HTTPS/HTTP2协商边界。"
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-3"
-draft: false
+draft: true
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
 
+import { GwpRoutingLab } from "@/components/mdx/go-web-programming/v2/gwp-routing";
 
-## 从谁接收TCP连接开始
+<Objectives>
 
-先预测：调用ListenAndServe后，main是否继续执行下一行？正常运行时它阻塞并持续接收连接，只有服务停止或失败才返回。要求启动错误不能被忽略。
+- 能实现显式服务器与处理器组合，区分监听、加密、路由和业务职责。
+- 能修改路由与中间件，用测试验证匹配、拒绝与回栈顺序。
+- 能回答：为什么同一 POST 会因根 fallback 从 405 变成 404，为什么普通监听不能证明 HTTP/2？
 
+</Objectives>
 
-## Go net/http库
+## 请求为什么会走错出口
 
-net/http把连接管理、消息解析与handler调用连接起来。让应用通常不直接操作socket，但仍要配置header读取、空闲和关闭策略。
+把请求想成工厂入口的工单：入口负责接收，分拣处负责送到合适工位，检查关口可以提前退回。没有清楚的分工，排查失败时就不知道是没进厂、分错路，还是处理过程被拒绝。
+
+本章沿着“收到工单—选中工位—原路返回”建立可测试的链条。先预测结果，再改变一个条件；不要只看最后出现了哪个数字。
+
+## 3.1 Go net/http库：连接服务与请求处理的分工
+
+标准库 <Term def="Go 标准库中提供 HTTP 客户端、服务器和协议抽象的包。">net/http</Term> 负责监听后的连接服务、请求解析和响应传输。应用只需提供一个处理入口；库不会替你决定谁有权限、哪些地址属于业务，也不会自动为明文连接取得证书。
+
+本章采用五组知识：服务入口、处理器适配、中间件组合、路由所有权、协议协商。下面每组都有代码或实验；互动图专门放大后两层中的分派与回栈。`httptest.NewRecorder` 能检查处理器输出，却没有真实连接，不能据此声称 TLS 或 HTTP/2 已工作。
+
+**版本与材料边界：**书籍出版于 2016 年；出版社公开目录仅限定本章范围，不是正文或授权证据。Go 1.6 官方源码用于同期实现参照，不代表已确认原书编译器。下文代码为独立编写的现代示例，统一用 Go 1.26.0 核验；所有含方法、通配符的路由均是 **Go 1.22+ 后加特性**，不是 2016 写法。
+
+## 3.2 使用Go提供HTTP服务：从监听到处理入口
+
+使用Go提供HTTP服务，需要先创建处理入口，再把它交给服务器监听。net/http 接收连接、解析请求后调用入口，入口可以直接处理业务，也可以由 mux 选择业务处理器；最后由库把响应送回连接。服务器配置与地址分派因此可以独立替换：改端口不应改变路由，换路由也不必重写协议解析。
+
+下面分别展示明文与 HTTPS 启动方式，它们是互斥入口，不应在同一地址同时调用。互动实验从请求已进入处理入口开始，不模拟监听；问题3用真实回环服务补上启动、关闭与协议验证。
+
+### 3.2.1 Go HTTP服务器：监听、超时与退出
+
+一个 <Term def="持有监听地址、处理入口和连接超时等配置的服务对象。">Server</Term> 把连接交给 `Handler`。`ListenAndServe` 正常服务时持续阻塞，失败或关闭才返回；端口冲突不会变成业务的 404。现代配置中的 `ReadHeaderTimeout` 限制读请求头的时间，不等于整个请求或数据库操作的截止时间。
 
 ```go
-server := &http.Server{
-    Addr: ":8080",
-    Handler: routes(),
-    ReadHeaderTimeout: 5 * time.Second,
+// ch03:server — 现代 Go1.26.0 示例
+func serveHTTP(h http.Handler) error {
+    s := &http.Server{
+        Addr: "127.0.0.1:8080", Handler: h,
+        ReadHeaderTimeout: 5 * time.Second,
+        IdleTimeout: 60 * time.Second,
+    }
+    return s.ListenAndServe()
 }
-log.Fatal(server.ListenAndServe())
 ```
 
-## Handler与HandlerFunc
+实践时由调用方检查返回错误并记录；主动 `Shutdown` 后的 `http.ErrServerClosed` 应与启动失败区别处理。超时数值是教学选择，不是通用生产配置。问题3的生命周期实验用 `127.0.0.1:0` 取得临时端口，再交给 `Server.Serve`：先确认请求到达处理器，再关闭服务并检查返回错误。它验证真实监听与服务生命周期，不实际调用上面占用固定端口的启动函数。
 
-Handler只要求`ServeHTTP(http.ResponseWriter, *http.Request)`；普通函数通过HandlerFunc适配。支持对象持有依赖，也支持函数保持轻量。
+### 3.2.2 HTTPS：加密是连接层的选择
+
+<Term def="通过 TLS 保护传输的 HTTP，仍需验证服务身份。">HTTPS</Term> 使用
+<Term def="为连接提供加密、完整性及身份认证机制的协议。">TLS</Term>
+。服务端需要证书和私钥，客户端还需信任证书链并核对主机名。端口写成 443
+不会自动加密，普通 `ListenAndServe` 也不会自动升级成 TLS。
 
 ```go
-type healthHandler struct{}
-func (healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-    w.WriteHeader(http.StatusNoContent)
+// ch03:tls — 现代示例；证书由部署环境提供
+func serveHTTPS(h http.Handler, cert, key string) error {
+    s := &http.Server{
+        Addr: "127.0.0.1:8443", Handler: h,
+        ReadHeaderTimeout: 5 * time.Second,
+    }
+    return s.ListenAndServeTLS(cert, key)
 }
 ```
 
+实践不要求自制证书或关闭验证：后面的 `httptest` 使用测试证书及配套受信客户端。部署证书签发、续期、真实域名信任不在该测试的证明范围内。反例是把 `InsecureSkipVerify` 当成修复；那只是绕过了身份验证。
 
-## Multiplexer
+## 3.3 处理器与处理函数：用同一个接口组合业务
 
-Mux根据模式选择handler。需要覆盖具体路径、子树、根fallback和不支持方法；路由只分派，不替代认证与业务验证。
+<Term def="实现 ServeHTTP 方法、负责处理单个 HTTP 请求的接口。">Handler</Term>
+只有一个方法 `ServeHTTP(ResponseWriter,
+*Request)`，因此路由器、业务对象和包装层都能成为入口。处理器与处理函数不是两套服务器机制：对象实现这个方法，普通函数经
+`HandlerFunc` 适配后也实现它，服务器最终都调用
+`ServeHTTP`。对象适合保存依赖，函数或闭包适合表达局部逻辑；二者都可能被并发调用。
+
+下面先用对象保存输出文本，再把普通函数适配成接口。问题2让两种形式输出同一个正文、接入同一包装链，比较允许与拒绝的调用轨迹；互动栈图解释调用与返回，不声称演示 Go 的类型转换。
+
+### 3.3.1 处理请求：响应写入与调用生命周期
+
+服务端传入响应写入器与请求。先设置响应头，再写状态或正文；第一次写正文通常隐含 200。`ServeHTTP` 返回表示本次处理结束，不应在返回后让后台任务继续使用响应写入器。多个请求可能并发调用同一个对象，所以共享可变状态需要同步。
 
 ```go
-mux := http.NewServeMux()
-mux.Handle("GET /health", healthHandler{})
-mux.HandleFunc("GET /threads/", showThread)
+// ch03:handler — 接口与只读依赖
+type textHandler struct{ text string }
+func (h textHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+    fmt.Fprint(w, h.text)
+}
 ```
 
-## 默认Mux与显式依赖
+把 `textHandler{"ready"}` 交给 Recorder，就能断言正文和 Content-Type。这里的字符串只读，不需锁；把它改成共享计数器就必须重新审查并发安全。HEAD 的线上正文抑制由真实 HTTP 服务路径处理，Recorder 直接调用可能仍录到处理器写出的字节，不能混为一谈。
 
-包级`http.HandleFunc`写入DefaultServeMux，测试和多个服务器会共享全局状态。更容易隔离测试和审查暴露面。
+### 3.3.2 多个处理器：按路径组合独立实例
 
+<Term def="按注册模式选择一个处理器的标准库请求分派器。">ServeMux</Term>
+本身也是 Handler。下面同一个 mux 持有两个不同实例，`/health` 与 `/version`
+各有自己的输出；注册工作在开始接收请求前完成。这里故意使用经典 path-only
+模式，方法限制另由处理器决定。
 
-## HTTP/2支持
+```go
+// ch03:classic — path-only，机制可对照 Go1.6
+func classicMux() *http.ServeMux {
+    m := http.NewServeMux()
+    m.Handle("/health", textHandler{"ready"})
+    m.Handle("/version", textHandler{"teaching"})
+    return m
+}
+```
 
-HTTP/2在一条连接上复用stream并压缩header。要求代码不依赖连接对应单请求或响应写入时序巧合；TLS配置和客户端协商由服务器层处理。
+实践：用两次 Recorder 请求确认两条路径不同、`/missing` 为 404。两个服务要有不同暴露面，就分别调用这个工厂或另建工厂，不要在共享实例里随意增加管理接口。
 
+### 3.3.3 处理函数：HandlerFunc适配与HandleFunc注册
 
-## 验收实验：路由与失败矩阵
+<Term def="把具有处理器签名的普通函数转换成 Handler 的函数类型。">
+  HandlerFunc
+</Term>
+的 `ServeHTTP` 方法才会调用其底层函数。`http.HandlerFunc(hello)`
+只是转换；`mux.HandleFunc` 是注册便捷方法，而不是“现在就处理一个请求”。
 
-分别制造端口占用、未知路径、方法不匹配、handler panic和响应二次写入，保存启动错误、状态码和日志。再用两个独立mux运行测试，证明路由状态不会跨用例污染；切换HTTP版本确认handler断言保持一致。
+```go
+// ch03:function — 普通函数与适配器
+func hello(w http.ResponseWriter, _ *http.Request) {
+    fmt.Fprint(w, "hello")
+}
+var helloHandler http.Handler = http.HandlerFunc(hello)
+```
 
+用 `helloHandler.ServeHTTP` 与直接调用 `hello` 对照，输出应相同。函数适合短逻辑；对象适合携带依赖，这不是性能高低的断言。下一节用函数闭包保存 `next`，把这两种形式连起来。
 
-## 本章回顾
+### 3.3.4 链式组合处理器与处理函数：进入和返回的顺序
 
-本章覆盖Go net/http库、使用Go提供HTTP服务、处理器与处理函数、多路复用器、默认mux所有权和HTTP/2服务支持。服务链从监听开始，以唯一handler响应结束，任何失败都必须有明确状态或日志。
+<Term def="包装下一个 Handler，在调用前后执行逻辑或提前返回的处理层。">
+  middleware
+</Term>
+接收 `next` 并返回新 Handler。`audit(gate(mux))` 先进入外层 audit，再进
+gate，业务结束后先回 gate、再回 audit。下例 `emit`
+只记录事件，传入的记录器须满足实际并发模型；测试按单请求使用。
 
+```go
+// ch03:middleware — 普通顺序，不是 panic 清理保证
+func audit(next http.Handler, emit func(string)) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        emit("audit.before")
+        next.ServeHTTP(w, r)
+        emit("audit.after")
+    })
+}
+func gate(next http.Handler, emit func(string)) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        emit("gate.before")
+        if r.Header.Get("X-Demo-Allow") != "yes" {
+            emit("gate.reject")
+            http.Error(w, "demo denied", http.StatusForbidden)
+            return
+        }
+        next.ServeHTTP(w, r)
+        emit("gate.after")
+    })
+}
+```
+
+`X-Demo-Allow` 是**可伪造的演示开关，不是认证方案**。因此拒绝使用 **403 Forbidden**，表示服务器理解请求但拒绝履行，不要求调用方已经认证。401 Unauthorized 则要求响应包含至少一个 `WWW-Authenticate` challenge（RFC 9110 §11.6.1）；`http.Error` 不会自动补齐它。本例没有实现认证协议，不应虚构 Basic/Bearer challenge。这里不发送 challenge 是演示策略，不是“所有403都禁止 challenge”。拒绝时 gate 不调用 next，既不会选路由，也不会执行 gate.after，但外层 audit.after 仍执行。普通 after 语句并不保证 panic 时运行；需要清理语义时考虑 `defer`，不要把二者混称为回栈保证。互动图的“拒绝”会移除业务栈帧。
+
+### 3.3.5 ServeMux 与 DefaultServeMux：模式与所有权都要明确
+
+<Term def="包级 Handle/HandleFunc 所注册的进程级默认 ServeMux。">
+  DefaultServeMux
+</Term>
+是全局对象；包级注册写入它，`Server.Handler == nil` 时也使用它。`NewServeMux`
+返回独立对象，把它显式传给 Server
+才能隔离路由所有权。实验在串行测试中临时换默认对象、结束恢复，并验证两个显式 mux
+不受默认注册影响。
+
+历史 path-only 路由以最长匹配等规则分派；尾斜杠表示子树，`/` 不是只匹配主页。现代 **Go 1.22+** 扩展允许方法和路径变量：`GET` 包含 HEAD，单段变量通过 `PathValue` 读取。现代优先级是“匹配请求集合的严格子集更具体”，不是字符更长或先注册者赢。实验不涉及 host 优先例外或转义路径，不能当成完整路由器规范。
+
+```go
+// ch03:routes — Go1.22+ 后加方法/通配符路由
+func routes(fallback bool, emit func(string)) *http.ServeMux {
+    m := http.NewServeMux()
+    m.HandleFunc("GET /posts/latest", func(w http.ResponseWriter, r *http.Request) {
+        emit("latest"); fmt.Fprint(w, "latest")
+    })
+    m.HandleFunc("GET /posts/{id}", func(w http.ResponseWriter, r *http.Request) {
+        emit("post"); fmt.Fprint(w, r.PathValue("id"))
+    })
+    m.HandleFunc("GET /posts/", func(w http.ResponseWriter, r *http.Request) {
+        emit("tree"); fmt.Fprint(w, "tree")
+    })
+    if fallback {
+        m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+            emit("fallback"); http.NotFound(w, r)
+        })
+    }
+    return m
+}
+```
+
+<Term def="没有更具体模式命中时由宽泛模式承接请求的兜底处理器。">fallback</Term>
+的行为由应用决定。上例用无方法限制的 `/` 返回 404；关闭它时，POST `/posts/42`
+没有可用处理器，但另一个方法可匹配，mux 返回 **405 和 Allow: GET,
+HEAD**。启用它后，POST 已有匹配者，所以执行应用的 404，不再自动生成 405。GET
+`/missing` 在两种配置下都是 404，但一个由 mux 生成，一个由应用生成。
+
+注册 `GET /posts/` 后，GET `/posts` 在本章 Go1.26.0 环境中得到 **307 → /posts/**，不是立即执行 tree。不要把重定向状态码视为所有 Go1.22+ 版本一致；本次实测与 Go1.26.0 标准库源码均为307。另行注册精确的无斜杠路径可以覆盖重定向。冲突则发生得更早：已有 `GET /posts/{id}` 时再注册 `GET /{kind}/latest`，两者在 `/posts/latest` 相交，却都不能包含另一方，注册会 panic。即使已有精确 latest 模式也不能消除这对冲突。
+
+### 3.3.6 其他多路复用器：比较契约，不替原书指定库
+
+<Term def="按方法、地址等条件分派请求的处理器，ServeMux 是其中一种实现。">
+  multiplexer
+</Term>
+可以由标准库或第三方提供。这里只核验到原书有 “Other multiplexers”
+小节，**没有核验其具体库选型或推荐理由**。下表是本站独立的现代选型任务，不是原书结论，也没有暗中引入第三方依赖。
+
+| 需要解决的问题             | 先验证的契约                                  | 本章实践                                           |
+| -------------------------- | --------------------------------------------- | -------------------------------------------------- |
+| 方法与单段参数             | GET/HEAD、PathValue、405 的 Allow             | 先用 Go1.22+ ServeMux 跑通例子                     |
+| 路径规范化                 | 尾斜杠、重复斜杠是否重定向                    | 保存 307 与 Location，不让客户端自动跟随掩盖它     |
+| 分组、中间件、复杂参数约束 | 接口能否接入 http.Handler，是否有额外匹配规则 | 若考虑第三方，先写黑盒验收再逐项对照其当前官方文档 |
+| 升级与维护                 | 冲突检测时机、依赖支持与迁移成本              | 不以“路由多”直接推出必须换框架                     |
+
+练习3要求写迁移验收清单，而非凭名称选库。换 mux 不会自动带来 TLS、认证或业务正确性；这些是不同层的责任。
+
+## 路由与回栈实验：先预测，再推进
+
+图中从具体到宽泛的连线表示请求集合包含，不是串行扫描顺序。逐帧推进后观察哪个节点胜出、哪些候选被淘汰，以及 audit/gate 栈何时退出。此实验是固定样例的可解释模型，实际行为由本章 Go 测试核对，不在浏览器里执行 Go。
+
+猜一猜：POST `/posts/42` 只打开 fallback 会改变哪个决策？若同时拒绝准入，还能看见 405 吗？先保持初始 GET `/posts/latest` 运行到结束，再分别修改一个参数；改变参数会回到第0帧，重置还会恢复所有默认参数并清除冲突。
+
+<GwpRoutingLab />
+
+图的两个边界也值得亲手试：HEAD 选中 GET 路由并不等于线上会发送正文；注册冲突发生在请求之前，不能画成请求返回 500。若交互不可用，可以用下表和练习答案完成同样的预测核对。
+
+| 请求/条件（Go1.26.0实测） | fallback 关闭          | fallback 开启               |
+| ------------------------- | ---------------------- | --------------------------- |
+| GET /posts/latest         | latest，200            | latest，200                 |
+| HEAD /posts/42            | post，200；线上无正文  | 同左                        |
+| POST /posts/42            | 405，Allow: GET, HEAD  | fallback，404；无自动 Allow |
+| GET /posts                | 307，Location: /posts/ | 同左                        |
+| GET /missing              | mux 的 404             | fallback 的 404             |
+| 任意请求，gate 拒绝       | 403，不进入 mux        | 同左                        |
+
+## 3.4 HTTP/2服务支持：验证TLS协商与真实请求
+
+<Term def="在一个连接上以多个流承载请求和响应的 HTTP 协议版本。">HTTP/2</Term>
+改变传输组织，不要求业务另写一套 Handler。Go 1.6 官方发布说明已记录 HTTPS
+下适当条件中的自动 HTTP/2 支持；这不意味着明文 `ListenAndServe` 自动获得 TLS 或
+HTTP/2。客户端能力与服务端配置必须兼容。
+
+HTTP/2服务支持要分开验证“服务器具备能力”与“这次连接实际使用了它”：启用支持后，TLS 握手仍需与客户端协商；协商为 HTTP/1.1 的成功响应不能证明 HTTP/2。协商完成后才进入请求处理，业务仍使用前面的对象或函数入口，而不是另建一组 HTTP/2 路由。下面的真实网络实验负责证明这一层，路由与回栈互动图不覆盖握手。
+
+TLS 中的 <Term def="TLS 握手时协商应用协议的机制，可选出 h2 或 http/1.1。">ALPN</Term> 可以协商出 `h2`。下面用测试服务器显式开启 HTTP/2，再同时核对响应协议版本和实际协商值，避免只看 HTTP 200 就宣布成功。它证明本地受控环境中的协商，不证明生产域名和代理链配置正确。
+
+```go
+// ch03:http2 — 可执行测试；测试证书，不关闭身份校验
+func TestTLSHTTP2(t *testing.T) {
+    h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprint(w, r.ProtoMajor)
+    })
+    s := httptest.NewUnstartedServer(h)
+    s.EnableHTTP2 = true
+    s.StartTLS()
+    defer s.Close()
+    client := s.Client()
+    client.Timeout = 5 * time.Second
+    res, err := client.Get(s.URL)
+    if err != nil { t.Fatal(err) }
+    defer res.Body.Close()
+    body, err := io.ReadAll(res.Body)
+    if err != nil { t.Fatal(err) }
+    if res.ProtoMajor != 2 || res.TLS == nil ||
+        res.TLS.NegotiatedProtocol != "h2" || string(body) != "2" {
+        t.Fatalf("protocol=%s TLS=%v body=%q", res.Proto, res.TLS, body)
+    }
+}
+```
+
+对照实验改用 `httptest.NewServer(h)`，不调用 `StartTLS`；在本章默认客户端配置中应读到 HTTP/1.1、`res.TLS == nil`、正文 `1`。显式配置的明文 HTTP/2 是另一个主题，不能由这个反例推导“HTTP/2 永远只能经 TLS”。处理器依旧只关注请求与响应，连接复用并不免除共享状态的并发约束。
+
+## 常见误区：用失败位置定位问题
+
+以下四种现象分别属于分派、组合、初始化和连接层。把失败画在正确位置，比捕获一个笼统的“服务器错误”更有诊断价值。
+
+- **现象 →** POST 以前是405，加了首页后变404。**原因 →** 无方法限制的 `/` 已匹配且自行返回404。**修法 →** 收窄首页模式，或显式实现预期方法策略；在图中对比 fallback 开关。
+- **现象 →** 拒绝请求仍执行了业务。**原因 →** 写完拒绝响应后仍调用 next。**修法 →** 拒绝分支立即 return，并断言业务事件未出现；测试不要只断言403。
+- **现象 →** 请求还没发服务就退出。**原因 →** 交叉模式在注册时 panic，不是处理请求产生500。**修法 →** 修改模式集合，启动前测试注册；实验冲突模式停止推进。
+- **现象 →** 端口8443返回200却无法证明加密/HTTP2。**原因 →** 地址和状态码不是协商证据。**修法 →** 使用TLS入口与受信客户端，分别核对TLS状态及ProtoMajor/ALPN。
+
+## 3.5 小结与练习：把责任落实为断言
+
+这些练习回收服务分层、路由修改和协议验证三个目标。答案给出原因与反例；不要靠死记状态码绕过执行路径。
+
+- 显式 Server 和 mux 让服务暴露面可追踪。
+- 路由看匹配集合，中间件看进入与返回顺序。
+- fallback 会改写失败路径；HTTP/2 要核对协商。
+
+<Exercises>
+
+**问题 1**：改路由，保留首页但恢复405
+
+现代 Go1.22+ 示例中，把 `/` fallback 改为只处理主页的 GET 模式。预测 POST `/posts/42`、GET `/missing`、GET `/` 的结果；再写一个独立测试证明。目标是既不吞未知路径，又保留主页200。
+
+<Answer>
+
+注册 `GET /{$}` 并返回200，删除原来的 `/` fallback。POST `/posts/42` 没有同方法匹配，但有 GET/HEAD，因此405并带Allow；GET `/missing` 没有任何路径匹配，因此404；GET `/` 命中精确主页，200。`{$}` 是Go1.22+结束标记，不能写成普通 `/`。把图中的 fallback 关掉只能模拟前两个结果；主页变体需要改代码测试，不在图的路径选项内。
+
+</Answer>
+
+**问题 2**：对照处理器与处理函数，再验证短路
+
+先用 `textHandler{"hello"}` 和 `http.HandlerFunc(hello)` 分别作为处理入口，让两者输出相同正文；再各自接入 `audit(gate(h))`。允许和拒绝时，业务调用及回栈应有哪些相同点？
+
+对 `audit(gate(mux))` 写出准入成功与拒绝时的完整事件序。再实现一个无认证职责的计时包装器，要求正常返回时记录耗时，且不要更改请求匹配或响应正文。为什么“返回后记录”不等于“panic时也记录”？
+
+<Answer>
+
+对象靠 `ServeHTTP` 满足接口，函数靠 `HandlerFunc` 适配；两者直接调用都应返回200和hello。套用同一包装链后，允许时业务执行一次，拒绝时业务不执行、返回403；包装器只依赖接口，不应因对象或函数形式改变短路和回栈顺序。
+
+GET `/posts/latest` 成功：audit.before → gate.before → latest → gate.after → audit.after。拒绝：audit.before → gate.before → gate.reject → audit.after。独立实现可在调用next之前记录开始时间，next返回后计算差值并交给日志函数。若要求panic退出时也记录，把记录放入defer；不要吞panic，不要让日志写入HTTP正文。普通after语句会被panic跳过。计时与认证应分层，演示请求头不能用于真实认证。
+
+</Answer>
+
+**问题 3**：验收HTTP服务启动、路由隔离与HTTP/2支持
+
+先说明如何用临时端口证明服务器能接收请求、正常关闭后返回什么，以及端口已被占用为何不是 HTTP 404。再检查下面的隔离与协议条件。
+
+服务A只暴露health，服务B只暴露version，某个包又向DefaultServeMux注册debug。设计测试证明A/B都不暴露debug；然后说明如何证明TLS下确实使用HTTP/2。如果今后换第三方mux，最少迁移哪些断言？
+
+<Answer>
+
+用 `net.Listen("tcp", "127.0.0.1:0")` 获取回环临时端口，让显式 `http.Server` 在独立 goroutine 中 `Serve`，客户端请求并断言处理器输出，再以有截止时间的 context 调用 `Shutdown`，等待 `Serve` 返回 `http.ErrServerClosed`。另用仍被占用的监听地址启动服务器，应立即得到监听错误，处理器不应被调用；这是启动失败，不存在可供客户端读取的404响应。
+
+创建两个NewServeMux，各自只注册所需地址；两台Server显式设置Handler。A的version和debug都404，B的health和debug都404；另用nil Handler服务器证明默认debug确实存在，避免把未注册误当隔离成功。测试对全局替换使用defer恢复且不并行。协议测试使用StartTLS和受信客户端，同时断言ProtoMajor=2、TLS非空、ALPN=h2及服务端看到2；普通明文对照为1。迁移mux至少重跑GET/HEAD、405及Allow、404、fallback、尾斜杠307、冲突时机、中间件顺序与隔离测试，不能把候选库未验证的行为当成ServeMux的保证。
+
+</Answer>
+
+</Exercises>
 
 ## 术语表
+
+下面按出现顺序收拢接口、分派和协商术语。它们分别属于不同层，遇到异常时先确定层次再选择测试工具。
+
+<Glossary>
+  <GlossaryItem term="net/http">
+    Go标准库的HTTP工具包，负责协议工作，不替应用决定业务权限。
+  </GlossaryItem>
+  <GlossaryItem term="Server">
+    持有地址、入口和超时配置的服务对象。
+  </GlossaryItem>
+  <GlossaryItem term="HTTPS">
+    用TLS保护传输的HTTP；证书信任仍需核对。
+  </GlossaryItem>
+  <GlossaryItem term="TLS">
+    保护连接并验证身份的协议，不是路由规则。
+  </GlossaryItem>
+  <GlossaryItem term="Handler">能被调用ServeHTTP的统一处理接口。</GlossaryItem>
+  <GlossaryItem term="ServeMux">
+    标准库路由分派器；自身也是Handler。
+  </GlossaryItem>
+  <GlossaryItem term="HandlerFunc">
+    让普通函数满足Handler接口的适配类型。
+  </GlossaryItem>
+  <GlossaryItem term="middleware">
+    包住下一层入口，决定调用前、调用后或提前返回的逻辑。
+  </GlossaryItem>
+  <GlossaryItem term="DefaultServeMux">
+    包级注册使用的全局路由对象，不是每台服务器私有。
+  </GlossaryItem>
+  <GlossaryItem term="fallback">
+    由宽泛匹配承接剩余请求的兜底，返回什么由它决定。
+  </GlossaryItem>
+  <GlossaryItem term="multiplexer">
+    把请求分派给相应处理器的组件类别。
+  </GlossaryItem>
+  <GlossaryItem term="HTTP/2">
+    可在同一连接上复用多个请求流的HTTP版本。
+  </GlossaryItem>
+  <GlossaryItem term="ALPN">
+    TLS握手协商应用协议的机制，h2表示HTTP/2。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与运行边界
+
+出版社目录用于范围映射，技术结论来自官方文档与本地测试。本章未取得或核验原书正文及全文使用许可，不声称逐段忠实、翻译或授权改编；也没有把现代第三方选型任务冒充原书推荐。
+
+- [RFC 9110 §11.6.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-11.6.1) 与 [§15.5.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.4)：401的challenge要求，以及本例403拒绝策略。
+- [Manning 出版社目录](https://www.manning.com/ajax/getTocHtml?id=679)：3.1–3.5及子节；目录证据不是正文证据。
+- [Go1.6 ServeMux源码](https://github.com/golang/go/blob/go1.6/src/net/http/server.go)：同期path-only、子树与默认mux语义参照。
+- [Go1.6 HTTP/2发布说明](https://go.dev/doc/go1.6#http2)：HTTPS场景的集成支持。
+- [Go1.22发布说明](https://go.dev/doc/go1.22#net/http) 与 [官方Routing Enhancements](https://go.dev/blog/routing-enhancements)：后加方法/通配符、匹配优先级、405及冲突规则。
+- [Go1.26.0服务端源码](https://github.com/golang/go/blob/go1.26.0/src/net/http/server.go)：本章尾斜杠307行为的版本锚点；官方tag与本地文件哈希一致。
+- [net/http接口文档](https://pkg.go.dev/net/http)：Handler、Server及ServeMux。冻结抓取页标go1.27.2，本章只使用Go1.26.0已有API，并以本地源码和执行测试交叉核对。
+
+作者负责的正文代码抽取、Go测试及局部MDX/组件检查证据位于仓库 `quality/artifacts/batch-36/ch03/`。主控已对本章qV1版本完成真实开发环境浏览器验收（1119项检查通过，360/390/1440三宽关键截图经实际查看通过），见 `quality/artifacts/batch-36/controller/runtime/ch03-2026-10-18T17-05-07.996Z/report.json` 与同目录 `manual-review.json`；独立生产构建通过的范围与限制见 `quality/artifacts/batch-36/controller/engineering/QV1-REPORT.md`。本章仍为draft，已被生产构建排除，因此这些结果不是本章生产渲染或生产路由验证，也不表示整书通过验收或已发布。本次仅获准提升qualityVersion至2，qV2最终验收仍待主控执行。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Go Web Programming · 第3章 Handling requests"
+  sourceUrl="https://www.manning.com/books/go-web-programming"
+/>
