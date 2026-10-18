@@ -3,66 +3,388 @@ title: "第5章 展示内容"
 type: C
 section: "Go Web编程 · 展示与数据"
 order: 5
-description: "掌握text/template与html/template的解析执行、action、pipeline、function、上下文转义和布局组合。"
+description: "沿着模板解析、数据作用域、上下文转义和布局调用，构造可验证且不泄漏半页的HTML输出。"
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-5"
-draft: false
+draft: true
+qualityVersion: 2
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+officialUnitId: gwp-05
+practiceMode: code
 ---
 
+import { GwpTemplatesLab } from "@/components/mdx/go-web-programming/gwp-templates-lab";
 
-## 从模板为什么分解析和执行开始
+{/* 知识→可视化：展示内容/模板引擎→解析树和提交闸门；Action/参数/变量→dot作用域树；Pipeline/函数→末参数插槽；text/template与html/template/上下文感知→编码位置；嵌套/布局/block→调用树及覆盖分支。 */}
 
-先预测：每次请求都从磁盘读取并Parse模板是否正确？能运行但放大I/O、语法失败和并发复杂度。应在启动期发现语法错误。
+<Objectives>
 
+- 区分模板解析失败、执行失败与成功输出，解释为什么执行错误仍可能留下半页。
+- 根据 dot、变量和管道的传参规则，预测条件、迭代、with 与子模板的具体结果。
+- 能改出一个先缓冲再提交的 HTML 页面，并自测：同一输入进入正文、URL 和 JavaScript 时，为什么不能采用同一种转义？
 
-## Template与Template Engine
+</Objectives>
 
-Template是含占位动作的展示程序，engine负责解析、绑定函数和执行。要求模板命名稳定，执行时不访问隐藏全局状态。
+## 直觉：先校对印版，再装订出货
+
+把网页想成一份按订单印出的说明书。印版决定哪些位置放标题、哪些位置放名单；订单提供当天的名字。印版缺了一半和订单漏了一个字段，是两种不同的故障，不能只在最后问“有没有纸出来”。
+
+印到第三页才发现订单有错，前两页不会自动消失。因此先把整份文件放在工作台上检查，成功后再交给收件人，比一边印一边寄更容易保证完整性。
+
+## 展示内容：模板与模板引擎如何分工
+
+展示内容不是把业务对象直接拼成字符串。模板与模板引擎分工明确：模板描述可信的页面结构，引擎把结构解析成可执行规则，再让它与每次请求的数据相遇。出版社第5章给出模板、action、函数和布局这些主题；本章据此独立设计“名单页”，不复述不可访问的书籍正文。
+
+这里的 <Term def="包含固定文本、数据占位和控制结构的展示规则。">模板</Term> 是印版；<Term def="解析展示规则，再用指定数据执行规则并写入输出的程序。">模板引擎</Term> 是执行印版的程序。应用负责查数据、处理权限、选模板；引擎负责遍历展示规则。模板不应该获得任意文件读写、数据库更新等有副作用的函数，否则一次页面渲染也可能改业务状态。
+
+用下面实验的“成功”案例，先预测再点击“解析模板”和“执行到缓冲区”。观察固定文本与字段分支汇合，最后才打开提交闸门。它显示 Go 测试产生的有限案例轨迹，不是在浏览器中运行 Go，也不是可接受任意代码的编辑器。正文中的代码实验则由原生 Go 1.26.0 实际执行验证。
+
+<GwpTemplatesLab />
+
+**随手检验：** 名单从 Lin 换为 Ada，必须重新解析吗？不必。结构没变，可以复用已解析模板，每次 Execute 传入不同数据；并发执行时应给各请求独立的 writer，不能无保护地共享一个 buffer。
+
+## Go模板引擎：解析模板与执行模板的边界
+
+解析解决“这套规则能否被理解”，执行解决“这份数据能否满足规则”。把两种错误分开，才能知道该修发布的模板还是请求数据。实验中的语法缺口和缺失字段看起来都不能得到完整页面，发生的阶段却不同。
+
+### Parse 建立结构，Execute 才读取数据
+
+一次 <Term def="读取模板文本并建立命名模板和语法树，不替请求数据完成执行。">解析</Term> 会发现未闭合的 `if`、未注册的函数名等问题；它不会预先验证每个请求对象都有 `.Name`。<Term def="以指定数据遍历已解析模板，将结果写给io.Writer，并返回可能的错误。">执行</Term> 才访问字段和调用函数。`html/template` 还会在首次执行前完成相关上下文安全检查，因此“Parse 成功”不能当作“HTML 已可安全执行”的证明。
+
+下面是完整的最小程序。它把错误显式分成两个检查点，输出 `Hello Lin`。模板名 `hello` 是对象的名字，不是磁盘路径；从文件加载时可使用 `ParseFiles` 或 `ParseFS`，但执行入口必须按解析后实际的模板名字选择，不能猜路径就是名字。
+
+{/* go-snippet: hello */}
 
 ```go
-templates := template.Must(template.New("base").Funcs(funcs).ParseFS(files, "*.html"))
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "html/template"
+)
+
+func main() {
+    t, err := template.New("hello").Parse(`Hello {{.Name}}`)
+    if err != nil { panic(err) }
+    var out bytes.Buffer
+    err = t.Execute(&out, struct{ Name string }{"Lin"})
+    if err != nil { panic(err) }
+    fmt.Print(out.String())
+}
 ```
 
-## text/template与html/template
+实验选择“解析错误”，`{{if .Name}}Hi` 没有 `end`，停在 Parse，执行按钮不可用。选择“字段错误”，`prefix|` 是已写入缓冲区的固定文本；访问不存在的结构体字段 `.Missing` 时才报错。选择“上下文错误”，语法可以解析，但未结束的 HTML 属性上下文在执行入口被拒绝，尚未产生输出。
 
-两者共享语法，但html/template按HTML、属性、URL、CSS和JavaScript位置做上下文转义。是默认安全边界；不要把不可信字符串转成template.HTML绕过。
+### 执行可以部分写入：成功后才提交响应
 
+<Term def="暂存输出的独立writer；渲染成功之前不把其中内容交给HTTP响应。">
+  输出缓冲区
+</Term>
+不是自动回滚：失败后里面仍有 `prefix|`，应用需要丢弃它。下面的可编译函数用
+buffer 隔离模板错误；handler 在 Render
+返回错误时发送受控的500，而不是把局部页面当200发送。
 
-## Action、参数与变量
+{/* go-snippet: buffered */}
 
-Action位于双花括号中，可访问dot、字段、方法和变量。要求空值和缺失字段有明确策略，复杂业务判断留在handler。
+```go
+package page
 
-```html
-{{range .Threads}}
-  <a href="/thread/{{.ID}}">{{.Title}}</a>
-{{else}}
-  <p>No threads</p>
-{{end}}
+import (
+    "bytes"
+    "html/template"
+    "net/http"
+)
+
+func Render(w http.ResponseWriter, t *template.Template, data any) {
+    var out bytes.Buffer
+    if err := t.Execute(&out, data); err != nil {
+        http.Error(w, "render failed", http.StatusInternalServerError)
+        return
+    }
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    w.WriteHeader(http.StatusOK)
+    _, _ = w.Write(out.Bytes())
+}
 ```
 
-## Pipeline与Function
+这只能防止**模板执行错误**造成半页提前提交，不能撤销提交后断网导致的部分传输。示例略去最后 Write 错误的日志处理；真实服务应记录它，且不能在头部已发送后再假装改成500。缓存模板减少重复解析，缓冲完整页面则增加每请求内存；大页面需另做容量预算，不可无限缓冲。
 
-Pipeline把前一步结果作为后一步参数，函数可返回值或`(value, error)`。适合格式化，不适合数据库、网络和不可控副作用。
+**随手检验：** 在实验“字段错误”中看见 `prefix|`，客户端是否也应看到它？答案是否：图中的缓冲区有内容、提交闸门关闭，HTTP测试要求响应体只有 `render failed\n`。
 
-## 嵌套模板与Layout
+<Callout type="trap">
+  误区：Execute 返回 error 就等于什么也没写。writer
+  不会替你回滚，先前的固定文本可能已送出。修法是先写局部
+  buffer，检查错误后才提交；不要对已开始的200响应再追加错误页。
+</Callout>
 
-define声明命名模板，template调用子模板，block提供可覆盖默认内容。避免复制header与footer，并要求数据契约一致。
+## Action、参数、变量与Pipeline：跟踪 dot 的位置
 
-```html
-{{define "base"}}<main>{{block "content" .}}{{end}}</main>{{end}}
-{{define "content"}}<h1>{{.Title}}</h1>{{end}}
+Action、参数、变量与Pipeline组成模板的数据流：Action执行指令，参数提供输入，变量保存局部结果，Pipeline把结果送到下一次调用。分支、遍历和局部上下文决定这些值在哪一步可用。把它们合称 <Term def="模板中由双花括号包围、负责取值或控制执行的指令。">Action</Term>。下面按数据流理解 conditional、iterator、set 和 include actions，而不是只背关键字。
+
+### 条件、迭代和 set actions
+
+模板里的 <Term def="当前执行位置绑定的数据，写作一个点；进入with或range后可能改变。">dot</Term> 在入口是传入对象。`if .Admin` 只选择分支，**不改变 dot**；假值包含 false、零、nil、空字符串和空集合。不要把“结构体的字段全为空”推成“结构体本身为假”。
+
+`range .Tags` 每轮把 dot 设为一个元素，空集合走 `else`。`with .User` 在非空时把 dot 临时设为该值；为空时进入 `else`，dot 不改变。这里的 set action 是**设置当前上下文**，不是修改数据库，也不是给 `.User` 赋值。离开 `with` 或 `range` 后回到外层 dot。
+
+| 位置                 | dot 指向  | `.Name` 或 `.` 的结果         |
+| -------------------- | --------- | ----------------------------- |
+| 入口与 `if` 内       | 根 page   | `.Name` 是 Lin                |
+| `with .User` 内      | User      | `.Name` 是 Ada                |
+| `range .Tags` 第一轮 | 字符串 Go | `.` 是 Go，不能再访问 `.Name` |
+| 离开 range           | 根 page   | `.Name` 又是 Lin              |
+
+声明 `{{$root := .}}` 可保留根数据；`$` 在执行开始时也是根。变量用 `:=` 声明，用 `=` 给已声明变量赋值，作用域到所在控制结构的 `end`，或模板结束。`range $i, $v := .Tags` 的两个值是索引和元素；只声明一个变量时得到**元素**，不是 Go 语言 `range` 的单变量索引规则。
+
+实验“作用域”把根、with 和 range 分叉画出来，实测输出 `reader|Ada:Go/Lin;Web/Lin;`。切到“空集合”后，with/range 分支为空，输出 `reader|guest:empty`。这同时验证条件不换 dot、with 换 dot、循环里用 `$root` 返回根。
+
+### 参数、变量和管道不是字符串拼接
+
+Action 的参数可以是常量、字段、键、变量、函数或括号包围的表达式。<Term def="用竖线连接命令，前一命令的结果作为后一命令的最后一个参数。">Pipeline</Term> 把数据送进下一次调用，而不是把它放在第一个参数。`printf` 是内置模板函数，不需要自己注册。
+
+{/* go-snippet: pipeline */}
+
+```go
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "text/template"
+)
+
+func main() {
+    t := template.Must(template.New("p").Parse(
+        `{{.Name | printf "%s!" | printf "[%s]"}}`))
+    var out bytes.Buffer
+    err := t.Execute(&out, struct{ Name string }{"Lin"})
+    if err != nil { panic(err) }
+    fmt.Print(out.String())
+}
 ```
 
+先算 `printf("%s!", "Lin")` 得 `Lin!`，再算 `printf("[%s]", "Lin!")` 得 `[Lin!]`。在“管道函数”实验看末参数插槽，而不要把它误读为 `printf("Lin", "%s!")`。`template.Must` 适合程序内固定模板的启动期校验；请求中动态解析不应把普通错误升级为 panic。
 
-## 验收实验：同一输入四种上下文
+**随手检验：** 如果把循环里的 `$root.Name` 改成 `.Name` 呢？当前元素是字符串，不具备 Name 字段，执行失败；修法是使用根变量或构造含所需字段的元素。
 
-把包含引号、尖括号、URL分隔符和脚本片段的输入分别放到文本、属性、URL和JavaScript位置，保存html/template输出；再与text/template比较。故意使用未知模板、失败函数和错误数据形状，确认错误在响应提交前可诊断。
+## 模板函数：注册时机与错误传播
 
+函数扩展模板的展示能力，但也扩大了模板可以调用的权限。将格式化留在函数里是合理的，把扣款藏在函数里则让重渲染产生副作用。浏览器实验的函数错误不是伪造语法问题：函数已注册，真正失败的是执行时的调用。
 
-## 本章回顾
+自定义函数通过 <Term def="把模板可调用名称映射到Go函数的表，通常在Parse之前注册。">FuncMap</Term> 注册。下面的 `check` 可以返回一个值，或返回 `(值, error)`；第二个返回值非 nil 时，Execute 停止并返回错误。函数名在 Parse 前就必须可识别，“未知函数”案例因此停在 Parse，而“函数错误”案例停在 Execute。
 
-本章覆盖模板与模板引擎、text/template、html/template、Action、参数、变量与Pipeline、模板函数、上下文感知，以及嵌套模板、布局与block action。安全来自解析时点、数据边界和上下文转义共同作用。
+{/* go-snippet: function */}
 
+```go
+package main
 
-## 术语表
+import (
+    "bytes"
+    "errors"
+    "fmt"
+    "text/template"
+)
+
+func main() {
+    check := func(s string) (string, error) {
+        if s == "bad" { return "", errors.New("rejected") }
+        return s, nil
+    }
+    t := template.Must(template.New("f").Funcs(template.FuncMap{
+        "check": check,
+    }).Parse(`prefix|{{check .}}`))
+    var out bytes.Buffer
+    err := t.Execute(&out, "bad")
+    fmt.Printf("partial=%q failed=%t", out.String(), err != nil)
+}
+```
+
+输出 `partial="prefix|" failed=true`，与“字段错误”的部分写入风险一样。函数返回值还会经过 html/template 的上下文转义；普通 string 并不会因为“来自函数”而变成可信 HTML。
+
+**随手检验：** 要让 `check "Lin"` 输出 Lin，应修哪里？保留注册顺序、传入合法数据即可；要让 `shout` 可用，则要在 Parse 前注册签名合法的函数，不能等 Parse 报错后只重试 Execute。
+
+## text/template与html/template：上下文感知与信任边界
+
+text/template与html/template共享大部分 action 语法，却不提供相同的安全保证：前者输出文本，后者把插入位置纳入安全处理。选择包时必须看输出会被谁解释，不能只看模板能否编译。`text/template` 适合普通文本，不做 HTML 上下文转义；把它的结果作为 HTML 发送，输入中的标签就可能成为代码。`html/template` 在**模板作者可信、执行数据不可信**的模型下提供 <Term def="根据插入点处在HTML文本、属性、URL、JS等位置选择相应处理规则。">上下文感知</Term>，不是对整页只调用一次通用替换函数。
+
+### 防御 XSS：输出位置决定编码规则
+
+实验“上下文转义”把插入点放在不同语法位置，下面给出具体预期。所有实验输出都按字面文本展示，绝不把攻击字符串插入真实 DOM。<Term def="不可信输入在页面中变成可执行代码的跨站脚本风险。">XSS</Term> 的关键是从“数据”跨成“代码”，不是输入中恰好出现某个敏感单词。
+
+| 场景与数据                    | html/template 的处理         | 实验观察                       |
+| ----------------------------- | ---------------------------- | ------------------------------ |
+| 正文 `<b>A&B</b>`             | `<`、`>`、`&` 编为实体       | `&lt;b&gt;A&amp;B&lt;/b&gt;`   |
+| title 中含引号                | 引号成为 `&#34;`，不结束属性 | onmouseover 仍只是 title 内容  |
+| href 为 `javascript:alert(1)` | 过滤危险 URL 协议            | href 变为 `#ZgotmplZ`          |
+| JS 值为 `</script><b>&`       | 序列化为字符串并转义危险字符 | 含 `\u003c`，不提前结束 script |
+
+正文转义不能代替 URL 协议检查，属性转义也不能代替 JavaScript 序列化。自动转义不等于业务 URL 白名单，不替代权限校验、CSRF 防护或对可信模板作者的代码审查。不要接受用户提交的模板源码后声称“因为用了 html/template 所以安全”。
+
+### Unescaping HTML：可信类型不是清洗器
+
+当开发者确实需要固定的强调标签，可以向 html/template 传入 <Term def="声明内容已经可信的HTML类型；会绕过相应HTML文本转义，不执行清洗。">template.HTML</Term>。实验“可信常量”只使用源码里固定的 `<b>fixed</b>`，输出保留标签。它展示的是**绕过保护**，不是把用户输入“认证安全”。同类的 JS、URL 等可信类型也只应承载已按对应上下文审查的内容，不是通用免转义按钮。
+
+**随手检验：** 用户昵称含 `<b>`，为了让它加粗而直接转为 template.HTML，可以吗？不可以。应把加粗标签写在可信模板里，如 `<b>{{.Name}}</b>`，昵称仍作为普通字符串；需要富文本时另行使用可靠的白名单清洗流程并明确其输出契约，本章没有实现该流程。
+
+<Callout type="trap">
+  误区：用 html/template
+  后任何输入都安全。它信任模板作者，也尊重可信类型声明。将用户输入强制转换为
+  template.HTML 是绕过保护，不是消毒；让用户控制模板源码更越过了该安全模型。
+</Callout>
+
+## 嵌套模板、布局与block action：名字和数据都要传对
+
+嵌套模板、布局与block action处理的是不同层次的复用：嵌套模板建立具名调用，布局安排外层骨架，block action提供可被覆盖的默认内容。它们复用展示结构，不会偷偷共享所有局部变量。页面通常有外层骨架、可复用片段和每页内容；用命名模板把调用关系显式画出来，比在多页复制头尾 HTML 更容易维护。
+
+### Include actions 与嵌套调用
+
+`{{define "item"}}…{{end}}` 定义一个命名模板；`{{template "item" .}}` 执行它，并把当前 dot 作为数据传入。这个 include action 不等于任意读取磁盘路径。调用者局部变量不会自动被被调用模板继承；如果省掉传入数据，子模板的 dot 为 nil，不能指望它自动使用调用者的根。
+
+实验布局树从 `page` 指向 `item` 和 `content`。`item` 收到 Name=Lin，所以产生 `<h1>Lin</h1>`；“缺少模板”虽然能解析调用表达式，却在执行安全准备阶段找不到名字，返回错误，没有输出。`Execute` 从接收对象的根模板开始；`ExecuteTemplate` 可以显式选择 `page`，避免只有 define、根内容为空时执行到一片空白。
+
+### block 默认值与单页覆盖
+
+<Term def="在当前位置定义并执行一个具名默认模板，可在执行前由后续解析的同名定义替换。">
+  block action
+</Term>
+是定义加调用的简写。下面完整程序先解析带默认值的
+base，再在**执行前**解析覆盖。克隆后做每页覆盖可防止修改公共布局；不要在同一个
+Parse 文本里放两个非空同名定义，或在已执行的 html/template 上继续 Parse/Clone。
+
+{/* go-snippet: layout */}
+
+```go
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "html/template"
+)
+
+func main() {
+    base := template.Must(template.New("base").Parse(
+        `{{define "page"}}<main>{{block "content" .}}Default` +
+            ` {{.Name}}{{end}}</main>{{end}}`))
+    child := template.Must(base.Clone())
+    child = template.Must(child.Parse(
+        `{{define "content"}}Custom {{.Name}}{{end}}`))
+    var out bytes.Buffer
+    err := child.ExecuteTemplate(&out, "page", struct{ Name string }{"Lin"})
+    if err != nil { panic(err) }
+    fmt.Print(out.String())
+}
+```
+
+输出 `<main>Custom Lin</main>`。在实验中，默认页还包括复用的 item 标题；切到“覆盖”后只有 content 分支替换，item 分支不变。默认页与覆盖页各自执行，不能仅凭 override 的输出就假定 base 没被意外改掉；Go 测试也检查了 clone 隔离与已执行后再 Parse 的错误。
+
+**随手检验：** 内容页需要 `.Name`，调用却写成 `{{template "item"}}`，应把变量声明复制过去吗？应先显式传入符合子模板契约的数据，如 `{{template "item" .}}`；变量名碰巧相同不能补上缺失的数据边界。
+
+<Callout type="trap">
+  误区：block 是运行时随意替换的槽位。定义覆盖发生在准备模板集合时，执行后的
+  html/template 不能继续解析。先解析 base，再 Clone、Parse
+  覆盖，最后执行；不要在请求处理中修改共享模板集合。
+</Callout>
+
+## 小结与带答案练习
+
+回到开头的三个目标：解析建立结构，执行读取数据，buffer 隔离执行失败；作用域和末参数规则决定模板如何取值；HTML 的插入上下文决定数据怎样保持为数据。布局只是把这套规则分到几个命名模板里，并没有改变信任边界。
+
+- 比较解析、字段与上下文错误；有输出不等于成功。
+- 沿with/range追踪dot；管道结果进入最后参数。
+- 选择可信模板与普通数据，检查子模板契约，成功才提交。
+
+<Exercises>
+
+**问题 1：独立实现不泄漏半页的名单响应**
+
+从模板与模板引擎的分工出发，用上面的 Render 函数独立接入已解析的 `Hello {{.Name}}`。成功输入 Name=Lin 时应返回什么状态、类型和正文？换成 `prefix|{{.Missing}}` 或未闭合的 `if`，分别在哪一步拒绝？若模板超过内存预算，buffer 是否仍是无条件正确的选择？请在执行实验中先预测再对照。
+
+<Answer>
+  成功是200、`text/html; charset=utf-8`、`Hello
+  Lin`。字段错误在Execute发生：本地buffer可能有prefix|，HTTP正文只能是render
+  failed加换行，状态500。未闭合if在Parse时失败，不应把不可用模板传给Render；应在启动/加载阶段拒绝，并保留明确的错误信息。缓存解析结果不等于缓存响应数据。buffer需要大小预算，超大页面应限制规模或另行设计有明确部分失败语义的流式输出，不能声称缓冲可回滚网络。
+</Answer>
+
+**问题 2：沿 dot 和末参数插槽手算**
+
+沿Action、参数、变量与Pipeline的数据流推演：根Name=Lin，User.Name=Ada，Tags为Go和Web，Admin=false。先写出“作用域”输出，再预测User=nil且Tags为空的结果。把range内的`$root.Name`误写成`.Name`有什么后果？手算两段printf管道；解释未知shout与已注册check返回error的区别。
+
+<Answer>
+  非空输出reader|Ada:Go/Lin;Web/Lin;，空值输出reader|guest:empty。if不换dot，with在真分支换成User，range每轮换成字符串元素，因此字符串没有Name字段会导致执行失败。$root是保存的根，离开控制块恢复外层dot。printf依次接收格式串与末参数Lin、Lin!，结果为[Lin!]。shout未注册在Parse时报错；check已注册但返回非nil
+  error在Execute时报错，prefix|可能已写入。模板函数应限制为必要的展示能力。
+</Answer>
+
+**问题 3：修复带布局的危险昵称页**
+
+一个页面用text/template渲染昵称，把链接也直接拼入HTML，并为了复用样式把昵称转成template.HTML；它还在首次Execute后才解析content覆盖。比较text/template与html/template，依据上下文感知规则逐项修正；再用嵌套模板、布局与block action修复复用结构，给出正文、URL、JS和默认/覆盖页的实验预期。子模板省略点号时应如何修？
+
+<Answer>
+  HTML页面改用html/template，昵称保持普通string，把固定样式标签放进可信模板；不能依赖text/template提供上下文保护，也不能用可信类型做清洗。正文中的&lt;b&gt;按实体输出，危险javascript
+  URL成为#ZgotmplZ，JS字符串中小于号成为反斜杠u003c。可信HTML常量可以保留标签，但这不授权用户输入走同一路径。布局在执行前准备：解析base、Clone、解析覆盖、ExecuteTemplate选择page。实验默认页为&lt;main&gt;&lt;h1&gt;Lin&lt;/h1&gt;Default
+  Lin&lt;/main&gt;，覆盖页仅把Default换成Custom。template调用应显式传入点号或专用视图对象，局部变量不会自动跨模板继承；名字缺失仍须处理错误。最后使用独立buffer，失败不提交局部页面。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+下面把取值、执行和安全三个层次的术语分开复查，避免将“模板解析成功”误当作“输出内容可信”。
+
+<Glossary>
+  <GlossaryItem term="模板">
+    包含固定文本与取值、控制结构的展示规则。
+  </GlossaryItem>
+  <GlossaryItem term="模板引擎">
+    把规则解析成结构，再用数据执行并写出结果的程序。
+  </GlossaryItem>
+  <GlossaryItem term="解析">
+    读取模板语法、登记命名模板；不会提前核验每次请求数据。
+  </GlossaryItem>
+  <GlossaryItem term="执行">
+    使用当前数据运行模板；可能在报错前已经写出部分内容。
+  </GlossaryItem>
+  <GlossaryItem term="输出缓冲区">
+    请求独立的暂存writer；成功才提交，失败丢弃。
+  </GlossaryItem>
+  <GlossaryItem term="Action">
+    双花括号内的取值或控制指令，如if、range、with、template。
+  </GlossaryItem>
+  <GlossaryItem term="dot">
+    当前数据位置；with和range能暂时改变它。
+  </GlossaryItem>
+  <GlossaryItem term="Pipeline">
+    前一结果传给后一命令的最后一个参数的组合方式。
+  </GlossaryItem>
+  <GlossaryItem term="FuncMap">
+    模板函数名称到Go函数的映射，在解析前提供可用名称。
+  </GlossaryItem>
+  <GlossaryItem term="上下文感知">
+    按HTML、属性、URL、JS等插入位置采用不同安全处理。
+  </GlossaryItem>
+  <GlossaryItem term="XSS">
+    不可信输入越过数据边界，变成网页执行代码的风险。
+  </GlossaryItem>
+  <GlossaryItem term="template.HTML">
+    对已经可信HTML的类型声明，不清洗内容，能绕过相应转义。
+  </GlossaryItem>
+  <GlossaryItem term="block action">
+    定义并调用默认命名模板，可在执行前通过后续解析覆盖。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与运行边界
+
+本章按 Sau Sheong Chang《Go Web Programming》（Manning，2016）第5章公开目录的17个编号节点（含小结）独立组织，另对章标题“展示内容”提供总览，覆盖7个完整核心概念；未取得或核验书籍正文，也没有声称出版社目录链接授予正文改编许可。例子、数据、图示与练习为本章独立设计。
+
+技术依据是 [Go text/template 文档](https://pkg.go.dev/text/template)、[Go html/template 文档](https://pkg.go.dev/html/template)及本机 Go 1.26.0 GOROOT 对应源码。来源缓存网页标有Go1.27.2，不能作为1.26.0运行证明；本章采用实际Go1.26.0测试裁定代码与实验结果。测试不启动HTTP服务，使用httptest记录响应；浏览器展示有限测试向量，不执行用户模板。作者已完成局部Go测试与真实组件SSR；主控已核验qV1的Chrome三宽（360/390/1440）交互、键盘、重置、reduced-motion与人工截图，以及工程检查（final-qv1-r5，13/13，actualExit0）和原始official检查。本次qV2最终验收仍待完成，本章保持草稿、未发布；上述结果不构成生产页面证明。
+
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Go Web Programming · Chapter 5: Displaying content"
+  sourceUrl="https://livebook.manning.com/book/go-web-programming/chapter-5"
+  sourceBasis="outline-only"
+/>
