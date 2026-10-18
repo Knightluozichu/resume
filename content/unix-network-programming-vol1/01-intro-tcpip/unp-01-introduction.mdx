@@ -1,52 +1,383 @@
 ---
-title: "第1章 简介"
+title: "第1章 简介：从一次时间查询看网络程序"
 type: C
-section: "简介与TCP/IP"
+section: "简介与 TCP/IP"
 order: 1
-description: "第1章 简介围绕一个简单的时间获取客户程序、协议无关性、错误处理：包裹函数、一个简单的时间获取服务器程序、本书中客户/服务器程序示例索引表、OSI模型建立从套接字接口到分组、内核状态与清理结果的证据链。 覆盖14个正式目录层级。"
+description: "沿 daytime 的端点、报文和字节流建立网络程序地图，诊断错误，核对分层、测试环境与 64 位资源契约。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
-draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: unp-unit-01
+draft: true
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  UnpDaytimeClientServerLab,
+  UnpLayerLab,
+  UnpEnvironmentLab,
+} from "@/components/mdx/unix-network-programming-vol1/v2/unp-01-introduction";
 
-## 为什么同时看API、内核状态与分组
+{/* 可视化决策：1.1/1.2/1.4/1.5=实验A端点资源+TCP时序+逐字节格，故障与读取上限改变轨迹；1.3=实验A地址族与同族监听输入；1.6=问题到后续章节的索引及实验B责任定位；1.7=实验B嵌套封装边界；1.8/1.9/1.10=有来源的BSD传承对照及实验C隔离拓扑，练习区分接口传统/标准/运行证据；1.11=实验C ILP32/LP64字节宽度；1.12=资源所有权独立实现与回收题。概念异构，均在本章专属组件内实现，非跨章文字卡片。 */}
 
-、、、、共同构成本页坐标。第1章
-简介围绕一个简单的时间获取客户程序、协议无关性、错误处理：包裹函数、一个简单的时间获取服务器程序、本书中客户/服务器程序示例索引表、OSI模型建立从套接字接口到分组、内核状态与清理结果的证据链。
+<Objectives>
 
-在“第1章 简介”中，第3版覆盖IPv4、IPv6、TCP、UDP、SCTP、路由与密钥管理套接字，并保留STREAMS等历史接口。正文先还原书中标准和测试平台语境；Linux专有工具只用于观测与现代对照，不能冒充POSIX或协议标准保证。SCTP、STREAMS、T/TCP和历史IPv6 API的可用性必须由当前平台实测确认。
+- 能按事件先后区分客户建连、服务端接入、短读写与 EOF，并在图上找出监听端点和会话端点。
+- 能修改本机客户程序，逐个尝试地址候选、准确报告失败，并按所有权释放描述符和地址链。
+- 能回答：没有监听与读到 EOF 有何区别？换成 IPv6 或 64 位主机后，哪些程序契约变、哪些不变？
 
-“第1章 简介”未取得未获授权的完整中文正文；以 [InformIT 第三版官方目录与合法样章](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 界定 3 部分、31 章和 5 个附录范围，中文解释、代码、实验与练习均为独立教学重写。“第1章 简介”的接口与协议事实分别以 [POSIX socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)、[RFC 9293 TCP](https://www.rfc-editor.org/rfc/rfc9293.html)、[RFC 768 UDP](https://www.rfc-editor.org/rfc/rfc768.html)、[RFC 9260 SCTP](https://www.rfc-editor.org/rfc/rfc9260.html)、[RFC 6458 SCTP sockets](https://www.rfc-editor.org/rfc/rfc6458.html) 和 [RFC 8200 IPv6](https://www.rfc-editor.org/rfc/rfc8200.html) 核对；现代差异不覆盖第三版历史语境。
+</Objectives>
 
-## 常见误区
+## 从一条运输路线开始
 
+把问时间想成沿地图送一张回执：起点要知道目的地，目的地要有人接收；道路通了，不代表对方已经写好回信。少分清一步，排错就会从“窗口没开”误跑到“整条道路坏了”。
 
-## 四类样本与验收
+本章把回执的旅程分成准备、连接、接收、收尾。先观察正常路线，再故意让其中一段失败；最终能解释程序停在哪里、谁还持有资源，而不是只背函数名。
 
-| 样本 | 只改变什么                 | 必查证据              | 通过条件   |
-| ---- | -------------------------- | --------------------- | ---------- |
-| 基线 | 固定网络、地址与输入       | API、状态、队列与分组 | 与预测一致 |
-| 边界 | 缓冲、MTU、并发或时序      | 首个阻塞、截断或拒绝  | 边界可解释 |
-| 故障 | 丢包、复位、信号或路径故障 | errno、首包与责任层   | 故障可定位 |
-| 恢复 | 关闭、回收、撤销网络设置   | 残留端点与同输入重放  | 回到基线   |
+## 1.1 概述
 
-## 练习
+“第1章 简介”承担的是建立排错坐标的任务：把客户与服务器的代码放回 TCP/IP 的主机、协议和资源关系里，而不是提前穷举所有套接字选项。
 
+本章以第三版目录限定范围，但以下中文、代码与实验为独立重写，不复刻书中正文或源程序。阅读时抓住三条证据链：程序调用返回了什么；内核保管哪些对象；线上实际交换了什么。实验 A 的三幅图分别承载这三种观察，不能拿其中一幅替代另外两幅。
 
-## 小结
+<Term def="进程用来引用打开的内核对象的小整数">文件描述符</Term>
+是程序持有的引用，不是端口或连接编号。两个进程都显示 fd
+3，仍可能指向完全不同的端点；最后一个描述符被关闭后，TCP
+的协议状态也可能继续存留。动手试：在实验 A 的初始帧找出客户 fd 和服务器
+fd，确认此时没有报文，也还没监听。自检答案是“两端只完成本地创建”，而不是“连接建立”。
 
-- 一个简单的时间获取客户程序：连接“冻结测试网络”的接口、状态与分组证据。
-- 协议无关性：连接“辨认协议层”的接口、状态与分组证据。
-- 错误处理：包裹函数：连接“建立端点”的接口、状态与分组证据。
-- 一个简单的时间获取服务器程序：连接“捕获分组”的接口、状态与分组证据。
-- 本书中客户/服务器程序示例索引表：连接“注入断开”的接口、状态与分组证据。
-- 本页14个正式目录层级全部进入可重放网络实验链。
+## 1.2 一个简单的时间获取客户程序
 
-## 术语表
+<Term def="建立连接后返回日期时间文本并关闭连接的传统诊断服务">
+  daytime 服务
+</Term>
+在 RFC 867 的 TCP 版本中使用端口
+13，客户不必先发送业务请求。服务端发送可读时间文本，随后关闭；标准不规定唯一文本格式。本章本机练习改用非特权端口
+1313，图中固定 `12:34:56` 是八字节教学载荷，不是假装读取真实时钟。[RFC 867：TCP
+Based Daytime Service](https://www.rfc-editor.org/rfc/rfc867.txt)
 
+客户通常先解析地址，再 `socket → connect → read 循环 → close`。<Term def="有序的字节序列服务，不保留应用每次写入的边界">TCP 字节流</Term>意味着一次读可能只得到两字节。`read` 的返回类型是有符号 `ssize_t`：正数是本次实际字节数；正长度请求返回 0 才表示接收端 EOF；`-1` 是失败。暂时没有数据时，阻塞读通常等待，非阻塞读可能报 `EAGAIN`，均不等于 EOF。[POSIX read](https://pubs.opengroup.org/onlinepubs/9799919799/functions/read.html)
 
+先预测：把实验 A 的读取上限从 2 改为 4，会减少几个有数据的读取步骤？看字节格从四轮填满改为两轮，但仍需等服务端结束发送后才观察 EOF。**小练习：**读到 8 字节是否就能断言 EOF？不能，字节数完整与流已结束是两条不同证据。
+
+## 1.3 协议无关性
+
+<Term def="从解析结果取得地址族、类型、协议与地址长度，而不把应用流程写死在一种 IP 地址表示上">
+  协议无关性
+</Term>
+不是“所有协议都一样”。客户可令 `getaddrinfo` 的
+`ai_family=AF_UNSPEC`、`ai_socktype=SOCK_STREAM`、`ai_protocol=IPPROTO_TCP`，逐个尝试返回的候选。创建时使用每个候选的
+`ai_family/ai_socktype/ai_protocol`，连接时使用其
+`ai_addr/ai_addrlen`；解析成功并不保证任何候选可连。[POSIX getaddrinfo /
+freeaddrinfo](https://pubs.opengroup.org/onlinepubs/9799919799/functions/getaddrinfo.html)
+
+下列函数把每个失败候选的 fd 关掉，但把地址链一直保留到遍历结束。`getaddrinfo` 返回的是独立的 EAI 错误码，应使用 `gai_strerror`；只有 `EAI_SYSTEM` 才另读 `errno`。成功返回的 fd 转交调用者，地址链不转交。
+
+```c
+int dial(const char *host, const char *service) {
+    struct addrinfo hints = {0}, *head = NULL;
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    int rc = getaddrinfo(host, service, &hints, &head);
+    if (rc != 0) {
+        if (rc == EAI_SYSTEM) perror("getaddrinfo");
+        else fprintf(stderr, "%s\n", gai_strerror(rc));
+        return -1;
+    }
+    int fd = -1, saved = EHOSTUNREACH;
+    for (struct addrinfo *p = head; p; p = p->ai_next) {
+        fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (fd < 0) { saved = errno; continue; }
+        if (connect(fd, p->ai_addr, p->ai_addrlen) == 0) break;
+        saved = errno;
+        close(fd);
+        fd = -1;
+    }
+    freeaddrinfo(head);
+    if (fd < 0) { errno = saved; perror("connect candidates"); }
+    return fd;
+}
+```
+
+这里采用阻塞连接；失败后关闭该 fd 并用新端点尝试下一候选，不在失败的端点上盲目重复 `connect`。包括中断的连接在内，这是一种保守放弃策略，不把 `connect` 当作可以直接套 `EINTR` 重试循环的 `read`。诊断保存的是最后一次候选失败，生产程序还应逐项记录候选和错误。[POSIX connect](https://pubs.opengroup.org/onlinepubs/9799919799/functions/connect.html)
+
+**动手试：**切换实验 A 的 IPv6，目标变成 `[::1]:1313`，监听端也选择同族回环。若真实服务器只监听 `127.0.0.1`，把客户改为 `::1` 不会神奇接通；IPv6 双栈行为要另查平台设置。重置会恢复 IPv4、无故障与读取上限 2。
+
+## 1.4 错误处理：包裹函数
+
+<Term def="项目自定义的接口辅助层，统一检查失败、报告上下文并实施清理策略">
+  包裹函数
+</Term>
+常写成 `Socket`、`Connect` 等大写名字，但它们不是 POSIX
+自带接口。直接在失败时退出适合最小演示；遍历候选、长寿命服务器和可重试 I/O
+往往需要把失败交给上层，而不是整个进程退出。
+
+<Term def="接口报告失败时提供的线程相关错误编号；成功调用不要求把它清零">
+  errno
+</Term>
+只在返回值指示失败时有意义。先保存它，再日志和清理；否则后续调用可能改变现场。`socket`
+返回 `-1` 时没有新 fd 可关闭；`connect` 失败时已有 fd，要按策略清理；`read` 返回
+0 则不应查询 `errno` 把旧错误当成这次结果。[POSIX
+socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)
+
+下面的输出辅助函数只覆盖本章的阻塞描述符。正数短写推进偏移；`EINTR` 且未交付数据则重试；无进展或其他错误向上传递。向套接字写入时还须在进程层选择 `SIGPIPE` 策略，否则进程可能在观察 `EPIPE` 前就被信号终止。[POSIX write](https://pubs.opengroup.org/onlinepubs/9799919799/functions/write.html)
+
+```c
+int write_all(int fd, const char *p, size_t left) {
+    while (left > 0) {
+        ssize_t n = write(fd, p, left);
+        if (n > 0) { p += n; left -= (size_t)n; continue; }
+        if (n < 0 && errno == EINTR) continue;
+        if (n == 0) errno = EIO; /* 本辅助函数的无进展策略 */
+        return -1;
+    }
+    return 0;
+}
+```
+
+**诊断练习：**在实验 A 分别注入客户 `socket` 失败、未监听、读复位。预测错误属于第 1、3、6 帧中的哪一帧，再逐步验证。答案依次为 1、3、6；`EMFILE`、`ECONNREFUSED`、`ECONNRESET` 是本实验选择的实例，不是各调用唯一可能错误。开启故障后，后续帧不能再凭空出现成功字节或 EOF。
+
+## 1.5 一个简单的时间获取服务器程序
+
+<Term def="关联本地服务地址并等待新连接的端点，由 accept 派生会话端点">
+  监听套接字
+</Term>
+经历 `socket → bind → listen`。`bind` 只关联本地地址；`listen`
+才让面向连接的端点接受连接请求。服务端应用随后调用
+`accept`，它从已完成连接队列取出连接并返回新的描述符；原监听描述符仍然打开。[POSIX
+listen](https://pubs.opengroup.org/onlinepubs/9799919799/functions/listen.html)
+· [POSIX
+accept](https://pubs.opengroup.org/onlinepubs/9799919799/functions/accept.html)
+
+阻塞客户 `connect` 可以在服务端应用尚未调用 `accept` 时就完成。握手由内核处理，不要求服务端应用同步“按确认键”。接入后服务器循环写完文本，结束发送，回收会话 fd，再接下一位客户；迭代服务若一个客户很慢，后续处理就会延迟。这引出后续 I/O 复用与并发服务器设计的问题。
+
+实验 A 把发送方向关闭拆成 `shutdown(SHUT_WR)`、客户读 EOF、两端 `close`，便于看清 EOF 与 fd 存活并非同一变量。真实最小 daytime 也可在写完后直接 `close`。图只画服务端 FIN，不宣称所有关闭都固定四包；`close` 返回和 TIME_WAIT 消失更不是同一个事件。[RFC 9293 §3.6](https://www.rfc-editor.org/rfc/rfc9293.html#section-3.6)
+
+先预测队列里的圆点何时移动到 fd 4，再播放或手动步进。全局重置将暂停时间线、回首帧、清除故障并恢复全部参数。减少动态效果偏好下不提供自动播放，仍可逐帧和拖动检查；参数变化也会暂停并回首帧，避免把两种输入混成一条轨迹。
+
+<UnpDaytimeClientServerLab />
+
+## 1.6 本书中客户/服务器程序示例索引表
+
+官方目录列有本节的客户/服务器程序示例索引主题。以下是本课程自编的“问题 → 应比较的结构”导航，不是复刻原书索引表。后续章号沿用课程现有编排，与原书目录的对应关系尚未独立核实；完整官方目录仍未核实，不能把本地编排当作来源证据。daytime 的服务端主动发送一次文本就结束；echo 示例则需要请求与响应，不能把两者业务时序当作相同。
+
+| 当前问题                   | 本课程下一站                       | 在实验中先看什么           |
+| -------------------------- | ---------------------------------- | -------------------------- |
+| 地址为什么需要长度与字节序 | 第 3 章套接字编程简介              | 实验 A 的地址族与目标地址  |
+| 怎样区分监听与接入         | 第 4–5 章基本 TCP 与客户/服务器    | 实验 A 的完成队列与 fd 4   |
+| 多个连接如何一起等         | 第 6 章 I/O 复用，第 30 章程序设计 | 一个慢客户是否占住迭代服务 |
+| 传输语义是否必须用字节流   | 第 8 章基本 UDP，第 9–10 章 SCTP   | 实验 B 中 TCP 承担的责任   |
+
+**选型题：**要处理 100 个客户的等待，不是把实验 A 的读取上限调大就解决；应先研究 I/O 复用中的可读事件，再比较并发服务器模型。要讨论报文边界则回到传输协议选择。这个索引将“调参数”与“换结构”分开。接着在实验 B 的章节路线图选择“多连接等待”，观察高亮分支从“地址”改到“等待”；图中的章号只是本课程当前导航标签，不是本题要求记忆的已核实原书目录。切换的是学习路径，并不表示仅切换按钮就改变了服务器实现。Reset 应同时回到应用层封装和地址表示路径。
+
+## 1.7 OSI模型
+
+<Term def="按通信责任划分的七层参考模型，不要求实际协议栈实现为七个模块">
+  OSI 参考模型
+</Term>
+自下而上是物理、数据链路、网络、传输、会话、表示、应用。Unix 上讨论 TCP/IP
+时，通常把上面三层的许多责任归入应用：时间文本格式和会话何时结束由程序决定；TCP
+管端到端字节流；IP 管主机寻址；链路与物理介质把信息送到下一跳。这里借 OSI
+定位责任，实际 Internet 协议分层依据 [RFC 1122
+§1.1.3](https://www.rfc-editor.org/rfc/rfc1122.html#section-1.1.3)，两种模型不要求逐层一一对应。
+
+实验 B 不是把一次 `write` 精确等同于一帧，而是画一个数据片段如何被封装。点击 IP 后，TCP 的端口仍在内层；点击链路帧后，下一跳信息出现在外层。实际 TCP 分段、IP 头长度与链路类型会改变尺寸，所以图的矩形不是字节数比例尺。
+
+**分层练习：**时间字符串格式错了应查应用；目标端口未监听应查服务和传输端点；跨主机不通则再核查 IP 路由与链路。一个 `connect` 错误不能独自证明哪根线坏了。操作后重置到应用文本，解释哪些首部消失、哪些载荷没变。
+
+<UnpLayerLab />
+
+## 1.8 BSD网络支持历史
+
+Berkeley 的 BSD 网络传统把 socket 接口带入广泛使用的 Unix 网络编程。FreeBSD 官方手册说明它源自 Berkeley 的 4.4BSD-Lite，并回顾 4.3BSD Net/2 与 386BSD 等历史来源。这条传承解释了今天文档中常见的“BSD sockets”称呼，不意味着 Linux、macOS、FreeBSD 使用同一份网络内核。[FreeBSD Handbook：A Brief History](https://docs.freebsd.org/en/books/handbook/introduction/)
+
+把这段历史放到实验 C 的主机边界里看：一边换成不同系统，逻辑上的客户、服务器和 TCP 关系仍可成立，但选项默认值和能力需重测。**辨析题：**看到接口名 `socket` 能否推断系统内核版本或支持 SCTP？不能，接口传统只提供学习线索，不是具体能力证据。原书是第三版的历史语境；本章用 POSIX.1-2024 核对当前接口契约，不把新标准倒写成书中的原句。
+
+## 1.9 测试用网络及主机
+
+先让两端在同一主机的同族回环地址上运行，再切换到隔离双主机网络。回环成功证明本机应用骨架可工作，不证明网卡、远程路由或防火墙正确。实验 C 增加第二台主机时，路由器和主机边界一起变化，这些是新出现的排错责任，不是装饰线。
+
+复现记录至少包括 OS/版本、CPU/ABI、编译器、实际地址与端口、解析候选、启动先后、每个调用的返回值。端口 1313 仍可能被其他进程占用；先启动并确认服务端 `bind/listen` 成功，再运行客户。停止服务后重试，应另记一次失败样本，不能只保留成功输出。图中两段地址来自文档专用网段，实际实验要替换，不能照图向公网发送。
+
+**验证任务：**在实验 C 回环与双主机各停一次，列出增加的核验项。答案：第二种还要记录两端子网/网关、路由与过滤配置，确认监听不是仅绑定回环；回环也仍需核对地址族、端口和进程。最后重置到同机，不应保留旧路由器图形。
+
+## 1.10 UNIX标准
+
+<Term def="定义可移植操作系统接口约定的一组标准，不能代替目标系统的能力与配置检查">
+  POSIX 标准
+</Term>
+给程序提供共同语言，例如 `socket` 成功返回描述符、失败返回 `-1`，`read`
+返回有符号字节数。标准同时允许某些支持范围由实现决定；某系统有 BSD
+接口传统也不表示支持所有协议或选项。
+
+| 证据层                | 可以据此说什么               | 不能据此说什么               |
+| --------------------- | ---------------------------- | ---------------------------- |
+| POSIX 接口页          | 返回值、参数、规定的错误语义 | 所有系统都有所有扩展         |
+| 系统手册与能力探测    | 目标平台支持哪些选项         | 另一平台默认设置相同         |
+| 实验 C 的具体测试记录 | 这组配置下本次观察到什么     | 一个成功样本证明所有环境可用 |
+
+**移植练习：**“我的 IPv6 socket 能接 IPv4，所以标准保证双栈”属于哪种错误？把配置下的测量升级成通用契约。修正是分别检查监听地址、双栈选项与平台手册，再用实验 A 的两种地址族独立验证。库里一项能力编译存在，也不证明运行主机允许使用。
+
+## 1.11 64位体系结构
+
+<Term def="按每种类型的角色检查宽度、符号、转换和格式串，而非机械扩大所有整数">
+  64 位迁移
+</Term>
+要分清内存 ABI 与协议表示。实验 C 比较常见 ILP32 和 LP64：在后者，`long`
+和指针加宽，`int` 仍为 32 位；其他 64 位 ABI 未必如此。[Oracle Solaris 64-bit
+Developer’s Guide：Data
+Model](https://docs.oracle.com/cd/E19253-01/816-5138/convert-tbl-3/index.html)
+的类型宽度表与双模式示例核对了这两种模型；它不是所有平台的统一 ABI
+保证。图假定字节为 8 位，TCP 端口仍是 16 位，不会跟着主机指针加宽。[RFC 9293
+§3.1](https://www.rfc-editor.org/rfc/rfc9293.html#section-3.1)
+
+接口类型比猜位数可靠：长度用 `size_t`，`read/write` 返回值用 `ssize_t`，地址长度用 `socklen_t`，描述符用 `int`。POSIX 明确 `ssize_t` 是有符号整数类型，而不是要求你永远用 `long` 代替它。打印 `size_t` 用 `%zu`，打印 `ssize_t` 可先转成 `intmax_t` 再用 `%jd`；不要用 `%d` 读取一个更宽的参数。[POSIX sys/types.h](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/sys_types.h.html)
+
+**类型诊断：**若把 `read` 的 `-1` 直接存进 `size_t`，它会变成很大的正数，随后写越界或计算剩余长度就危险。必须先用有符号类型判断，再只把正数转换为长度。切换实验 C 的模型并核对端口格数不变；即使在 32 位也不能省略这个判断。
+
+<UnpEnvironmentLab />
+
+## 1.12 小结
+
+可以按三条不变量复述本章：没有成功创建就没有客户 fd；没有成功接入就没有服务器会话 fd；没有观察到正长度 `read=0` 就不能声称 EOF。`connect` 成功并不保证应用业务成功，读到完整文本也不等于已经结束连接。
+
+实现时再补两条所有权规则：每个失败候选自己关闭已经创建的 fd；一次成功 `getaddrinfo` 返回的整条结果链，由保留的头指针统一 `freeaddrinfo(head)` **一次**。不能在遍历时对每个节点分别释放，因为释放一个节点会连同后续链一起释放。成功连接的 fd 留给调用者，最终读取结束或失败都要回收。
+
+下面的读取函数与前面的 `write_all` 配合，把正数短读写到标准输出；采用阻塞 I/O，EOF 返回成功，其他错误交给调用者保存并清理。片段需包含 `unistd.h`、`sys/socket.h`、`netdb.h`、`errno.h`、`stdio.h`；实现题还需提供 `main` 与错误出口。
+
+```c
+int receive_daytime(int fd) {
+    char buf[256];
+    for (;;) {
+        ssize_t n = read(fd, buf, sizeof buf);
+        if (n > 0) {
+            if (write_all(STDOUT_FILENO, buf, (size_t)n) < 0)
+                return -1;
+        } else if (n == 0) {
+            return 0;
+        } else if (errno != EINTR) {
+            return -1;
+        }
+    }
+}
+```
+
+<Callout type="trap" title="误区一：一次 read 就是一条时间消息">
+
+短读只表示本次得到较少字节，不自动意味着 EOF 或出错。实验 A 从 2 改成 4 只是改变应用取走的量；TCP 不替应用添加消息边界。若改成持续连接协议，就不能继续用关闭当作每条消息的分隔符。
+
+</Callout>
+
+<Callout type="trap" title="误区二：拒绝连接就能证明路由断了">
+
+实验 A 选定回环可达、无过滤的未监听情况，显示 RST 与 `ECONNREFUSED`。真实环境的主动拒绝也可能来自策略设备，丢弃则可能超时；需结合监听记录、系统日志和网络证据，不要把示例原因当成错误码的唯一解释。
+
+</Callout>
+
+<Callout type="trap" title="误区三：释放每个候选更保险">
+
+`freeaddrinfo` 释放从参数起始的链，不是只释放一块节点。保留 `head`，遍历指针 `p` 只借用；结束后调用一次 `freeaddrinfo(head)`，之后既不解引用 `p`，也不再次释放它。fd 有独立生命周期，不会随地址链自动关闭。
+
+</Callout>
+
+## 练习：先留预测，再对照答案
+
+以下三题分别回收时序、分层与移植、完整实现。作答时记录实验参数和帧号；答案用于校验推理，不应代替实际编译与本机运行。
+
+<div className="unp-intro-practice">
+
+<Exercises>
+
+1. **失败与恢复：用调用返回值验证预测（1.1–1.5）**
+
+   从“概述”的程序—内核—网络三条证据链入手，比较一个简单的时间获取客户程序与一个简单的时间获取服务器程序：实验 A 选择未监听故障，跳到 connect，记录客户 fd、完成队列、会话 fd、errno 和 EOF。关闭故障后为什么应使用新 socket？再把读取上限改为 4，读完 8 字节是否立即意味着 EOF？最后结合“错误处理：包裹函数”，说明为什么不能用无条件退出的 Connect 包裹函数实现地址候选回退。
+
+   <Answer>
+
+   未监听轨迹在主动拒绝假设下返回 ECONNREFUSED；客户创建过 fd，但失败处理已将其关闭。没有完成连接、会话 fd 或接收 EOF。服务端需要先成功 bind/listen；客户重新创建端点，不能假定失败 socket 可直接复用。正常路径 connect 可先完成，随后 accept 才从队列取出连接并创建会话 fd；监听 fd 留给后续客户。读取上限 4 时两次正数 read 交付八字节，仍要等发送方向结束且缓冲耗尽，下一次正长度 read=0 才是 EOF。包裹函数若遇到首个候选错误就退出，将跳过其他候选；应返回错误给循环，保存 errno 并关闭该候选 fd 后继续。三幅图分别证明调用轨迹、资源所有权与应用已收到的字节，不能只凭某条箭头猜返回值。
+
+   </Answer>
+
+2. **跨主机与跨 ABI：给每条判断指定证据（1.6–1.11）**
+
+   把实验 C 的“测试用网络及主机”从同机回环改为隔离双主机，再选择 LP64。参照实验 B 的 OSI模型，指出哪些新边界必须核查；用本节自编导航说明地址表示、建立连接、100 个客户等待各应继续学习什么主题，而不是背诵尚未核实的原书后续章号。比较 BSD网络支持历史与 UNIX标准：看到 socket 名称、查到 POSIX 契约、完成一次本机运行，各能证明什么？最后解释 64位体系结构如何影响指针/long，而不改变线上端口宽度；Reset 后图中哪些对象应消失？
+
+   <Answer>
+
+   双主机新增外部链路、路由和过滤边界；同时确认服务不只绑定回环、两端族与端口匹配。OSI模型把时间格式放在应用、端口放在传输、跨网主机寻址放在网络，不能把连不上统称为网线坏。地址表示应学习地址结构、长度与字节序；建连应学习监听、连接与接入流程；多个客户等待应研究 I/O 复用，并比较并发服务器模型。BSD网络支持历史解释接口传统，不证明具体内核或 SCTP 能力；UNIX标准提供调用契约，不保证所有选项默认相同；一次运行只证明本次配置。LP64 模型把 long 与指针从四格改为八格，int 仍四格，TCP 端口仍两格；read 返回类型继续用 ssize_t，不能改成无符号大小。重置应移除第二台主机与路由器，恢复 ILP32 四格指针；回环成功依旧不证明外部链路正常。
+
+   </Answer>
+
+3. **独立实现：用所有权清单完成小结（1.2–1.5、1.9–1.12）**
+
+   “第1章 简介”的小结要能落成可运行程序：组合三个函数并补 main，实现本机时间获取客户。说明协议无关性怎样落实到每个候选的地址族、类型、协议和长度，而非只把地址字符串改为 IPv6。读取失败先保存 errno，关闭 fd 后报告原错误；正常结束也检查 close。至少测试 IPv4、IPv6、未监听和分段发送，记录系统/ABI/编译器/候选地址/返回值及超时上限。服务端仅绑定回环端口 1313；不得连接公共 daytime 服务。审查结果链释放和描述符回收，找出潜在 double-free。
+
+   <Answer>
+
+   dial 用每个 addrinfo 候选的 ai_family/ai_socktype/ai_protocol 创建 socket，用 ai_addr/ai_addrlen 连接；候选可解析不等于可达。socket 失败不 close 不存在的 fd；connect 失败先保存 errno，再关闭该候选 fd。整个遍历结束后，无论是否找到成功候选，对本次 getaddrinfo 结果链仅 freeaddrinfo(head) 一次；不能逐节点调用，因为一次释放包含后继链。成功 fd 转交 main，失败 fd 不留到最后一起猜测回收。读取以 ssize_t 区分正数、0、-1，EINTR 重试，其余失败返回；输出处理短写。main 保存读取错误后关闭 fd，报告保存值，不能让 close 覆盖首个错误；close 失败也不盲目重试同一数字。IPv6 测试先确认 IPv6 监听，分段发送只比较最终字节与 EOF，不固定 read 次数；未监听若达到测试超时，就如实记录超时而非伪造 ECONNREFUSED。参考本章回环测试，成功样本应输出完整八字节且无 sanitizer 报错；这不免除自行编译与故障记录。
+
+   </Answer>
+
+</Exercises>
+
+</div>
+
+## 名词解释
+
+回看实验时，可用下面的术语核对自己是否把应用、描述符、传输状态与主机平台混在一起。每个词都对应正文的一次展开，不以词表替代解释。
+
+<Glossary>
+
+<GlossaryItem term="文件描述符">
+  进程内引用打开的内核对象的小整数，不能跨进程直接比较它代表的对象。
+</GlossaryItem>
+<GlossaryItem term="daytime 服务">
+  RFC 867 定义的日期时间服务；本章只研究 TCP 变体，并在本机使用 1313
+  而非标准端口 13。
+</GlossaryItem>
+<GlossaryItem term="TCP 字节流">
+  有序字节序列服务，读写调用边界不构成消息边界。
+</GlossaryItem>
+<GlossaryItem term="协议无关性">
+  根据解析结果的地址族、类型、协议与长度创建和连接端点，传输协议语义仍需明确选择。
+</GlossaryItem>
+<GlossaryItem term="包裹函数">
+  项目自定义的错误检查与处理辅助层，不是标准 API。
+</GlossaryItem>
+<GlossaryItem term="errno">
+  在接口报告失败时解释的错误编号；应在日志和清理前保存。
+</GlossaryItem>
+<GlossaryItem term="监听套接字">
+  等待新连接的服务端端点；accept 返回另一会话端点。
+</GlossaryItem>
+<GlossaryItem term="OSI 参考模型">
+  按通信责任区分的七层参考模型，不等于实际内核模块布局。
+</GlossaryItem>
+<GlossaryItem term="POSIX 标准">
+  可移植接口契约；具体实现支持、扩展和配置还需另查。
+</GlossaryItem>
+<GlossaryItem term="64 位迁移">
+  核对 ABI、类型符号、长度运算与打印格式；协议字段宽度不随主机字长自动变化。
+</GlossaryItem>
+
+</Glossary>
+
+## 来源与独立改写边界
+
+本章按 Stevens、Fenner、Rudoff《UNIX Network Programming, Volume 1: The Sockets Networking API》第三版官方目录组织 1.1–1.12，未取得全书正文改编许可，也不声称复现中文译本。2026-10-18 实际访问 InformIT、POSIX、RFC、FreeBSD 和 Oracle 官方页面，事实链接随对应段落给出；目前独立核实的是本章 1.1–1.12 的目录范围，不代表后续各章或完整目录已核实；目录证据不证明接口行为或开放许可。本次使用官方目录与标准核验，未把既有样章声明当成当前完整正文访问。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="UNIX Network Programming, Volume 1, Third Edition — W. Richard Stevens, Bill Fenner, Andrew M. Rudoff"
+  sourceUrl="https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
+/>
