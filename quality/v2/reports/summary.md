@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-18T17:32:25.901Z；旧版分数不迁移。
+> 2026-10-18T20:14:45.721Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1708
+- failed：1704
 - queued：203
-- passed：1706
+- passed：1710
 - published：992
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -100,7 +100,7 @@
 | 87 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
 | 88 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 89 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 90 | go-web-programming | 12 | 8 | 0 | 4 | 24 |
+| 90 | go-web-programming | 12 | 4 | 0 | 8 | 12 |
 | 91 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 92 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 93 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
