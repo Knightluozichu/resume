@@ -1,52 +1,282 @@
 ---
-title: "第5章 TCP客户/服务器程序示例"
+title: "第5章 TCP 客户/服务器程序示例"
 type: C
 section: "基本套接字编程"
 order: 5
-description: "第5章 TCP客户/服务器程序示例围绕TCP回射服务器程序：main函数、TCP回射服务器程序：str_echo函数、TCP回射客户程序：main函数、TCP回射客户程序：str_cli函数、正常启动、正常终止建立从套接字接口到分组、内核状态与清理结果的证据链。 覆盖20个正式目录层级。"
+description: "以 TCP 回射程序追踪连接、字节流、半关闭、信号与进程回收；用可重放故障区分应用、内核和协议层责任。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
-draft: false
-qualityVersion: 2
+draft: true
+qualityVersion: 1
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: unp-unit-05
 ---
 
+import { UnpTcpClientServerLab } from "@/components/mdx/unix-network-programming-vol1/v2/unp-05-tcp-client-server-example";
 
-## 为什么同时看API、内核状态与分组
+<Objectives>
 
-、、、、共同构成本页坐标。第5章
-TCP客户/服务器程序示例围绕TCP回射服务器程序：main函数、TCP回射服务器程序：str_echo函数、TCP回射客户程序：main函数、TCP回射客户程序：str_cli函数、正常启动、正常终止建立从套接字接口到分组、内核状态与清理结果的证据链。
+- 能修改回射循环，正确处理短读写、信号中断及输入结束，并追踪父子进程的描述符责任。
+- 能区分正常关闭、服务进程退出、主机崩溃与重启，并用观测证据解释 EOF、RST 和写入错误。
+- 能回答：输入“你🙂”且读取容量为 2 字节时有多少组？为何一次 SIGCHLD 不能只调用一次 wait？
 
-在“第5章 TCP客户/服务器程序示例”中，第3版覆盖IPv4、IPv6、TCP、UDP、SCTP、路由与密钥管理套接字，并保留STREAMS等历史接口。正文先还原书中标准和测试平台语境；Linux专有工具只用于观测与现代对照，不能冒充POSIX或协议标准保证。SCTP、STREAMS、T/TCP和历史IPv6 API的可用性必须由当前平台实测确认。
+</Objectives>
 
-“第5章 TCP客户/服务器程序示例”未取得未获授权的完整中文正文；以 [InformIT 第三版官方目录与合法样章](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 界定 3 部分、31 章和 5 个附录范围，中文解释、代码、实验与练习均为独立教学重写。“第5章 TCP客户/服务器程序示例”的接口与协议事实分别以 [POSIX socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)、[RFC 9293 TCP](https://www.rfc-editor.org/rfc/rfc9293.html)、[RFC 768 UDP](https://www.rfc-editor.org/rfc/rfc768.html)、[RFC 9260 SCTP](https://www.rfc-editor.org/rfc/rfc9260.html)、[RFC 6458 SCTP sockets](https://www.rfc-editor.org/rfc/rfc6458.html) 和 [RFC 8200 IPv6](https://www.rfc-editor.org/rfc/rfc8200.html) 核对；现代差异不覆盖第三版历史语境。
+## 直觉：流水线什么时候可以收工？
+
+工厂有一条送件带和一条返件带。客户不再送件，并不代表返件带上已经没有东西。若两边都等对方先收工，最后一批产品就会永远卡在路上。
+
+本章让每一批送件都原样返回，并把“停止送件”“收完返件”“回收工位”分开。先观察正常流程，再故意让返件工位提早停工，判断哪些结果可以确认、哪些只能继续等待。
+
+## 5.1 概述
+
+回射程序把同一组字节从客户送到服务器，再原样返回。它的价值不在业务计算，而在把三个不同的生命周期放在一起检查：应用请求是否完整、TCP 两个方向是否结束、服务子进程是否被父进程回收。以下图中两条竖线是通信端点，顶部父进程不是第三条数据通路；后面的回收实验单独检查进程状态。
+
+## 5.2 TCP回射服务器程序：main函数
+
+以第三版第 5 章目录限定范围，以下是独立改写而非原书翻译。服务器依次执行 `socket → bind → listen`，父进程反复 `accept` 得到已连接端点，再 `fork` 一个服务子进程。一个 <Term def="进程用于访问内核打开对象的整数句柄；继承句柄不等于复制连接。">文件描述符</Term> 只是句柄，不是连接本身。
+
+父进程关闭自己的会话副本，保留监听描述符继续服务其他客户；子进程关闭继承的监听副本，服务当前会话后退出。若父进程忘关会话副本，子进程退出不一定触发连接最终关闭。实验顶部父进程到子进程的分支，以及末步回收标签，对应这条所有权路径。`fork` 失败时父进程必须关掉刚接受的会话，不能泄漏它。
+
+## 5.3 TCP回射服务器程序：str_echo函数
+
+这里的 <Term def="可靠、有序的字节序列；不保存发送调用的消息边界。">TCP 字节流</Term> 不保存一次 `write` 的边界。服务器的 `read` 可以返回任意正数个可用字节，不保证填满传入缓冲区；多个发送也可能合成一次读取。因此回射只处理本次实际读到的长度，再循环写完这些字节。短写之后必须移动指针，不能重新发送整个缓冲区。
+
+下面是可抽取编译的核心函数，不是完整服务器。需包含 `unistd.h`、`errno.h`、`stddef.h`；由调用者建立阻塞套接字、决定 SIGPIPE 策略并关闭描述符。循环重试 <Term def="系统调用被信号中断、尚未完成时可能返回的错误；不能一概当成连接断开。">EINTR</Term>，其他错误交给调用者。
+
+```c
+static int write_all(int fd, const char *p, size_t left) {
+    while (left > 0) {
+        ssize_t n = write(fd, p, left);
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0) return -1;
+        if (n == 0) { errno = EIO; return -1; }
+        p += n;
+        left -= (size_t)n;
+    }
+    return 0;
+}
+```
+
+服务器每次只回写有效前缀。正长度 `read` 返回 0 才表示 <Term def="正长度流读取返回0：已读完排在关闭之前的数据，对端发送方向有序结束。">EOF</Term>；暂时没有数据时阻塞等待，不返回假 EOF。参考 [POSIX read](https://pubs.opengroup.org/onlinepubs/9799919799/functions/read.html) 与 [write](https://pubs.opengroup.org/onlinepubs/9799919799/functions/write.html)。
+
+```c
+static int str_echo(int fd) {
+    char buf[4096];
+    for (;;) {
+        ssize_t n = read(fd, buf, sizeof buf);
+        if (n > 0) {
+            if (write_all(fd, buf, (size_t)n) < 0) return -1;
+        } else if (n == 0) {
+            return 0;
+        } else if (errno != EINTR) {
+            return -1;
+        }
+    }
+}
+```
+
+## 5.4 TCP回射客户程序：main函数
+
+客户准备服务器地址、创建套接字并 `connect`；这时地址解析、端口和连接错误属于 main 的责任。建立连接的 main 不负责猜测应用响应长度：连接成功只说明传输层建立了通道，不能证明远端应用已处理请求。失败时应报告 connect 的错误并关闭本次创建的描述符，不要进入读写循环。
+
+## 5.5 TCP回射客户程序：str_cli函数
+
+简单的行协议客户每读取标准输入一行，就写完整行，再读到一个完整换行响应后输出。服务器提前 EOF，而本行尚未收齐时，是响应截断，不能当成功。正文不复现原书封装函数；`readline` 必须自己维护跨读取的缓冲和长度上限。
+
+本章实验另选有限请求的批量模型：写完请求后 `shutdown(fd, SHUT_WR)`，继续接收回射到 EOF。这叫 <Term def="结束本端发送方向，同时保留接收方向；不是关闭整个描述符。">半关闭</Term>。不能把“先全部写、后全部读”的模型直接用于无限大输入：两端发送缓冲都满时可能互相等待。大流量应交错读写或使用下一章的 I/O 多路复用。方向参数依据 [POSIX shutdown](https://pubs.opengroup.org/onlinepubs/9799919799/functions/shutdown.html)：SHUT_WR 禁止后续发送，不禁止接收。
+
+## 5.6 正常启动
+
+先启动服务器并确认监听，再启动客户。握手完成不等于服务子进程已经运行：`accept` 和进程调度仍需发生。实验第 2 步合并表示连接建立、accept 和 fork，不声称三个动作同时发生。
+
+## 5.7 正常终止
+
+正常输入结束时，行客户可在收到所有预期响应后 `close`；实验批量客户则半关闭写方向。服务器先读尽已排队的请求，才读到 0；随后回射循环返回、关闭会话，客户先收尽响应才读到 0。`close` 释放一个描述符引用，`shutdown` 则影响套接字的方向，即使另有继承引用也不能简单等同。FIN 和 EOF 的顺序见 [RFC 9293 §3.6](https://www.rfc-editor.org/rfc/rfc9293.html#section-3.6)。
+
+## 实验：预测 → 操作 → 解释 → 重置
+
+猜一猜：把读取容量从 3 调到 1，会增加数据字节数，还是只增加分组数？输入“你🙂”，逐步推进，比较正常半关闭、回射前退出、仅回射前缀。最后重置，检查输入、容量、故障与进度一起恢复。
+
+<UnpTcpClientServerLab />
+
+“你”为 UTF-8 的 `e4 bd a0`，表情为 `f0 9f 99 82`，合计 7 字节；容量 2 得到 4 组（2、2、2、1），不是 JavaScript 的 3 个 UTF-16 码元。实验按容量取满是可复算的教学选择，真实 `read` 可以更短。UTF-8 字符可跨组，先累积或使用流式解码；不能分别解码每组后拼字符串。
+
+## 5.8 POSIX信号处理
+
+使用 `sigaction` 明确安装策略，避免依赖历史 `signal` 的平台差异。处理器中只能使用异步信号安全的操作，不使用 `printf`、动态分配或普通日志库。`SA_RESTART` 可使某些阻塞调用重启，但不是所有调用和平台都保证重启，调用点仍必须处理 EINTR。按 [POSIX 信号行为规则](https://pubs.opengroup.org/onlinepubs/9799919799/functions/V2_chap02.html#tag_16_04_03)，处理器使用 errno 时应在入口保存、返回前恢复，避免覆盖被中断代码尚需检查的错误。
+
+## 5.9 处理SIGCHLD信号
+
+子进程状态变化可产生 <Term def="子进程状态变化通知；通知可以合并，父进程仍需读取并回收退出状态。">SIGCHLD</Term>。已退出但尚未被回收的子进程保留状态记录（僵尸），与“仍在服务”不同。多个退出可能只留下一个待处理通知，所以应把信号理解成“有状态可取”的提示，而不是计数器。实验让三个进程同时退出；无论只显示一个通知还是分批收到，都必须收割全部已退出者。
+
+## 5.10 wait和waitpid函数
+
+`wait` 可能阻塞且一次只取一个状态；<Term def="读取子进程状态的接口；-1选任意子进程，WNOHANG表示没有状态时不要阻塞。">waitpid</Term> 可循环非阻塞收割。一个信号不代表恰好一个退出，循环至返回 0 或 ECHILD。
+
+下面函数保留被打断代码的 `errno`，并处理 waitpid 本身的 EINTR。未启用 WUNTRACED/WCONTINUED；不负责记录业务退出状态。可在普通事件循环另存状态，不能在这里随意输出日志。规范依据为 [POSIX wait/waitpid](https://pubs.opengroup.org/onlinepubs/9799919799/functions/wait.html) 与 [sigaction](https://pubs.opengroup.org/onlinepubs/9799919799/functions/sigaction.html)。
+
+```c
+static void reap_children(int signo) {
+    int saved_errno = errno;
+    (void)signo;
+    for (;;) {
+        pid_t pid = waitpid(-1, NULL, WNOHANG);
+        if (pid > 0) continue;
+        if (pid < 0 && errno == EINTR) continue;
+        break; /* 0: still running; ECHILD: none; other error: stop */
+    }
+    errno = saved_errno;
+}
+```
+
+在进入 accept 循环之前安装，避免第一个孩子退出后才注册。初始化和 accept 的核心片段如下；省略地址、fork 分支与日志。`accept` 返回 EINTR 时本例重试；若系统有退出标记，应先检查是否请求结束。
+
+```c
+struct sigaction sa = {0};
+sa.sa_handler = reap_children;
+sigemptyset(&sa.sa_mask);
+sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+if (sigaction(SIGCHLD, &sa, NULL) < 0) return -1;
+for (;;) {
+    int connfd = accept(listenfd, NULL, NULL);
+    if (connfd < 0 && errno == EINTR) continue;
+    if (connfd < 0 && errno == ECONNABORTED) continue;
+    if (connfd < 0) return -1;
+    /* fork; parent closes connfd; child closes listenfd */
+    break; /* sketch only: insert the actual ownership branches here */
+}
+```
+
+## 5.11 accept返回前连接中止
+
+客户可能在握手成功后、服务器 accept 前中止连接。不同实现可能隐藏已中止的队列项，或由 accept 报告 ECONNABORTED 等待处理错误。不要因为一个客户中止就关闭监听端点。上述片段重试 ECONNABORTED；资源耗尽等错误应诊断或退避，不能将所有错误都无条件忙重试。实验的“回射前退出”发生在 accept 之后，与这一竞态不同。[POSIX accept](https://pubs.opengroup.org/onlinepubs/9799919799/functions/accept.html) 分别列出 ECONNABORTED 与 EINTR；它们不是同一个故障原因。
+
+## 5.12 服务器进程终止
+
+终止服务子进程时，内核通常仍正常运行，并释放该进程的描述符。最后一个连接引用被关闭、且没有未读请求等特殊条件时，可以有序结束；有未读数据等条件时可能重置连接。父进程若仍持有会话副本，就可能推迟关闭。实验“回射前退出”专门选择已消费请求、返回零字节后有序关闭的分支，不能代表所有 kill 情况。检查进程列表、剩余引用及 read 结果，比仅看 write 成功更可靠。
+
+## 5.13 SIGPIPE信号
+
+向不可写连接写入时，<Term def="写入失去接收端的流时可能产生的信号；默认行为会终止进程。">SIGPIPE</Term> 的默认动作可结束程序。选择忽略或安全处理后，仍要检查 <Term def="写操作因连接不再可写等情况返回的错误；不负责描述全部网络故障。">EPIPE</Term>。本章不安装全局忽略策略，以免隐瞒应用其他用途；平台特定的抑制选项也不能当成 POSIX 通用保证。模型只展示无响应或前缀，**并未预测信号发生时机**。
+
+## 5.14 服务器主机崩溃
+
+主机突然崩溃时，失效的内核无法正常发送 FIN。若连接空闲，客户可能没有立即可见的变化；若发送了未确认数据，本地 TCP 会按策略重传并最终失败。应用截止时间与 TCP 重传超时是两种策略，不能从“服务器没有响应”推导统一的超时秒数。故障图用断开的路径及“无回复”标记表示这种证据缺失，不用 EOF 冒充失联。
+
+## 5.15 服务器主机崩溃后重启
+
+重启通常丢失旧连接的序列号与状态。客户旧连接报文若抵达已重启且没有匹配连接的 TCP 栈，可能收到 RST；若网络或防火墙丢弃报文，客户仍可能只观察到等待与超时。故障图中的 RST 是“旧报文抵达”条件分支，不是重启必然通知。重新 connect 建立的是新连接，应用必须决定请求是否可重试，不能自动重放可能已经执行的非幂等操作。
+
+## 5.16 服务器主机关机
+
+正常关机一般先通知进程退出，再停止网络和内核；如果连接清理先完成，客户可以观察到有序结束。但网络先停、强制关机或断电会打断这个顺序，产生类似崩溃的无回复。故障实验提供两个关机顺序，切换后应看到 FIN 路径和断路的区别；这也是为何只说“关机了”不足以预测客户收到的错误。
+
+## 5.17 TCP程序例子小结
+
+逐条对照启动、并发、请求、回射、结束方向和进程回收，才能把网络状态与应用状态连起来。回射图检查数据是否完整，进程图检查状态是否回收，故障图检查内核是否还能响应，三者没有一个能单独证明整个会话成功。练习分别改变读取分组、请求协议和退出/失联条件，要求指出破坏的是哪一条不变量。
+
+## 5.18 数据格式
+
+回射原样复制字节，暂时掩盖了格式问题。一旦把请求改成“两数相加”，直接发送 C 结构体就可能受字节序、整数宽度、对齐填充影响。文本协议可约定 `12 30\n` 并验证解析和溢出；二进制协议可约定两个 32 位无符号网络序整数，逐字段编码，禁止把结构体内存直接上网。`12 + 30 = 42`，但 `4294967295 + 1` 应按协议拒绝或明确溢出规则。文本也必须约定字符编码、分隔符和长度上限；不是“用了字符串就无歧义”。
 
 ## 常见误区
 
+<Callout type="trap">
+  **现象 →** 回射乱码或多了一段内容。**原因 →**
+  把读取块当字符或消息，短写后又重发整个缓冲区。**修法 →**
+  按返回字节数推进，跨组流式解码；用实验的单字节分组观察多字节字符。
+</Callout>
 
-## 四类样本与验收
+<Callout type="trap">
+  **现象 →** 请求已写完但双方都不结束。**原因 →**
+  批量协议未声明输入结束；或父进程保留了子进程的会话引用。**修法 →**
+  明确半关闭与描述符所有权；不是看到等待就随便杀进程。
+</Callout>
 
-| 样本 | 只改变什么                 | 必查证据              | 通过条件   |
-| ---- | -------------------------- | --------------------- | ---------- |
-| 基线 | 固定网络、地址与输入       | API、状态、队列与分组 | 与预测一致 |
-| 边界 | 缓冲、MTU、并发或时序      | 首个阻塞、截断或拒绝  | 边界可解释 |
-| 故障 | 丢包、复位、信号或路径故障 | errno、首包与责任层   | 故障可定位 |
-| 恢复 | 关闭、回收、撤销网络设置   | 残留端点与同输入重放  | 回到基线   |
+<Callout type="trap">
+  **现象 →** 收到 SIGCHLD 后仍存在僵尸。**原因 →** 标准信号合并通知，却只 wait
+  一次，或处理器覆盖了主流程 errno。**修法 →** 保存/恢复 errno，循环
+  waitpid，EINTR 重试，0/ECHILD 停止。
+</Callout>
 
-## 练习
+## 5.19 小结
 
+回射结果完整、读到 EOF、服务进程被回收是三个不同判断。数据返回完整不意味着进程一定回收；收到 EOF 也可能只拿到前缀；SIGCHLD 更不证明网络正常结束。下面练习要求同时列出已知事实与还需观测的条件，而不是背诵某个固定报错顺序。
 
-## 小结
+- 用返回值推进字节，不用调用次数推断消息。
+- 进程退出、主机失联和 EOF 不是一回事。
+- UTF-8 按字节分组，waitpid 按状态循环回收。
 
-- TCP回射服务器程序：main函数：连接“解析监听地址”的接口、状态与分组证据。
-- TCP回射服务器程序：str_echo函数：连接“创建绑定监听”的接口、状态与分组证据。
-- TCP回射客户程序：main函数：连接“接受连接”的接口、状态与分组证据。
-- TCP回射客户程序：str_cli函数：连接“传输字节流”的接口、状态与分组证据。
-- 正常启动：连接“处理半关闭”的接口、状态与分组证据。
-- 本页20个正式目录层级全部进入可重放网络实验链。
+<Exercises>
 
-## 术语表
+1. 先用概述中的三个生命周期写出成功判据，作为自己的 TCP程序例子小结。对照“TCP回射服务器程序：str_echo函数”和“数据格式”字节图，修改实验的分组策略，使各次读取长度交替为 1、2（仍不超过容量），保持偏移与回射字节不丢不重。输入“你🙂”且容量 2，列出原模型和修改模型的分组长度，解释为什么都符合字节流语义。
+2. 对照“TCP回射客户程序：main函数”的连接责任和“TCP回射客户程序：str_cli函数”的读写责任，独立实现有上限的长度前缀回射客户：4 字节网络序长度，上限 4096 字节。给出短写、部分头部、正文中途 EOF 的处理，并测试空请求。再说明为何不能无限量先写后读。为“TCP回射服务器程序：main函数”列出正常启动与正常终止的描述符所有权；若 accept返回前连接中止，应该关闭监听端点吗？
+3. 对照“POSIX信号处理”“处理SIGCHLD信号”与“wait和waitpid函数”回收图，在隔离本机派生三个立即退出的子进程，阻塞 SIGCHLD 后等待三者退出，再解除阻塞。如何确认它们全部被回收、errno 未被污染？再在故障图比较“服务器进程终止”“服务器主机崩溃”“服务器主机崩溃后重启”和“服务器主机关机”：各自需要什么条件才能观察到 FIN、RST 或无回复？为什么不能据此断言下一次 write 必然触发 SIGPIPE信号？
 
+<Answer>
+  **第 1 题：** 原模型为 2、2、2、1；交替模型为 1、2、1、2、1，都是 7
+  字节。需用累计偏移而非固定 `i * chunkSize` 标注格子；拼接所有字节应逐字节等于
+  TextEncoder 输出。每次只读到容量以内的数据即可，TCP
+  不保证读取调用边界。小结的三个判据是：回射字节完整、双方方向按协议结束、退出状态被父进程回收，三者不能互相替代。
+</Answer>
 
+<Answer>
+  **第 2 题：** 循环写完头部再写正文，每次按实际返回值推进；接收头部凑满 4
+  字节才解码并验证上限，再累积正文。正文完成前 EOF 是截断错误，长度 0
+  是合法空帧，不应调用零长度 read 来探测
+  EOF。大流量需交错收发以免双向缓冲阻塞。测试 0、1、4096、4097
+  长度、拆分头部和中途关闭；原样回射成功后再结束方向。启动时父进程持有监听端点；fork
+  后父关会话副本、子关监听副本，服务完毕子关闭会话，父继续监听。连接中止仅丢弃这一会话或重试
+  accept，不能因单个客户故障关闭监听端点。
+</Answer>
+
+<Answer>
+  **第 3 题：** 记录三个 PID，解除阻塞后处理器循环
+  waitpid；在普通主流程中最终确认 waitpid 返回
+  ECHILD，无遗留子进程。可用受控桩令 waitpid 依次返回 EINTR、两个 PID、0，再断言
+  errno
+  恢复入口值，不能声称真实系统必会在该点中断。进程退出且最后引用关闭、无未读数据时可有序关闭；硬崩溃可能无回复；重启后旧报文抵达无匹配状态时可能
+  RST；关机要区分清理先完成和网络先停止。失联不意味着本地已知连接不可写，写可先进入缓冲；需综合读写结果、超时和抓包，SIGPIPE
+  时机不是协议常量。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="文件描述符">
+    进程持有的内核对象句柄；父子进程可共同引用同一个连接。
+  </GlossaryItem>
+  <GlossaryItem term="TCP 字节流">
+    保证顺序的字节通道，不帮应用保存消息边界。
+  </GlossaryItem>
+  <GlossaryItem term="EINTR">
+    调用被信号中断时的错误；按程序策略重试或退出。
+  </GlossaryItem>
+  <GlossaryItem term="EOF">
+    正长度 read 返回0，表示对端发送结束且此前数据已读完。
+  </GlossaryItem>
+  <GlossaryItem term="半关闭">只结束发送方向，仍可继续接收响应。</GlossaryItem>
+  <GlossaryItem term="SIGCHLD">
+    子进程状态变化通知，不能用信号次数代替退出数量。
+  </GlossaryItem>
+  <GlossaryItem term="waitpid">
+    读取子进程退出状态并回收；WNOHANG 避免无状态时阻塞。
+  </GlossaryItem>
+  <GlossaryItem term="SIGPIPE">
+    对不可写的流继续写入时可能收到的信号，默认终止进程。
+  </GlossaryItem>
+  <GlossaryItem term="EPIPE">
+    写操作失败的一种错误，处理信号后仍须检查返回值。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与范围声明
+
+本章 5.1–5.19 的范围依据仓库既有第三版目录映射。此次访问 [InformIT 第三版书目页](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 成功，但返回的目录未包含第 5 章，尚未完成该章目录的独立在线复核；书目或目录也不是可改编全文授权。本章用 POSIX 接口规范及 RFC 9293 核验事实，独立编写说明、模型和练习，不声称取得原书开放许可证，不复现未获授权的正文。实验时间和分组均是教学设定，不能替代真实网络测试。
+
+<Attribution />
