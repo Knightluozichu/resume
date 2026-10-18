@@ -5,6 +5,7 @@ import {
   isValidElement,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -45,7 +46,7 @@ function extractText(node: ReactNode): string {
  * 锚点：点术语跳到章末对应 Glossary 词条（按术语文本 termSlug 或显式 id 关联）。
  *  - 单击切换 tooltip；术语左侧另给一个小「↡」锚链接负责跳转，避免点高亮即跳走。
  *
- * tooltip 定位：绝对定位贴术语下方（居中），溢出靠 max-width + 自动换行兜住；
+ * tooltip 定位：绝对定位贴术语下方，按视口夹紧水平位置并允许自动换行；
  * 不引 floating 库（DESIGN「简单稳妥」）。reduced-motion 下淡入动画自动降为瞬时
  * （--duration-hover 在 globals.css 已对 reduced-motion 置 0，这里只动 opacity）。
  *
@@ -66,6 +67,33 @@ export function Term({
   const [open, setOpen] = useState(false);
   const tipId = useId();
   const glossaryLinkRef = useRef<HTMLAnchorElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const placeTooltip = () => {
+      const tip = tooltipRef.current;
+      const anchor = tip?.parentElement;
+      if (!tip || !anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const width = tip.getBoundingClientRect().width;
+      const left = Math.max(
+        8,
+        Math.min(
+          rect.left + (rect.width - width) / 2,
+          window.innerWidth - width - 8,
+        ),
+      );
+      tip.style.left = `${left - rect.left}px`;
+    };
+    placeTooltip();
+    window.addEventListener("resize", placeTooltip);
+    window.addEventListener("scroll", placeTooltip, true);
+    return () => {
+      window.removeEventListener("resize", placeTooltip);
+      window.removeEventListener("scroll", placeTooltip, true);
+    };
+  }, [open, def]);
 
   // 锚点目标：显式 id 优先（GlossaryItem 同样接受 id 覆盖），否则按术语文本生成。
   // 术语文本从 children 递归提取——prettier 多行重排后 children 含空白，不能只判 string。
@@ -87,7 +115,7 @@ export function Term({
   }, [anchor]);
 
   return (
-    <span className="mdx-term relative inline-block">
+    <span className="mdx-term relative inline-block max-w-full align-middle">
       <button
         type="button"
         aria-describedby={open ? tipId : undefined}
@@ -100,8 +128,8 @@ export function Term({
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
         }}
-        // 行内高亮：accent 虚线下划线 + cursor-help，不撑行高（baseline 对齐、无 padding）
-        className="cursor-help border-0 bg-transparent p-0 font-[inherit] text-accent underline decoration-accent decoration-dashed underline-offset-4 transition-colors duration-(--duration-hover) ease-standard hover:text-primary"
+        // 保留行内术语强调，同时为触控和键盘提供独立的 44px 目标。
+        className="inline-flex min-h-11 min-w-11 max-w-full cursor-help items-center border-0 bg-transparent p-0 text-left font-[inherit] text-accent underline decoration-accent decoration-dashed underline-offset-4 transition-colors duration-(--duration-hover) ease-standard hover:text-primary"
       >
         {/*
          * MDX 会把换行后的 children 包成 <p>。button 只允许短语内容，直接渲染
@@ -117,17 +145,18 @@ export function Term({
         ref={glossaryLinkRef}
         hidden
         aria-label={`跳到名词解释：${termText}`}
-        className="ml-0.5 align-super text-[0.7em] text-secondary no-underline transition-colors duration-(--duration-hover) ease-standard hover:text-accent"
+        className="ml-0.5 inline-flex min-h-11 min-w-11 items-center justify-center align-middle text-[0.7em] text-secondary no-underline transition-colors duration-(--duration-hover) ease-standard hover:text-accent [&[hidden]]:hidden"
       >
         ↡
       </a>
 
       {/* tooltip：贴术语下方居中，hover/focus 显示；只动 opacity（reduced-motion 安全） */}
       <span
+        ref={tooltipRef}
         id={tipId}
         role="tooltip"
         hidden={!open}
-        className="absolute top-full left-1/2 z-10 mt-2 w-max max-w-xs -translate-x-1/2 rounded-control border border-border bg-elevated px-3 py-2 text-xs leading-relaxed whitespace-normal text-primary"
+        className="absolute top-full left-0 z-10 mt-2 w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-control border border-border bg-elevated px-3 py-2 text-xs leading-relaxed whitespace-normal text-primary"
       >
         {def}
       </span>

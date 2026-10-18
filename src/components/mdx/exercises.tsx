@@ -46,7 +46,7 @@ export function Answer({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
+        className="flex min-h-11 min-w-11 items-center gap-2 rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
       >
         <svg
           viewBox="0 0 16 16"

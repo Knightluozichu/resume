@@ -26523,6 +26523,72 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.UvfOfficialFinalReviewCaptureGateLab,
     } as ChapterMdxComponents;
   },
+  "unix-network-programming-vol1/00-guide/unp-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-official-learning-map");
+      return {
+        UnpLearningMapLab: module0.UnpLearningMapLab,
+      } as ChapterMdxComponents;
+    },
+  "unix-network-programming-vol1/01-intro-tcpip/unp-01-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-01-introduction");
+      return {
+        UnpDaytimeClientServerLab: module0.UnpDaytimeClientServerLab,
+        UnpLayerLab: module0.UnpLayerLab,
+        UnpEnvironmentLab: module0.UnpEnvironmentLab,
+      } as ChapterMdxComponents;
+    },
+  "unix-network-programming-vol1/01-intro-tcpip/unp-02-transport-layer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-02-transport-layer");
+      return {
+        UnpTransportHandshakeLab: module0.UnpTransportHandshakeLab,
+      } as ChapterMdxComponents;
+    },
+  "unix-network-programming-vol1/02-elementary-sockets/unp-03-sockets-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-03-sockets-introduction");
+      return {
+        Unp03AddressBytesLab: module0.Unp03AddressBytesLab,
+      } as ChapterMdxComponents;
+    },
+  "unix-network-programming-vol1/02-elementary-sockets/unp-04-elementary-tcp-sockets":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-04-elementary-tcp-sockets");
+      return {
+        UnpElementaryTcpSocketsLab: module0.UnpElementaryTcpSocketsLab,
+      } as ChapterMdxComponents;
+    },
+  "unix-network-programming-vol1/02-elementary-sockets/unp-05-tcp-client-server-example":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-05-tcp-client-server-example");
+      return {
+        UnpTcpClientServerLab: module0.UnpTcpClientServerLab,
+      } as ChapterMdxComponents;
+    },
+  "unix-network-programming-vol1/02-elementary-sockets/unp-06-io-multiplexing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-06-io-multiplexing");
+      return {
+        UnpIoMultiplexingLab: module0.UnpIoMultiplexingLab,
+      } as ChapterMdxComponents;
+    },
+  "unix-network-programming-vol1/02-elementary-sockets/unp-07-socket-options":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unix-network-programming-vol1/v2/unp-07-socket-options");
+      return {
+        UnpSocketOptionsLab: module0.UnpSocketOptionsLab,
+      } as ChapterMdxComponents;
+    },
   "vulkan-guide/01-introduction/vkg-ch01-vulkan-intro": async () => {
     const module0 =
       await import("@/components/mdx/vulkan-guide/v2/vkg-ch01-vulkan-intro");

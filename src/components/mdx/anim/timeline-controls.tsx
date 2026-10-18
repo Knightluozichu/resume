@@ -70,7 +70,7 @@ export function TimelineControls({
     <div className="not-prose mt-4">
       {/* 步点条：当前步高亮（与 Stepper 同款视觉语言） */}
       {labels.length > 1 && (
-        <ol className="mb-3 flex flex-wrap gap-2" aria-hidden="true">
+        <ol className="mb-3 flex flex-wrap gap-2">
           {labels.map((label, i) => (
             <li key={label}>
               <button
