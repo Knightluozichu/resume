@@ -3,50 +3,359 @@ title: "第7章 套接字选项"
 type: C
 section: "基本套接字编程"
 order: 7
-description: "第7章 套接字选项围绕getsockopt和setsockopt函数、检查选项是否受支持并获取默认值、套接字状态、通用套接字选项、IPv4套接字选项、ICMPv6套接字选项建立从套接字接口到分组、内核状态与清理结果的证据链。 覆盖13个正式目录层级。"
+description: "按命名空间、值类型和连接状态正确设置选项；用缓冲区、读清错误、协议过滤、流数协商和描述符共享状态实验辨认平台边界。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
-draft: false
-qualityVersion: 2
+draft: true
+qualityVersion: 1
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: unp-unit-07
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import { UnpSocketOptionsLab } from "@/components/mdx/unix-network-programming-vol1/v2/unp-07-socket-options";
 
-## 为什么同时看API、内核状态与分组
+{/* 可视化决策：7.1–7.3命名空间与类型→分派树/容量标尺；7.4–7.5状态→pending error读清时序；7.6 IPv4→逐跳TTL；7.7 ICMPv6→类型过滤位图；7.8 IPv6→双栈地址入口；7.9 TCP→队列/窗口门/ACK；7.10 SCTP→双端流数配对；7.11 fcntl→dup共享对象与标志位；7.12→三组练习回收。独立UnpSocketOptionsLab，预测/参数/边界/步进/重置，非串行协议层穿透。 */}
 
-、、、、共同构成本页坐标。第7章
-套接字选项围绕getsockopt和setsockopt函数、检查选项是否受支持并获取默认值、套接字状态、通用套接字选项、IPv4套接字选项、ICMPv6套接字选项建立从套接字接口到分组、内核状态与清理结果的证据链。
+[← 上一节：I/O复用](/learn/unix-network-programming-vol1/02-elementary-sockets/unp-06-io-multiplexing) · [下一节：基本UDP套接字 →](/learn/unix-network-programming-vol1/02-elementary-sockets/unp-08-elementary-udp-sockets)
 
-在“第7章 套接字选项”中，第3版覆盖IPv4、IPv6、TCP、UDP、SCTP、路由与密钥管理套接字，并保留STREAMS等历史接口。正文先还原书中标准和测试平台语境；Linux专有工具只用于观测与现代对照，不能冒充POSIX或协议标准保证。SCTP、STREAMS、T/TCP和历史IPv6 API的可用性必须由当前平台实测确认。
+<Objectives>
 
-“第7章 套接字选项”未取得未获授权的完整中文正文；以 [InformIT 第三版官方目录与合法样章](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 界定 3 部分、31 章和 5 个附录范围，中文解释、代码、实验与练习均为独立教学重写。“第7章 套接字选项”的接口与协议事实分别以 [POSIX socket](https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html)、[RFC 9293 TCP](https://www.rfc-editor.org/rfc/rfc9293.html)、[RFC 768 UDP](https://www.rfc-editor.org/rfc/rfc768.html)、[RFC 9260 SCTP](https://www.rfc-editor.org/rfc/rfc9260.html)、[RFC 6458 SCTP sockets](https://www.rfc-editor.org/rfc/rfc6458.html) 和 [RFC 8200 IPv6](https://www.rfc-editor.org/rfc/rfc8200.html) 核对；现代差异不覆盖第三版历史语境。
+- 能解释选项的命名空间、类型长度、调用时机如何共同决定结果，而不是只背选项名称。
+- 能修改 C 探针，检查返回值与读回长度，并区分平台限制、连接错误和应用健康。
+- 能回答：设置 TCP_NODELAY 成功后为什么仍可能不发出新数据？读两次 SO_ERROR 为什么可能不同？
 
-## 常见误区
+</Objectives>
 
+## 7.1 概述
 
-## 四类样本与验收
+**先找控制台，而不是沿流水线拧一遍。**
 
-| 样本 | 只改变什么                 | 必查证据              | 通过条件   |
-| ---- | -------------------------- | --------------------- | ---------- |
-| 基线 | 固定网络、地址与输入       | API、状态、队列与分组 | 与预测一致 |
-| 边界 | 缓冲、MTU、并发或时序      | 首个阻塞、截断或拒绝  | 边界可解释 |
-| 故障 | 丢包、复位、信号或路径故障 | errno、首包与责任层   | 故障可定位 |
-| 恢复 | 关闭、回收、撤销网络设置   | 残留端点与同输入重放  | 回到基线   |
+工厂的不同机器有各自的控制台。相同编号的按钮，在两台机器上可能控制完全不同的动作。递交调整单时必须同时写清机器、按钮和刻度；“系统接受了申请”也不代表调到了想调的地方。
 
-## 练习
+这章解决的是怎样可靠地调整联网行为。没有读回与核对，程序会把出厂默认值当作承诺，把环境限制误判成程序错误。我们先确定操作对象，再检查结果，最后观察实际行为。
 
+### 五个观察角度
 
-## 小结
+这里的 <Term def="附着在套接字或协议对象上的配置或可查询状态，具体可读写性取决于该选项">套接字选项</Term> 不全是开关：有整数、结构体，也有只读且读取会产生副作用的状态。五个观察角度是**命名空间、类型长度、生命周期、作用范围、返回与读回**。下文以原书 7.1–7.12 为范围，将 IPv4、ICMPv6、IPv6、TCP、SCTP 作为这五个角度的不同实例，不把它们合成一条设置路径。
 
-- getsockopt和setsockopt函数：连接“解析监听地址”的接口、状态与分组证据。
-- 检查选项是否受支持并获取默认值：连接“创建绑定监听”的接口、状态与分组证据。
-- 套接字状态：连接“接受连接”的接口、状态与分组证据。
-- 通用套接字选项：连接“传输字节流”的接口、状态与分组证据。
-- IPv4套接字选项：连接“处理半关闭”的接口、状态与分组证据。
-- 本页13个正式目录层级全部进入可重放网络实验链。
+图中的左列是选项命名空间分派，右列才是选中对象的变化。`fcntl` 单独走描述符命令，不属于其中一个 socket level。协议数据发送可能经过传输层与网际层，但那不是一次选项调用遍历所有命名空间的证据。
 
-## 术语表
+## 7.2 getsockopt和setsockopt函数
 
+接口 <Term def="读取或设置指定socket选项的系统接口；读取长度是输入输出参数，设置长度是输入值">getsockopt 与 setsockopt</Term> 的布局相似，但长度参数并不相同：
 
+```c
+int getsockopt(int fd, int level, int optname,
+               void *optval, socklen_t *optlen);
+int setsockopt(int fd, int level, int optname,
+               const void *optval, socklen_t optlen);
+```
+
+其中 <Term def="解释optname数值的协议命名空间；同一数值在不同level中可能有不同含义">level</Term> 决定如何解释 `optname`。例如 TCP_NODELAY 要用 IPPROTO_TCP；SO_RCVBUF 要用 SOL_SOCKET。两者都传整数，但并不属于同一张选项表。函数收到的是宏展开后的数值，不是字符串名称。
+
+把 TCP_NODELAY 配上 SOL_SOCKET，不能断言必然 ENOPROTOOPT：可能报 EINVAL 或其他适用错误，也可能数值恰好碰撞该命名空间的另一合法选项并成功。实验“错误 level”故意不编造统一返回值。正确做法是查本机头文件与接口手册，使用正确配对，再核对期望行为；不要在生产连接上试错。[POSIX setsockopt](https://pubs.opengroup.org/onlinepubs/9799919799/functions/setsockopt.html) 分别规定了参数、状态和支持性错误。
+
+### 值的布局是接口的一部分
+
+很多布尔选项使用 `int`，不是 C 的 `bool`；SO_LINGER 使用 `struct linger`，ICMP6_FILTER 使用 `struct icmp6_filter`，SCTP_INITMSG 使用 `struct sctp_initmsg`。传错长度不能靠强制类型转换修好。读操作前令 `socklen_t len = sizeof value`；成功后检查实际长度再解释内容。每次重新读都应重新初始化长度。
+
+返回 `0` 表示这次调用成功，返回 `-1` 才读取 `errno`，并在其他调用覆盖它之前保存。成功后的旧 errno 不说明本次失败；读出 SO_ERROR 中的非零值则是另一个层面的错误。
+
+## 7.3 检查选项是否受支持并获取默认值
+
+不能把 `optlen=0` 宣称为 POSIX 通用支持探测。有的平台可能截断拷贝或返回零长度，也可能拒绝参数；这不等于完整值已读出。应创建与目标程序相同的地址族、类型、协议的套接字，用该选项规定的对象和长度调用，检查返回值、errno 和返回长度。[POSIX getsockopt](https://pubs.opengroup.org/onlinepubs/9799919799/functions/getsockopt.html) 明确长度的输入输出性质。
+
+编译时宏存在，只说明头文件提供了声明，不保证当前内核、协议模块、权限与 socket 类型均支持。运行时失败也应先排除 EBADF、ENOTSOCK、长度错误、权限不足和状态不符，不能统称“不支持”。
+
+默认值要在新建 socket 上读取并记录平台版本；连接后的值可能受自动调节或协商影响。实验“接收缓冲区”给出明确的**模型参数**，不是浏览器所在机器的默认值。把请求调到 65536，再开启低上限，观察容量条如何停在上限而不是继续成比例增长。
+
+## 7.4 套接字状态
+
+设置之前先问：它尚未绑定、正在监听，还是已经连接？SO_REUSEADDR 一般在 bind 前设置；IPV6_V6ONLY 应在 bind 前明确；TCP 缓冲区与影响窗口协商的配置宜在 connect/listen 前安排。某些选项可在连接后改变，但不能追回已经完成的协商。
+
+监听 socket 和 accept 返回的连接 socket 是两个对象。POSIX 将哪些选项继承给已接受 socket 留给实现定义；不能把一个系统的继承表当作所有系统的保证。对关键连接策略，在 accept 后检查或显式设置。`getsockopt(SO_TYPE)` 查询类型、`SO_ACCEPTCONN` 查询是否监听，但都不是对端业务可用性的判断。
+
+### SO_ERROR：读出并清除，不是普通仪表
+
+选项 <Term def="返回并清除套接字待处理错误的只读选项；读回0仅表示此刻没有该待处理错误">SO_ERROR</Term> 常用于非阻塞 connect 就绪后的结果检查。就绪不等于连接成功；先检查 getsockopt 本身成功，再查看读出的错误码。第一次读到 ECONNREFUSED 后，若无新错误，第二次通常读到 0，因为原错误已被消费，并不是连接恢复。[Linux socket(7)](https://man7.org/linux/man-pages/man7/socket.7.html) 明确写出“get and clear”。
+
+实验“读并清除”用一个错误槽展示这一副作用；打开“又出现错误”再读第二次，会读到新错误。多个线程竞争读取时也可能互相消费诊断信息，宜由一个连接管理者读取并把结果保存给其他模块。
+
+## 7.5 通用套接字选项
+
+通用套接字选项位于 SOL_SOCKET，但“通用”不等于所有类型都支持，也不等于都是整数开关。先区分配置（例如缓冲区请求）、行为策略（例如关闭处理）和可消费状态（例如 SO_ERROR），再决定何时设置、怎样观察。下面把容量、端口与连接健康分开检查。
+
+### 缓冲区与低水位
+
+SOL_SOCKET 中的 SO_RCVBUF/SO_SNDBUF 控制接收/发送缓冲区大小，不等于一次 read/write 的字节数，更不创造消息边界。在 Linux 上，设置时会为内部记账开销翻倍，getsockopt 返回翻倍值；同时受下限、`rmem_max/wmem_max`、权限以及协议行为约束。实验采用请求上限 32768 或 4096、记账下限 256 的简化模型，不能当作所有内核配置。
+
+因此请求 8192、读回 16384 可是正常现象，但不能推出任何平台任何请求都恰好翻倍，也不能保证调大请求后读回一定同比增长。低水位 SO_RCVLOWAT 表示读就绪等判断的阈值，其与就绪通知的关系要查实现；Linux 的 SO_SNDLOWAT 不可设置。缓冲容量、低水位、应用帧长度是三件事。
+
+### 地址复用与关闭行为
+
+SO_REUSEADDR 会放宽某些本地绑定检查，常用于服务器重启时处理残留连接造成的冲突；它不是“清除 TIME_WAIT”，也不是抢占活跃监听者。TIME_WAIT 属于连接状态，冲突还取决于本地地址/端口、通配或具体地址、原 socket 与新 socket 的设置以及系统策略。Linux 通常要求旧绑定者和新绑定者都启用复用；不能据此推断 BSD 一样。即使开启复用也必须检查 bind 返回。
+
+SO_LINGER 决定 close 时如何处理待发送数据。Linux 上启用且超时为零常导致 TCP 中止式关闭；正超时可能影响 close 等待行为。close 返回不能证明对端应用已经读取，更不能证明业务落盘。SO_REUSEPORT 是另一机制，不应拿它掩盖地址配置错误。上述平台边界参见 [socket(7)](https://man7.org/linux/man-pages/man7/socket.7.html)。
+
+### keepalive 与应用健康
+
+SO_KEEPALIVE 启用空闲 TCP 的保活机制。它探测的是**对端 TCP 协议栈及路径的响应**，不是应用进程正在工作。应用线程死锁时内核仍可应答；丢失一次探测也不足以断定对端死亡。[RFC 9293 §3.8.4](https://www.rfc-editor.org/rfc/rfc9293.html#section-3.8.4) 规定了可选保活机制及失败判断限制。
+
+```text
+本端TCP             对端TCP              对端应用
+   |----保活探测------->|                   |死锁
+   |<-----ACK----------|                   |仍死锁
+   |----业务请求------->|----交给接收队列---->|未处理
+   |     应用截止时间到：没有业务响应       |
+```
+
+这段时序是两个不同观察层次的对照：TCP 应答不推出业务应答。需要业务健康时加应用心跳或请求截止时间；保活间隔、重试次数和单次读写超时各有不同语义。SO_RCVTIMEO/SO_SNDTIMEO 约束适用的阻塞 I/O 等待，不等于整个业务事务截止时间，也不直接设定 poll/epoll 的等待时间。
+
+SO_BROADCAST 允许在适用的 IPv4 数据报 socket 上发送广播；SO_DONTROUTE 限制路由使用，SO_OOBINLINE 控制带外数据是否内联读取，SO_DEBUG 还可能需要权限。这些选项的可用性都要走 7.3 的检查，不是给每个协议无条件加上的能力。
+
+## 为什么先预测：交互实验与对象变化
+
+猜一猜：把 SO_RCVBUF 请求翻倍，读回是否一定翻倍？把 TCP_NODELAY 打开，数据是否一定立即上网？请选择判断，再切换参数和故障/边界，单步到第三、第四帧。重置会恢复缓冲区场景、8192 字节、关闭边界、清空预测，并暂停回到首帧。
+
+<UnpSocketOptionsLab />
+
+左图只表达“把选项交给哪一个命名空间”，不表示 IPv4 与 IPv6 串行封装。右图随实验切换真实对象：缓冲区容量、错误槽、TTL 分组、过滤位图、地址入口、发送队列、SCTP 流与共享文件状态。图不调用真实网络，也不会把示意结果冒充你的系统测量。
+
+## 7.6 IPv4套接字选项
+
+IPPROTO_IP 的 IP_TTL 设置出站 IPv4 分组的初始 TTL。每个转发路由器递减，减至零就丢弃；它不是以秒计的连接超时。实验中 TTL=3 经过第三个路由器时归零，不能抵达该路由器之后的目的端；加长路径可直接看到失败位置。[ip(7)](https://man7.org/linux/man-pages/man7/ip.7.html) 给出 Linux 接口与边界。
+
+IP_MULTICAST_TTL 单独控制组播跳数，IP_MULTICAST_IF 选择出站组播接口，IP_MULTICAST_LOOP 决定本机回环，不能都用 IP_TTL 替代。接收组播还涉及加入组和指定接口；加入组不是订阅应用频道的通用语法。
+
+Linux 的 IP_PKTINFO 可启用接收辅助信息，recvmsg 控制消息提供目的地址和接口等元数据。它不同于把这些字节塞入应用负载；IP_OPTIONS 则涉及 IPv4 首部选项。各平台的辅助信息名称和结构有差异。实验的分组路径回答“能走多远”，这些元数据则回答“从哪里来、投给谁”；两者不可互推。
+
+## 7.7 ICMPv6套接字选项
+
+对原始 ICMPv6 socket，IPPROTO_ICMPV6 下的 ICMP6_FILTER 是类型过滤器，不是 int 开关。先全阻止，再放行特定类型，可以让应用只收到需要的消息。例如 129 是 Echo Reply、128 是 Echo Request、1 是 Destination Unreachable。实验将三种消息穿过同一过滤位图，放行格变亮，未选类型不会交给此 socket。
+
+```c
+/* fd是获授权创建的AF_INET6/SOCK_RAW/IPPROTO_ICMPV6 socket */
+struct icmp6_filter filter;
+ICMP6_FILTER_SETBLOCKALL(&filter);
+ICMP6_FILTER_SETPASS(ICMP6_ECHO_REPLY, &filter);
+if (setsockopt(fd, IPPROTO_ICMPV6, ICMP6_FILTER,
+               &filter, sizeof filter) == -1)
+    perror("ICMP6_FILTER");
+```
+
+结构与宏声明于 `<netinet/icmp6.h>`；原始 socket 创建常需特权，应在受控环境测试，不要为了示例关闭安全限制。[RFC 3542 §3.2](https://www.rfc-editor.org/rfc/rfc3542.html#section-3.2) 说明过滤与宏。忘记初始化不是可靠的允许策略；实验的边界特指“已知初态为全部允许后，只加 SETPASS”，不是模拟未初始化 C 内存。此过滤仅影响本 socket 的交付，不等于阻断系统 IPv6 邻居发现或所有 ICMPv6 处理。
+
+## 7.8 IPv6套接字选项
+
+IPPROTO_IPV6 下的 IPV6_UNICAST_HOPS 对应单播跳数；组播使用 IPV6_MULTICAST_HOPS 等独立选项。接收分组信息、跳数等可用 IPV6_RECVPKTINFO、IPV6_RECVHOPLIMIT 配合 recvmsg；启用接收元数据与设置发送跳数不是同一个操作。旧 IPv6 API 与新接口命名有演进，本章按 [RFC 3493](https://www.rfc-editor.org/rfc/rfc3493.html) 和 [RFC 3542](https://www.rfc-editor.org/rfc/rfc3542.html) 核对，不宣称所有旧代码原样可移植。
+
+IPV6_V6ONLY 决定 AF_INET6 socket 是否仅处理 IPv6，关闭时在支持 IPv4 映射地址的系统可处理相应 IPv4 流量。默认值和双栈绑定策略因平台而异，应在 bind 前显式设置并检查。实验用两条地址入口说明作用：开启就关闭映射 IPv4 入口；关闭后若与已有 IPv4 绑定冲突，bind 仍可失败。V6ONLY 不会自动释放另一个监听端口。[ipv6(7)](https://man7.org/linux/man-pages/man7/ipv6.7.html) 提供 Linux 细节。
+
+## 7.9 TCP套接字选项
+
+选项 <Term def="关闭Nagle算法的TCP选项；不取消流量控制、拥塞控制或调度限制">TCP_NODELAY</Term> 要在 IPPROTO_TCP 设置。Nagle 的核心情形是已有未确认数据时暂缓新的小段，等待确认或积累足够数据；它不是固定毫秒的睡眠计时器。关闭算法有利于一些交互流，但可能增加小段数量，不能保证降低任何工作负载的总耗时。
+
+实验先放置未确认的小段，再写 20 字节：不开 NODELAY 时先留在队列，第4帧 ACK 到达才解除等待；开启则移除这个门。再开启零窗口边界，两种设置都不能发送新的应用数据。真实网络还有拥塞窗口、发送缓冲、调度、链路等限制，图中不模拟窗口探测报文。[tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html) 和 [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293.html) 是事实来源。
+
+TCP_MAXSEG 涉及 TCP 最大报文段数据长度，不是包含 IP/TCP 首部的 MTU，更不是应用消息大小。设置和读回会受实现、连接时机、对端通告 MSS 和路径限制影响，不能写死“设1460就保证每段1460”。已有连接与未连接 socket 上读回也可能反映不同阶段；TCP 仍然只提供字节流。
+
+## 7.10 SCTP套接字选项
+
+SCTP 的关联是通信端点间的协议关系；一对多风格 socket 可拥有多个关联。SCTP_INITMSG 在 IPPROTO_SCTP 下使用结构体，`sinit_num_ostreams` 请求出站流数，`sinit_max_instreams` 是本端愿意接收的入站流上限。实验连接两排流槽：本端请求8、对端最多收2，实际本端出站只协商为2；反方向须另行计算。
+
+```c
+/* 需实现提供<netinet/sctp.h>；fd为新建的SCTP socket */
+struct sctp_initmsg init = {0};
+init.sinit_num_ostreams = 4;
+init.sinit_max_instreams = 6;
+if (setsockopt(fd, IPPROTO_SCTP, SCTP_INITMSG,
+               &init, sizeof init) == -1)
+    perror("SCTP_INITMSG");
+```
+
+未指定字段保持零按该接口表示使用默认设置，不是“零次重试”。设置初始化参数不重建已有的关联；先设置再发起关联，并读取 SCTP_STATUS 中实际入站/出站流数进行核对。[RFC 6458 §8.1.3 与 §8.2.1](https://www.rfc-editor.org/rfc/rfc6458.html#section-8.1.3) 是当前接口依据，比第三版出版时间晚，属于显式现代补充而非原文复现。
+
+查询一对多 socket 的 SCTP_STATUS 要在 `struct sctp_status` 的 `sstat_assoc_id` 指定目标关联；它不是问“整个 fd 的唯一连接”。SCTP_RTOINFO、SCTP_PEER_ADDR_PARAMS 等进一步区分关联或路径参数；不要把端点默认值误作所有现存关联的值。SCTP_NODELAY 禁用 Nagle 类合并，也不提供实时发送保证。SO_RCVBUF 即使用于 SCTP，level 仍是 SOL_SOCKET；一对多时缓冲区对整个 socket 还是对关联生效需查实现。可用性还受操作系统、协议模块与开发头文件限制。
+
+## 7.11 fcntl函数
+
+调用 <Term def="按命令操作描述符或其共享打开文件描述对象的接口；不同命令作用范围不同">fcntl</Term> 的 F_GETFL/F_SETFL 读取和修改打开文件描述对象的状态。把 fd 复制成 dup(fd) 后，两者引用同一对象，O_NONBLOCK 因而共享。实验画出两条引用箭头汇入同一组状态位；直接覆盖标志的边界会把其他可修改位清掉。
+
+```c
+int flags = fcntl(fd, F_GETFL);
+if (flags == -1) return -1;
+if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    return -1;
+/* 关闭非阻塞：再次读取当前flags，再清除该位 */
+/* fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) */
+```
+
+空读时非阻塞通常返回 EAGAIN/EWOULDBLOCK，不意味着连接断开，也不意味着网络变快。读改写仍可能与其他线程竞争，应由明确的所有者管理共享状态。
+
+F_GETFD/F_SETFD 管每个描述符的 FD_CLOEXEC，不能和 F_GETFL 的标志混用；它控制 exec 时是否关闭该 fd。F_SETOWN/F_GETOWN 涉及异步通知接收者，不是设置 TCP 对端地址。原书还讨论异步与带外通知的关联，这些系统相关机制应在目标平台单独核对。详见 [POSIX fcntl](https://pubs.opengroup.org/onlinepubs/9799919799/functions/fcntl.html)。
+
+## 可运行探针：不连接外网也能做类型正确的读写
+
+下面保存为 `socket-option-probe.c`，用 `cc -Wall -Wextra socket-option-probe.c -o socket-option-probe` 编译。程序不绑定、不连接、不发送，只创建一个 IPv4 TCP socket。辅助函数既核对返回值又核对长度；main 先读初始值、设置请求，再读回。出现失败立即退出，不拿未验证值继续推理。
+
+```c
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <unistd.h>
+static int read_buf(int fd, const char *stage) {
+    int value = 0;
+    socklen_t len = sizeof value;
+    if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &value, &len) == -1) {
+        perror("getsockopt SO_RCVBUF"); return -1;
+    }
+    if (len != sizeof value) {
+        fprintf(stderr, "unexpected option length\n"); return -1;
+    }
+    printf("%s: %d bytes\n", stage, value);
+    return 0;
+}
+```
+
+下面紧接在同一个源文件中。8192 是请求而非预期断言；不把本机结果外推到所有 POSIX 系统。
+
+```c
+int main(void) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd == -1) { perror("socket"); return 1; }
+    int requested = 8192, status = 1;
+    if (read_buf(fd, "before") == -1) goto done;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF,
+                   &requested, sizeof requested) == -1) {
+        perror("setsockopt SO_RCVBUF"); goto done;
+    }
+    if (read_buf(fd, "after") == -1) goto done;
+    status = 0;
+done:
+    if (close(fd) == -1) { perror("close"); return 1; }
+    return status;
+}
+```
+
+动手试：分别请求 8192、65536，记录系统版本与读回值，不预先写“必翻倍”的断言。改为 TCP_NODELAY 时，应同时改 level、名称、日志和布尔请求值，并加入 `<netinet/tcp.h>`，而不是只替换宏。代码成功仅证明该 socket 的这次操作成功；真实发送性能还需抓包、计时与业务负载验证。
+
+## 常见误区：现象、原因与修法
+
+<Callout type="trap">
+  **现象**：错误 level 的调用竟然成功。 **原因**：optname
+  是数值，可能碰撞另一个命名空间的合法选项。
+  **修法**：查明正确配对与类型长度，用正确 level
+  读回并检查行为；不能把“没报错”当作选项正确。
+</Callout>
+
+<Callout type="trap">
+  **现象**：请求缓冲区翻倍，但读回没变。
+  **原因**：平台上限等约束可能先截断请求；Linux 翻倍记账也不是无限分配。
+  **修法**：记录系统限制、权限和读回值；用实验低上限模式定位，别靠同比断言判断失败。
+</Callout>
+
+<Callout type="trap">
+  **现象**：TCP 保活应答正常，但业务无响应；NODELAY 开启仍发不出去。
+  **原因**：协议栈应答不证明应用健康；零窗口等约束不由 Nagle 开关取消。
+  **修法**：分别检查业务截止时间、接收窗口和拥塞状态，切换实验零窗口观察队列。
+</Callout>
+
+<Callout type="trap">
+  **现象**：第二次 SO_ERROR 为0，被误报成连接已经恢复。
+  **原因**：第一次成功读取已清除原 pending error。
+  **修法**：保存第一次诊断结果；统一读取所有权，结合连接状态而非反复消费错误槽。
+</Callout>
+
+## 7.12 小结
+
+- 先确定命名空间、类型、状态与作用范围。
+- 返回成功、读回状态、业务成功要分开验证。
+- NODELAY和保活不替代窗口检查与应用健康判断。
+
+<Exercises>
+
+1. **问题 1：从配置请求到可验证的结果。** 根据7.1 概述中的五个观察角度，为 TCP_NODELAY 写出命名空间、值类型、设置时机、作用对象和观测方式。修改上面的 C 探针，使用7.2 getsockopt和setsockopt函数检查调用结果；按7.3 检查选项是否受支持并获取默认值的方法，说明头文件有宏、读回成功与业务变快之间有什么区别。最后在“接收缓冲区”实验中请求65536，开启4096上限，预测第三帧容量条；用7.5 通用套接字选项的记账规则计算读回值，并说出不能推广到其他系统的原因。
+
+   <Answer>
+
+   将头文件加入 `netinet/tcp.h`，读写的 level/optname 均改为 `IPPROTO_TCP/TCP_NODELAY`，值用 `int` 且设为1，长度每次初始化为 `sizeof value`。可在需要该策略的 TCP socket 上、发送相应数据前设置；它作用于这个连接的发送策略，不改变对端业务。先读默认值，再写、再读，并分别检查返回值和实际长度。失败时保存 errno；成功后不要解释旧 errno。
+
+   头文件有宏不保证运行内核支持，读回1只确认该配置被采用；业务是否变快还受接收窗口、拥塞和调度影响。错用 SOL_SOCKET 时，内核只看数字，既可能拒绝，也可能碰撞另一合法选项而成功，不能规定唯一 errno。应修正配对而不是寻找“碰巧成功”的错误组合。
+
+   缓冲区模型把请求65536先截为4096，再翻倍为8192，且不低于模型下限256。把请求改回8192会得到相同结果：上限让增大请求失效。这里模拟 Linux 风格记账，并不是浏览器对本机执行的系统调用；其他平台、权限、自动调节和限额可产生不同读回值。比较真实探针日志时必须同时保留系统版本与配置。
+
+   </Answer>
+
+2. **问题 2：区分连接状态、协议应答与业务健康。** 按7.4 套接字状态检查非阻塞连接：两次 SO_ERROR 先 ECONNREFUSED 后0，能否判为恢复？在错误槽实验中开启“又出现错误”，说明第三、四帧谁消费了哪次错误。再按7.5 通用套接字选项分析：服务重启 bind 失败，REUSEADDR是否必然足够？保活 ACK 是否说明应用没有死锁？最后用7.9 TCP套接字选项实验，先设置 NODELAY=1，再打开零窗口，比较20字节所在位置。
+
+   <Answer>
+
+   先确认 getsockopt 本身成功，再解释返回的 SO_ERROR。第一次读出并清除了原 pending error；无新错误时第二次0不表示恢复。错误槽模型第三帧把原错误交给第一次读取者；边界开启时另一个错误随后到达，第四帧第二次读取消费新错误，槽再次为空。记录错误码及读取时序，不让多个诊断线程竞相读取后互相否定。
+
+   REUSEADDR不删除 TIME_WAIT，也不绕过活跃监听绑定。检查实际地址、端口、通配范围、原有绑定者、旧新 socket 的复用设置和平台规则，才能解释 bind 失败。保活 ACK 只说明当时 TCP 栈与路径有响应；应用死锁仍可能应答保活，业务健康要看应用心跳或请求截止时间。
+
+   NODELAY=1只解除 Nagle 等待：窗口足够的模型中第三帧20字节可离开发送队列。打开零窗口后它仍留在队列；ACK到达也不自动扩大窗口。真实拥塞窗口与调度仍可能限制发送，本图不把窗口探测当成业务数据已经交付。
+
+   </Answer>
+
+3. **问题 3：按协议与对象范围排错，并改动模型验证。** 依次完成下面五步，最后按7.12 小结写出“设置成功不等于目标达成”的共同判据：在7.6 IPv4套接字选项实验设TTL=3、增加一个路由器，定位丢包点；在7.7 ICMPv6套接字选项实验只放行129，判断128与1的去向；在7.8 IPv6套接字选项实验关V6ONLY并开启已有IPv4绑定，预测bind；在7.10 SCTP套接字选项实验请求8个流、对端上限2，写出查询实际流数的对象；在7.11 fcntl函数实验通过dup后的fd开启非阻塞，解释原fd及FD_CLOEXEC是否变化。代码改动题：只把 `socketOptionModel` 的边界分支 `peerStreams` 从2改为3，先预测第3帧连线数，再运行模型断言；验证后恢复为2，不改请求上限来“修正”答案。
+
+   <Answer>
+
+   IPv4分组在第三个路由器递减至0而丢弃，不会抵达第四个路由器；TTL不是秒数。ICMPv6过滤先 `ICMP6_FILTER_SETBLOCKALL` 再 `ICMP6_FILTER_SETPASS(129, &filter)`，以结构体长度设置；128和1不投递给这个 socket，不等于关闭系统其他ICMPv6处理。若初态全部允许，只加SETPASS不能收紧范围。
+
+   关闭V6ONLY不保证bind成功：模型中双栈通配入口与已有IPv4绑定冲突。实际还须查映射支持、地址与复用条件，并在bind前检查设置返回值。SCTP原模型出站流数为 `min(8,2)=2`；修改后为3且应显示三条连线。反向流数须另算。用 `struct sctp_status` 的 `sstat_assoc_id` 选择目标关联，调用SCTP_STATUS并检查长度和返回结果，而非把整个一对多fd当成一个关联。
+
+   dup后的fd共享打开文件描述对象，因此F_SETFL改变O_NONBLOCK会影响原fd；必须先F_GETFL检查成功，再F_SETFL(oldFlags | O_NONBLOCK)，避免清掉其他可修改位。FD_CLOEXEC是各fd自己的标志，要用F_GETFD/F_SETFD单独管理。共同判据是：返回成功只确认一次接口操作；仍需在正确的协议、状态和对象范围，核对实际读回及业务事件。
+
+   </Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="套接字选项">
+    端点或协议对象的配置/状态；不是所有选项都可写，查询也可能有副作用。
+  </GlossaryItem>
+  <GlossaryItem term="getsockopt 与 setsockopt">
+    读写选项的接口；读取前给出可用空间长度，读取后得到实际长度，失败时检查errno。
+  </GlossaryItem>
+  <GlossaryItem term="level">
+    解释选项数字的命名空间；填错后既可能报错，也可能碰巧设置另一合法选项。
+  </GlossaryItem>
+  <GlossaryItem term="SO_ERROR">
+    读出并清除待处理错误；再次为0不表示原错误没发生或连接恢复。
+  </GlossaryItem>
+  <GlossaryItem term="TCP_NODELAY">
+    关闭Nagle等待条件的选项；不保证实际发包时刻，不绕过接收窗口和拥塞窗口。
+  </GlossaryItem>
+  <GlossaryItem term="fcntl">
+    操作描述符及其共享状态的命令接口；O_NONBLOCK与FD_CLOEXEC属于不同对象范围。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与使用边界
+
+章节范围按项目 manifest 的第三版7.1–7.12映射组织；[InformIT 第三版出版信息](https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555) 用于核对版本身份。本次取得的页面目录在第4章截断，不能作为第7章完整目录已独立核验的证据；原书小节范围仍待完整目录复核。未取得原书全文的改编许可，不复现未获授权的正文、配图或习题；本章解释、有限状态实验与练习均为独立教学重写，不把出版社链接、目录或合法样章访问等同于开放许可证。
+
+事实核对使用文中逐节链接的 POSIX Issue 8 接口、Linux man-pages、RFC 3493/3542/6458/9293。这些标准与手册中有出版时间晚于原书第三版的部分，已用当前接口与平台说明补充，不冒充原书逐句忠实翻译。2026-10-18实际 HTTP 访问记录、原始响应摘要哈希与章节映射保存在本批证据目录；Linux 平台行为不宣称是 POSIX 通用保证。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="W. Richard Stevens、Bill Fenner、Andrew M. Rudoff《UNIX网络编程 卷1：套接字联网API（第3版）》"
+  adaptedUrl="https://www.informit.com/store/unix-network-programming-volume-1-the-sockets-networking-9780131411555"
+/>
