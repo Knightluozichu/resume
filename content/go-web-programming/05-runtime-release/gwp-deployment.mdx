@@ -1,75 +1,453 @@
 ---
 title: "第10章 部署Go应用"
-type: C
+type: D
 section: "Go Web编程 · 并发与部署"
 order: 10
-description: "比较独立服务器、Heroku、Google App Engine与Docker，追踪二进制、资产、配置和发布证据。"
+description: "从发布物到接流与排空：比较独立服务器、Heroku、App Engine和Docker，验证Go退出边界。"
 demo: true
 math: false
+practiceMode: simulation
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-10"
+sourceMode: independent-rewrite
+officialUnitId: gwp-10
+sourceAccess: outline-only
 draft: false
+qualityVersion: 2
 ---
 
+import { GwpDeploymentLab } from "@/components/mdx/go-web-programming/gwp-deployment-lab";
 
-## 从单二进制为何仍不够开始
+## 学习目标
 
-先预测：`go build`成功后，复制一个文件到服务器就一定能运行完整Web应用吗？不一定，模板、静态文件、证书、配置和数据库schema都可能缺失。必须完整。
+本章把“程序能启动”拆成“候选可接请求、旧请求有归宿、失败能退回”的验收任务。比较平台时，不以命令多少代替责任分析。
 
+<Objectives>
 
-## 部署到独立服务器
+- 能追踪切流前后每个请求的归属，并用实验区分探测失败、业务失败和排空超时。
+- 能依据控制权、持久数据和退出责任，在服务器、Heroku、App Engine与Docker方案间作出选择。
+- 能回答：旧版本还有两个请求时切换新版本，立即停止旧版本与先排空有什么不同？
 
-独立主机提供最大控制权，也要求自行管理用户、目录、进程、日志、TLS、端口、防火墙和升级。要求非root运行、固定工作目录和可观察退出状态。
+</Objectives>
 
-```sh
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o web ./cmd/web
-sha256sum web templates/* public/*
+## 直觉：换一条生产线，不是搬走线上半成品
+
+一座工厂要换新生产线。新线能开机，不代表能做出合格产品；先试做，再把新订单交过去，才不会把故障直接交给顾客。
+
+旧线还有半成品时，把电源拔掉会丢掉正在做的工作。正确交接还要决定哪些继续做、等多久、超时怎么办。本章解决的正是这种不停工换线问题。
+
+## 部署Go应用：发布物、健康与接流资格
+
+部署不是复制一个二进制就结束。将代码、资产、配置契约和版本身份合在一起考虑，才能解释“构建成功但页面失败”。下面三个边界贯穿原书第10章的各部署目标。
+
+### 发布物必须能被重新识别
+
+一次可识别的部署版本叫作 <Term def="把应用产物与运行配置绑定的一次可追踪发布">发布（release）</Term>。程序还可能需要模板、静态资源、CA证书、时区数据和外部服务地址；其中秘密应在运行时注入，不能烘焙进镜像。用 <Term def="对产物字节计算的摘要，用于确认是否是同一份产物">制品摘要（digest）</Term> 关联测试与上线对象，不能只认会移动的 `latest` 标签。
+
+```text
+代码 + 资产 + 构建依赖 → 制品摘要
+制品摘要 + 配置版本 → 候选实例
+候选探测通过 → 新请求路由 → 业务成功率
+旧版本在途请求 → 完成 / 超时中止 → 停止
 ```
 
-## 部署到Heroku
+图中“配置版本”记录秘密的引用或修订号，不输出秘密值。回滚上一摘要也不能撤销已经执行的破坏性数据库迁移；应先设计兼容新旧应用的扩展—收缩迁移。
 
-原书展示Heroku的构建和dyno模型。应用监听平台提供的PORT，持久状态放外部服务，本地文件系统不可作为长期数据库。
+### 就绪不同于活着
 
-## 部署到Google App Engine
+接收业务请求前满足依赖条件的状态称为 <Term def="实例已满足当前接收业务请求所需条件的状态">就绪（readiness）</Term>。进程活着只能证明它尚未退出；就绪检查应针对监听端口、必需资产和关键依赖，且有超时。探测也不覆盖每一种输入。实验中“候选缺少模板”会阻断切流，“切流后请求失败”则说明探测通过不等于业务正确。
 
-App Engine提供托管实例、路由和伸缩，但有运行时与服务约束。需要在设计期验证超时、文件、网络和后台任务限制。
+### 排空和回滚不是反向播放
 
+停止接收新请求、等待已接收请求结束叫 <Term def="停止接新工作，但给已有工作留出完成时间">排空（draining）</Term>；把新流量恢复到已知版本叫 <Term def="将新请求恢复到已知可用版本，但不撤销已发生的数据变更">回滚（rollback）</Term>。路由换了，原连接和在途请求不会自动转移。旧实例被关掉后不能直接切回空目标，必须重建并验证；失败的写请求也不能无条件重试，需考虑幂等性。
 
-## 部署到Docker
+## 交互实验：交接时请求去了哪里
 
-Docker镜像封装文件系统与启动命令，不自动解决配置、数据和安全。要求多阶段构建、固定基础镜像、非root用户和外部秘密。
+这里把平台差异暂时抽象成同一个发布决策，不模拟某家云的精确调度时序。六个请求的身份在每个动作后都保留，数量守恒可以揭穿“切流就算成功”的错觉。
+
+猜一猜：把排空等待缩成零，会不会让旧请求自动在新版本完成？先选择预测；依次准备候选、探测、切流、发送，观察 R1/R2 与 R3 的位置。再试停止非接流版本，对照拒绝原因，最后 Reset。
+
+<GwpDeploymentLab />
+
+正常路径中先完成 R1/R2，再停止旧版；回滚路径应在旧版仍存活时执行。更换故障会重建整场实验，Reset 还会恢复正常场景并清空预测。待发队列只是实验输入，不声称 Heroku 或 App Engine 真的用这种队列缓存请求。
+
+## 10.1 部署到独立服务器
+
+部署到独立服务器时，你控制操作系统、进程和网络，也承担补丁、入口安全和故障恢复。启动二进制不等于持续提供服务：进程监督负责退出后的恢复，入口负责把请求交给就绪实例，应用负责排空已有请求。本节的 `serveUntil` 与练习2验证最后一个边界，不证明公网入口或云上监督已经配置。
+
+### 从构建到受监督运行
+
+先核对目标系统与 CPU 架构。纯Go程序可交叉编译；依赖 cgo 时必须另行准备目标工具链与库，不能把 `CGO_ENABLED=0` 当作通用修法。构建命令是操作说明，本轮没有生成或上传生产二进制。
+
+```sh
+# 在包含本节 server.go 和 go.mod 的独立目录执行；未代执行。
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o web .
+# Linux可使用 sha256sum web；macOS可使用 shasum -a 256 web。
+```
+
+运行时使用专用非root账号、固定工作目录、最小文件权限；由系统服务管理器监督退出和重启，并采集标准输出日志。公网入口需单独配置DNS、TLS、反向代理和防火墙。监听所有接口不等于允许所有来源；以下示例只提供HTTP，真实部署应由受信入口终止TLS，不能直接拿它当安全边界。
+
+### 可运行的端口与健康检查
+
+以下五个 `go` 代码块按顺序原样拼成 `server.go`，配 `module example.invalid/deploylab` 与 `go 1.26.0` 的 `go.mod` 即可测试。它是现代Go示例，不是2016年源码；没有模板文件依赖，根页面直接返回固定文本。
+
+```go
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "log"
+    "net"
+    "net/http"
+    "os"
+    "os/signal"
+    "strconv"
+    "sync/atomic"
+    "syscall"
+    "time"
+)
+```
+
+平台提供的 `PORT` 是端口号，不是地址。空值只在本示例本地模式回退8080；负数、非数字、零和越界值都应在监听前失败，而不是悄悄监听另一个端口。
+
+```go
+func listenAddress(port string) (string, error) {
+    if port == "" { port = "8080" }
+    n, err := strconv.Atoi(port)
+    if err != nil || n < 1 || n > 65535 {
+        return "", fmt.Errorf("invalid PORT %q", port)
+    }
+    return ":" + strconv.Itoa(n), nil
+}
+```
+
+就绪标志使用原子变量，因为请求与停止逻辑并发访问。生产应用还需真实、有界的关键依赖探测；本例的布尔标志只验证接流边界，不声称数据库可用。`GET /{$}` 的精确根路径语法需要Go1.22或更高版本。
+
+```go
+func routes(ready *atomic.Bool) http.Handler {
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+        if !ready.Load() {
+            http.Error(w, "draining", http.StatusServiceUnavailable)
+            return
+        }
+        w.WriteHeader(http.StatusOK)
+    })
+    mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+        fmt.Fprintln(w, "release demo")
+    })
+    return mux
+}
+```
+
+### Shutdown 的等待者必须活得更久
+
+`Serve` 在关闭后返回 `http.ErrServerClosed`，不代表所有在途请求已完成。下面启动监听循环后，由调用者等待 `Shutdown`；超时则显式 `Close`。停止上下文必须从 `Background` 派生，不能复用已经被信号取消的上下文，否则宽限期立即耗尽。
+
+```go
+func serveUntil(ctx context.Context, srv *http.Server, ln net.Listener,
+    ready *atomic.Bool, grace time.Duration) error {
+    served := make(chan error, 1)
+    go func() { served <- srv.Serve(ln) }()
+    select {
+    case err := <-served:
+        if errors.Is(err, http.ErrServerClosed) { return nil }
+        return err
+    case <-ctx.Done():
+        ready.Store(false)
+        stop, cancel := context.WithTimeout(context.Background(), grace)
+        defer cancel()
+        if err := srv.Shutdown(stop); err != nil {
+            _ = srv.Close()
+            return fmt.Errorf("shutdown: %w", err)
+        }
+        err := <-served
+        if errors.Is(err, http.ErrServerClosed) { return nil }
+        return err
+    }
+}
+```
+
+这个等待只覆盖标准HTTP连接；劫持连接、WebSocket和独立后台任务需要各自的退出协议。`Close` 也不是等待所有 handler 返回的屏障。真实入口应先撤销接流、等待传播，再发退出信号；这个单进程例子不证明路由传播已完成。
+
+```go
+func main() {
+    addr, err := listenAddress(os.Getenv("PORT"))
+    if err != nil { log.Fatal(err) }
+    var ready atomic.Bool
+    ready.Store(true)
+    srv := &http.Server{Addr: addr, Handler: routes(&ready),
+        ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
+    ln, err := net.Listen("tcp", addr)
+    if err != nil { log.Fatal(err) }
+    ctx, stop := signal.NotifyContext(context.Background(),
+        os.Interrupt, syscall.SIGTERM)
+    defer stop()
+    if err := serveUntil(ctx, srv, ln, &ready, 10*time.Second); err != nil {
+        log.Print(err)
+    }
+}
+```
+
+局部测试将用临时loopback端口、阻塞中的真实HTTP请求与取消上下文，验证正常排空、超时强关、就绪503及监听错误；不是启动开发服务器，也不是在公网验收。示例记录退出错误；需要故障退出码的服务监督策略应由调用层明确约定，不应把一次日志当成成功发布。
+
+## 10.2 部署到Heroku
+
+部署到Heroku把构建和进程托管交给平台，但应用仍须正确监听平台端口、把持久数据放到外部服务，并在停止期限内排空。实验“候选端口错误”解释启动契约，练习3检查临时盘误用；两者都不是Heroku整合测试。这里依据2026-10-19抓取的官方文档说明现代Go Modules流程，不照抄2016年的依赖工具或假设旧免费套餐存在。
+
+<Term def="Heroku中承载应用进程的隔离运行单元，不是持久磁盘">Dyno</Term>
+承载进程。Go buildpack识别
+`go.mod`，构建可执行程序；支持的工具链应按当次官方列表选择，不能从本机Go1.26.0推断云端一定支持。默认进程推断有条件，显式
+`Procfile` 更容易复核；路径须以实际构建产物为准。
+
+```text
+# 配置示意，不是已执行的发布记录
+Procfile: web: bin/web
+构建输出必须存在: bin/web
+监听: 0.0.0.0:$PORT（Go中可用 :端口）
+配置: 运行时注入 DATABASE_URL 等秘密引用
+持久数据: 外部数据库/对象存储，不写入 dyno 本地目录
+```
+
+代码仓库内的静态资产可随发布携带；dyno运行时写入的文件是临时的，其他dyno不可见，重建后会丢失。官方停止说明给进程发送 `SIGTERM`，宽限期后可能 `SIGKILL`；本次抓取页面说明30秒，不应推广到所有平台。将应用10秒排空预算放在平台期限之内，还要为撤路由与清理留余量。
+
+实验的“候选端口错误”和“旧请求排空超时”分别对应启动契约和退出契约。实际创建应用、配置计费资源、推送发布、扩缩容都涉及账号与费用，本轮没有执行。
+
+## 10.3 部署到Google App Engine
+
+部署到Google App Engine必须先区分standard与flexible；本节限定现代standard Go运行时，不沿用2016年第一代沙箱API。创建版本不等于迁移流量：下方版本图对应实验的候选与接流边，但真实分流和运行时支持仍须查平台契约。练习3同时检查流量迁移前提和非持久文件系统，不能把模型探测通过当成云端验收。
+
+官方运行时页本次快照更新于2026-10-13，列出Go1.27为当时最新支持版本，并用 `go` 加主次版本号选择运行时。下面是该快照的配置示意，**不是本机Go1.26.0实测的云配置**；正式部署前必须重新核查生命周期与项目可用版本。
+
+```yaml
+# 现代standard配置示意，未部署
+runtime: go127
+service: default
+```
+
+实例读取平台 `PORT`，HTTPS由入口终止。standard文件系统除 `/tmp` 外只读，写 `/tmp` 消耗实例内存，不适合持久上传或本地数据库。版本发布与流量迁移分开，可先观察候选，再调整流量；官方提供按IP或Cookie方式分流，并非所有请求都按一个全局百分比严格交替。
+
+```text
+service default
+  ├─ version old ← 当前接流
+  └─ version new ← 候选验证
+验证后调整服务流量；失败时恢复到仍可用的旧版本
+```
+
+实验的单一路由是教学简化，不是App Engine调度实现。真实应用还要核查实例缩放、请求期限、IAM、区域和成本；本章未登录项目、未上传配置、未调用平台部署API。
+
+## 10.4 部署到Docker
+
+部署到Docker先把进程所需文件封装为镜像，再由目标daemon创建容器；它不代替运行主机、TLS或云调度。镜像push成功不等于容器就绪或入口可达。以下五个子主题沿着构建、分发、运行逐项解释，10.4.5检查目标Engine版本与发布端口边界，练习3据此区分“制品已分发”和“服务已上线”；本轮没有执行Docker部署。
+
+### 10.4.1 Docker是什么
+
+<Term def="由分层文件系统与启动配置组成的可分发只读模板">镜像（image）</Term>
+不是一个正在服务的进程。基于镜像创建的
+<Term def="镜像加运行时可写层、配置与隔离进程的实例">容器（container）</Term>
+才会运行。容器通常共享宿主机内核，不是完整虚拟机；删除重建容器不应丢掉业务唯一副本。
+
+### 10.4.2 安装Docker：先确认客户端连到了谁
+
+Linux可按发行版官方说明安装Engine；macOS、Windows通常选Desktop，需满足虚拟化与平台要求，许可条件单独核查。不要把Linux的一键安装脚本直接贴到macOS执行。本轮没有安装软件或启动daemon，下列命令是读者在获准环境中的诊断步骤。
+
+```sh
+# 未执行；先按官方安装页完成对应系统的安装。
+docker version
+docker context show
+docker info
+```
+
+`version` 只有Client信息不表示Server可达；context指向远端时，后续操作可能改变远程机器，先核对再运行。权限错误应定位socket访问策略，不要通过随意开放daemon网络端口“修复”。
+
+### 10.4.3 Docker概念和组件
+
+CLI向daemon发请求，daemon负责构建和运行；<Term def="保存并分发镜像的服务，不直接承载应用请求">镜像仓库（registry）</Term> 存储镜像。网络决定容器怎样收发请求，volume或外部服务决定数据怎样跨实例生命周期保留。
+
+```text
+CLI ──构建/运行请求──→ daemon ──创建──→ container
+                         ↑                 │
+registry ← push image ── image             ├─ network → 对外入口
+registry ── pull image ─→ image            └─ volume / 外部数据库
+```
+
+这里的 `push` 推送镜像，不是把运行中的容器连同内存搬上网。实验中v1/v2可以看作两个镜像版本启动的实例；切流修改入口路由，不修改它们的镜像内容。
+
+### 10.4.4 把Go Web应用容器化
+
+多阶段构建使编译器只存在于构建阶段，运行镜像只带需要的文件。以下Dockerfile与前面的单文件程序对应。两个基础镜像参数必须由维护者选择并填写带SHA256的完整引用；这里不编造摘要，也不声称已构建或扫描镜像。
 
 ```dockerfile
-FROM golang:1.24 AS build
+ARG GO_IMAGE
+ARG RUNTIME_IMAGE
+FROM ${GO_IMAGE} AS build
 WORKDIR /src
-COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o /out/web ./cmd/web
-FROM gcr.io/distroless/static-debian12:nonroot
+COPY go.mod server.go ./
+RUN CGO_ENABLED=0 go build -trimpath -o /out/web .
+FROM ${RUNTIME_IMAGE}
 COPY --from=build /out/web /web
+USER 65532:65532
+ENV PORT=8080
+EXPOSE 8080
 ENTRYPOINT ["/web"]
 ```
 
+构建阶段需包含兼容Go工具链，运行阶段可选有CA证书的非root静态运行镜像；目标架构必须一致。真实应用若从磁盘读模板，必须额外复制且验证权限；示例根页面没有模板，不能拿它证明你的资产完整。`EXPOSE` 只声明端口，并不发布宿主机端口。JSON形式入口避免用不转发信号的shell包住进程，便于接收停止信号。
 
-## 部署方式比较
+### 10.4.5 把镜像推向互联网，不等于服务已经上线
 
-部署方法比较的维度包括控制权、运维负担、伸缩、启动时间、持久存储、网络、成本与供应商约束。不能只按命令多少选择。
+先在授权环境构建、测试、扫描与签名，再推送镜像并记录摘要。下面的变量是待填写输入，命令全部未执行；登录认证、仓库权限和费用必须由部署者确认。
 
-## 健康、切换与回滚
-
-发布先验证进程、依赖和关键请求，再切换流量；失败按版本回滚。要求测试产物与上线产物摘要一致。
-
-```text
-commit -> test report -> artifact digest -> deployment id -> probe result -> rollback digest
+```sh
+# GO_IMAGE、RUNTIME_IMAGE：审核过的 name@sha256:... 引用
+# IMAGE：你有推送权限的 registry/namespace/web:release-id
+: "${GO_IMAGE:?}" "${RUNTIME_IMAGE:?}" "${IMAGE:?}"
+docker build --build-arg GO_IMAGE="$GO_IMAGE" \
+  --build-arg RUNTIME_IMAGE="$RUNTIME_IMAGE" -t "$IMAGE" .
+docker push "$IMAGE"
+# 由部署方记录推送得到的digest；在目标主机按digest拉取。
+# 本地验收的localhost绑定示意；本机可达限制须满足下述Engine版本条件：
+docker run --rm -p 127.0.0.1:8080:8080 "$IMAGE"
 ```
 
+依赖这个发布端口的“仅本机可达”边界前，须先用 `docker context show` 确认目标，再检查 `docker version` 输出中的 **Server/Engine版本至少为28.0.0**，不能只看Client版本。[Docker官方端口发布说明](https://docs.docker.com/engine/network/port-publishing/)明确警告：低于28.0.0的版本，同一二层网络（L2，例如同一交换机）的其他主机也可能访问发布到localhost的端口。旧版应先升级；无法升级时，不得只依赖localhost绑定，应由部署方配置并验证适用于Docker流量的防火墙与网络隔离策略。这不是对所有容器网络路径的隔离保证。本轮未执行上述版本检查或Docker命令，目标Server版本和实际可达性仍待部署者核验。
 
-## 验收实验：同一版本两种目标
+正式运行应改用核验后的镜像摘要，注入秘密并配置公网入口、TLS、健康检查和停止期限。Docker停止通常先发 `SIGTERM`，超时后强杀；Linux容器默认期限可能是10秒，正好等于示例预算并不安全，应显式留余量。推送成功只证明仓库接收了镜像，不证明远端已经拉取、进程就绪或域名可访问。
 
-用同一提交构建独立二进制和Docker镜像，记录Go版本、依赖、资产与摘要。在临时环境运行健康、静态文件、模板和数据库迁移检查；故意缺失模板、错误PORT和失败迁移，确认切流前阻断并能回滚上一摘要。
+## 10.5 部署方法比较：比较责任，不比较按钮数量
 
+部署方法比较应先分清OS维护、制品分发、持久数据和退出控制由谁负责，而不是比较发布按钮。这些选择并非互斥：Docker可以运行在独立服务器，也可交给支持容器的平台。本表对应实验图中的候选、接流边和在途请求；练习3用两团队约束检查责任归属，不能从一次模拟成功推断哪种平台更可靠或更便宜。
 
-## 本章回顾
+| 方案                | 你必须承担                             | 平台提供或可另配          | 数据与退出风险                            |
+| ------------------- | -------------------------------------- | ------------------------- | ----------------------------------------- |
+| 独立服务器          | OS补丁、监督进程、TLS入口、容量规划    | 可自选代理与监控          | 本地盘可持久但需备份；退出由你协调        |
+| Heroku              | 应用契约、配置、依赖、业务健康         | buildpack、dyno管理、路由 | dyno临时盘；按平台期限排空                |
+| App Engine standard | 受支持运行时、服务配置、依赖与版本策略 | 托管实例、流量控制、伸缩  | `/tmp` 非持久且占内存；受平台生命周期约束 |
+| Docker配自管主机    | 镜像供应链、运行主机、网络、入口与监督 | 可复用封装与分发工具      | 可写层不可当唯一数据库；停止期限要协调    |
 
-本章覆盖部署到服务器、Heroku、Google App Engine、Docker和方法比较。部署的核心不是复制命令，而是完整发布物、平台约束、不可变身份和切流回滚证据。
+需要定制系统库、网络或可控停机窗口时，先检查托管环境是否允许，再决定是否自管；想减少OS维护时，可优先评估托管平台，但仍需预算实例、数据库、流量与日志费用。没有当前价格证据，就不宣称哪家最便宜，也不承诺某种方案天然零停机。
 
+## 常见误区：上线失败的四条因果链
+
+以下错误都能沿着发布物、接流边或退出责任找到具体原因；先观察实验失败路径，再决定在哪一层修复。
+
+<Callout type="trap" title="构建成功就直接切流">
+  **现象 →** 新版本立即返回错误。 **原因 →** 编译未检查端口、模板或外部服务。
+  **修法 →** 选择“候选缺少模板”查看探测阻断，先补齐发布物，再探测。
+</Callout>
+
+<Callout type="trap" title="切流会搬走在途请求">
+  **现象 →** R1/R2在关旧实例后失败。 **原因 →** 请求仍属于旧进程。 **修法 →**
+  对比正常排空与“旧请求排空超时”，为停止安排期限与失败处置。
+</Callout>
+
+<Callout type="warn" title="推送镜像就等于公网部署">
+  **现象 →** 仓库有镜像，域名却无法访问。 **原因 →**
+  分发与运行、入口配置是不同操作。 **修法 →**
+  逐层查pull、进程、端口、路由和TLS，不能只反复push。
+</Callout>
+
+<Callout type="warn" title="选容器就不用管理机器">
+  **现象 →** 镜像可复用，宿主机故障仍停机。 **原因 →**
+  Docker封装不等于托管服务。 **修法 →**
+  用责任表明确谁做补丁、监控、备份与故障切换。
+</Callout>
+
+## 10.6 小结与练习
+
+先用请求账本回收接流目标，再用可运行代码验证退出边界，最后把同一责任模型用于平台选型。所有练习都有可观察结果，而不只要求记住产品名称。
+
+- 新请求切流，不会搬走已有请求。
+- 探测通过仍须观察业务失败率。
+- 排空有期限，超时和回滚都要记账。
+- 平台减少部分运维，不消除应用责任。
+- 本地测试与云上验收不能互相冒充。
+
+<Exercises>
+
+**问题 1**
+
+预测正常路径：准备、探测、切流、发送一个请求后，三个在途请求分别属于谁？立即停止旧版会怎样？切到“旧请求排空超时”重做，指出哪两个请求失败，并解释回滚为何可能被拒绝。修改模型中的初始待发请求数量时，守恒断言应怎样同步改变？
+
+<Answer label="答案 1：请求身份比版本标签重要">
+
+R1/R2仍在v1，R3在v2；正常场景停止旧版被拒绝，要先完成R1/R2。超时场景强关v1，使R1/R2计入失败，R3不受这一动作影响。此后v1已停止，直接回滚会被拒绝，需先重新启动并探测。修改初始队列时，应把守恒总数设为初始待发数加初始在途数；每个ID必须只属于待发、在途、完成、失败中的一个集合。不能靠删掉失败请求“保持成功率”。
+
+</Answer>
+
+**问题 2**
+
+独立实现一个阻塞handler的测试：发出真实loopback请求，等handler确认已进入后取消服务上下文，确认服务尚未返回；放行handler后应返回成功。再把宽限期缩到20毫秒且不放行，预期错误是什么？为什么停止上下文不能来自已取消的上下文？
+
+<Answer label="答案 2：等待关闭完成，而不只等Serve返回">
+
+正常路径要在放行之前确认 `serveUntil` 仍在等待；放行后请求完成、函数返回nil，ready变为false。超时路径应满足 `errors.Is(err, context.DeadlineExceeded)`，随后本例显式Close断开连接；测试最终仍要释放handler以免泄漏。局部 `TestGracefulDrain` 与 `TestShutdownDeadline` 按此执行。已取消的父上下文会让Shutdown立即取消，根本没有20毫秒预算。服务退出还需另行处理WebSocket与后台任务；这里不证明真实云的信号投递或入口传播。
+
+</Answer>
+
+**问题 3**
+
+做一次部署方法比较：团队A选择部署到Heroku以减少OS维护，却想把上传文件长期放在dyno本地目录；备选是部署到Google App Engine standard并写 `/tmp`。团队B需要自定义系统库，计划部署到独立服务器，并用部署到Docker封装依赖。分别纠正存储与责任判断，说明push和镜像摘要能证明什么。再在实验中选择“候选端口错误”，依次准备、探测、尝试切流：观察候选健康、接流目标和R1/R2，解释它为何不能证明上述任一平台已经部署。最后给出真实上线前的检查顺序。
+
+<Answer label="答案 3：把存储、分发、托管分开选">
+
+部署到Heroku可减少OS维护，但上传需外部对象存储，不能依赖dyno临时盘；部署到Google App Engine standard也不能用 `/tmp` 持久保存上传，且它耗内存。部署到独立服务器把主机安全、入口、监督和备份交给团队；部署到Docker可封装系统依赖，却不免除这些自管责任。若要减少主机维护需另选容器托管服务。部署方法比较因此要同时检查存储生命周期和运维归属，而非只选一种打包方式。实验中候选被标为探测失败、切流被拒绝，v1仍接流且R1/R2仍在v1；这是本模型的启动契约检查，不证明任一平台的实际探测行为。push只分发镜像，digest识别字节，不证明业务健康。顺序为核查平台与工具链版本→构建测试并记录摘要→验证资产和配置→准备候选并探测→小范围业务观察→切流→排空旧版；出错时回退仍可用版本并核对数据兼容性。不要自动重放可能已产生副作用的请求。
+
+</Answer>
+
+</Exercises>
 
 ## 术语表
+
+下列词条对应正文首次标注的词。遇到“成功”这个词时，先问它说的是构建、分发、接流还是请求完成。
+
+<Glossary>
+  <GlossaryItem term="发布（release）">
+    把产物和配置绑定成一次可追踪的运行版本。
+  </GlossaryItem>
+  <GlossaryItem term="制品摘要（digest）">
+    从文件或镜像内容计算的身份标识，不是健康证明。
+  </GlossaryItem>
+  <GlossaryItem term="就绪（readiness）">
+    当前满足接收业务请求的检查条件。
+  </GlossaryItem>
+  <GlossaryItem term="排空（draining）">
+    不接新工作，给已有工作留时间完成。
+  </GlossaryItem>
+  <GlossaryItem term="回滚（rollback）">
+    恢复新请求的目标版本，不自动撤销数据变化。
+  </GlossaryItem>
+  <GlossaryItem term="Dyno">
+    Heroku托管的进程运行单元，本地写入不是持久存储。
+  </GlossaryItem>
+  <GlossaryItem term="镜像（image）">
+    打包文件和启动配置的只读模板。
+  </GlossaryItem>
+  <GlossaryItem term="容器（container）">
+    由镜像启动的隔离进程实例，有自己的运行时状态。
+  </GlossaryItem>
+  <GlossaryItem term="镜像仓库（registry）">
+    存储分发镜像的服务，不是应用的公网入口。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与验证边界
+
+范围依据Manning在2016年出版的《Go Web Programming》第10章目录，共11个编号节点，不含章标题；本文只访问了目录，独立改写，不是原文翻译、正文复现或开放授权改编。现代机制由以下官方资料核对，页面快照与抓取时间存于本章证据目录。
+
+- [原书目录与章节入口](https://livebook.manning.com/book/go-web-programming/chapter-10)：限定范围，不提供正文访问或许可证明。
+- [Go net/http](https://pkg.go.dev/net/http#Server.Shutdown)：关闭语义以实际Go1.26.0标准库源码和局部测试为准，在线文档可能更新。
+- [Heroku Go支持](https://devcenter.heroku.com/articles/go-support)、[dyno模型](https://devcenter.heroku.com/articles/dynos)、[停止行为](https://devcenter.heroku.com/articles/dyno-shutdown-behavior)：本次快照分别说明构建、临时盘及停止期限。
+- [App Engine Go运行时](https://cloud.google.com/appengine/docs/standard/go/runtime)、[配置](https://cloud.google.com/appengine/docs/standard/reference/app-yaml)、[流量拆分](https://cloud.google.com/appengine/docs/standard/splitting-traffic)：限定modern standard；文档版本不等于本机版本。
+- [Docker组件](https://docs.docker.com/get-started/docker-overview/)、[安装](https://docs.docker.com/engine/install/)、[多阶段构建](https://docs.docker.com/build/building/multi-stage/)、[push](https://docs.docker.com/reference/cli/docker/image/push/)、[停止](https://docs.docker.com/reference/cli/docker/container/stop/)：用于区分封装、分发和运行。
+
+局部Go测试、代码块哈希绑定、教学模型与MDX执行记录位于 `quality/artifacts/batch-38/ch10/`。这些记录不证明真实云发布、容器构建、生产TLS、入口传播或数据库迁移安全。作者未操作云账号和外部设施；局部测试不代表浏览器或生产验收，对应版本的验收状态以主控按文件哈希绑定的验收报告为准。metadata不证明已发布，也不代表全书验收完成。
+
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Go Web Programming · Chapter 10 · Deploying Go"
+  sourceUrl="https://livebook.manning.com/book/go-web-programming/chapter-10"
+  sourceBasis="outline-only"
+/>
