@@ -633,17 +633,29 @@ def fetch_url(url, limit, remaining):
 
 
 def response_headers(status, headers, path, size, kind):
-    # Preserve multiplicity until validation, for BOTH HTML and streamed assets.
-    # Only Cache-Control is admitted as repeated list-valued metadata here
-    # (RFC 9110 sections 5.2-5.3; RFC 9111 section 5.2). Never last-value-wins.
-    # This is not a cache: retaining directives does not endorse freshness.
+    # Only these fields determine this verifier's framing/representation policy.
+    # Reject even identical duplicates; never let urllib's first-value choice
+    # decide the verifier's interpretation. This applies to HTML AND assets.
+    critical = {'content-length', 'transfer-encoding', 'content-encoding', 'content-type'}
+    need(not getattr(headers, 'defects', ()), 'malformed response header section')
     fields = {}
     for key, value in headers.items():
+        need(isinstance(key, str) and re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", key),
+             'malformed response header name')
+        need(isinstance(value, str) and all(c == '\t' or 32 <= ord(c) <= 126 or
+                                          128 <= ord(c) <= 255 for c in value),
+             'malformed response header value: ' + key.lower())
         name = key.lower()
-        need(name not in fields or name == 'cache-control',
+        need(name not in fields or name not in critical,
              'duplicate response header: ' + name)
         fields.setdefault(name, []).append(value)
-    h = {name: ', '.join(values) for name, values in fields.items()}
+    # Unknown/unconsumed metadata is opaque, NOT presumed to be list-valued,
+    # valid, or safe for a browser/cache. Preserve every value in wire order.
+    # Cache-Control alone has an explicit list projection (RFC 9111 section 5.2);
+    # conflicting directives remain present, never last-directive-wins.
+    h = {name: (values[0] if name in critical else
+                ', '.join(values) if name == 'cache-control' else tuple(values))
+         for name, values in fields.items()}
     need(status == 200, 'HTTP status not 200')
     # Conservative framing policy: do not accept TE/CL conflicts or coding
     # chains that urllib does not decode (RFC 9112 sections 6.1 and 6.3).
@@ -660,10 +672,24 @@ def response_headers(status, headers, path, size, kind):
     return h
 
 
+def response_header_duplicates(headers):
+    """Record names/counts, never secret values, for unconsumed duplicate metadata.
+
+    Raw values remain in the HTTPMessage and response_headers' ordered tuples;
+    these diagnostics do not certify cache, cookie, browser or security policy.
+    """
+    counts = {}
+    for name, _ in headers.items():
+        name = name.lower()
+        counts[name] = counts.get(name, 0) + 1
+    return {name: count for name, count in counts.items() if count > 1}
+
+
 def hash_asset_response(response, path, expected_size, deadline):
     """Bounded memory, exact local size plus EOF, every response byte hashed; no buffering fallback."""
     need(type(expected_size) is int and 0 <= expected_size <= MAX_TOTAL, 'invalid expected asset size')
     response_headers(response.status, response.headers, path, expected_size, 'asset')
+    duplicates = response_header_duplicates(response.headers)
     count = 0
     digest = hashlib.sha256()
     while True:
@@ -676,7 +702,10 @@ def hash_asset_response(response, path, expected_size, deadline):
         need(count <= expected_size, 'asset longer than exact expected size')
         digest.update(chunk)
     need(count == expected_size, 'asset shorter than exact expected size')
-    return {'sha256': digest.hexdigest(), 'size': count}
+    result = {'sha256': digest.hexdigest(), 'size': count}
+    if duplicates:
+        result['headerDuplicates'] = duplicates
+    return result
 
 
 def fetch_asset_url(url, expected_size, remaining):
@@ -704,6 +733,9 @@ def public_check(contract, origin, fetch, deadline, evidence):
         need(len(data) <= cap and total <= MAX_TOTAL, 'response byte budget')
         need(time.monotonic() < deadline, 'global deadline after HTML read')
         response_headers(status, headers, path, len(data), kind)
+        duplicates = response_header_duplicates(headers)
+        if duplicates:
+            evidence.setdefault('responseHeaderDuplicates', {})[path] = duplicates
         return data
     assets = set()
     evidence['routes'] = []
@@ -733,6 +765,8 @@ def public_check(contract, origin, fetch, deadline, evidence):
         evidence.update(phase='public-asset', currentPath=asset, expectedSize=size, bytesRead=total)
         observed = fetch_asset_url(origin + asset, size, remaining)
         need(time.monotonic() < deadline, 'global deadline after asset stream')
+        if observed.get('headerDuplicates'):
+            evidence.setdefault('responseHeaderDuplicates', {})[asset] = observed['headerDuplicates']
         need(observed['size'] == size, 'public asset exact size differs')
         total += observed['size']
         evidence['assets'].append({'path': asset, 'actualSha256': observed['sha256'],
