@@ -16096,6 +16096,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GiaFinalReviewEvidenceGateLab: module0.GiaFinalReviewEvidenceGateLab,
     } as ChapterMdxComponents;
   },
+  "go-web-programming/00-guide/gwp-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/v2/gwp-learning-map");
+    return {
+      GwpLearningMapLab: module0.GwpLearningMapLab,
+    } as ChapterMdxComponents;
+  },
   "go-web-programming/01-foundations/gwp-chitchat": async () => {
     const module0 =
       await import("@/components/mdx/go-web-programming/gwp-chitchat-lab");
@@ -16152,6 +16159,27 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/go-web-programming/v2/gwp-testing");
     return {
       GwpTestingLab: module0.GwpTestingLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/05-runtime-release/gwp-concurrency": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/gwp-concurrency-lab");
+    return {
+      GwpConcurrencyLab: module0.GwpConcurrencyLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/05-runtime-release/gwp-deployment": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/gwp-deployment-lab");
+    return {
+      GwpDeploymentLab: module0.GwpDeploymentLab,
+    } as ChapterMdxComponents;
+  },
+  "go-web-programming/06-review/gwp-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/go-web-programming/v2/gwp-final-review");
+    return {
+      GwpFinalReviewLab: module0.GwpFinalReviewLab,
     } as ChapterMdxComponents;
   },
   "gpu-gems/01-natural-effects/gpugems-ch01": async () => {
