@@ -629,21 +629,35 @@ def fetch_url(url, limit, remaining):
     req = Request(url, headers={'Accept-Encoding': 'identity', 'User-Agent': 'Remuse-PreMark/1'})
     with opener.open(req, timeout=min(10, remaining)) as response:
         data = response.read(limit + 1)
-        return response.status, dict(response.headers.items()), data
+        return response.status, response.headers, data
 
 
 def response_headers(status, headers, path, size, kind):
-    h = {}
+    # Preserve multiplicity until validation, for BOTH HTML and streamed assets.
+    # Only Cache-Control is admitted as repeated list-valued metadata here
+    # (RFC 9110 sections 5.2-5.3; RFC 9111 section 5.2). Never last-value-wins.
+    # This is not a cache: retaining directives does not endorse freshness.
+    fields = {}
     for key, value in headers.items():
-        need(key.lower() not in h, 'duplicate response header')
-        h[key.lower()] = value
+        name = key.lower()
+        need(name not in fields or name == 'cache-control',
+             'duplicate response header: ' + name)
+        fields.setdefault(name, []).append(value)
+    h = {name: ', '.join(values) for name, values in fields.items()}
     need(status == 200, 'HTTP status not 200')
+    # Conservative framing policy: do not accept TE/CL conflicts or coding
+    # chains that urllib does not decode (RFC 9112 sections 6.1 and 6.3).
+    need('transfer-encoding' not in h or 'content-length' not in h,
+         'ambiguous transfer-encoding/content-length')
+    need('transfer-encoding' not in h or h['transfer-encoding'].lower() == 'chunked',
+         'unsupported transfer-encoding')
     need(h.get('content-encoding', 'identity').lower() == 'identity', 'encoded response unsupported')
     need('content-length' not in h or h['content-length'] == str(size), 'truncated/invalid content length')
     mime = h.get('content-type', '').split(';')[0].lower()
     need(mime in ({'text/html'} if kind == 'html' else
                  ({'text/css'} if path.endswith('.css') else {'application/javascript', 'text/javascript'})),
          'wrong response MIME')
+    return h
 
 
 def hash_asset_response(response, path, expected_size, deadline):
