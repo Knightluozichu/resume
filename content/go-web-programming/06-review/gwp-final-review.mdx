@@ -1,71 +1,273 @@
 ---
-title: "《Go Web编程》总复习"
+title: "《Go Web编程》综合诊断与总复习"
 type: C
 section: "Go Web编程 · 总复习"
 order: 11
-description: "按协议、处理、数据、验证、并发与发布六层诊断完整Go Web应用。"
+description: "沿一条主题读取请求追踪故障如何越过鉴权、数据、表示与响应提交边界，用真实小型测试限定诊断结论。"
 demo: true
 math: false
+practiceMode: diagnosis
+sourceMode: independent-rewrite
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/table-of-contents"
 draft: false
+qualityVersion: 2
 ---
 
+import { GwpFinalReviewLab } from "@/components/mdx/go-web-programming/v2/gwp-final-review";
 
-## 从故障应该回哪一章开始
+<Objectives>
 
-先预测：线上500是否应先查看部署平台？不一定。先定位最后一个可信边界：请求是否到达、mux是否命中、解析是否成功、模板或存储是否失败、并发是否收敛。把复习变成故障定位。
+- 根据请求轨迹区分发布阻断、鉴权拒绝、输入错误、依赖失败和表示失败，指出哪些下游步骤根本没有执行。
+- 修改响应提交位置，使表示失败从“状态200却带错误”变成确定的500，并用HTML与JSON两组断言验证。
+- 回答：本地HTTP测试、取消后等待、产物摘要全部通过，是否已经证明线上数据库与发布安全？给出仍缺失的证据。
 
+</Objectives>
 
-## 协议与全景：第1至2章
+## 直觉：返工发生在哪里，决定成品还能不能收回
 
-第1章定义HTTP请求、响应、URI、handler与template engine；第2章用ChitChat连接mux、Cookie、模板和PostgreSQL。用于判断功能缺失还是连接错误。
+把一次页面读取想成短流水线：入口核对凭证，中段取材料，末段装箱交付。最后一站发现问题时，若箱子还没交出去，就能换成完整的错误说明；若已经交付，不能靠再喊一句“失败”收回原来的标签。
 
-```text
-client -> HTTP -> mux -> handler -> use case -> store -> template/service -> response
-```
+本复盘要解决的不是“记得多少工具名”，而是辨认最后一个可信步骤。只盯最终数字，会把入口拒绝误判为仓库故障，也可能把已经交付的坏成品当成成功。
 
-## 请求与展示：第3至5章
+## 案件范围：同一读取请求的九个观察边界
 
-第3章拥有server、handler与mux，第4章拥有form、ResponseWriter与Cookie，第5章拥有模板解析、pipeline和上下文转义。防止错误发生后仍返回200。
+这是围绕全书十章组织的**补充综合复盘**，不是出版社原书第11章；页面排序11只用于站内排列。2016年目录限定复习范围，现代技术事实以Go1.26.0源码和本地实验核对，不复现原书正文。学习地图负责安排先后，本页负责拿一个具体故障作出可反驳的诊断。
 
-## 数据与服务：第6至7章
+案件是 `GET /thread?id=7`，JSON接口为 `GET /api/thread?id=7`。请求必须带可被服务端会话替身识别的 `sid` Cookie；数据替身返回标题。成功分别产生HTML或JSON。契约采用401拒绝身份、400拒绝输入、503表示数据不可用、500表示本地表示生成失败；这不是所有应用的唯一状态码设计。
 
-存储层负责内存、文件、SQL、事务和映射；服务层负责SOAP、REST、XML、JSON和错误表示。要求DTO、数据库行和领域对象不互相泄漏。
+| 边界          | 此案能观察什么                               | 不能顺势断言什么                           |
+| ------------- | -------------------------------------------- | ------------------------------------------ |
+| 发布一致性    | 候选二进制、模板、配置字节是否与预期摘要一致 | 摘要不是签名、秘密保护或平台健康证明       |
+| 请求与handler | mux是否匹配方法/路径，参数是否满足契约       | 代理、TLS与真实浏览器已正确配置            |
+| 鉴权          | Cookie值经过会话校验后才继续                 | Cookie存在就代表登录，更不代表对象访问权限 |
+| 数据          | 注入函数被调用几次，错误是否向外泄露         | 真实SQL、连接池、事务和迁移正确            |
+| 模板与API     | 转义、编码结果、状态和Content-Type           | HTML转义可替代JSON契约或所有安全控制       |
+| 提交与测试    | 首次提交时刻、Recorder与本地Server响应       | 已覆盖网络断连、集群与所有中间件           |
+| 并发与退出    | 合作取消后两个任务均收敛                     | cancel会强杀任意工作、race通过等于逻辑正确 |
+
+<Callout type="tip" title="预测后再操作">
+  先预测：选择“表示生成失败”，判断“缓冲后提交”和“提前提交”的最终状态。再比较“会话无效”时数据节点是否仍可达。故障会改变路径、回边与提交轨迹，而不是只替换说明文字。
+</Callout>
+
+<GwpFinalReviewLab />
+
+## 请求与鉴权：先判定能否继续，再读取数据
+
+这里的 <Term def="停止后续步骤并明确记录已执行与未执行部分的诊断分界">观察边界</Term> 是会话校验与输入验证之间的门。Cookie只携带客户端可发送的值；生产系统还需验证会话有效期、撤销、用户身份及对象授权。本例的 `Session` 是替身，不把固定值比较包装成安全的登录系统。
+
+**401与403不是同一个拒绝信号。** RFC 9110的401表示缺少有效认证凭据，并要求WWW-Authenticate挑战；403表示服务器理解请求但拒绝履行，常见于已识别用户却没有对象权限，但不只限于这一原因。本案只实现会话替身的401，不实现对象授权403；不把通过会话门推导成有权读取任意主题。示例401携带自定义 `ReviewSession realm="review"` 挑战，仅作为测试协议，不是标准登录方案，也不冒称实现了Basic或Bearer认证。
+
+Go mux按路径与方法选handler。用 `GET /thread` 注册会自动接受HEAD；本例测试GET/POST，未宣称HEAD全契约已验。`URL.Query()`会忽略解析错误，因此严格输入用 `url.ParseQuery` 检查错误，再拒绝重复或空id。`id=7&id=8` 不应悄悄选择第一项；身份不合格时先401，解析和数据步骤不会执行。图中“会话无效”和“重复id”各停在不同门后。
+
+下面各Go块是同一个可编译示例的连续声明；证据脚本原样抽取，仅补package/import。不连接数据库。函数注入使正常值、错误和取消可重复触发。
 
 ```go
-type Store interface { CreateThread(context.Context, NewThread) (Thread, error) }
-type Service struct { store Store }
+type ReviewDeps struct {
+    Session func(string) bool
+    Load func(context.Context, string) (string, error)
+}
+type ReviewOptions struct { JSON, Early, RenderFail bool }
+func ReadID(w http.ResponseWriter, r *http.Request,
+    d ReviewDeps, api bool) (string, bool) {
+    c, err := r.Cookie("sid")
+    if err != nil || !d.Session(c.Value) {
+        ReviewError(w, 401, "unauthorized", api)
+        return "", false
+    }
+    q, err := url.ParseQuery(r.URL.RawQuery)
+    ids := q["id"]
+    if err != nil || len(ids) != 1 || ids[0] == "" {
+        ReviewError(w, 400, "invalid id", api)
+        return "", false
+    }
+    return ids[0], true
+}
 ```
 
+## 数据与错误：503说明哪一层没给出结果
 
-## 验证与运行：第8至9章
+数据接口收到请求context和明确id，handler不在内部创建数据库连接，也不靠全局变量挑选测试实现。真实实现可用 `QueryContext`，但还必须考虑驱动支持、连接池、事务边界、行关闭和迁移；本页没有执行这些集成。图上数据故障回边只证明“没有进入表示生成”，不证明哪一条SQL慢。
 
-测试章节提供testing、httptest和dependency injection；并发章节提供goroutine、channel、取消与等待。必须覆盖慢、错、取消和部分完成。
+示例把数据错误与已取消context统一映射为503，是此案的服务策略，不是Go规定的取消状态码。这里测试主动取消的本地请求；不能据此宣称已经断线的客户端还能收到503。内部错误只留在测试/服务端诊断，不把连接串或数据库错误原样放入响应。
 
-## 发布：第10章
-
-部署章节把二进制、资产、配置、迁移、平台和摘要绑定。阻止本地测试一个版本、线上运行另一个版本。
-
-```sh
-go test ./...
-go test -race ./...
-go build -trimpath -o web ./cmd/web
-shasum -a 256 web
+```go
+func ReviewError(w http.ResponseWriter, code int, msg string, api bool) {
+    if code == 401 { w.Header().Set("WWW-Authenticate", `ReviewSession realm="review"`) }
+    if api {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(code)
+        _ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+        return
+    }
+    http.Error(w, msg, code)
+}
+func ReviewHandler(d ReviewDeps, o ReviewOptions) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        id, ok := ReadID(w, r, d, o.JSON)
+        if !ok { return }
+        title, err := d.Load(r.Context(), id)
+        if err != nil { ReviewError(w, 503, "unavailable", o.JSON); return }
+        if o.Early { _, _ = w.Write(nil) }
+        body, kind, err := EncodeView(title, o.JSON, o.RenderFail)
+        if err != nil { ReviewError(w, 500, "render failed", o.JSON); return }
+        w.Header().Set("Content-Type", kind)
+        _, _ = w.Write(body)
+    })
+}
 ```
 
-## 综合项目：可验证论坛服务
+## 表示与提交：生成失败不能撤销已发送的状态
 
-项目包含HTML与JSON两种接口、SQL存储、Cookie会话、模板、HTTP测试、并发聚合和两种部署目标。要求每个外部边界都有替身或临时实现。
+<Term def="首个最终响应状态被写出，此后不能通过再写状态码撤销它">提交点</Term>
+是本案最重要的分界。普通响应的首次 `Write`
+会隐式提交200，哪怕这里传入空字节；后写 `WriteHeader(500)`
+不会覆盖它。1xx临时响应、trailer等特殊规则不在这段普通响应示例内。把 `Early`
+从真改为假，才能将表示错误可靠地变成500，而非“200中夹着错误”。
 
+`EncodeView` 使用 <Term def="先在本地缓冲区完成表示生成，成功后才写入HTTP响应">缓冲提交</Term>。HTML模板执行可能已写入部分内容才返回错误；返回错误时必须丢弃整个本地缓冲。JSON通过 `Marshal` 先得到字节，故意放入channel可触发不支持类型错误。该内存方法适合有界小响应，不是无限数据流的通用答案；生产大响应需单独设计限制与流式错误协议。
 
-## 验收实验：删除缓存后重建
+```go
+func EncodeView(title string, api, broken bool) ([]byte, string, error) {
+    if api {
+        var value any = struct { Title string `json:"title"` }{title}
+        if broken { value = make(chan int) }
+        b, err := json.Marshal(value)
+        return b, "application/json", err
+    }
+    boom := func() (string, error) { return "", errors.New("render boom") }
+    source := `<h1>{{.}}</h1>`
+    if broken { source += `{{boom}}` }
+    t, err := template.New("view").Funcs(template.FuncMap{"boom": boom}).Parse(source)
+    if err != nil { return nil, "", err }
+    var b bytes.Buffer
+    err = t.Execute(&b, title)
+    return b.Bytes(), "text/html; charset=utf-8", err
+}
+```
 
-从干净检出恢复依赖，运行单元、HTTP、故障、race和构建；启动临时数据库，执行登录、创建主题、读取HTML与JSON、并发聚合和退出。构建独立二进制与镜像，确认摘要、模板与静态资源一致，再故意破坏配置验证阻断与回滚。
+普通字符串中的 `<script>` 由 `html/template` 按上下文转义；不要把未经信任的字符串改成 `template.HTML` 来“修复显示”。模板作者仍需可信。JSON的结构、Content-Type和状态要分别断言；即使正文是一段合法错误JSON，200也不能表示本案成功。图中表示节点随HTML/API选择改变；提前提交把Write节点移到表示节点之前，后续500回边被提交闸截住。
 
+Go1.26.0实测还有一个诊断差异：提前提交的正常HTML，在Recorder中得到 `text/plain; charset=utf-8`，在本地Server中得到 `text/html; charset=utf-8`；提前提交的JSON在两者中都是 `text/plain; charset=utf-8`。这是自动内容探测的边界差异，不是证明提交后Header.Set有效。需要用明确的响应头契约与真实传输一起检查。
 
-## 本章回顾
+<Callout type="trap" title="误区一：写了500，响应就一定是500">
+  现象：日志说render
+  failed，客户端却拿到200。机制：更早的Write已提交200；修改Header映射也不能改变已提交的普通响应头。修法：用Result或真实Client检查已提交状态与头，并把可能失败的表示生成移到提交点前。不能只断言内存里最后一次Header.Set。
+</Callout>
 
-全书十章形成协议、全景、请求、展示、数据、服务、测试、并发和部署的连续链。完成标准是能定位故障、复现实验、证明修复并发布同一产物，而不是记住API名称。
+## 取消与并发：关闭通知还不等于所有工作完成
 
+<Term def="工作任务主动观察取消信号并退出，再由调用方等待它们结束">
+  合作取消与收敛
+</Term>
+把“发信号”和“已经退出”拆成两条事件。实验中的取消故障由数据替身注入：替身为两个本地任务提供同一context，收到取消后各报告结束，`Wait`返回后替身才返回context错误，handler将其映射为503。本例不使用睡眠猜测时序，也不声称模拟了真实数据库调度。
 
-## 术语表
+```go
+func WaitForCancellation(ctx context.Context, ready, stopped chan<- int) {
+    var wg sync.WaitGroup
+    for i := 0; i < 2; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            ready <- id
+            <-ctx.Done()
+            stopped <- id
+        }(i)
+    }
+    wg.Wait()
+}
+```
+
+测试把两个通道容量都设为2，先收齐ready再cancel，然后等待函数返回并收齐stopped。调用者若不消费未缓冲的通知，任务可能阻塞在发送处，单靠cancel无法解除它；这也是通道所有权契约。图中的两个分支和汇合闸表达偏序，不排列谁先退出。图里非取消路径不声称额外启动了这两个示范任务。
+
+<Callout type="trap" title="误区二：cancel之后可以直接释放共享资源">
+  现象：取消后仍发生写入或资源访问。机制：CancelFunc只通知，不等待；任务若不合作便可能继续。修法：确定任务观察点、阻塞发送的退出办法及唯一等待者，收齐退出后再释放资源。race检测只能寻找本次执行中的数据竞态，不能证明退出协议和所有次序都正确。
+</Callout>
+
+## 发布一致性：先证明送检的是同一份，再谈上线
+
+<Term def="把候选文件逐一绑定到明确预期摘要的本地一致性检查">产物绑定</Term>
+将二进制、模板与配置放在同一候选集合。图上“候选不一致”会关掉入口，请求根本不进入handler；这是部署前本地门禁，不是HTTP错误码，也不是对任何云平台的模拟。本例只比较内存字节与预期摘要，未执行构建或部署。图把这道本地检查放在请求链之前作决策解释；它不是ReviewHandler内的中间件，测试也不启动候选应用。
+
+```go
+func VerifyArtifacts(files map[string][]byte, expected map[string][32]byte) bool {
+    if len(files) != len(expected) { return false }
+    for name, digest := range expected {
+        content, ok := files[name]
+        if !ok || sha256.Sum256(content) != digest { return false }
+    }
+    return true
+}
+```
+
+实际发布还应确认配置来源与秘密管理、数据库迁移兼容、探针、端口/TLS、回滚路径与运行中的版本。`Server.Shutdown`可用于优雅关闭，但不能因此假设任意后台任务或被劫持连接自动收敛；需要自身的取消与等待协议。本地摘要相同也不证明内容可信：预期值本身必须来自受控流程，生产配置中的秘密不能写进公开日志。本页只用非秘密的测试字节。
+
+<Callout type="trap" title="误区三：本地绿灯就是线上验收">
+  Recorder证明handler边界，本地Server再加入HTTP传输；数据依旧是替身，摘要依旧是本地比较。修法：把每个结论写成“输入—边界—断言—未覆盖项”，再单独安排数据库、代理、资产和目标环境验收；不要把未执行的云端或数据库步骤补写为PASS。
+</Callout>
+
+## 实验与诊断决策：先看被跳过的下游
+
+证据目录的Go1.26.0测试原样编译上述全部代码块，并额外提供测试夹具。`go test -json -count=1 -timeout=90s .` 与有界race命令均由原生90秒、外层120秒上限约束。Recorder和本地Server对正常、401、重复id的400、数据503、表示500、提前提交200逐项检查；取消与摘要另作确定性测试。不把浏览器图当作Go执行器。
+
+| 观察到的证据             | 优先检查                     | 不该先做什么                  |
+| ------------------------ | ---------------------------- | ----------------------------- |
+| 候选检查失败，无HTTP记录 | 文件集合、预期摘要来源       | 宣称handler返回了503          |
+| 401且Load调用0次         | Cookie解析及会话校验         | 调数据库连接池参数            |
+| 400且Load调用0次         | 原始查询串、重复/空id        | 以URL.Query().Get选一个值继续 |
+| 503且表示未生成          | 数据替身错误、context状态    | 直接改HTML转义                |
+| 表示故障＋状态200        | 首次Write/WriteHeader的位置  | 重复WriteHeader期待覆盖       |
+| cancel后只有一个stopped  | 阻塞发送、任务合作与等待协议 | 立即释放仍被使用的资源        |
+
+这里的响应路径是小型读取用例：没有写事务、密码登录、CSRF防护或真实SQL。正式服务要为写操作另定原子性和重试规则；不能从安全读取示例推广出“失败后重试POST总是安全”。本节的表格是诊断顺序，不是把HTTP状态码反向等同唯一根因。
+
+## 小结与有答案的综合练习
+
+这次复盘把同一请求的“执行到哪里”与“还能改变什么”分开。拒绝越早，下游证据越少；提交越早，失败补救空间越小；取消与发布检查则分别限制任务生命周期和候选身份。下面三题要求同时给出诊断、可重复的验证和不能宣称的结论。
+
+<Exercises>
+
+1. API请求带失效sid，同时有 `id=7&id=8`，数据替身还会返回错误。预测状态和Load次数；再只修复sid，预测下一次结果。应增加哪两条断言？
+2. HTML模板在输出标题后失败；API的表示对象误含channel。两者在“缓冲后提交”和“提前提交”各返回什么状态？如何改一处代码并验证，为什么只检错误正文不够？
+3. 两个任务收到cancel，某一任务却阻塞在结果发送；部署候选模板又与预期摘要不同。写出收敛和发布各自的阻断条件，并说明Recorder、Server、race通过还缺哪类验收。
+
+</Exercises>
+
+<Answer>
+  练习1：先401，Load为0；会话修复后400，Load仍为0，因为重复id不合法。分别断言状态与调用计数，并确保无503错误泄漏；只有同时满足前两道门才有数据错误的观察资格。图中选择相应单故障能逐次验证位置，组合优先序由Go附加测试验证。
+</Answer>
+
+<Answer>
+  练习2：本案两种表示在缓冲策略下均为500；提前Write(nil)后均保留200。HTML的本地缓冲可能已有标题，但出错应丢弃；JSON的Marshal返回编码错误。删除提前Write，将Header设置与Write放到编码成功之后；用两个接口的状态、Content-Type、完整正文和不含部分标题共同回归。错误JSON可以语法合法但状态仍错误，因此不能只看正文。
+</Answer>
+
+<Answer>
+  练习3：cancel不解除所有发送阻塞；让接收方持续消费、配置有界缓冲或使发送select监听context，然后等待两个退出信号与join完成。摘要不匹配时不启动候选，先查文件和预期来源；不是伪造一个HTTP状态。Recorder与Server的替身都不证明SQL或云平台；race不证明所有逻辑次序。仍需真实数据库、迁移、代理/TLS、资产、秘密配置、探针及回滚的目标环境证据。
+</Answer>
+
+## 术语与来源边界
+
+下面五个术语组织诊断方法，不把全书已介绍的API重新算成新章知识点。出版社公开目录共十章，本站学习地图与本补充复盘不增加出版章节分母。正文是独立综合改写；官方技术事实来自安装的Go1.26.0标准库源码，缓存的更新版本文档不作为运行支持证明。
+
+<Glossary>
+  <GlossaryItem term="观察边界">
+    区分已执行、未执行与不可据此推断的系统部分。
+  </GlossaryItem>
+  <GlossaryItem term="提交点">
+    普通响应的最终状态首次写出后，后写状态不能覆盖它。
+  </GlossaryItem>
+  <GlossaryItem term="缓冲提交">
+    先完整生成有界表示，再设置响应头并提交，失败时丢弃缓冲。
+  </GlossaryItem>
+  <GlossaryItem term="合作取消与收敛">
+    任务观察取消并退出，调用方等待退出完成；通知和完成不是同一事件。
+  </GlossaryItem>
+  <GlossaryItem term="产物绑定">
+    按受控预期摘要核对候选集合，证明一致性而非安全或部署成功。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  source="Go Web Programming · Manning 2016 十章公开目录；Go1.26.0 net/http、net/url、html/template、encoding/json、context、sync、crypto/sha256 官方源码"
+  url="https://www.manning.com/books/go-web-programming"
+  license="仅原书目录可核验；独立综合改写，不主张原书正文授权"
+/>
