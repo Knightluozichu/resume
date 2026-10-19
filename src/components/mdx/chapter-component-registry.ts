@@ -21125,6 +21125,35 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.LkeOfficialFinalReviewSafetyGateLab,
     } as ChapterMdxComponents;
   },
+  "linux-os-practice/00-guide/lop-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-os-practice/v2/lop-official-learning-map");
+    return {
+      LopOfficialLearningMapLab: module0.LopOfficialLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-os-practice/01-foundation/lop-01-recognizing-linux": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-os-practice/v2/lop-01-recognizing-linux");
+    return {
+      LinuxRecognizingLab: module0.LinuxRecognizingLab,
+      LinuxFamilyDiagram: module0.LinuxFamilyDiagram,
+    } as ChapterMdxComponents;
+  },
+  "linux-os-practice/01-foundation/lop-02-using-linux": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-os-practice/v2/lop-02-using-linux");
+    return {
+      Lop02UsingLinuxLab: module0.Lop02UsingLinuxLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-os-practice/02-administration/lop-03-user-management": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-os-practice/v2/lop-03-user-management");
+    return {
+      LopUserManagementLab: module0.LopUserManagementLab,
+    } as ChapterMdxComponents;
+  },
   "llm-app-dev-essentials/00-map/lae-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/llm-app-dev-essentials/v2/lae-official-learning-map");

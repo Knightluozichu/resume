@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-10-19T00:15:40.643Z；旧版分数不迁移。
+> 2026-10-19T10:56:52.492Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1700
+- failed：1696
 - queued：203
-- passed：1714
-- published：992
+- passed：1706
+- published：1004
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -97,9 +97,9 @@
 | 84 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 85 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
 | 86 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 87 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 88 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 89 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 87 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 88 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 89 | linux-os-practice | 11 | 7 | 0 | 4 | 26 |
 | 90 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 91 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 92 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
@@ -190,7 +190,7 @@
 | 177 | game-server-programming | 10 | 0 | 0 | 10 | 0 |
 | 178 | global-illumination | 12 | 0 | 0 | 12 | 0 |
 | 179 | go-in-action | 11 | 0 | 0 | 11 | 0 |
-| 180 | go-web-programming | 12 | 0 | 0 | 12 | 0 |
+| 180 | go-web-programming | 12 | 0 | 0 | 0 | 0 |
 | 181 | gpu-gems | 131 | 0 | 0 | 131 | 0 |
 | 182 | http-definitive-guide | 38 | 0 | 0 | 0 | 0 |
 | 183 | illustrated-ai | 16 | 0 | 0 | 0 | 0 |
