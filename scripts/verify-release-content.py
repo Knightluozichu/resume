@@ -25,6 +25,10 @@ SHA = re.compile(r'[0-9a-f]{64}')
 MAX_HTML = 8 * 1024 * 1024
 MAX_ASSET = 16 * 1024 * 1024
 MAX_TOTAL = 128 * 1024 * 1024
+# Local generated inventories are hashes, not buffered HTML/network responses.
+# Current app inventory is 2,114,488,574 bytes; bound each full scan to 4 GiB.
+MAX_LOCAL_HASH_BYTES = 4 * 1024 * 1024 * 1024
+HASH_CHUNK = 1024 * 1024
 VOID = set('area base br col embed hr img input link meta param source track wbr'.split())
 EXCLUDE = set('script style template nav header footer'.split())
 BLOCKS = {'p', 'pre', 'li', 'blockquote', 'dd', 'td'}
@@ -95,7 +99,39 @@ def route_path(path):
     return path
 
 
-def inventory(root, subtree, cap=MAX_ASSET):
+def stream_hash(root, name, remaining):
+    """Hash every byte with bounded memory; reject replacement or concurrent writes."""
+    started = time.monotonic()
+    p = local(root, name)
+    before = p.stat()
+    visited = 0
+    def identity(st):
+        return (st.st_dev, st.st_ino, st.st_mode, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+    try:
+        need(before.st_size <= remaining, 'local inventory total byte budget')
+        fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as f:
+            need(stat.S_ISREG(os.fstat(f.fileno()).st_mode) and
+                 identity(os.fstat(f.fileno())) == identity(before), 'local hash open identity changed')
+            digest = hashlib.sha256()
+            while True:
+                data = f.read(min(HASH_CHUNK, before.st_size - visited + 1))
+                if not data:
+                    break
+                visited += len(data)
+                need(visited <= before.st_size and visited <= remaining, 'local hash size changed')
+                digest.update(data)
+            need(visited == before.st_size and identity(os.fstat(f.fileno())) == identity(before),
+                 'local hash file changed')
+        need(identity(p.lstat()) == identity(before), 'local hash path changed')
+        return digest.hexdigest(), visited
+    except Exception as exc:
+        raise ValueError('local-hash phase=inventory path=' + name +
+                         ' visited=' + str(visited) + ' remaining=' + str(remaining) +
+                         ' elapsed=' + format(time.monotonic() - started, '.6f') + ': ' + str(exc)) from exc
+
+
+def inventory(root, subtree, cap=MAX_ASSET, *, hash_only=False, sizes=None):
     relative(subtree)
     base = root / subtree
     need(base.is_dir() and not base.is_symlink(), 'missing inventory root: ' + subtree)
@@ -104,6 +140,7 @@ def inventory(root, subtree, cap=MAX_ASSET):
             break
         need(not parent.is_symlink(), 'inventory parent symlink')
     result = {}
+    visited = 0
     for directory, dirs, files in os.walk(base, followlinks=False):
         for name in sorted(dirs + files):
             p = Path(directory) / name
@@ -111,7 +148,13 @@ def inventory(root, subtree, cap=MAX_ASSET):
         for name in sorted(files):
             rel = (Path(directory) / name).relative_to(root).as_posix()
             need(len(result) < 50000, 'inventory file budget')
-            result[rel] = sha(read(root, rel, cap))
+            if hash_only:
+                result[rel], size = stream_hash(root, rel, MAX_LOCAL_HASH_BYTES - visited)
+                visited += size
+                if sizes is not None:
+                    sizes[rel] = size
+            else:
+                result[rel] = sha(read(root, rel, cap))
     need(result, 'empty inventory: ' + subtree)
     return result
 
@@ -258,17 +301,24 @@ class Markup(HTMLParser):
                 'assets': sorted(self.assets), 'externalPreloadHints': sorted(self.external_hints), 'homeCards': self.cards}
 
 
+def assertion_fields(a):
+    base = 'section text source expectationId' if 'expectationId' in a else 'section text source'
+    keys(a, base + (' wholeBlockContext' if 'wholeBlockContext' in a else ''))
+    need('wholeBlockContext' not in a or a.get('expectationId') == 'review-02',
+         'whole-block context only supported for review-02')
+
+
 def check_assertions(parsed, assertions):
     need(isinstance(assertions, list) and 2 <= len(assertions) <= 8, 'need 2..8 substantive source assertions')
     seen = set()
     total = 0
     for a in assertions:
-        keys(a, 'section text source expectationId' if 'expectationId' in a else 'section text source')
-        value = text(a['text'])
+        assertion_fields(a)
+        value = text(a['wholeBlockContext']['visibleText'] if 'wholeBlockContext' in a else a['text'])
         need(len(value) >= 32 and value not in seen, 'short/duplicate substantive assertion')
         seen.add(value)
         total += len(value)
-        matches = [b for b in parsed['blocks'] if b['tag'] in BLOCKS and
+        matches = [b for b in parsed['blocks'] if b['tag'] in ({'p'} if 'wholeBlockContext' in a else BLOCKS) and
                    b['section'] == a['section'] and text(b['text']) == value]
         need(len(matches) == 1, 'missing/ambiguous substantive explanation: ' + value[:64])
     need(total >= 96, 'insufficient substantive explanation length')
@@ -307,7 +357,7 @@ def generated_search(project, expected):
     need(record['scriptSha256'] == expected['sourceFiles']['scripts/build-search-index.mjs'] and
          record['lockSha256'] == expected['sourceFiles']['pnpm-lock.yaml'], 'search script/lock binding mismatch')
     need(record['buildIdSha256'] == sha(read(project, '.next/BUILD_ID')), 'search BUILD_ID binding mismatch')
-    html = {k.removeprefix('.next/server/app/'):v for k,v in inventory(project,'.next/server/app').items() if k.endswith('.html')}
+    html = {k.removeprefix('.next/server/app/'):v for k,v in inventory(project,'.next/server/app', hash_only=True).items() if k.endswith('.html')}
     need(html and record['htmlFiles'] == html, 'search HTML input drift')
     def output(base):
         data = inventory(project,base)
@@ -348,6 +398,36 @@ def home_card(parsed, expected):
          'missing/conflicting same-card chapter count')
     projection = {**expected, 'countText': counts[0]}
     return {'projection': projection, 'sha256': sha(canonical(projection))}
+
+
+# Reviewed fixed inline-Term semantics: visible termText button, initially hidden tooltip/arrow.
+# This is deliberately NOT a general MDX renderer or a public-response-derived expectation.
+REVIEW_CONTEXT_COMPONENTS = {
+    'src/components/mdx/term.tsx': '5aa8183a40cb352b07c5ba69e9c6a5e6f57df47ff8e058a450f50ab516c999d5',
+    'src/components/mdx/mdx-components.tsx': '9fb58b1659a31e62b6d4b61bc021a8c1894881e40aea3223bbf8913acc07d7ca',
+}
+REVIEW_SOURCE = 'content/go-web-programming/06-review/gwp-final-review.mdx'
+REVIEW_SECTION = '发布一致性先证明送检的是同一份再谈上线'
+
+
+def review_block_context(project, original):
+    need(original['id'] == 'review-02' and original['sourceLineStart'] ==
+         original['sourceLineEnd'] == 189 and original['sourceColumnStart'] == 1,
+         'unsupported whole-block selected span')
+    lines = read(project, REVIEW_SOURCE).decode('utf-8').splitlines()
+    need(len(lines) > 189 and lines[185] == '## 发布一致性：先证明送检的是同一份，再谈上线' and
+         lines[186] == lines[189] == '', 'whole-block boundary/section mismatch')
+    term = '<Term def="把候选文件逐一绑定到明确预期摘要的本地一致性检查">产物绑定</Term>'
+    need(lines[187] == term and lines[188] == original['rawSourceLine'] ==
+         original['rawParagraph'] == original['expectedVisibleText'] and
+         sha(lines[188].encode()) == original['rawParagraphSha256'], 'whole-block raw selection mismatch')
+    for path, digest in REVIEW_CONTEXT_COMPONENTS.items():
+        need(sha(read(project, path)) == digest, 'whole-block component semantic binding: ' + path)
+    raw = '\n'.join(lines[187:189])
+    return {'sourceLineStart': 188, 'sourceLineEnd': 189, 'rawSourceBlock': raw,
+            'rawSha256': sha(raw.encode()), 'visibleText': '产物绑定 ' + original['expectedVisibleText'],
+            'semanticId': 'mdx-inline-Term-visible-button-hidden-tooltip-v1',
+            'componentSources': dict(REVIEW_CONTEXT_COMPONENTS)}
 
 
 def reviewed_expectations(project, spec):
@@ -401,6 +481,16 @@ def reviewed_expectations(project, spec):
                  sha(paragraph.encode()) == original['rawParagraphSha256'], 'reviewed raw span/SHA mismatch')
             need(a['source'] == source and a['text'] == original['expectedVisibleText'],
                  'reviewed source/visible mapping mismatch')
+            if ident == 'review-02':
+                need(source == REVIEW_SOURCE and a['section'] == REVIEW_SECTION, 'whole-block source/section')
+                context = review_block_context(project, original)
+                need(original.get('wholeBlockContext') == a.get('wholeBlockContext') == context,
+                     'reviewed whole-block context missing/drift')
+                need(all(spec['sourceFiles'].get(k) == v for k, v in REVIEW_CONTEXT_COMPONENTS.items()),
+                     'component semantic sources not frozen')
+            else:
+                need('wholeBlockContext' not in a and 'wholeBlockContext' not in original,
+                     'unexpected whole-block context')
     need(len(ids) == 22, 'all22 reviewed assertions required')
     home = doc['homeBookVisibility']
     need(home['required'] is True and len(home['assertions']) == 3, 'home book structure required')
@@ -448,7 +538,8 @@ def source_binding(project, spec):
         need(path == '/' if r['role'] == 'home' else path.startswith('/learn/' + spec['book'] + '/'), 'role path/book mismatch')
         need(isinstance(r['assertions'], list) and 2 <= len(r['assertions']) <= 8, 'assertions list budget')
         for a in r['assertions']:
-            keys(a, 'section text source expectationId' if spec['schema'] == 2 else 'section text source')
+            assertion_fields(a)
+            need(('expectationId' in a) == (spec['schema'] == 2), 'assertion schema version')
             need(a['source'] in expected, 'assertion source not frozen')
             if spec['schema'] == 1:
                 need(text(a['text']) in text(read(project, a['source']).decode('utf-8')), 'assertion absent from reviewed source')
@@ -491,8 +582,12 @@ def local_contract(project, spec_data, spec_hash, release, commit, book, smoke_p
     app_manifest = parse_json(artifact('.next/server/app-paths-manifest.json'))
     need(app_manifest.get('/page') == 'app/page.js' and
          app_manifest.get('/learn/[...slug]/page') == 'app/learn/[...slug]/page.js', 'unsupported app routing manifest')
-    static = inventory(project, '.next/static')
-    assembled = inventory(project, '.next/standalone/.next/static')
+    sizes, assembled_sizes = {}, {}
+    static = inventory(project, '.next/static', hash_only=True, sizes=sizes)
+    assembled = inventory(project, '.next/standalone/.next/static', hash_only=True, sizes=assembled_sizes)
+    need({k.removeprefix('.next/static/'): v for k, v in sizes.items()} ==
+         {k.removeprefix('.next/standalone/.next/static/'): v for k, v in assembled_sizes.items()},
+         'assembled static sizes mismatch')
     need({k.removeprefix('.next/static/'): v for k, v in static.items()} ==
          {k.removeprefix('.next/standalone/.next/static/'): v for k, v in assembled.items()}, 'assembled static manifest mismatch')
     search = generated_search(project, expected)
@@ -521,7 +616,7 @@ def local_contract(project, spec_data, spec_hash, release, commit, book, smoke_p
     binding = {'expectations': spec['expectations'], 'homeBookVisibility': reviewed_expectations(project, spec)} if spec['schema'] == 2 else {}
     return {'schema': 3 if spec['schema'] == 2 else 2, **binding, 'buildInputSha256': build_input_sha, 'specSha256': spec_hash, 'checkerSha256': sha(Path(__file__).read_bytes()),
             'release': release, 'commit': commit, 'book': book, 'buildId': build,
-            'sourceFiles': sources, 'generatedSearch':search, 'staticFiles': static, 'artifactFiles': artifacts, 'routes': routes}
+            'sourceFiles': sources, 'generatedSearch':search, 'staticFiles': static, 'staticSizes': sizes, 'artifactFiles': artifacts, 'routes': routes}
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -535,6 +630,47 @@ def fetch_url(url, limit, remaining):
     with opener.open(req, timeout=min(10, remaining)) as response:
         data = response.read(limit + 1)
         return response.status, dict(response.headers.items()), data
+
+
+def response_headers(status, headers, path, size, kind):
+    h = {}
+    for key, value in headers.items():
+        need(key.lower() not in h, 'duplicate response header')
+        h[key.lower()] = value
+    need(status == 200, 'HTTP status not 200')
+    need(h.get('content-encoding', 'identity').lower() == 'identity', 'encoded response unsupported')
+    need('content-length' not in h or h['content-length'] == str(size), 'truncated/invalid content length')
+    mime = h.get('content-type', '').split(';')[0].lower()
+    need(mime in ({'text/html'} if kind == 'html' else
+                 ({'text/css'} if path.endswith('.css') else {'application/javascript', 'text/javascript'})),
+         'wrong response MIME')
+
+
+def hash_asset_response(response, path, expected_size, deadline):
+    """Bounded memory, exact local size plus EOF, every response byte hashed; no buffering fallback."""
+    need(type(expected_size) is int and 0 <= expected_size <= MAX_TOTAL, 'invalid expected asset size')
+    response_headers(response.status, response.headers, path, expected_size, 'asset')
+    count = 0
+    digest = hashlib.sha256()
+    while True:
+        need(time.monotonic() < deadline, 'global deadline during asset stream')
+        chunk = response.read(min(HASH_CHUNK, expected_size - count + 1))
+        need(time.monotonic() < deadline, 'global deadline after asset read')
+        if not chunk:
+            break
+        count += len(chunk)
+        need(count <= expected_size, 'asset longer than exact expected size')
+        digest.update(chunk)
+    need(count == expected_size, 'asset shorter than exact expected size')
+    return {'sha256': digest.hexdigest(), 'size': count}
+
+
+def fetch_asset_url(url, expected_size, remaining):
+    deadline = time.monotonic() + remaining
+    opener = build_opener(ProxyHandler({}), NoRedirect())
+    req = Request(url, headers={'Accept-Encoding': 'identity', 'User-Agent': 'Remuse-PreMark/1'})
+    with opener.open(req, timeout=min(10, remaining)) as response:
+        return hash_asset_response(response, urlsplit(url).path, expected_size, deadline)
 
 
 def public_check(contract, origin, fetch, deadline, evidence):
@@ -552,13 +688,8 @@ def public_check(contract, origin, fetch, deadline, evidence):
         status, headers, data = fetch(origin + path, cap, remaining)
         total += len(data)
         need(len(data) <= cap and total <= MAX_TOTAL, 'response byte budget')
-        h = {k.lower(): v for k, v in headers.items()}
-        need(status == 200, 'HTTP status not 200')
-        need(h.get('content-encoding', 'identity').lower() == 'identity', 'encoded response unsupported')
-        need('content-length' not in h or h['content-length'] == str(len(data)), 'truncated/invalid content length')
-        mime = h.get('content-type', '').split(';')[0].lower()
-        need(mime in ({'text/html'} if kind == 'html' else
-                     ({'text/css'} if path.endswith('.css') else {'application/javascript', 'text/javascript'})), 'wrong response MIME')
+        need(time.monotonic() < deadline, 'global deadline after HTML read')
+        response_headers(status, headers, path, len(data), kind)
         return data
     assets = set()
     evidence['routes'] = []
@@ -579,10 +710,20 @@ def public_check(contract, origin, fetch, deadline, evidence):
         assets.update(parsed['assets'])
     need(1 <= len(assets) <= 64, 'asset count budget')
     for asset in sorted(assets):
-        data = request(asset, MAX_ASSET, 'asset')
-        expected = contract['staticFiles']['.next/static/' + asset.removeprefix('/_next/static/')]
-        evidence['assets'].append({'path': asset, 'actualSha256': sha(data), 'expectedSha256': expected})
-        need(sha(data) == expected, 'public asset bytes differ')
+        key = '.next/static/' + asset.removeprefix('/_next/static/')
+        expected = contract['staticFiles'][key]
+        size = contract['staticSizes'][key]
+        need(type(size) is int and 0 <= size <= MAX_TOTAL - total, 'total response byte budget before stream')
+        remaining = deadline - time.monotonic()
+        need(remaining > 0, 'global deadline')
+        evidence.update(phase='public-asset', currentPath=asset, expectedSize=size, bytesRead=total)
+        observed = fetch_asset_url(origin + asset, size, remaining)
+        need(time.monotonic() < deadline, 'global deadline after asset stream')
+        need(observed['size'] == size, 'public asset exact size differs')
+        total += observed['size']
+        evidence['assets'].append({'path': asset, 'actualSha256': observed['sha256'],
+                                   'expectedSha256': expected, 'expectedSize': size, 'actualSize': observed['size']})
+        need(observed['sha256'] == expected, 'public asset bytes differ')
     evidence['bytesRead'] = total
 
 
