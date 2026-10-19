@@ -33,6 +33,22 @@ const SKIP_VISUAL = process.argv.includes("--skip-visual");
 const SKIP_AUDIT = process.argv.includes("--skip-audit");
 const ALLOW_INCOMPLETE = process.argv.includes("--allow-incomplete");
 
+// Opt-in isolated validation origin. Literal loopback only: no DNS or URL normalization.
+const VALIDATION_BASE_URL = process.env.REMUSE_VALIDATION_BASE_URL;
+const VISUAL_BASE_ARGS = [];
+if (VALIDATION_BASE_URL !== undefined) {
+  const match = /^https?:\/\/(?:127\.0\.0\.1|\[::1\]):([1-9][0-9]{0,4})\/?$/.exec(
+    VALIDATION_BASE_URL,
+  );
+  if (!match || Number(match[1]) > 65535 || Number(match[1]) === 3000) {
+    console.error(
+      "REMUSE_VALIDATION_BASE_URL must use literal loopback (127.0.0.1 or [::1]) with an explicit port 1..65535 other than 3000; no credentials, path, query or fragment.",
+    );
+    process.exit(2);
+  }
+  VISUAL_BASE_ARGS.push("--base-url", VALIDATION_BASE_URL);
+}
+
 if (!BOOK_SLUG || !/^[a-z0-9][a-z0-9-]*$/.test(BOOK_SLUG)) {
   console.error("用法：node scripts/pre-publish-gate.mjs --book <slug> [--skip-visual] [--skip-audit] [--allow-incomplete]");
   process.exit(2);
@@ -54,7 +70,7 @@ const STEPS = [
   {
     name: "3/5 视觉巡检（渲染 + contentHash 匹配）",
     cmd: "node",
-    args: ["scripts/audit-content-visual.mjs", "--book", BOOK_SLUG],
+    args: ["scripts/audit-content-visual.mjs", "--book", BOOK_SLUG, ...VISUAL_BASE_ARGS],
     skip: SKIP_VISUAL,
   },
   {
