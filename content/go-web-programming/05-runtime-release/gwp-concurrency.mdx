@@ -3,73 +3,349 @@ title: "第9章 利用Go并发"
 type: C
 section: "Go Web编程 · 并发与部署"
 order: 9
-description: "区分并发与并行，使用goroutine和channel改造独立Web任务，并证明取消、关闭与延迟收益。"
+description: "用照片马赛克任务池理解调度、channel背压、取消与关闭所有权，实测并发边界而不承诺固定加速。"
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-9"
 draft: false
+qualityVersion: 2
+sourceMode: independent-rewrite
+sourceAccess: outline-only
+officialUnitId: gwp-09
+practiceMode: code
 ---
 
+import { GwpConcurrencyLab } from "@/components/mdx/go-web-programming/gwp-concurrency-lab";
 
-## 从重叠不等于同时开始
+<Objectives>
 
-先预测：两个HTTP调用各耗时100毫秒，启动两个goroutine后总耗时一定50毫秒吗？不会。理想关键路径接近较慢任务，还受调度、连接和下游容量影响。先描述结构。
+- 区分并发结构与并行执行，用任务槽和处理槽解释为何增加goroutine不保证缩短请求延迟。
+- 能预测channel缓冲、关闭与取消的不同后果，指出谁发送、谁等待、谁关闭以及怎样确认工作退出。
+- 能改出有界照片马赛克任务池，在成功、失败和请求取消时验证结果位置、资源收敛与响应边界。
 
+</Objectives>
 
-## 并发不是并行
+## 直觉：拼图工厂不只需要更多工位
 
-并发是任务分解与协调，并行是硬件同时执行。取决于CPU、GOMAXPROCS和阻塞；I/O并发可在单核上缩短等待，但CPU任务可能只增加切换。
+一张大图要用许多小照片拼成。每个工位先为一格挑照片，再把成品交给装配台。若装配台停下，出货篮满了，多开工位只会让更多人抱着成品等待。
+
+订单撤回也不等于厂房瞬间清空。必须停止分派、通知正在工作的人、等他们放下工具，最后关闭出货口；否则晚到的一块仍可能撞上已封闭的出口。
+
+## 利用Go并发：先画所有权，再开工
+
+利用Go并发，是让可独立推进的工作有明确的开始、通信和结束路径，而不是把每个函数前都加一个go。原书第9章公开目录以照片马赛克为Web应用案例；下面独立设计一个四格样本，不复制或推测不可访问的书籍实现。
+
+这里的 <Term def="把任务组织为可独立推进、需要协调的活动。">并发</Term> 描述结构；<Term def="多个计算在同一时刻实际执行。">并行</Term> 描述执行。先在实验中选“双工位成功”，预测“完成”，逐步观察：任务格移动到工位，成品进入结果槽，装配台按编号放回原坐标。这个路径同时说明数据归属和结束条件。
+
+### 决策卡：何时值得并发
+
+| 判断                             | 本章选择                      | 不满足时怎样做                     |
+| -------------------------------- | ----------------------------- | ---------------------------------- |
+| 每格匹配能否只读输入、独立计算？ | 可以，结果携带格子编号        | 有顺序依赖就保留顺序，或拆成阶段   |
+| 下游/CPU/内存是否有容量预算？    | 最多8个工位，示例输入最多64格 | 先限流和限制输入，不无限启动任务   |
+| 谁拥有最终画布？                 | 一个收集者写画布              | 不让多个工位抢写同一张图           |
+| 取消后任务能否合作退出？         | 每个任务检查context           | 不合作的调用不能被Go强行杀死       |
+| 如何证明收益？                   | 同输入benchmark并报告环境     | 不把教学步数或一次计时称为延迟保证 |
+
+## 并发不是并行：工位与执行槽分开数
+
+并发不是并行：两个goroutine可以在一个执行槽上交替计算，等待网络时也可以让出执行机会。更多可运行任务，并不会凭空增加CPU。现实还受GOMAXPROCS、配额、内存带宽、锁与下游容量影响；I/O等待重叠和CPU密集计算要分别测量。
+
+实验的“逻辑执行槽：1/2”只改变每步可推进的计算数；“单工位成功/双工位成功”改变在途工作数。默认采用轮转顺序，**不是Go调度器轨迹，也不是毫秒**。把执行槽降到1后，两个工位仍能存活，但每步最多一条计算进度增长。问题1要求解释这两个数量为何不同。
+
+两次独立远程请求各标称100ms，并发后不保证50ms，也不保证恰好100ms。关键路径、排队、失败重试和尾延迟都可能主导。照片匹配若很小，分派与同步的成本甚至超过收益。
+
+## goroutine：启动、等待与性能边界
+
+一个 <Term def="由Go运行时调度的独立函数执行活动；不是固定绑定的操作系统线程。">goroutine</Term> 从go语句开始，但没有自动交还给调用者的返回值。调用参数在启动前求值；错误和结果需要显式通路。main退出不会自动等待其他goroutine，请求返回也不自动等于后台任务结束。
+
+### 使用与等待goroutine
+
+本章把任务输入做成有编号的格子，工作函数只返回匹配编号和错误。用 <Term def="等待一组已登记任务全部完成的计数同步工具。">WaitGroup</Term> 登记、完成、等待；Add发生在启动之前，Done通过defer执行。它只负责等待，不提供取消和错误传播。
+
+下面各代码块按顺序保存成同一个`mosaic.go`，代码块间的说明不是源代码。完整组合已从本页原文抽取测试；现代示例目标Go1.26.0，不声称书籍2016年使用同一版本。
+
+{/* go:types */}
 
 ```go
-start := time.Now()
-// compare sequential and bounded concurrent execution
-log.Printf("elapsed=%s", time.Since(start))
+package mosaic
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "net/http"
+    "sync"
+)
+
+type Job struct { Index int; RGB [3]int }
+type Result struct { Index, Tile int; Err error }
+type MatchFunc func(context.Context, Job) (int, error)
+
+var Palette = [4][3]int{
+    {220, 60, 60}, {40, 170, 100},
+    {50, 100, 220}, {230, 190, 50},
+}
 ```
 
-## Goroutine
+### goroutine与性能
 
-`go`语句启动独立调用，返回值不能直接回到调用点。要求调用前决定谁等待、谁取消、错误去哪；请求结束后不得遗留无主工作。
+工位数不是越多越好：每个活动都占栈、调度和工作集；每个队列又保留数据。实际HTTP服务器已并发处理请求，若每个请求启动8个工位，100个请求可能产生800个工作活动；本章限制是**单次调用上限**，不是全站准入控制。部署时还需共享预算、输入大小限制和排队策略。
+
+在实验“暂停收集”中，结果槽满后，工位进度条虽到终点，成品仍留在工位，不能领取下一个任务。这是吞吐瓶颈而不是“goroutine数量不够”。问题1要求你按相同输入测串行与有界版本，并将性能结果与正确性分开报告。
+
+## channel：同步、消息、缓冲与选择
+
+一个 <Term def="有元素类型的通信通道，支持发送与接收；容量影响何时阻塞。">channel</Term> 同时约束数据传递和进度。无缓冲通道需要发送与接收会合；容量为1的通道只容纳一个尚未接收的元素，满时发送方必须等待。缓冲不是无限吞吐，也不能替代接收者。
+
+### 用channel同步和传消息
+
+发送之前的写入，对对应接收完成之后的读取具有Go内存模型定义的同步关系；但发送指针不会复制其指向对象，更不会让随后并发修改自动安全。这里发送值型Result，接收者独占输出切片，避免共享画布竞态。
+
+在“channel边界”台观察无缓冲发送的会合箭头；再观察“缓冲排空”的槽位先满后空。同步关心何时能继续，消息传递关心内容和归属，两者不能只用一条“收到就好了”的经验替代。问题2会让你预测各次接收的值与ok。
+
+### 缓冲channel与关闭所有权
+
+关闭表示“不再有发送”，不是清空队列，也不是撤销任务。缓冲值仍按FIFO取出，耗尽后接收立即得到零值和ok=false；向已关闭通道发送、重复关闭都会panic。关闭nil通道也panic，nil通道上的收发则阻塞。
+
+唯一 <Term def="在能证明所有发送均结束后负责关闭通道的一方。">关闭所有者</Term> 是本章的协调者：先Wait，后close(results)。多个工位都发送，任何单个工位都不能提前关闭。输入队列由调用者一次填充并关闭，因为此后不会再发送任务。失败用独立取消信号，不能由收集者直接关闭仍有发送者的结果通道。
+
+### select、取消与泄漏边界
+
+一个 <Term def="等待多条通信分支中可进行的一条；多个就绪分支没有业务优先级。">select</Term> 可同时等待结果或取消。若多个分支就绪，Go按规范作伪随机选择；代码书写顺序不提供取消优先权。default立即走会造成忙等风险，nil分支则被禁用。
+
+通过 <Term def="传递取消、截止时间和请求范围信息的上下文；取消是合作信号。">context</Term> 通知工位结束，工位在接任务、工作函数内部和发送结果处观察它。已在执行的不合作函数不会被强杀，因此等待它可能很久。实验取消在下一教学步回收所有工位，是**合作任务模型**；真实代码只有在工作函数遵守退出契约时才能收敛。
+
+## Web应用中的并发：照片马赛克流水线
+
+Web应用中的并发必须同时保住请求生命周期和数据位置。照片马赛克先把目标图分格，计算每格的代表颜色，再选颜色相近的小照片缩略图贴入对应位置。各格选图相互独立，最终合成则按Index排序，与完成顺序无关。
+
+### 创建照片马赛克
+
+本章用四张纯色缩略图代替外部照片，便于手算。RGB平方距离最小者获选；相等时取较小编号。真实照片需先解码、缩小、计算平均色，处理长宽比，再将选中的缩略图绘制到目标格。这个简化既不实现感知色差，也不声称照片检索质量；实验的四色拼图显示“结果位置正确”，不是加载真实用户图片。
+
+{/* go:match */}
 
 ```go
-results := make(chan Result, 2)
-go func() { results <- fetchProfile(ctx, id) }()
-go func() { results <- fetchPosts(ctx, id) }()
+func Match(ctx context.Context, j Job) (int, error) {
+    if err := ctx.Err(); err != nil { return 0, err }
+    best, distance := 0, int(^uint(0)>>1)
+    for i, rgb := range Palette {
+        d := 0
+        for k, v := range rgb {
+            delta := j.RGB[k] - v
+            d += delta * delta
+        }
+        if d < distance { best, distance = i, d }
+    }
+    return best, nil
+}
 ```
 
-## Channel
+工作函数只读Palette；应用启动后不得并发改它。输入RGB必须在0到255范围内，防止无意义距离及整数溢出；Build在启动前验证。高成本真实匹配还应在循环内周期性检查取消，而不是仅在入口检查。
 
-Channel传值并建立同步点。由知道不再发送的一侧关闭；关闭不是取消广播的万能替代，接收方也不应猜测生产者寿命。
+### 并发照片马赛克：先定通路
 
+下面的 <Term def="固定数量工作活动从队列取任务，限制同一调用的在途计算。">有界任务池</Term> 用一个容量为1的结果channel形成背压。验证前不启动工作；调用者填充至多64个任务，随后关闭输入。出现第一个已观察到的任务错误时取消同伴，但继续排空并等待结果通道关闭，再返回错误。它不保证返回哪个同时发生的错误。
 
-## Web应用中的并发
-
-适合并发的是相互独立的慢任务，例如并行读取多个后端；不适合的是需要顺序事务或会压垮同一资源的工作。应显式限制。
+{/* go:build */}
 
 ```go
-for i := 0; i < 2; i++ {
-    select {
-    case result := <-results:
-        if result.Err != nil { return result.Err }
-    case <-ctx.Done():
-        return ctx.Err()
+func Build(parent context.Context, jobs []Job, n int, fn MatchFunc) ([]Result, error) {
+    if n < 1 || n > 8 || len(jobs) > 64 || fn == nil {
+        return nil, errors.New("invalid budget")
+    }
+    for i, j := range jobs {
+        if j.Index != i { return nil, errors.New("invalid index") }
+        for _, v := range j.RGB {
+            if v < 0 || v > 255 { return nil, errors.New("invalid color") }
+        }
+    }
+    ctx, cancel := context.WithCancel(parent)
+    defer cancel()
+    in, out := make(chan Job, len(jobs)), make(chan Result, 1)
+    for _, j := range jobs { in <- j }; close(in)
+    var wg sync.WaitGroup
+    for i := 0; i < n; i++ {
+        wg.Add(1); go work(ctx, in, out, fn, &wg)
+    }
+    go func() { wg.Wait(); close(out) }()
+    results, first := make([]Result, len(jobs)), error(nil)
+    for r := range out {
+        if r.Err != nil && first == nil { first = r.Err; cancel() }
+        if r.Err == nil { results[r.Index] = r }
+    }
+    if first != nil { return nil, first }
+    if err := ctx.Err(); err != nil { return nil, err }
+    return results, nil
+}
+```
+
+wait/close协调者也是一个需要退出的goroutine。Build直到out关闭且排空才结束，证明本调用的工位已经Done；不是通过“睡一会儿”猜测结束。n大于任务数时空闲工位会读到关闭输入并退出，空输入也有明确结果。
+
+### 工位退出与错误路径
+
+下面把每个阻塞点放在取消可达的路径上。工作函数返回错误后，该工位尝试发送带错误的Result；取消已发生时发送可以放弃。这里没有由工位关闭out的语句。
+
+{/* go:worker */}
+
+```go
+func work(ctx context.Context, in <-chan Job, out chan<- Result,
+    fn MatchFunc, wg *sync.WaitGroup) {
+    defer wg.Done()
+    for {
+        if ctx.Err() != nil { return }
+        var j Job
+        var ok bool
+        select {
+        case <-ctx.Done(): return
+        case j, ok = <-in:
+            if !ok { return }
+        }
+        if ctx.Err() != nil { return }
+        tile, err := fn(ctx, j)
+        select {
+        case out <- Result{j.Index, tile, err}:
+        case <-ctx.Done(): return
+        }
+        if err != nil { return }
     }
 }
 ```
 
+该契约还要求fn不panic且不遗留自己的无主活动。生产服务应在明确边界处理不可恢复错误，而不是把任意panic吞掉后伪装成功。问题3要求注入合作阻塞函数并取消，确认所有启动任务返回；race检测只能发现本次覆盖的竞态，不能证明所有执行都无竞态。
 
-## 取消、错误与收敛
+### 照片马赛克Web应用：响应只能由收集者提交
 
-请求context传播取消，结果要携带错误，上层等待所有已启动任务。防止goroutine、连接和channel泄漏。
+实际上传版本还要限请求体字节数、解码后的像素数和图片格式，并限制缩略图库大小。下面是可用httptest调用的最小HTTP入口：固定四格输入，返回选图编号，不伪称已经实现上传/PNG服务。它让HTTP与并发核心分离，能够独立替换工作函数测试取消、失败和顺序。
 
+{/* go:handler */}
 
-## 验收实验：双后端聚合
+```go
+func Handler(fn MatchFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodGet {
+            w.Header().Set("Allow", "GET")
+            http.Error(w, "method not allowed", 405); return
+        }
+        jobs := make([]Job, len(Palette))
+        for i, rgb := range Palette { jobs[i] = Job{i, rgb} }
+        result, err := Build(r.Context(), jobs, 2, fn)
+        if err != nil {
+            http.Error(w, "mosaic unavailable", 503); return
+        }
+        w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+        for _, v := range result { fmt.Fprintf(w, "%d:%d\n", v.Index, v.Tile) }
+    }
+}
+```
 
-构建一个同时读取profile与posts的handler，分别注入快、慢、错误和永不返回后端。比较串行与并发延迟，取消客户端请求，确认两任务退出；再运行race detector和goroutine profile，证明没有共享竞态或数量持续增长。
+只有Build完整成功才写成功响应，不将半张结果与错误页混发。取消后客户端可能已断开，示例尝试返回503不等于客户端必定收到；实际网络写入错误和上传协议不在本例验证范围。实验失败时保留已装配格供诊断，却将提交闸门锁住，二者不是“允许返回部分成功”的同义词。
 
+## 实验：让任务、槽位与退出路径自己说话
 
-## 本章回顾
+猜一猜：把两个工位保留，却暂停结果收集，系统会继续接完四格吗？先选预测，再逐步推进，观察满槽导致发送箭头停住；恢复收集后才会释放工位。取消与失败都不会解锁提交；若手动取消前已装配局部画布，保留的颜色也不等于可交付的完整响应。
 
-本章覆盖并发不是并行、goroutine、channel和Web应用并发。正确改造先判断独立性和预算，再设计所有权与取消，最后用延迟、race和泄漏证据证明收益。
+<GwpConcurrencyLab />
 
+教学调度模型每步依次处理控制事件、收集一个结果、发送就绪结果、推进逻辑计算、分派空工位，采用固定轮转规则。它是可重放的有界机制模型，不是运行Go代码或测量调度延迟。“channel边界”台另用原生Go探针记录精确收发事实；模型与原生测试的证据在本章交付记录中分开保存。
 
-## 术语表
+## 常见误区：看到停住时先找谁在等谁
+
+下面的三条故障分别对应实验的暂停收集、取消和关闭边界；它们不是靠增加并发数就能解决的同一种问题。
+
+<Callout type="trap">
+  **现象：** 结果槽满，工位都停在发送处。 **原因：**
+  收集者暂停，队列容量不能替代消费。 **修法：**
+  恢复接收或让发送可响应取消；先在“暂停收集”中定位背压箭头，不盲目加工位。
+</Callout>
+
+<Callout type="trap">
+  **现象：** context已取消，等待仍不返回。 **原因：**
+  工作函数阻塞在不观察取消的调用里。 **修法：**
+  给外部调用传context并规定退出契约；取消不是强杀，不以固定等待时间冒充无泄漏证明。
+</Callout>
+
+<Callout type="trap">
+  **现象：** 接收方一报错就close，其他工位panic。 **原因：**
+  仍有发送者，关闭所有权被夺走。 **修法：**
+  发取消信号，等待全部工位退出，再由唯一协调者close；运行“关闭后发送”探针区分panic与正常耗尽。
+</Callout>
+
+## 小结与带答案练习
+
+把调度、通信和Web边界重新串起来：能完成四格不是唯一成功条件，还要能解释错误时为什么没有工作活动被留在背后。
+
+- 并发描述结构，并行取决于执行资源。
+- channel传值与同步；取消、等待、关闭职责不同。
+- 有界匹配、索引装配、全部收敛后再响应。
+
+<Exercises>
+
+**问题 1：工位加倍为何未必更快？**
+
+用“并发不是并行”解释实验：比较“双工位成功”的1/2逻辑执行槽，再运行“单工位成功”，指出活跃goroutine与本步执行槽的数量差别。写下哪一步工位只是在等发送。修改实验初始执行槽为1，保留两个工位，解释几何变化；为真实Match设计同输入串行/有界benchmark，哪些数字不能从实验步数推断？
+
+<Answer>
+  两个工位可以同时存活，但1个执行槽每步最多推进一个计算；满结果槽又会使就绪工位等收集。将initialState的cpus改为1，只减少每步计算进度，不改变worker上限和结果容量。实际benchmark固定目标格、Palette和任务数量，比较workers=1/2，报告Go版本、GOMAXPROCS、硬件、输入规模、分配与多次运行分布；教学步数不是毫秒，不能推出2倍提速或固定尾延迟。只读Palette与单收集者是正确性条件，不是性能结论。
+</Answer>
+
+**问题 2：逐次读懂channel边界。**
+
+容量1通道先放7，再close，连续接收两次得到什么？发送到已关闭通道和nil通道分别怎样？两个select分支同时就绪时，能保证取消分支优先吗？用边界台对应案例验证，并说明WaitGroup为什么不能取代取消。
+
+<Answer>
+  先得到7,true，再得到0,false，关闭不清空缓冲。向已关闭通道发送panic；向nil通道发送阻塞，在select中该分支不可进行，有default时选择default。多个就绪分支不按源码顺序优先，不能承诺取消抢先。WaitGroup只等Done计数归零，不会通知工作退出、传结果或关闭channel；每项职责需要显式安排。
+</Answer>
+
+**问题 3：改出可取消、不泄漏半张图的任务池。**
+
+检验Web应用中的并发是否尊重请求生命周期。把Handler传入的fn替换为：登记开始后等待ctx.Done，再返回ctx.Err。启动两个工位后取消请求，验证Build返回前两个工位均已退出；再注入一个匹配错误，检查503且无成功编号。最后用逆序完成的匹配任务确认结果仍按Index排列，并给出不合作fn的限制。
+
+<Answer>
+  用测试channel作为开始闸门，收到两次开始通知再cancel，不依靠Sleep猜时序；任务defer登记退出，Build返回后退出数等于启动数且active=0。错误使收集者cancel，但仍排空out直到协调者Wait完成并close。httptest应得到503和mosaic
+  unavailable加换行，不包含0:0等成功行。结果写入results[r.Index]，所以完成逆序不改变坐标。若fn忽略ctx并永远阻塞，Build无法保证退出；测试要用可释放闸门验证此边界，不能启动一个永不释放的测试活动。对这些路径运行race，并说明它是有限执行证据。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+这些术语把“同时存在”“实际执行”和“结束证明”分开；回看词条时，请在实验中找到对应槽位、箭头或闸门，而不是只背名称。
+
+<Glossary>
+  <GlossaryItem term="并发">可独立推进且需要协调的任务结构。</GlossaryItem>
+  <GlossaryItem term="并行">多个计算在同一时刻实际执行。</GlossaryItem>
+  <GlossaryItem term="goroutine">Go运行时调度的独立函数执行活动。</GlossaryItem>
+  <GlossaryItem term="WaitGroup">
+    等待已登记任务完成的计数同步工具，不负责取消。
+  </GlossaryItem>
+  <GlossaryItem term="channel">
+    有类型的通信通道，缓冲容量影响收发何时阻塞。
+  </GlossaryItem>
+  <GlossaryItem term="关闭所有者">
+    在所有发送结束后负责关闭通道的一方。
+  </GlossaryItem>
+  <GlossaryItem term="select">
+    选择可进行通信的语句，多就绪分支无业务优先级。
+  </GlossaryItem>
+  <GlossaryItem term="context">
+    合作式取消、截止时间及请求范围信息的载体。
+  </GlossaryItem>
+  <GlossaryItem term="有界任务池">
+    固定数量工作活动从任务队列获取工作。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与验证边界
+
+依据Manning《Go Web Programming》（2016）第9章公开目录独立改写：15个编号节点（含Summary），另有章标题总览，覆盖5个manifest核心概念。书籍正文不可访问、未核验，未声称拥有正文改编授权；照片马赛克代码、教学调度模型和练习均为本章原创简化设计。
+
+现代事实依据[Go语言规范](https://go.dev/ref/spec)、[Go内存模型](https://go.dev/ref/mem)、[context](https://pkg.go.dev/context)与[sync](https://pkg.go.dev/sync)，以本机Go1.26.0 GOROOT文档及实际测试校验，不将旧来源缓存的1.27.2标记当作运行版本。示例未引入第三方依赖。原生并发测试、race与httptest仅证明覆盖到的有限执行；不证明所有调度、真实网络交付或固定性能收益。局部测试不代表浏览器或生产验收；各版本验收以主控对应产品哈希的报告为准，metadata本身不证明发布。
+
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Go Web Programming · Chapter 9: Leveraging Go concurrency"
+  sourceUrl="https://livebook.manning.com/book/go-web-programming/chapter-9"
+  sourceBasis="outline-only"
+/>
