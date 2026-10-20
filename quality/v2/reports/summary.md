@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-10-19T10:56:52.492Z；旧版分数不迁移。
+> 2026-10-20T05:09:30.361Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1696
+- failed：1692
 - queued：203
-- passed：1706
+- passed：1710
 - published：1004
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -99,7 +99,7 @@
 | 86 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 87 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 88 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 89 | linux-os-practice | 11 | 7 | 0 | 4 | 26 |
+| 89 | linux-os-practice | 11 | 3 | 0 | 8 | 13 |
 | 90 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 91 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 92 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
